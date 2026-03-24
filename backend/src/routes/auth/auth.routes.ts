@@ -26,11 +26,19 @@ router.post('/register', async (req: Request, res: Response) => {
     }
 
     // Register the student
-    const authResponse = await register({ email, password, firstName, lastName });
+    const authResponse = await register({
+      email,
+      password,
+      firstName,
+      lastName,
+    });
 
     res.status(201).json(authResponse);
   } catch (error) {
-    if (error instanceof Error && error.message === 'Student with this email already exists') {
+    if (
+      error instanceof Error &&
+      error.message === 'Student with this email already exists'
+    ) {
       res.status(409).json({ error: error.message });
       return;
     }

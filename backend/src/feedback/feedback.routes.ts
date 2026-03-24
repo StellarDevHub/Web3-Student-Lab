@@ -28,7 +28,11 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       return;
     }
 
-    const feedback = await createFeedback(studentId, { courseId, rating, review: review || undefined });
+    const feedback = await createFeedback(studentId, {
+      courseId,
+      rating,
+      review: review || undefined,
+    });
     res.status(201).json(feedback);
   } catch (error) {
     if (error instanceof Error) {
@@ -36,11 +40,17 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
         res.status(404).json({ error: error.message });
         return;
       }
-      if (error.message === 'Student must be enrolled in the course to submit feedback') {
+      if (
+        error.message ===
+        'Student must be enrolled in the course to submit feedback'
+      ) {
         res.status(403).json({ error: error.message });
         return;
       }
-      if (error.message.includes('Rating must be') || error.message.includes('Review must be')) {
+      if (
+        error.message.includes('Rating must be') ||
+        error.message.includes('Review must be')
+      ) {
         res.status(400).json({ error: error.message });
         return;
       }
@@ -92,23 +102,27 @@ router.get('/course/:courseId/summary', async (req: Request, res: Response) => {
  * @desc    Get current user's feedback for a specific course
  * @access  Private (requires authentication)
  */
-router.get('/my-feedback/:courseId', authenticate, async (req: Request, res: Response) => {
-  try {
-    const studentId = req.user!.id;
-    const { courseId } = req.params;
+router.get(
+  '/my-feedback/:courseId',
+  authenticate,
+  async (req: Request, res: Response) => {
+    try {
+      const studentId = req.user!.id;
+      const { courseId } = req.params;
 
-    const feedback = await getFeedbackByStudentAndCourse(studentId, courseId);
+      const feedback = await getFeedbackByStudentAndCourse(studentId, courseId);
 
-    if (!feedback) {
-      res.status(404).json({ error: 'Feedback not found' });
-      return;
+      if (!feedback) {
+        res.status(404).json({ error: 'Feedback not found' });
+        return;
+      }
+
+      res.json(feedback);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch feedback' });
     }
-
-    res.json(feedback);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch feedback' });
   }
-});
+);
 
 /**
  * @route   PUT /api/feedback/:courseId
@@ -138,7 +152,10 @@ router.put('/:courseId', authenticate, async (req: Request, res: Response) => {
         res.status(404).json({ error: error.message });
         return;
       }
-      if (error.message.includes('Rating must be') || error.message.includes('Review must be')) {
+      if (
+        error.message.includes('Rating must be') ||
+        error.message.includes('Review must be')
+      ) {
         res.status(400).json({ error: error.message });
         return;
       }
@@ -152,20 +169,24 @@ router.put('/:courseId', authenticate, async (req: Request, res: Response) => {
  * @desc    Delete feedback for a course
  * @access  Private (requires authentication)
  */
-router.delete('/:courseId', authenticate, async (req: Request, res: Response) => {
-  try {
-    const studentId = req.user!.id;
-    const { courseId } = req.params;
+router.delete(
+  '/:courseId',
+  authenticate,
+  async (req: Request, res: Response) => {
+    try {
+      const studentId = req.user!.id;
+      const { courseId } = req.params;
 
-    await deleteFeedback(studentId, courseId);
-    res.status(204).send();
-  } catch (error) {
-    if (error instanceof Error && error.message === 'Feedback not found') {
-      res.status(404).json({ error: error.message });
-      return;
+      await deleteFeedback(studentId, courseId);
+      res.status(204).send();
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Feedback not found') {
+        res.status(404).json({ error: error.message });
+        return;
+      }
+      res.status(500).json({ error: 'Failed to delete feedback' });
     }
-    res.status(500).json({ error: 'Failed to delete feedback' });
   }
-});
+);
 
 export default router;

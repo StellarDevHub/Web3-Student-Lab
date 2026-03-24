@@ -19,7 +19,7 @@ describe('Learning Module Integration Tests', () => {
         .expect(200);
 
       expect(response.body).toHaveProperty('modules');
-      
+
       // Check that all returned lessons are beginner level
       response.body.modules.forEach((module: any) => {
         module.lessons.forEach((lesson: any) => {
@@ -126,7 +126,7 @@ describe('Learning Module Integration Tests', () => {
 
     it('should update progress percentage after completing lessons', async () => {
       const userId = 'progress-user';
-      
+
       // Complete first lesson
       await request(app)
         .post(`/api/learning/progress/${userId}/complete`)
@@ -159,7 +159,7 @@ describe('Learning Module Integration Tests', () => {
       const occurrences = response.body.progress.completedLessons.filter(
         (id: string) => id === lessonId
       ).length;
-      
+
       expect(occurrences).toBe(1);
     });
   });

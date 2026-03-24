@@ -31,7 +31,9 @@ describe('Auth Module Integration Tests', () => {
       expect(response.body).toHaveProperty('user');
       expect(response.body.user).toHaveProperty('id');
       expect(response.body.user.email).toBe(newStudent.email);
-      expect(response.body.user.name).toBe(`${newStudent.firstName} ${newStudent.lastName}`);
+      expect(response.body.user.name).toBe(
+        `${newStudent.firstName} ${newStudent.lastName}`
+      );
       expect(response.body).toHaveProperty('token');
       expect(typeof response.body.token).toBe('string');
       expect(response.body.token.length).toBeGreaterThan(0);
@@ -76,7 +78,10 @@ describe('Auth Module Integration Tests', () => {
       };
 
       // First registration
-      await request(app).post('/api/auth/register').send(newStudent).expect(201);
+      await request(app)
+        .post('/api/auth/register')
+        .send(newStudent)
+        .expect(201);
 
       // Second registration with same email
       const response = await request(app)
@@ -85,7 +90,9 @@ describe('Auth Module Integration Tests', () => {
         .expect(409);
 
       expect(response.body).toHaveProperty('error');
-      expect(response.body.error).toBe('Student with this email already exists');
+      expect(response.body.error).toBe(
+        'Student with this email already exists'
+      );
     });
   });
 
@@ -113,7 +120,9 @@ describe('Auth Module Integration Tests', () => {
 
       expect(response.body).toHaveProperty('user');
       expect(response.body.user.email).toBe(testStudent.email);
-      expect(response.body.user.name).toBe(`${testStudent.firstName} ${testStudent.lastName}`);
+      expect(response.body.user.name).toBe(
+        `${testStudent.firstName} ${testStudent.lastName}`
+      );
       expect(response.body).toHaveProperty('token');
       expect(typeof response.body.token).toBe('string');
       expect(response.body.token.length).toBeGreaterThan(0);
@@ -196,7 +205,9 @@ describe('Auth Module Integration Tests', () => {
       expect(response.body).toHaveProperty('user');
       expect(response.body.user).toHaveProperty('id');
       expect(response.body.user.email).toBe(testStudent.email);
-      expect(response.body.user.name).toBe(`${testStudent.firstName} ${testStudent.lastName}`);
+      expect(response.body.user.name).toBe(
+        `${testStudent.firstName} ${testStudent.lastName}`
+      );
     });
   });
 });

@@ -12,13 +12,13 @@ router.use('/enrollments', enrollmentsRouter);
 // Placeholder routes for future features
 // These can be replaced with actual routers as features are developed
 router.use('/blockchain', (req, res) => {
-    res.json({ message: 'Blockchain feature - Coming soon' });
+  res.json({ message: 'Blockchain feature - Coming soon' });
 });
 router.use('/generator', (req, res) => {
-    res.json({ message: 'Generator feature - Coming soon' });
+  res.json({ message: 'Generator feature - Coming soon' });
 });
 router.use('/learning', (req, res) => {
-    res.json({ message: 'Learning feature - Coming soon' });
+  res.json({ message: 'Learning feature - Coming soon' });
 });
 export default router;
 //# sourceMappingURL=index.js.map

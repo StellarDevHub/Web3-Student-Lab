@@ -12,7 +12,8 @@ If this is something you think you can fix, then fork Web3 Student Lab and creat
 
 ## 3. Get the code working locally
 
-*(We are still setting up the stack, but general instructions will be placed here:)*
+_(We are still setting up the stack, but general instructions will be placed here:)_
+
 - Clone your fork locally.
 - Run `npm install` in both `frontend` and `backend` directories.
 - Start the servers using `npm run dev`.

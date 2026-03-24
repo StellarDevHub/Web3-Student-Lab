@@ -19,15 +19,18 @@ The platform provides **interactive tools, coding environments, and guided learn
 ## 🛠 Technology Stack
 
 **Frontend**
+
 - React / Next.js
 - Tailwind CSS
 - Monaco Editor
 
 **Backend**
+
 - Node.js / Express
 - PostgreSQL
 
 **Blockchain Integration**
+
 - Stellar SDK
 - Soroban Smart Contracts
 
@@ -51,9 +54,10 @@ web3-student-lab/
 
 ## 🤝 Contributing
 
-We love our contributors! This project is being built for students, by students and open-source enthusiasts. 
+We love our contributors! This project is being built for students, by students and open-source enthusiasts.
 
 To start contributing:
+
 1. Read our [Contribution Guidelines](CONTRIBUTING.md).
 2. Check out our existing [Issues](https://github.com/your-repo/issues) or look for the `good first issue` label.
 3. Fork the repository and submit a Pull Request!
