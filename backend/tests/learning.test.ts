@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { app } from '../src/index';
+import { app } from '../src/index.js';
 
 describe('Learning Module Integration Tests', () => {
   describe('GET /api/learning/modules', () => {

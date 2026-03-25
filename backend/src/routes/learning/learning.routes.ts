@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { Module, Lesson, Progress } from './types';
+import { Module, Lesson, Progress } from './types.js';
 
 const router = Router();
 
@@ -67,7 +67,7 @@ router.get('/modules', (req: Request, res: Response) => {
       filteredModules = modules.map((mod) => ({
         ...mod,
         lessons: mod.lessons.filter(
-          (lesson) => lesson.difficulty === difficulty
+          (lesson: Lesson) => lesson.difficulty === difficulty
         ),
       }));
     }
@@ -145,7 +145,7 @@ router.post('/progress/:userId/complete', (req: Request, res: Response) => {
 
     // Verify lesson exists
     const lessonExists = modules.some((mod) =>
-      mod.lessons.some((l) => l.id === lessonId)
+      mod.lessons.some((l: Lesson) => l.id === lessonId)
     );
 
     if (!lessonExists) {

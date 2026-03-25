@@ -4,8 +4,6 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth/auth.routes.js';
 import learningRoutes from './routes/learning/learning.routes.js';
 import { requestLogger } from './middleware/requestLogger.js';
-import authRoutes from './routes/auth/auth.routes';
-import learningRoutes from './routes/learning/learning.routes';
 import routes from './routes/index.js';
 import prisma from './db/index.js';
 
