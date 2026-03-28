@@ -1,17 +1,8 @@
-import {
-  Address,
-  StrKey,
-  rpc,
-  Contract,
-  xdr,
-  scValToNative,
-} from "@stellar/stellar-sdk";
+import { Contract, StrKey, rpc, scValToNative, xdr } from '@stellar/stellar-sdk';
 
 const SOROBAN_RPC_URL =
-  process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ||
-  "https://soroban-test.stellar.org:443";
-const CERTIFICATE_CONTRACT_ID =
-  process.env.NEXT_PUBLIC_CERTIFICATE_CONTRACT_ID || "";
+  process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || 'https://soroban-test.stellar.org:443';
+const CERTIFICATE_CONTRACT_ID = process.env.NEXT_PUBLIC_CERTIFICATE_CONTRACT_ID || '';
 
 export interface CertificateData {
   symbol: string;
@@ -23,34 +14,27 @@ export interface CertificateData {
 /**
  * Verify a certificate on the Soroban blockchain
  */
-export const verifyCertificateOnChain = async (
-  symbol: string,
-): Promise<CertificateData | null> => {
+export const verifyCertificateOnChain = async (symbol: string): Promise<CertificateData | null> => {
   try {
     if (!CERTIFICATE_CONTRACT_ID) {
-      console.warn("Certificate contract ID not configured");
+      console.warn('Certificate contract ID not configured');
       return null;
     }
 
     const server = new rpc.Server(SOROBAN_RPC_URL);
-    const contract = new Contract(CERTIFICATE_CONTRACT_ID);
 
     // Prepare the arguments for 'get_certificate'
     const args = [xdr.ScVal.scvString(symbol)];
 
     // Simulate the contract call (read-only)
     const simulation = await server.getHealth(); // Check health first
-    if (simulation.status !== "healthy") {
-      throw new Error("Soroban RPC is not healthy");
+    if (simulation.status !== 'healthy') {
+      throw new Error('Soroban RPC is not healthy');
     }
 
     // Call the contract
     const result = await server.simulateTransaction(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      new Contract(CERTIFICATE_CONTRACT_ID).call(
-        "get_certificate",
-        ...args,
-      ) as any,
+      new Contract(CERTIFICATE_CONTRACT_ID).call('get_certificate', ...args) as any
     );
 
     if (rpc.Api.isSimulationSuccess(result)) {
@@ -68,7 +52,7 @@ export const verifyCertificateOnChain = async (
 
     return null;
   } catch (error) {
-    console.error("Error verifying certificate on-chain:", error);
+    console.error('Error verifying certificate on-chain:', error);
     return null;
   }
 };
@@ -80,16 +64,15 @@ export const verifyCertificateOnChain = async (
 export const issueCertificateOnChain = async (
   symbol: string,
   student: string,
-  courseName: string,
-  walletAddress: string,
+  courseName: string
 ): Promise<string | null> => {
   try {
     if (!CERTIFICATE_CONTRACT_ID) {
-      console.warn("Certificate contract ID not configured");
+      console.warn('Certificate contract ID not configured');
       return null;
     }
 
-    console.log("Issuing certificate:", { symbol, student, courseName });
+    console.log('Issuing certificate:', { symbol, student, courseName });
 
     // TODO: Implement actual certificate issuance
     // This requires:
@@ -98,9 +81,9 @@ export const issueCertificateOnChain = async (
     // 3. Submitting to the network
     // 4. Waiting for confirmation
 
-    return "transaction_hash_placeholder";
+    return 'transaction_hash_placeholder';
   } catch (error) {
-    console.error("Error issuing certificate on-chain:", error);
+    console.error('Error issuing certificate on-chain:', error);
     return null;
   }
 };
@@ -108,9 +91,7 @@ export const issueCertificateOnChain = async (
 /**
  * Check if a certificate exists on-chain
  */
-export const certificateExistsOnChain = async (
-  symbol: string,
-): Promise<boolean> => {
+export const certificateExistsOnChain = async (symbol: string): Promise<boolean> => {
   try {
     const cert = await verifyCertificateOnChain(symbol);
     return cert !== null;

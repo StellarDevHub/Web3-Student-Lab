@@ -1,22 +1,14 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import {
-  coursesAPI,
-  certificatesAPI,
-  enrollmentsAPI,
-  Course,
-  Certificate,
-  Enrollment,
-} from "@/lib/api";
-import Link from "next/link";
+import { useAuth } from '@/contexts/AuthContext';
+import { Certificate, certificatesAPI, Course, coursesAPI, enrollmentsAPI } from '@/lib/api';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
     totalCourses: 0,
@@ -28,18 +20,14 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const [coursesData, certificatesData, enrollmentsData] =
-          await Promise.all([
-            coursesAPI.getAll(),
-            user
-              ? certificatesAPI.getByStudentId(user.id)
-              : Promise.resolve([]),
-            user ? enrollmentsAPI.getByStudentId(user.id) : Promise.resolve([]),
-          ]);
+        const [coursesData, certificatesData, enrollmentsData] = await Promise.all([
+          coursesAPI.getAll(),
+          user ? certificatesAPI.getByStudentId(user.id) : Promise.resolve([]),
+          user ? enrollmentsAPI.getByStudentId(user.id) : Promise.resolve([]),
+        ]);
 
         setCourses(coursesData);
         setCertificates(certificatesData);
-        setEnrollments(enrollmentsData);
 
         setStats({
           totalCourses: coursesData.length,
@@ -48,7 +36,7 @@ export default function DashboardPage() {
           certificates: certificatesData.length,
         });
       } catch (error) {
-        console.error("Failed to load dashboard:", error);
+        console.error('Failed to load dashboard:', error);
       } finally {
         setIsLoading(false);
       }
@@ -59,47 +47,45 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">
-            Loading dashboard...
-          </p>
+          <div className="mx-auto h-16 w-16 animate-spin rounded-full border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading dashboard...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-red-600 selection:text-white pb-20 relative overflow-hidden">
+    <div className="relative min-h-screen overflow-hidden bg-black pb-20 text-white selection:bg-red-600 selection:text-white">
       {/* Abstract Background Glow */}
-      <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-red-600/5 rounded-full blur-[150px] pointer-events-none"></div>
-      <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-red-600/5 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="pointer-events-none absolute top-0 right-0 h-[800px] w-[800px] rounded-full bg-red-600/5 blur-[150px]"></div>
+      <div className="pointer-events-none absolute bottom-0 left-0 h-[600px] w-[600px] rounded-full bg-red-600/5 blur-[120px]"></div>
 
       {/* Navigation Layer */}
-      <nav className="relative z-20 bg-zinc-950/80 backdrop-blur-md border-b border-white/10 sticky top-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-20">
+      <nav className="relative sticky top-0 z-20 border-b border-white/10 bg-zinc-950/80 backdrop-blur-md">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex h-20 justify-between">
             <div className="flex items-center gap-4">
               <div className="flex flex-col">
-                <span className="text-2xl font-black text-white tracking-tighter uppercase flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                <span className="flex items-center gap-2 text-2xl font-black tracking-tighter text-white uppercase">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-red-500"></span>
                   Control <span className="text-red-600">Center</span>
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-6">
-              <div className="hidden md:flex flex-col items-end">
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+              <div className="hidden flex-col items-end md:flex">
+                <span className="text-xs font-bold tracking-widest text-gray-500 uppercase">
                   Active Operator
                 </span>
-                <span className="text-sm font-mono text-gray-300">
-                  {user?.name || "Unknown Entity"}
+                <span className="font-mono text-sm text-gray-300">
+                  {user?.name || 'Unknown Entity'}
                 </span>
               </div>
               <button
                 onClick={logout}
-                className="px-5 py-2.5 text-xs font-bold text-red-500 bg-red-500/10 border border-red-500/30 rounded-lg hover:bg-red-500 hover:text-white transition-all uppercase tracking-widest"
+                className="rounded-lg border border-red-500/30 bg-red-500/10 px-5 py-2.5 text-xs font-bold tracking-widest text-red-500 uppercase transition-all hover:bg-red-500 hover:text-white"
               >
                 Disconnect
               </button>
@@ -109,29 +95,27 @@ export default function DashboardPage() {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative z-10">
+      <main className="relative z-10 mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         {/* Welcome Section */}
-        <div className="mb-12 border-l-4 border-red-600 pl-6 py-2">
-          <h2 className="text-4xl md:text-5xl font-black text-white mb-3 uppercase tracking-tight">
+        <div className="mb-12 border-l-4 border-red-600 py-2 pl-6">
+          <h2 className="mb-3 text-4xl font-black tracking-tight text-white uppercase md:text-5xl">
             Terminal <span className="text-gray-500">Access Granted</span>
           </h2>
-          <p className="text-gray-400 font-light text-lg tracking-wide">
-            Operator{" "}
-            <span className="text-white font-mono">
-              {user?.name?.split(" ")[0] || "Student"}
-            </span>{" "}
-            — Metrics and module connections active.
+          <p className="text-lg font-light tracking-wide text-gray-400">
+            Operator{' '}
+            <span className="font-mono text-white">{user?.name?.split(' ')[0] || 'Student'}</span> —
+            Metrics and module connections active.
           </p>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
-          <div className="bg-zinc-950 border border-white/10 rounded-2xl p-6 hover:border-red-500/50 hover:shadow-[0_0_30px_rgba(220,38,38,0.1)] transition-all group relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-white/5 rounded-bl-3xl group-hover:bg-red-500/10 transition-colors"></div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-black border border-white/10 rounded-xl flex items-center justify-center group-hover:border-white/30 transition-colors">
+        <div className="mb-16 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 p-6 transition-all hover:border-red-500/50 hover:shadow-[0_0_30px_rgba(220,38,38,0.1)]">
+            <div className="absolute top-0 right-0 h-16 w-16 rounded-bl-3xl bg-white/5 transition-colors group-hover:bg-red-500/10"></div>
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-black transition-colors group-hover:border-white/30">
                 <svg
-                  className="w-6 h-6 text-white group-hover:text-red-400"
+                  className="h-6 w-6 text-white group-hover:text-red-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -144,21 +128,19 @@ export default function DashboardPage() {
                   />
                 </svg>
               </div>
-              <p className="text-3xl font-black text-white font-mono">
-                {stats.totalCourses}
-              </p>
+              <p className="font-mono text-3xl font-black text-white">{stats.totalCourses}</p>
             </div>
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-2">
+            <p className="mt-2 text-xs font-bold tracking-widest text-gray-500 uppercase">
               Available Nodes
             </p>
           </div>
 
-          <div className="bg-zinc-950 border border-white/10 rounded-2xl p-6 hover:border-red-500/50 hover:shadow-[0_0_30px_rgba(220,38,38,0.1)] transition-all group relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-white/5 rounded-bl-3xl group-hover:bg-red-500/10 transition-colors"></div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-black border border-white/10 rounded-xl flex items-center justify-center group-hover:border-white/30 transition-colors">
+          <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 p-6 transition-all hover:border-red-500/50 hover:shadow-[0_0_30px_rgba(220,38,38,0.1)]">
+            <div className="absolute top-0 right-0 h-16 w-16 rounded-bl-3xl bg-white/5 transition-colors group-hover:bg-red-500/10"></div>
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-black transition-colors group-hover:border-white/30">
                 <svg
-                  className="w-6 h-6 text-white group-hover:text-red-400"
+                  className="h-6 w-6 text-white group-hover:text-red-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -171,21 +153,19 @@ export default function DashboardPage() {
                   />
                 </svg>
               </div>
-              <p className="text-3xl font-black text-white font-mono">
-                {stats.enrolledCourses}
-              </p>
+              <p className="font-mono text-3xl font-black text-white">{stats.enrolledCourses}</p>
             </div>
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-2">
+            <p className="mt-2 text-xs font-bold tracking-widest text-gray-500 uppercase">
               Active Uplinks
             </p>
           </div>
 
-          <div className="bg-zinc-950 border border-white/10 rounded-2xl p-6 hover:border-red-500/50 hover:shadow-[0_0_30px_rgba(220,38,38,0.1)] transition-all group relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-white/5 rounded-bl-3xl group-hover:bg-red-500/10 transition-colors"></div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-black border border-white/10 rounded-xl flex items-center justify-center group-hover:border-white/30 transition-colors">
+          <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 p-6 transition-all hover:border-red-500/50 hover:shadow-[0_0_30px_rgba(220,38,38,0.1)]">
+            <div className="absolute top-0 right-0 h-16 w-16 rounded-bl-3xl bg-white/5 transition-colors group-hover:bg-red-500/10"></div>
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-black transition-colors group-hover:border-white/30">
                 <svg
-                  className="w-6 h-6 text-white group-hover:text-red-400"
+                  className="h-6 w-6 text-white group-hover:text-red-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -198,21 +178,19 @@ export default function DashboardPage() {
                   />
                 </svg>
               </div>
-              <p className="text-3xl font-black text-white font-mono">
-                {stats.completedCourses}
-              </p>
+              <p className="font-mono text-3xl font-black text-white">{stats.completedCourses}</p>
             </div>
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-2">
+            <p className="mt-2 text-xs font-bold tracking-widest text-gray-500 uppercase">
               Executed Modules
             </p>
           </div>
 
-          <div className="bg-zinc-950 border border-white/10 rounded-2xl p-6 hover:border-red-500/50 hover:shadow-[0_0_30px_rgba(220,38,38,0.1)] transition-all group relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-white/5 rounded-bl-3xl group-hover:bg-red-500/10 transition-colors"></div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-black border border-white/10 rounded-xl flex items-center justify-center group-hover:border-white/30 transition-colors">
+          <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 p-6 transition-all hover:border-red-500/50 hover:shadow-[0_0_30px_rgba(220,38,38,0.1)]">
+            <div className="absolute top-0 right-0 h-16 w-16 rounded-bl-3xl bg-white/5 transition-colors group-hover:bg-red-500/10"></div>
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-black transition-colors group-hover:border-white/30">
                 <svg
-                  className="w-6 h-6 text-white group-hover:text-red-400"
+                  className="h-6 w-6 text-white group-hover:text-red-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -225,11 +203,9 @@ export default function DashboardPage() {
                   />
                 </svg>
               </div>
-              <p className="text-3xl font-black text-white font-mono">
-                {stats.certificates}
-              </p>
+              <p className="font-mono text-3xl font-black text-white">{stats.certificates}</p>
             </div>
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-2">
+            <p className="mt-2 text-xs font-bold tracking-widest text-gray-500 uppercase">
               Cryptographic Tokens
             </p>
           </div>
@@ -237,40 +213,37 @@ export default function DashboardPage() {
 
         {/* Recent Courses */}
         <div className="mb-16">
-          <div className="flex justify-between items-center mb-8 border-b border-white/10 pb-4">
-            <h3 className="text-xl font-black text-white uppercase tracking-widest flex items-center gap-3">
-              <span className="w-4 h-4 bg-red-600 rounded-sm inline-block"></span>{" "}
-              Directory Nodes
+          <div className="mb-8 flex items-center justify-between border-b border-white/10 pb-4">
+            <h3 className="flex items-center gap-3 text-xl font-black tracking-widest text-white uppercase">
+              <span className="inline-block h-4 w-4 rounded-sm bg-red-600"></span> Directory Nodes
             </h3>
             <Link
               href="/courses"
-              className="text-gray-400 hover:text-white uppercase text-xs font-bold tracking-widest transition-colors flex items-center gap-1 group"
+              className="group flex items-center gap-1 text-xs font-bold tracking-widest text-gray-400 uppercase transition-colors hover:text-white"
             >
-              Scan All{" "}
-              <span className="transform group-hover:translate-x-1 transition-transform">
-                →
-              </span>
+              Scan All{' '}
+              <span className="transform transition-transform group-hover:translate-x-1">→</span>
             </Link>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {courses.slice(0, 3).map((course) => (
               <Link
                 key={course.id}
                 href={`/courses/${course.id}`}
-                className="bg-zinc-950 border border-white/5 p-8 hover:border-red-500/30 hover:bg-zinc-900 transition-all block group relative"
+                className="group relative block border border-white/5 bg-zinc-950 p-8 transition-all hover:border-red-500/30 hover:bg-zinc-900"
               >
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-transparent group-hover:bg-red-600 transition-colors"></div>
-                <h4 className="text-xl font-black text-white mb-3 uppercase tracking-tight group-hover:text-red-50">
+                <div className="absolute top-0 bottom-0 left-0 w-1 bg-transparent transition-colors group-hover:bg-red-600"></div>
+                <h4 className="mb-3 text-xl font-black tracking-tight text-white uppercase group-hover:text-red-50">
                   {course.title}
                 </h4>
-                <p className="text-gray-400 font-light text-sm mb-6 line-clamp-2">
-                  {course.description || "System metadata missing"}
+                <p className="mb-6 line-clamp-2 text-sm font-light text-gray-400">
+                  {course.description || 'System metadata missing'}
                 </p>
-                <div className="flex justify-between items-center pt-6 border-t border-white/5">
-                  <span className="text-xs font-mono text-gray-500 px-2 py-1 bg-black border border-white/10 rounded">
+                <div className="flex items-center justify-between border-t border-white/5 pt-6">
+                  <span className="rounded border border-white/10 bg-black px-2 py-1 font-mono text-xs text-gray-500">
                     {course.credits} UNIT
                   </span>
-                  <span className="text-xs font-bold text-red-500 uppercase tracking-widest group-hover:text-red-400">
+                  <span className="text-xs font-bold tracking-widest text-red-500 uppercase group-hover:text-red-400">
                     Connect
                   </span>
                 </div>
@@ -282,33 +255,31 @@ export default function DashboardPage() {
         {/* My Certificates */}
         {certificates.length > 0 && (
           <div>
-            <div className="flex justify-between items-center mb-8 border-b border-white/10 pb-4">
-              <h3 className="text-xl font-black text-white uppercase tracking-widest flex items-center gap-3">
-                <span className="w-4 h-4 bg-red-600 rounded-sm inline-block"></span>{" "}
-                Issued Credentials
+            <div className="mb-8 flex items-center justify-between border-b border-white/10 pb-4">
+              <h3 className="flex items-center gap-3 text-xl font-black tracking-widest text-white uppercase">
+                <span className="inline-block h-4 w-4 rounded-sm bg-red-600"></span> Issued
+                Credentials
               </h3>
               <Link
                 href="/certificates"
-                className="text-gray-400 hover:text-white uppercase text-xs font-bold tracking-widest transition-colors flex items-center gap-1 group"
+                className="group flex items-center gap-1 text-xs font-bold tracking-widest text-gray-400 uppercase transition-colors hover:text-white"
               >
-                Vault{" "}
-                <span className="transform group-hover:translate-x-1 transition-transform">
-                  →
-                </span>
+                Vault{' '}
+                <span className="transform transition-transform group-hover:translate-x-1">→</span>
               </Link>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
               {certificates.slice(0, 3).map((cert) => (
                 <Link
                   key={cert.id}
                   href={`/certificates/${cert.id}`}
-                  className="bg-black border border-red-500/20 rounded-xl p-8 hover:border-red-500/60 shadow-[0_0_20px_rgba(220,38,38,0.05)] hover:shadow-[0_0_30px_rgba(220,38,38,0.2)] transition-all block relative group overflow-hidden"
+                  className="group relative block overflow-hidden rounded-xl border border-red-500/20 bg-black p-8 shadow-[0_0_20px_rgba(220,38,38,0.05)] transition-all hover:border-red-500/60 hover:shadow-[0_0_30px_rgba(220,38,38,0.2)]"
                 >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-red-900/10 rounded-bl-full pointer-events-none group-hover:bg-red-900/20 transition-colors"></div>
-                  <div className="flex items-start justify-between mb-6 relative z-10">
-                    <div className="w-12 h-12 bg-zinc-950 border border-red-500/30 rounded-xl flex items-center justify-center">
+                  <div className="pointer-events-none absolute top-0 right-0 h-32 w-32 rounded-bl-full bg-red-900/10 transition-colors group-hover:bg-red-900/20"></div>
+                  <div className="relative z-10 mb-6 flex items-start justify-between">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-red-500/30 bg-zinc-950">
                       <svg
-                        className="w-6 h-6 text-red-500"
+                        className="h-6 w-6 text-red-500"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -321,16 +292,14 @@ export default function DashboardPage() {
                         />
                       </svg>
                     </div>
-                    <span className="text-xs font-mono bg-zinc-950 border border-white/10 text-gray-400 px-3 py-1 rounded">
+                    <span className="rounded border border-white/10 bg-zinc-950 px-3 py-1 font-mono text-xs text-gray-400">
                       {new Date(cert.issuedAt).toLocaleDateString()}
                     </span>
                   </div>
-                  <h4 className="text-xl font-bold text-white mb-2 uppercase tracking-wide group-hover:text-red-100">
-                    {cert.course?.title || "Soroban Protocol"}
+                  <h4 className="mb-2 text-xl font-bold tracking-wide text-white uppercase group-hover:text-red-100">
+                    {cert.course?.title || 'Soroban Protocol'}
                   </h4>
-                  <p className="text-sm font-light text-red-500/80">
-                    On-Chain Certification
-                  </p>
+                  <p className="text-sm font-light text-red-500/80">On-Chain Certification</p>
                 </Link>
               ))}
             </div>
