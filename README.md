@@ -149,3 +149,219 @@ To start contributing:
 ## 📜 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+
+## Getting Started
+
+This guide will help you set up the Web3 Student Lab locally for development.
+
+---
+
+### Prerequisites
+
+Ensure you have the following installed on your system:
+
+#### Node.js
+
+* Version: 18 or higher (recommended: 20+)
+* Download: https://nodejs.org/
+
+Verify installation:
+
+```bash
+node -v
+npm -v
+```
+
+---
+
+#### Rust
+
+* Version: 1.70 or higher
+* Install via rustup:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+Restart your terminal, then verify:
+
+```bash
+rustc --version
+cargo --version
+```
+
+---
+
+#### Soroban CLI (Stellar Smart Contracts)
+
+Install the Soroban CLI:
+
+```bash
+cargo install --locked soroban-cli
+```
+
+Verify installation:
+
+```bash
+soroban --version
+```
+
+---
+
+#### Docker (Optional but Recommended)
+
+* Required for running backend + database easily
+* Install: https://docs.docker.com/get-docker/
+
+Verify:
+
+```bash
+docker --version
+docker compose version
+```
+
+---
+
+### Installation
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/<your-username>/web3-student-lab.git
+cd web3-student-lab
+```
+
+2. Install frontend and backend dependencies:
+
+```bash
+npm install
+```
+
+---
+
+### Environment Setup
+
+Create environment configuration files as needed:
+
+```bash
+cp .env.example .env
+```
+
+Update values depending on your local setup.
+
+---
+
+### Running the Project
+
+#### Option 1: Using Docker (Recommended)
+
+Start backend and database:
+
+```bash
+docker compose up --build
+```
+
+* Backend: http://localhost:8080
+* Database: localhost:5432
+
+---
+
+#### Option 2: Manual Setup
+
+##### Start Backend
+
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+##### Start Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend will run on:
+
+```
+http://localhost:3000
+```
+
+---
+
+### Smart Contracts (Soroban)
+
+Navigate to the contracts directory:
+
+```bash
+cd contracts
+```
+
+Build contracts:
+
+```bash
+soroban contract build
+```
+
+Run tests:
+
+```bash
+cargo test
+```
+
+(Optional) Deploy to testnet:
+
+```bash
+soroban contract deploy \
+  --wasm target/wasm32-unknown-unknown/release/<contract-name>.wasm \
+  --network testnet
+```
+
+---
+
+### Development Tips
+
+* Use Docker for consistent environments
+* Run linting and formatting before commits
+* Keep dependencies up to date
+* Test smart contracts thoroughly before deployment
+
+---
+
+### Troubleshooting
+
+#### Soroban CLI not found
+
+Ensure Cargo bin is in your PATH:
+
+```bash
+export PATH="$HOME/.cargo/bin:$PATH"
+```
+
+---
+
+#### Rust build issues
+
+Update toolchain:
+
+```bash
+rustup update
+```
+
+---
+
+#### Port already in use
+
+Kill the process using the port or change the port in your environment config.
+
+---
+
+### Next Steps
+
+* Explore the simulator and playground modules
+* Review the documentation in the `docs/` folder
+* Start contributing by picking an issue labeled `good first issue`
