@@ -30,6 +30,7 @@
     "next-themes": "^0.2.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-window": "^2.2.7",
     "reactflow": "^11.11.4",
     "tailwind-merge": "^3.5.0",
     "tldraw": "^4.5.10",

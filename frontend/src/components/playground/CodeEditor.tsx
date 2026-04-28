@@ -7,21 +7,28 @@ import { CollaborationProvider } from "../../lib/collaboration/YjsProvider";
 interface CodeEditorProps {
   roomName: string;
   mobileMode?: boolean;
+  collaborationProvider?: CollaborationProvider;
 }
 
 export const CodeEditor: React.FC<CodeEditorProps> = ({
   mobileMode = false,
   roomName,
+  collaborationProvider,
 }) => {
-  const [provider] = useState(() => new CollaborationProvider(roomName));
+  const [provider] = useState(
+    () => collaborationProvider ?? new CollaborationProvider(roomName),
+  );
+  const shouldDestroyProvider = !collaborationProvider;
   const bindingRef = useRef<MonacoBinding | null>(null);
 
   useEffect(() => {
     return () => {
-      provider.destroy();
+      if (shouldDestroyProvider) {
+        provider.destroy();
+      }
       bindingRef.current?.destroy();
     };
-  }, [provider]);
+  }, [provider, shouldDestroyProvider]);
 
   const status = useWebSocketStatus(provider);
 

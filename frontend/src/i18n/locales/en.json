@@ -1,0 +1,14 @@
+{
+  "nav.modules": "MODULES",
+  "nav.roadmap": "ROADMAP",
+  "nav.quiz": "QUIZ",
+  "nav.playground": "PLAYGROUND",
+  "nav.reviews": "REVIEWS",
+  "nav.simulator": "SIMULATOR",
+  "nav.ideas": "IDEAS",
+  "nav.verify": "VERIFY",
+  "nav.devtools": "DEVTOOLS",
+  "language.english": "English",
+  "language.spanish": "Spanish",
+  "language.chinese": "Chinese"
+}

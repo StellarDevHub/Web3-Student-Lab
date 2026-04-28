@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  i18n: {
+    locales: ["en", "es", "zh"],
+    defaultLocale: "en",
+    localeDetection: true,
+  },
   // Bundle optimization and tree-shaking configuration
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
     // Optimize bundle size

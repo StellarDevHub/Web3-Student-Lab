@@ -1,6 +1,9 @@
 "use client";
 
+import { LanguageSelector } from "@/components/common/LanguageSelector";
 import { useAuth } from "@/contexts/AuthContext";
+import { useI18n } from "@/i18n";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -8,20 +11,21 @@ import { useState } from "react";
 export default function Navbar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const { t } = useI18n();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
 
   const navLinks = [
-    { name: "MODULES", path: "/courses" },
-    { name: "ROADMAP", path: "/roadmap" },
-    { name: "QUIZ", path: "/quiz" },
-    { name: "PLAYGROUND", path: "/playground" },
-    { name: "REVIEWS", path: "/peer-review" },
-    { name: "SIMULATOR", path: "/simulator" },
-    { name: "IDEAS", path: "/ideas" },
-    { name: "VERIFY", path: "/verify" },
-    { name: "DEVTOOLS", path: "/devtools/events" },
+    { name: t("nav.modules"), path: "/courses" },
+    { name: t("nav.roadmap"), path: "/roadmap" },
+    { name: t("nav.quiz"), path: "/quiz" },
+    { name: t("nav.playground"), path: "/playground" },
+    { name: t("nav.reviews"), path: "/peer-review" },
+    { name: t("nav.simulator"), path: "/simulator" },
+    { name: t("nav.ideas"), path: "/ideas" },
+    { name: t("nav.verify"), path: "/verify" },
+    { name: t("nav.devtools"), path: "/devtools/events" },
   ];
 
   return (
@@ -80,6 +84,7 @@ export default function Navbar() {
           </div>
 
           <div className="hidden md:flex items-center gap-4">
+            <LanguageSelector />
             {user ? (
               <div className="flex items-center gap-4">
                 <Link
