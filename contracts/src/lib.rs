@@ -23,6 +23,9 @@ pub mod verification;
 // #[cfg(test)]
 // pub mod fuzz;
 pub mod token;
+pub mod crowdfunding;
+pub mod milestone_release;
+
 
 use crate::revocation::{CertificateState, CertificateStatus, RevocationReason, RevocationRecord};
 use crate::token::RsTokenContractClient;
@@ -2164,7 +2167,41 @@ impl CertificateContract {
 
         new_token_id
     }
+
+    // --- Crowdfunding & Milestone Release ---
+
+    /// Create a new crowdfunding campaign with milestones.
+    pub fn create_campaign(
+        env: Env,
+        creator: Address,
+        goal: i128,
+        deadline: u64,
+        milestones: Vec<crowdfunding::Milestone>,
+    ) -> u64 {
+        crowdfunding::create_campaign(&env, creator, goal, deadline, milestones)
+    }
+
+    /// Contribute funds to a campaign.
+    pub fn contribute(env: Env, contributor: Address, campaign_id: u64, amount: i128) {
+        crowdfunding::contribute(&env, contributor, campaign_id, amount)
+    }
+
+    /// Vote on the current milestone of a campaign.
+    pub fn vote_on_milestone(env: Env, voter: Address, campaign_id: u64, approve: bool) {
+        milestone_release::vote_on_milestone(&env, voter, campaign_id, approve)
+    }
+
+    /// Release funds for the current milestone if approved by backers.
+    pub fn release_milestone_funds(env: Env, campaign_id: u64) {
+        milestone_release::release_milestone_funds(&env, campaign_id)
+    }
+
+    /// Process a refund for a contributor if the campaign failed or is eligible.
+    pub fn process_refund(env: Env, contributor: Address, campaign_id: u64) {
+        milestone_release::process_refund(&env, contributor, campaign_id)
+    }
 }
+
 
 #[cfg(test)]
 mod tests;
