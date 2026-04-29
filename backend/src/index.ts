@@ -1,3 +1,4 @@
+import freelanceRoute from './routes/freelance';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { Request, Response } from 'express';
@@ -123,3 +124,5 @@ if (process.env.NODE_ENV !== 'test') {
     });
   });
 }
+
+app.use('/api/freelance', freelanceRoute);
