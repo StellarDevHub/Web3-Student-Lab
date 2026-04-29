@@ -15,10 +15,17 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useWebSocketStatus } from "../../lib/collaboration/WebSocketManager";
 import { CollaborationProvider } from "../../lib/collaboration/YjsProvider";
 import { LSPClient } from "../../lib/lsp/LSPClient";
-import { DiagnosticsManager } from "../../lib/lsp/DiagnosticsManager";
 import { StateManager } from "../../lib/debugger/StateManager";
 import { TimeTravelDebugger } from "../debugger/TimeTravelDebugger";
 import { cn } from "../../lib/utils";
+import {
+  SOROBAN_LANGUAGE_ID,
+  setSorobanDiagnostics,
+  registerSorobanLanguage,
+  registerSorobanCodeActions,
+} from "../../lib/editor/SorobanLanguage";
+import { registerSorobanCompletion } from "../../lib/editor/SorobanCompletion";
+import { registerSorobanHover } from "../../lib/editor/SorobanHover";
 
 interface CodeEditorProps {
   roomName: string;
@@ -52,6 +59,11 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   const status = useWebSocketStatus(provider);
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
+    registerSorobanLanguage(monaco);
+    registerSorobanCompletion(monaco);
+    registerSorobanHover(monaco);
+    registerSorobanCodeActions(monaco);
+
     const type = provider.doc.getText("monaco");
     bindingRef.current = new MonacoBinding(
       type,
@@ -60,11 +72,19 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
       provider.awareness,
     );
 
-    const diagnosticsManager = new DiagnosticsManager(editor);
-    
+    const model = editor.getModel();
+    if (model) {
+      monaco.editor.setModelLanguage(model, SOROBAN_LANGUAGE_ID);
+      setSorobanDiagnostics(monaco, model);
+    }
+
     editor.onDidChangeModelContent(() => {
         stateManager.trackChange('Code update');
         setSnapshots([...stateManager.getHistory()]);
+        const currentModel = editor.getModel();
+        if (currentModel) {
+          setSorobanDiagnostics(monaco, currentModel);
+        }
     });
 
     editor.onDidChangeCursorPosition((e) => {
@@ -83,6 +103,9 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
       rules: [
         { token: "comment", foreground: "636e7b", fontStyle: "italic" },
         { token: "keyword", foreground: "ff7b72", fontStyle: "bold" },
+        { token: "annotation", foreground: "f59e0b", fontStyle: "bold" },
+        { token: "annotation.soroban", foreground: "f59e0b", fontStyle: "bold" },
+        { token: "macro", foreground: "f59e0b", fontStyle: "bold" },
         { token: "string", foreground: "a5d6ff" },
         { token: "variable", foreground: "ffa657" },
         { token: "type", foreground: "79c0ff" },
@@ -129,7 +152,14 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
       <div className="flex-grow relative">
         <Editor
           height="100%"
-          defaultLanguage="rust"
+          defaultLanguage={SOROBAN_LANGUAGE_ID}
+          language={SOROBAN_LANGUAGE_ID}
+          beforeMount={(monaco) => {
+            registerSorobanLanguage(monaco);
+            registerSorobanCompletion(monaco);
+            registerSorobanHover(monaco);
+            registerSorobanCodeActions(monaco);
+          }}
           onMount={handleEditorDidMount}
           options={{
             minimap: { enabled: false },
@@ -182,7 +212,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             <div className="flex items-center gap-4">
                 <span>UTF-8</span>
                 <span>Spaces: 4</span>
-                <span>Rust</span>
+                <span>Soroban Rust</span>
             </div>
             <div className="bg-red-500 text-white px-2 py-0.5 rounded font-mono text-[10px]">
                 LN {cursorPos.line}, COL {cursorPos.col}
