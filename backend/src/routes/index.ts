@@ -20,10 +20,14 @@ import activityRouter from './activity.routes.js';
 import analyticsRouter from './analytics.routes.js';
 import securityRouter from './security.routes.js';
 
+import healthRouter from './health.routes.js';
+
 const router = Router();
 
 // Mount all feature routers
+router.use('/health', healthRouter);
 router.use('/security', securityRouter);
+
 router.use('/analytics', analyticsRouter);
 router.use('/students', studentsRouter);
 router.use('/courses', coursesRouter);

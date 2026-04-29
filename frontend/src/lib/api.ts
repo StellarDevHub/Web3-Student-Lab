@@ -265,6 +265,27 @@ export const analyticsAPI = {
   },
 };
 
+// Generator APIs
+export interface ProjectIdea {
+  title: string;
+  description: string;
+  keyFeatures: string[];
+  recommendedTech: string[];
+  difficulty: "Beginner" | "Intermediate" | "Advanced";
+}
+
+export const generatorAPI = {
+  generateIdea: async (params: {
+    theme: string;
+    techStack: string[];
+    difficulty: string;
+  }): Promise<ProjectIdea> => {
+    const response = await apiClient.post("/generator/generate", params);
+    return response.data;
+  },
+};
+
+
 export const exportAPI = {
   start: async (data: {
     type: "students" | "audit" | "courses";
