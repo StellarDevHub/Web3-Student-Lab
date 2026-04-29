@@ -40,6 +40,7 @@ router.use('/user', userRouter);
 router.use('/activity', activityRouter);
 router.use('/audit', auditRouter);
 router.use('/export', exportRouter);
+router.use('/subscriptions', subscriptionsRouter);
 
 // Blockchain routes
 router.use('/blockchain', blockchainRouter);

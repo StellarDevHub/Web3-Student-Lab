@@ -25,6 +25,7 @@ pub mod verification;
 pub mod token;
 pub mod carbon_credit_platform;
 pub mod verification_system;
+pub mod subscription_manager;
 
 use crate::revocation::{CertificateState, CertificateStatus, RevocationReason, RevocationRecord};
 use crate::token::RsTokenContractClient;
