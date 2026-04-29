@@ -25,6 +25,8 @@ pub mod verification;
 pub mod token;
 pub mod smart_wallet;
 pub mod paymaster;
+pub mod reputation_system;
+pub mod scoring_algorithm;
 
 use crate::revocation::{CertificateState, CertificateStatus, RevocationReason, RevocationRecord};
 use crate::token::RsTokenContractClient;
