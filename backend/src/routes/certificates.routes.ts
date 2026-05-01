@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { certificateController } from './certificates.controller.js';
-import { MintCertificateSchema } from './validation.schemas.js';
+import { certificateController } from '../certificates/certificates.controller.js';
+import { MintCertificateSchema } from './certificates/validation.schemas.js';
 
 const router = Router();
 

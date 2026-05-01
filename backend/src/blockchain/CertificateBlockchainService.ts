@@ -1,5 +1,6 @@
 import { NetworkError } from '@stellar/stellar-sdk';
 import logger from '../utils/logger.js';
+import { cbManager } from '../lib/circuit-breaker/CircuitBreakerManager.js';
 
 /**
  * Certificate Blockchain Service
@@ -12,6 +13,12 @@ export class CertificateBlockchainService {
   private network: string;
   private contractId: string;
   private isSimulationMode: boolean;
+  private breaker = cbManager.getOrCreateBreaker('stellar-blockchain', {
+    failureThreshold: 5,
+    successThreshold: 2,
+    timeout: 30000,
+    windowMs: 10000,
+  });
 
   constructor() {
     this.network = process.env.STELLAR_NETWORK || 'testnet';
@@ -46,43 +53,68 @@ export class CertificateBlockchainService {
     transactionHash: string;
     contractAddress: string;
   }> {
-    if (this.isSimulationMode) {
-      return this.simulateMint(metadata);
-    }
+    return this.breaker.execute(
+      async () => {
+        if (this.isSimulationMode) {
+          return this.simulateMint(metadata);
+        }
 
-    // Production implementation would call Soroban contract
-    throw new Error('Live blockchain integration not yet implemented');
+        // Production implementation would call Soroban contract
+        throw new Error('Live blockchain integration not yet implemented');
+      },
+      (error) => {
+        logger.error('Circuit breaker fallback for mintCertificate triggered', error);
+        return {
+          success: false,
+          tokenId: metadata.verification?.tokenId || 'error-token-id',
+          transactionHash: 'circuit-breaker-fallback',
+          contractAddress: this.contractId || 'UNKNOWN',
+        };
+      }
+    );
   }
 
   /**
    * Verifies a certificate exists on-chain
    */
   async verifyOnChain(tokenId: string): Promise<boolean> {
-    if (this.isSimulationMode) {
-      return this.simulateVerifyOnChain(tokenId);
-    }
-    return false;
+    return this.breaker.execute(
+      async () => {
+        if (this.isSimulationMode) {
+          return this.simulateVerifyOnChain(tokenId);
+        }
+        return false;
+      },
+      () => false // Fallback: assume not verified if service is down
+    );
   }
 
   /**
    * Gets token owner from blockchain
    */
   async getOwner(tokenId: string): Promise<string> {
-    if (this.isSimulationMode) {
-      return this.simulateGetOwner(tokenId);
-    }
-    return '';
+    return this.breaker.execute(
+      async () => {
+        if (this.isSimulationMode) {
+          return this.simulateGetOwner(tokenId);
+        }
+        return '';
+      },
+      () => 'N/A (Circuit Breaker)' // Fallback owner
+    );
   }
 
   /**
    * Revokes a certificate on-chain (if contract supports)
    */
   async revokeCertificate(tokenId: string, reason: string): Promise<void> {
-    if (this.isSimulationMode) {
-      logger.info(`Simulated revocation of token ${tokenId}: ${reason}`);
-      return;
-    }
-    throw new Error('Live blockchain integration not yet implemented');
+    return this.breaker.execute(async () => {
+      if (this.isSimulationMode) {
+        logger.info(`Simulated revocation of token ${tokenId}: ${reason}`);
+        return;
+      }
+      throw new Error('Live blockchain integration not yet implemented');
+    });
   }
 
   /**
@@ -96,17 +128,22 @@ export class CertificateBlockchainService {
    * Gets certificate data from on-chain storage
    */
   async getCertificateData(tokenId: string): Promise<any | null> {
-    if (this.isSimulationMode) {
-      return this.simulateGetOnChainData(tokenId);
-    }
-    return null;
+    return this.breaker.execute(
+      async () => {
+        if (this.isSimulationMode) {
+          return this.simulateGetOnChainData(tokenId);
+        }
+        return null;
+      },
+      () => null // Fallback: no data
+    );
   }
 
   /**
    * Checks if service is connected to blockchain
    */
   isConnected(): boolean {
-    return !this.isSimulationMode;
+    return !this.isSimulationMode && this.breaker.getStats().state === 'CLOSED';
   }
 
   /**
@@ -170,3 +207,4 @@ export class CertificateBlockchainService {
 }
 
 export const certificateBlockchainService = new CertificateBlockchainService();
+
