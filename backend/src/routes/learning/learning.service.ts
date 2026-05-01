@@ -117,15 +117,6 @@ export const listCourses = async (difficulty?: string): Promise<CurriculumCourse
 
     await cacheService.set(cacheKey, result, cacheTTL.courses.list);
     return result;
-      id: course.id,
-      title: course.title,
-      description: course.description,
-      instructor: course.instructor,
-      credits: course.credits,
-      createdAt: course.createdAt,
-      updatedAt: course.updatedAt,
-      modules: filterModulesByDifficulty(getCurriculumForCourse(course.id), difficulty),
-    }));
   } catch (_error) {
     console.warn('Database error in listCourses, falling back to mock data');
     const now = new Date();

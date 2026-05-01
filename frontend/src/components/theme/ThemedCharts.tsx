@@ -6,7 +6,16 @@ import {
     getChartStyles,
     getLineChartStyle
 } from '@/lib/theme/chartTheme';
-import * as d3 from 'd3';
+import { 
+  select, 
+  scaleLinear, 
+  scaleBand, 
+  max, 
+  line, 
+  area, 
+  axisBottom, 
+  axisLeft 
+} from 'd3';
 import { useEffect, useRef } from 'react';
 
 interface D3ChartProps {
@@ -38,10 +47,9 @@ export const ThemedLineChart: React.FC<D3ChartProps> = ({
     const innerHeight = height - margin.top - margin.bottom;
 
     // Clear previous
-    d3.select(svgRef.current).selectAll('*').remove();
+    select(svgRef.current).selectAll('*').remove();
 
-    const svg = d3
-      .select(svgRef.current)
+    const svg = select(svgRef.current)
       .attr('width', width)
       .attr('height', height)
       .attr('viewBox', `0 0 ${width} ${height}`);
@@ -51,19 +59,16 @@ export const ThemedLineChart: React.FC<D3ChartProps> = ({
       .attr('transform', `translate(${margin.left},${margin.top})`);
 
     // Scales
-    const xScale = d3
-      .scaleLinear()
+    const xScale = scaleLinear()
       .domain([0, data.length - 1])
       .range([0, innerWidth]);
 
-    const yScale = d3
-      .scaleLinear()
-      .domain([0, d3.max(data, (d) => d.value) || 100])
+    const yScale = scaleLinear()
+      .domain([0, max(data, (d) => d.value) || 100])
       .range([innerHeight, 0]);
 
     // Line generator
-    const line = d3
-      .line<(typeof data)[0]>()
+    const lineGenerator = line<(typeof data)[0]>()
       .x((d, i) => xScale(i))
       .y((d) => yScale(d.value));
 
@@ -79,8 +84,7 @@ export const ThemedLineChart: React.FC<D3ChartProps> = ({
       .attr('class', 'grid')
       .attr('opacity', 0.1)
       .call(
-        d3
-          .axisLeft(yScale)
+        axisLeft(yScale)
           .tickSize(-innerWidth)
           .tickFormat(() => '')
       )
@@ -89,7 +93,7 @@ export const ThemedLineChart: React.FC<D3ChartProps> = ({
     // X Axis
     g.append('g')
       .attr('transform', `translate(0,${innerHeight})`)
-      .call(d3.axisBottom(xScale).tickFormat((d) => data[d as number]?.name || ''))
+      .call(axisBottom(xScale).tickFormat((d) => data[d as number]?.name || ''))
       .attr('color', axisStyles.color)
       .selectAll('text')
       .attr('fill', axisStyles.textFill)
@@ -97,15 +101,14 @@ export const ThemedLineChart: React.FC<D3ChartProps> = ({
 
     // Y Axis
     g.append('g')
-      .call(d3.axisLeft(yScale))
+      .call(axisLeft(yScale))
       .attr('color', axisStyles.color)
       .selectAll('text')
       .attr('fill', axisStyles.textFill)
       .attr('font-size', '12px');
 
     // Area (optional)
-    const area = d3
-      .area<(typeof data)[0]>()
+    const areaGenerator = area<(typeof data)[0]>()
       .x((d, i) => xScale(i))
       .y0(innerHeight)
       .y1((d) => yScale(d.value));
@@ -114,7 +117,7 @@ export const ThemedLineChart: React.FC<D3ChartProps> = ({
       .datum(data)
       .attr('fill', chartStyles.colors[0])
       .attr('fill-opacity', lineStyles.areaOpacity)
-      .attr('d', area);
+      .attr('d', areaGenerator);
 
     // Line path
     g.append('path')
@@ -122,7 +125,7 @@ export const ThemedLineChart: React.FC<D3ChartProps> = ({
       .attr('fill', 'none')
       .attr('stroke', chartStyles.colors[0])
       .attr('stroke-width', lineStyles.lineWidth)
-      .attr('d', line);
+      .attr('d', lineGenerator);
 
     // Points
     g.selectAll('.dot')
@@ -138,13 +141,13 @@ export const ThemedLineChart: React.FC<D3ChartProps> = ({
       .attr('stroke-width', lineStyles.pointStroke)
       .style('cursor', 'pointer')
       .on('mouseover', function () {
-        d3.select(this)
+        select(this)
           .transition()
           .duration(200)
           .attr('r', lineStyles.pointRadius * 1.5);
       })
       .on('mouseout', function () {
-        d3.select(this)
+        select(this)
           .transition()
           .duration(200)
           .attr('r', lineStyles.pointRadius);
@@ -194,10 +197,9 @@ export const ThemedBarChart: React.FC<D3ChartProps> = ({
     const innerHeight = height - margin.top - margin.bottom;
 
     // Clear previous
-    d3.select(svgRef.current).selectAll('*').remove();
+    select(svgRef.current).selectAll('*').remove();
 
-    const svg = d3
-      .select(svgRef.current)
+    const svg = select(svgRef.current)
       .attr('width', width)
       .attr('height', height)
       .attr('viewBox', `0 0 ${width} ${height}`);
@@ -207,15 +209,13 @@ export const ThemedBarChart: React.FC<D3ChartProps> = ({
       .attr('transform', `translate(${margin.left},${margin.top})`);
 
     // Scales
-    const xScale = d3
-      .scaleBand()
+    const xScale = scaleBand()
       .domain(data.map((d) => d.name))
       .range([0, innerWidth])
       .padding(0.1);
 
-    const yScale = d3
-      .scaleLinear()
-      .domain([0, d3.max(data, (d) => d.value) || 100])
+    const yScale = scaleLinear()
+      .domain([0, max(data, (d) => d.value) || 100])
       .range([innerHeight, 0]);
 
     // Background
@@ -240,14 +240,14 @@ export const ThemedBarChart: React.FC<D3ChartProps> = ({
       .attr('rx', 4)
       .style('cursor', 'pointer')
       .on('mouseover', function () {
-        d3.select(this)
+        select(this)
           .transition()
           .duration(200)
           .attr('fill-opacity', 1)
           .attr('fill', chartStyles.colors[1]);
       })
       .on('mouseout', function () {
-        d3.select(this)
+        select(this)
           .transition()
           .duration(200)
           .attr('fill-opacity', 0.8)
@@ -257,7 +257,7 @@ export const ThemedBarChart: React.FC<D3ChartProps> = ({
     // X Axis
     g.append('g')
       .attr('transform', `translate(0,${innerHeight})`)
-      .call(d3.axisBottom(xScale))
+      .call(axisBottom(xScale))
       .attr('color', axisStyles.color)
       .selectAll('text')
       .attr('fill', axisStyles.textFill)
@@ -265,7 +265,7 @@ export const ThemedBarChart: React.FC<D3ChartProps> = ({
 
     // Y Axis
     g.append('g')
-      .call(d3.axisLeft(yScale))
+      .call(axisLeft(yScale))
       .attr('color', axisStyles.color)
       .selectAll('text')
       .attr('fill', axisStyles.textFill)
