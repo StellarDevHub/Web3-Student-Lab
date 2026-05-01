@@ -1,7 +1,8 @@
 "use client";
 
+import React from "react";
 import { useState } from "react";
-import { verifyCertificateOnChain, CertificateData } from "@/lib/soroban";
+import type { CertificateData } from "@/lib/soroban";
 
 export default function VerifyCertificatePage() {
   const [certificateId, setCertificateId] = useState("");
@@ -20,6 +21,7 @@ export default function VerifyCertificatePage() {
     setVerified(false);
 
     try {
+      const { verifyCertificateOnChain } = await import("@/lib/soroban");
       const data = await verifyCertificateOnChain(certificateId.trim());
 
       if (data) {
@@ -85,7 +87,7 @@ export default function VerifyCertificatePage() {
                   id="certificateId"
                   type="text"
                   value={certificateId}
-                  onChange={(e) => setCertificateId(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCertificateId(e.target.value)}
                   placeholder="e.g. SOLID, INIT505, 0x..."
                   className="w-full px-6 py-5 rounded-xl border border-white/20 bg-black text-white font-mono focus:ring-1 focus:ring-red-500 focus:border-red-500 transition-colors placeholder-gray-700 text-lg uppercase tracking-wider"
                 />

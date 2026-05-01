@@ -19,11 +19,17 @@ import webhookRouter from './webhooks.js';
 import activityRouter from './activity.routes.js';
 import analyticsRouter from './analytics.routes.js';
 import securityRouter from './security.routes.js';
+import subscriptionsRouter from './subscriptions.js';
+import lendingRouter from './lending.routes.js';
+
+import healthRouter from './health.routes.js';
 
 const router = Router();
 
 // Mount all feature routers
+router.use('/health', healthRouter);
 router.use('/security', securityRouter);
+
 router.use('/analytics', analyticsRouter);
 router.use('/students', studentsRouter);
 router.use('/courses', coursesRouter);
@@ -44,6 +50,9 @@ router.use('/subscriptions', subscriptionsRouter);
 
 // Blockchain routes
 router.use('/blockchain', blockchainRouter);
+
+router.use('/subscriptions', subscriptionsRouter);
+router.use('/lending', lendingRouter);
 
 router.use('/webhooks', webhookRouter);
 
