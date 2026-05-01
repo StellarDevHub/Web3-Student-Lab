@@ -1,7 +1,30 @@
 "use client";
 
-import { DiffEditor, OnMount } from "@monaco-editor/react";
+import dynamic from "next/dynamic";
+import type { OnMount } from "@monaco-editor/react";
+
+const DiffEditor = dynamic(
+  () => import("@monaco-editor/react").then((mod) => mod.DiffEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full w-full items-center justify-center bg-zinc-950 text-zinc-500">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-red-500 border-t-transparent" />
+          <p className="text-xs uppercase tracking-widest">Loading Diff Engine...</p>
+        </div>
+      </div>
+    ),
+  }
+);
 import { useMemo, useState } from "react";
+import {
+  SOROBAN_LANGUAGE_ID,
+  registerSorobanLanguage,
+  registerSorobanCodeActions,
+} from "@/lib/editor/SorobanLanguage";
+import { registerSorobanCompletion } from "@/lib/editor/SorobanCompletion";
+import { registerSorobanHover } from "@/lib/editor/SorobanHover";
 
 interface ReviewComment {
   id: string;
@@ -133,6 +156,9 @@ export default function PeerReviewDashboard() {
       rules: [
         { token: "comment", foreground: "6B7280", fontStyle: "italic" },
         { token: "keyword", foreground: "F87171", fontStyle: "bold" },
+        { token: "annotation", foreground: "F59E0B", fontStyle: "bold" },
+        { token: "annotation.soroban", foreground: "F59E0B", fontStyle: "bold" },
+        { token: "macro", foreground: "F59E0B", fontStyle: "bold" },
         { token: "string", foreground: "34D399" },
       ],
       colors: {
@@ -250,7 +276,13 @@ export default function PeerReviewDashboard() {
                 <DiffEditor
                   original={masterCode}
                   modified={currentCode}
-                  language="rust"
+                  language={SOROBAN_LANGUAGE_ID}
+                  beforeMount={(monaco) => {
+                    registerSorobanLanguage(monaco);
+                    registerSorobanCompletion(monaco);
+                    registerSorobanHover(monaco);
+                    registerSorobanCodeActions(monaco);
+                  }}
                   theme="web3-lab-diff"
                   options={{
                     renderSideBySide: true,

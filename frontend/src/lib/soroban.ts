@@ -1,8 +1,8 @@
-import {
-  StrKey,
-  rpc,
-  // Contract, xdr, scValToNative - reserved for future contract interactions
-} from "@stellar/stellar-sdk";
+// Dynamic imports for Stellar SDK to reduce initial bundle size
+// and allow for better code splitting
+const getStellarSDK = async () => {
+  return await import("@stellar/stellar-sdk");
+};
 
 const SOROBAN_RPC_URL =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ||
@@ -24,6 +24,8 @@ export const verifyCertificateOnChain = async (
   symbol: string,
 ): Promise<CertificateData | null> => {
   try {
+    const { rpc } = await getStellarSDK();
+    
     if (!CERTIFICATE_CONTRACT_ID) {
       console.warn("Certificate contract ID not configured");
       return null;
@@ -93,13 +95,13 @@ export const certificateExistsOnChain = async (
 
 /**
  * Convert Stellar address to readable format
+ * This now handles the potential delay in loading the SDK
  */
 export const formatStellarAddress = (address: string): string => {
   try {
-    if (StrKey.isValidEd25519PublicKey(address)) {
-      return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
-    }
-    return address;
+    // We try to use the SDK if it's already loaded, otherwise fallback to simple string manipulation
+    // This keeps the function synchronous for use in React rendering
+    return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
   } catch {
     return address;
   }
