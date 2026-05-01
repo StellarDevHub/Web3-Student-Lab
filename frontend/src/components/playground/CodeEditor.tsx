@@ -1,80 +1,110 @@
-import Editor, { OnMount } from "@monaco-editor/react";
+import dynamic from "next/dynamic";
+import type { OnMount } from "@monaco-editor/react";
+
+const Editor = dynamic(() => import("@monaco-editor/react"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full items-center justify-center bg-zinc-950 text-zinc-500">
+      <div className="flex flex-col items-center gap-4">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-red-500 border-t-transparent" />
+        <p className="text-xs uppercase tracking-widest">Initializing Editor...</p>
+      </div>
+    </div>
+  ),
+});
+import type { editor } from "monaco-editor";
 import React, { useEffect, useRef, useState } from "react";
 import { MonacoBinding } from "y-monaco";
-import { 
-  Activity, 
-  Terminal, 
-  Code2, 
-  ChevronRight, 
-  Users, 
-  Wifi, 
+import { CursorManager } from "@/components/cursor";
+import { TimeTravelDebugger } from "@/components/debugger/TimeTravelDebugger";
+import { useAwareness } from "@/hooks/useCanvasCollaboration";
+import { useWebSocketStatus } from "@/lib/collaboration/WebSocketManager";
+import { CollaborationProvider } from "@/lib/collaboration/YjsProvider";
+import { StateManager } from "@/lib/debugger/StateManager";
+import { DiagnosticsManager } from "@/lib/lsp/DiagnosticsManager";
+import { LSPClient } from "@/lib/lsp/LSPClient";
+import { cn } from "@/lib/utils";
+import {
   AlertCircle,
-  FileText
+  ChevronRight,
+  FileText,
+  Terminal,
+  Users,
+  Wifi,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useWebSocketStatus } from "../../lib/collaboration/WebSocketManager";
-import { CollaborationProvider } from "../../lib/collaboration/YjsProvider";
-import { LSPClient } from "../../lib/lsp/LSPClient";
-import { DiagnosticsManager } from "../../lib/lsp/DiagnosticsManager";
-import { StateManager } from "../../lib/debugger/StateManager";
-import { TimeTravelDebugger } from "../debugger/TimeTravelDebugger";
-import { cn } from "../../lib/utils";
 
 interface CodeEditorProps {
   roomName: string;
   mobileMode?: boolean;
+  collaborationProvider?: CollaborationProvider;
 }
 
 export const CodeEditor: React.FC<CodeEditorProps> = ({
   mobileMode = false,
   roomName,
+  collaborationProvider,
 }) => {
-  const [provider] = useState(() => new CollaborationProvider(roomName));
+  const [provider] = useState(
+    () => collaborationProvider ?? new CollaborationProvider(roomName),
+  );
+  const shouldDestroyProvider = !collaborationProvider;
   const [stateManager] = useState(() => new StateManager(provider.doc));
   const [snapshots, setSnapshots] = useState(stateManager.getHistory());
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
   const [errorCount, setErrorCount] = useState(0);
+  const [editorInstance, setEditorInstance] =
+    useState<editor.IStandaloneCodeEditor | null>(null);
   const bindingRef = useRef<MonacoBinding | null>(null);
   const lspClientRef = useRef<LSPClient | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const wsUrl = process.env.NEXT_PUBLIC_LSP_WS_URL || 'ws://localhost:3001/rust';
-    lspClientRef.current = new LSPClient(wsUrl, 'rust');
+    const wsUrl = process.env.NEXT_PUBLIC_LSP_WS_URL || "ws://localhost:3001/rust";
+    lspClientRef.current = new LSPClient(wsUrl, "rust");
     lspClientRef.current.connect();
 
     return () => {
-      provider.destroy();
+      if (shouldDestroyProvider) {
+        provider.destroy();
+      }
       bindingRef.current?.destroy();
       lspClientRef.current?.disconnect();
     };
-  }, [provider]);
+  }, [provider, shouldDestroyProvider]);
 
   const status = useWebSocketStatus(provider);
+  const remoteUsers = useAwareness(provider.awareness);
 
-  const handleEditorDidMount: OnMount = (editor, monaco) => {
+  const handleEditorDidMount: OnMount = (mountedEditor, monaco) => {
+    setEditorInstance(mountedEditor);
+
     const type = provider.doc.getText("monaco");
     bindingRef.current = new MonacoBinding(
       type,
-      editor.getModel()!,
-      new Set([editor]),
+      mountedEditor.getModel()!,
+      new Set([mountedEditor]),
       provider.awareness,
     );
 
-    const diagnosticsManager = new DiagnosticsManager(editor);
-    
-    editor.onDidChangeModelContent(() => {
-        stateManager.trackChange('Code update');
-        setSnapshots([...stateManager.getHistory()]);
+    const diagnosticsManager = new DiagnosticsManager(mountedEditor);
+    void diagnosticsManager;
+
+    mountedEditor.onDidChangeModelContent(() => {
+      stateManager.trackChange("Code update");
+      setSnapshots([...stateManager.getHistory()]);
     });
 
-    editor.onDidChangeCursorPosition((e) => {
-        setCursorPos({ line: e.position.lineNumber, col: e.position.column });
+    mountedEditor.onDidChangeCursorPosition((e) => {
+      setCursorPos({ line: e.position.lineNumber, col: e.position.column });
     });
 
-    // Listen for diagnostics to update error count
     monaco.editor.onDidChangeMarkers(() => {
-        const markers = monaco.editor.getModelMarkers({ resource: editor.getModel()?.uri });
-        setErrorCount(markers.filter(m => m.severity === monaco.MarkerSeverity.Error).length);
+      const markers = monaco.editor.getModelMarkers({
+        resource: mountedEditor.getModel()?.uri,
+      });
+      setErrorCount(
+        markers.filter((m) => m.severity === monaco.MarkerSeverity.Error).length,
+      );
     });
 
     monaco.editor.defineTheme("web3-lab-premium", {
@@ -103,30 +133,55 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   };
 
   return (
-    <div className="group relative flex flex-grow flex-col h-full overflow-hidden bg-[#09090b]">
-      {/* Premium Breadcrumbs */}
-      <div className="flex items-center gap-2 px-6 py-2 border-b border-white/5 bg-black/40 text-[10px] font-bold text-gray-500 uppercase tracking-widest overflow-x-auto no-scrollbar">
-        <FileText className="w-3.5 h-3.5 text-gray-400" />
+    <div
+      ref={containerRef}
+      className="group relative flex h-full flex-grow flex-col overflow-hidden bg-[#09090b]"
+    >
+      <div className="flex items-center gap-2 overflow-x-auto border-b border-white/5 bg-black/40 px-6 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-500 no-scrollbar">
+        <FileText className="h-3.5 w-3.5 text-gray-400" />
         <span>Web3-Student-Lab</span>
-        <ChevronRight className="w-3 h-3" />
+        <ChevronRight className="h-3 w-3" />
         <span className="text-gray-300">contracts</span>
-        <ChevronRight className="w-3 h-3" />
+        <ChevronRight className="h-3 w-3" />
         <span className="text-red-500">lib.rs</span>
         <div className="flex-grow" />
         <div className="flex items-center gap-4 text-gray-600">
-            <div className="flex items-center gap-1.5">
-                <Users className="w-3 h-3" />
-                <span>3 Active</span>
+          <div className="flex -space-x-2">
+            <div
+              className="flex h-5 w-5 items-center justify-center rounded-full border border-black text-[8px] font-bold text-white"
+              style={{ backgroundColor: provider.localUser.color }}
+              title={`You (${provider.localUser.name})`}
+            >
+              {provider.localUser.name.charAt(0)}
             </div>
-            <div className="flex items-center gap-1.5">
-                <Wifi className={cn("w-3 h-3", status === "connected" ? "text-emerald-500" : "text-red-500")} />
-                <span>{status}</span>
-            </div>
+            {remoteUsers.map((user) => (
+              <div
+                key={user.clientId}
+                className="flex h-5 w-5 items-center justify-center rounded-full border border-black text-[8px] font-bold text-white"
+                style={{ backgroundColor: user.color }}
+                title={user.name}
+              >
+                {user.name.charAt(0)}
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Users className="h-3 w-3" />
+            <span>{remoteUsers.length + 1} Active</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Wifi
+              className={cn(
+                "h-3 w-3",
+                status === "connected" ? "text-emerald-500" : "text-red-500",
+              )}
+            />
+            <span>{status}</span>
+          </div>
         </div>
       </div>
 
-      {/* Editor Content */}
-      <div className="flex-grow relative">
+      <div className="relative flex-grow">
         <Editor
           height="100%"
           defaultLanguage="rust"
@@ -144,49 +199,60 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             cursorSmoothCaretAnimation: "on",
             renderLineHighlight: "all",
             scrollbar: {
-                vertical: "visible",
-                horizontal: "visible",
-                verticalScrollbarSize: 10,
-                horizontalScrollbarSize: 10,
+              vertical: "visible",
+              horizontal: "visible",
+              verticalScrollbarSize: 10,
+              horizontalScrollbarSize: 10,
             },
           }}
         />
+
+        {editorInstance && provider.awareness && (
+          <CursorManager
+            editor={editorInstance}
+            awareness={provider.awareness}
+            containerRef={containerRef}
+          />
+        )}
       </div>
 
-      {/* Time-Travel Debugger Integration */}
-      <TimeTravelDebugger 
-        snapshots={snapshots} 
-        onRestore={(id) => stateManager.revertTo(id)} 
+      <TimeTravelDebugger
+        snapshots={snapshots}
+        onRestore={(id) => stateManager.revertTo(id)}
       />
 
-      {/* Premium Status Bar */}
-      <div className="flex items-center justify-between px-6 py-1.5 bg-black/80 backdrop-blur-xl border-t border-white/5 text-[9px] font-black uppercase tracking-[0.15em] text-gray-500 shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
+      <div className="flex items-center justify-between border-t border-white/5 bg-black/80 px-6 py-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-gray-500 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl">
         <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]" />
-                <span className="text-gray-300">LSP: RUST-ANALYZER</span>
-            </div>
-            <div className="flex items-center gap-2">
-                <AlertCircle className={cn("w-3 h-3", errorCount > 0 ? "text-red-500" : "text-gray-600")} />
-                <span className={cn(errorCount > 0 ? "text-red-500" : "text-gray-500")}>
-                    {errorCount} {errorCount === 1 ? 'Error' : 'Errors'}
-                </span>
-            </div>
-            <div className="flex items-center gap-2">
-                <Terminal className="w-3 h-3 text-emerald-500" />
-                <span>Runtime: Stable</span>
-            </div>
+          <div className="flex items-center gap-2">
+            <div className="h-1.5 w-1.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]" />
+            <span className="text-gray-300">LSP: RUST-ANALYZER</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <AlertCircle
+              className={cn(
+                "h-3 w-3",
+                errorCount > 0 ? "text-red-500" : "text-gray-600",
+              )}
+            />
+            <span className={cn(errorCount > 0 ? "text-red-500" : "text-gray-500")}>
+              {errorCount} {errorCount === 1 ? "Error" : "Errors"}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Terminal className="h-3 w-3 text-emerald-500" />
+            <span>Runtime: Stable</span>
+          </div>
         </div>
-        
+
         <div className="flex items-center gap-6">
-            <div className="flex items-center gap-4">
-                <span>UTF-8</span>
-                <span>Spaces: 4</span>
-                <span>Rust</span>
-            </div>
-            <div className="bg-red-500 text-white px-2 py-0.5 rounded font-mono text-[10px]">
-                LN {cursorPos.line}, COL {cursorPos.col}
-            </div>
+          <div className="flex items-center gap-4">
+            <span>UTF-8</span>
+            <span>Spaces: 4</span>
+            <span>Rust</span>
+          </div>
+          <div className="rounded bg-red-500 px-2 py-0.5 font-mono text-[10px] text-white">
+            LN {cursorPos.line}, COL {cursorPos.col}
+          </div>
         </div>
       </div>
     </div>

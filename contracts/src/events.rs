@@ -4,7 +4,7 @@
 //! optimized for gas efficiency and easy parsing by indexers.
 
 use soroban_sdk::{
-    Address, BytesN, Env, Symbol, Vec,
+    Address, BytesN, Env, String, Symbol, Vec,
 };
 
 /// Certificate event types for on-chain activity logging.
@@ -347,10 +347,54 @@ impl<'a> EventPublisher<'a> {
     pub fn publish_upgrade_cancelled(&self, caller: &Address) {
         self.env.events().publish(
             (
-                Symbol::new(&self.env, "upgrade_cancelled"),
+                Symbol::new(self.env, "upgrade_cancelled"),
                 Symbol::new(self.env, "v2"),
             ),
             (caller.clone(),),
+        );
+    }
+
+    /// Publish a proposal created event.
+    pub fn publish_proposal_created(&self, creator: &Address, proposal_id: u64, title: &String) {
+        self.env.events().publish(
+            (
+                Symbol::new(self.env, "proposal_created"),
+                Symbol::new(self.env, "v2"),
+            ),
+            (creator.clone(), proposal_id, title.clone()),
+        );
+    }
+
+    /// Publish a vote cast event.
+    pub fn publish_vote_cast(&self, user: &Address, proposal_id: u64, votes: i128, cost: u128) {
+        self.env.events().publish(
+            (
+                Symbol::new(self.env, "vote_cast"),
+                Symbol::new(self.env, "v2"),
+            ),
+            (user.clone(), proposal_id, votes, cost),
+        );
+    }
+
+    /// Publish a proposal executed event.
+    pub fn publish_proposal_executed(&self, proposal_id: u64, status: u32) {
+        self.env.events().publish(
+            (
+                Symbol::new(self.env, "proposal_executed"),
+                Symbol::new(self.env, "v2"),
+            ),
+            (proposal_id, status),
+        );
+    }
+
+    /// Publish an identity verified event.
+    pub fn publish_identity_verified(&self, student: &Address, did: &String) {
+        self.env.events().publish(
+            (
+                Symbol::new(self.env, "identity_verified"),
+                Symbol::new(self.env, "v2"),
+            ),
+            (student.clone(), did.clone()),
         );
     }
 
@@ -496,8 +540,6 @@ pub fn compute_metadata_hash(
     grade: &Option<String>,
     did: &Option<String>,
 ) -> BytesN<32> {
-    use soroban_sdk::crypto::HasHasher;
-
     let mut hasher = env.crypto().hasher();
 
     hasher.update(course_name.as_bytes());

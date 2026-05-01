@@ -1369,6 +1369,70 @@ fn get_event_version_returns_one() {
 }
 
 // ---------------------------------------------------------------------------
+// Notarization Tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn notarizes_and_verifies_file_successfully() {
+    let (env, owner, _, _, client) = setup();
+    
+    env.ledger().with_mut(|ledger| {
+        ledger.timestamp = 2_000_000;
+        ledger.sequence_number = 100;
+    });
+
+    let hash = BytesN::from_array(&env, &[1u8; 32]);
+    let metadata = String::from_str(&env, "Test Notarization");
+
+    client.notarize_file(&owner, &hash, &metadata);
+
+    let record = client.verify_file(&hash).unwrap();
+    assert_eq!(record.hash, hash);
+    assert_eq!(record.owner, owner);
+    assert_eq!(record.proof.timestamp, 2_000_000);
+    assert_eq!(record.proof.ledger_seq, 100);
+    assert_eq!(record.metadata, metadata);
+}
+
+#[test]
+fn notarization_is_immutable_first_timestamp_wins() {
+    let (env, owner_a, _, _, client) = setup();
+    let owner_b = Address::generate(&env);
+
+    let hash = BytesN::from_array(&env, &[2u8; 32]);
+    let metadata_a = String::from_str(&env, "First");
+    let metadata_b = String::from_str(&env, "Second");
+
+    env.ledger().with_mut(|l| l.timestamp = 1_000);
+    client.notarize_file(&owner_a, &hash, &metadata_a);
+
+    env.ledger().with_mut(|l| l.timestamp = 2_000);
+    client.notarize_file(&owner_b, &hash, &metadata_b);
+
+    let record = client.verify_file(&hash).unwrap();
+    assert_eq!(record.owner, owner_a);
+    assert_eq!(record.proof.timestamp, 1_000);
+    assert_eq!(record.metadata, metadata_a);
+}
+
+#[test]
+fn retrieves_owner_notarization_history() {
+    let (env, owner, _, _, client) = setup();
+    
+    let hash1 = BytesN::from_array(&env, &[10u8; 32]);
+    let hash2 = BytesN::from_array(&env, &[11u8; 32]);
+    let metadata = String::from_str(&env, "Batch");
+
+    client.notarize_file(&owner, &hash1, &metadata);
+    client.notarize_file(&owner, &hash2, &metadata);
+
+    let history = client.get_notarization_history(&owner);
+    assert_eq!(history.len(), 2);
+    assert_eq!(history.get(0).unwrap().hash, hash1);
+    assert_eq!(history.get(1).unwrap().hash, hash2);
+}
+
+// ---------------------------------------------------------------------------
 // Revocation & Verification Tests
 // ---------------------------------------------------------------------------
 
@@ -1378,4 +1442,8 @@ mod revocation_tests {
 
 mod verification_tests {
     include!("tests/verification_test.rs");
+}
+
+mod savings_tests {
+    include!("tests/savings_tests.rs");
 }

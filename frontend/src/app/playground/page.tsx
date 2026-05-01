@@ -1,28 +1,170 @@
 "use client";
 
 import { CodeEditor } from "@/components/playground/CodeEditor";
-import { useState, useEffect } from "react";
+import { VirtualizedFileTree, type FileTreeNode } from "@/components/explorer/VirtualizedFileTree";
+import { FilePresenceManager } from "@/lib/explorer/FilePresence";
+import { CollaborationProvider } from "@/lib/collaboration/YjsProvider";
+import { OfflineIndicator } from "@/components/storage/OfflineIndicator";
+import { TerminalPanel } from "@/components/terminal/TerminalPanel";
+import { DatabaseManager } from "@/lib/storage/DatabaseManager";
+import { SyncManager } from "@/lib/storage/SyncManager";
+import { useState, useEffect, useMemo } from "react";
 import { WithSkeleton } from "@/components/ui/WithSkeleton";
 import { EditorSkeleton } from "@/components/ui/skeletons/EditorSkeleton";
 
+const INITIAL_TREE: FileTreeNode[] = [
+  {
+    id: "src",
+    name: "src",
+    path: "/src",
+    type: "folder",
+    children: [
+      { id: "lib-rs", name: "lib.rs", path: "/src/lib.rs", type: "file" },
+      { id: "contract-rs", name: "contract.rs", path: "/src/contract.rs", type: "file" },
+      { id: "types-rs", name: "types.rs", path: "/src/types.rs", type: "file" },
+    ],
+  },
+  {
+    id: "tests",
+    name: "tests",
+    path: "/tests",
+    type: "folder",
+    children: [{ id: "contract-test-rs", name: "contract.test.rs", path: "/tests/contract.test.rs", type: "file" }],
+  },
+  { id: "cargo-toml", name: "Cargo.toml", path: "/Cargo.toml", type: "file" },
+];
+
+function moveFileNode(nodes: FileTreeNode[], sourcePath: string, targetFolderPath: string): FileTreeNode[] {
+  let movedNode: FileTreeNode | null = null;
+  let nextTree = structuredClone(nodes) as FileTreeNode[];
+
+  const removeNode = (items: FileTreeNode[]): FileTreeNode[] =>
+    items
+      .map((item) => {
+        if (item.path === sourcePath && item.type === "file") {
+          movedNode = item;
+          return null;
+        }
+        if (item.children?.length) {
+          item.children = removeNode(item.children);
+        }
+        return item;
+      })
+      .filter(Boolean) as FileTreeNode[];
+
+  const insertNode = (items: FileTreeNode[]): FileTreeNode[] =>
+    items.map((item) => {
+      if (item.path === targetFolderPath && item.type === "folder" && movedNode) {
+        item.children = [...(item.children ?? []), movedNode];
+      } else if (item.children?.length) {
+        item.children = insertNode(item.children);
+      }
+      return item;
+    });
+
+  nextTree = removeNode(nextTree);
+  if (!movedNode) {
+    return nodes;
+  }
+  return insertNode(nextTree);
+}
 
 export default function PlaygroundPage() {
-
   const [output, setOutput] = useState("");
   const [isCompiling, setIsCompiling] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [treeData, setTreeData] = useState<FileTreeNode[]>(INITIAL_TREE);
+  const [activeFilePath, setActiveFilePath] = useState("/src/contract.rs");
+  const [provider] = useState(() => new CollaborationProvider("main-lab-session"));
+  const [databaseManager] = useState(() => new DatabaseManager());
+  const [syncManager] = useState(() => new SyncManager(databaseManager));
+  const [syncState, setSyncState] = useState<"idle" | "syncing" | "offline" | "error">("idle");
+  const [isOnline, setIsOnline] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsInitializing(false), 1500);
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      provider.destroy();
+    };
+  }, [provider]);
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
+
+  const filePresenceManager = useMemo(() => {
+    const folderStateMap = provider.doc.getMap<boolean>("explorer:folder-state");
+    const manager = new FilePresenceManager(provider.awareness, folderStateMap, provider.awareness.clientID);
+    manager.hydrateFolderStateFromStorage();
+    manager.setActiveFile(activeFilePath);
+    return manager;
+  }, [provider, activeFilePath]);
+
+  useEffect(() => {
+    filePresenceManager.setActiveFile(activeFilePath);
+  }, [activeFilePath, filePresenceManager]);
+
+  useEffect(() => {
+    const unsubscribe = syncManager.subscribe((state) => setSyncState(state));
+    return unsubscribe;
+  }, [syncManager]);
+
+  useEffect(() => {
+    const setupPersistence = async () => {
+      await syncManager.restoreYDoc(provider.doc, "playground-main-lab-session");
+      const cleanup = syncManager.attachYDocPersistence(provider.doc, "playground-main-lab-session");
+      setPendingCount(syncManager.getPendingChanges().length);
+      return cleanup;
+    };
+
+    let cleanupFn: null | (() => Promise<void>) = null;
+    setupPersistence().then((cleanup) => {
+      cleanupFn = cleanup;
+    });
+
+    return () => {
+      if (cleanupFn) {
+        cleanupFn();
+      }
+    };
+  }, [provider.doc, syncManager]);
+
+  useEffect(() => {
+    const persistActiveFile = async () => {
+      await databaseManager.setMetadata("playground:active-file", activeFilePath);
+    };
+    persistActiveFile();
+  }, [activeFilePath, databaseManager]);
+
+  useEffect(() => {
+    const restoreActiveFile = async () => {
+      const stored = await databaseManager.getMetadata("playground:active-file");
+      if (stored?.value) {
+        setActiveFilePath(stored.value);
+      }
+    };
+    restoreActiveFile();
+  }, [databaseManager]);
+
   const handleCompile = () => {
     setIsCompiling(true);
     // Simulate compilation delay
     setTimeout(() => {
       setOutput(
-        "✅ Compilation successful!\n📦 WASM size: 4.2KB\n🚀 Contract ready for simulation.",
+        `✅ Compilation successful!\n📦 WASM size: 4.2KB\n🗂 Active file: ${activeFilePath}\n🚀 Contract ready for simulation.`,
       );
       setIsCompiling(false);
     }, 1500);
@@ -55,13 +197,34 @@ export default function PlaygroundPage() {
                 <div className="w-3 h-3 rounded-full bg-red-500"></div>
                 <div className="w-3 h-3 rounded-full bg-zinc-700"></div>
                 <div className="w-3 h-3 rounded-full bg-zinc-700"></div>
-                <span className="ml-4 text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                  contract.rs
-                </span>
+                <span className="ml-4 text-[10px] text-gray-500 font-bold uppercase tracking-widest">{activeFilePath}</span>
               </div>
               <div className="flex items-center gap-2 bg-red-600/10 px-3 py-1 rounded-full border border-red-600/20">
                 <span className="text-[9px] font-black uppercase text-red-500 tracking-widest">Collaborative Mode</span>
               </div>
+            </div>
+
+            <div className="mb-4">
+              <div className="mb-2">
+                <OfflineIndicator
+                  isOnline={isOnline}
+                  syncState={syncState}
+                  pendingCount={pendingCount}
+                  onManualSync={async () => {
+                    await syncManager.syncPendingUploads(async () => Promise.resolve());
+                    setPendingCount(syncManager.getPendingChanges().length);
+                  }}
+                />
+              </div>
+              <VirtualizedFileTree
+                nodes={treeData}
+                activeFilePath={activeFilePath}
+                filePresenceManager={filePresenceManager}
+                onSelectFile={setActiveFilePath}
+                onMoveFile={(sourcePath, targetFolderPath) => {
+                  setTreeData((prev) => moveFileNode(prev, sourcePath, targetFolderPath));
+                }}
+              />
             </div>
 
             <div className="flex-grow flex flex-col overflow-hidden rounded-xl border border-white/5 relative">
@@ -69,7 +232,7 @@ export default function PlaygroundPage() {
                 isLoading={isInitializing}
                 skeleton={<EditorSkeleton />}
               >
-                <CodeEditor roomName="main-lab-session" />
+                <CodeEditor roomName="main-lab-session" collaborationProvider={provider} />
               </WithSkeleton>
             </div>
 
@@ -110,6 +273,8 @@ export default function PlaygroundPage() {
                 </div>
               )}
             </div>
+
+            <TerminalPanel />
 
             <div className="bg-zinc-950 border border-white/5 p-8 rounded-3xl">
               <h4 className="text-[10px] font-black text-white uppercase tracking-widest mb-4">

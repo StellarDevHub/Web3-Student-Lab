@@ -1,37 +1,39 @@
 "use client";
 
 import { useState } from "react";
+import { generatorAPI, ProjectIdea } from "@/lib/api";
 
-const IDEAS = [
+const IDEAS: ProjectIdea[] = [
   {
     title: "DeFi_Primitive_01",
-    category: "DECENTRALIZED FINANCE",
-    desc: "Automated liquidity provider for specialized Stellar assets.",
-  },
-  {
-    title: "OnChain_Identity_v2",
-    category: "IDENTITY PROTOCOL",
-    desc: "Verifiable credentials using Soroban-managed trustlines.",
-  },
-  {
-    title: "Flash_Loan_Engine",
-    category: "ARBITRAGE TOOLS",
-    desc: "Heuristically optimized cross-chain borrowing mechanism.",
+    recommendedTech: ["Stellar", "Soroban", "React"],
+    description: "Automated liquidity provider for specialized Stellar assets.",
+    difficulty: "Intermediate",
+    keyFeatures: ["Liquidity Pools", "Flash Loans", "Yield Farming"],
   },
 ];
 
 export default function IdeasPage() {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [activeIdea, setActiveIdea] = useState(IDEAS[0]);
+  const [activeIdea, setActiveIdea] = useState<ProjectIdea>(IDEAS[0]);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setIsGenerating(true);
-    setTimeout(() => {
-      const randomIdea = IDEAS[Math.floor(Math.random() * IDEAS.length)];
-      setActiveIdea(randomIdea);
+    try {
+      const idea = await generatorAPI.generateIdea({
+        theme: "Stellar Ecosystem",
+        techStack: ["Soroban", "React", "TypeScript"],
+        difficulty: "Intermediate",
+      });
+      setActiveIdea(idea);
+    } catch (error) {
+      console.error("Failed to generate idea:", error);
+      // Fallback is handled by the API (circuit breaker) or we just keep the current one
+    } finally {
       setIsGenerating(false);
-    }, 1200);
+    }
   };
+
 
   return (
     <div className="min-h-[calc(100vh-80px)] bg-black text-white p-6 md:p-12 relative overflow-hidden font-mono">
@@ -57,13 +59,13 @@ export default function IdeasPage() {
             className={`transition-all duration-700 ${isGenerating ? "blur-md grayscale opacity-30" : ""}`}
           >
             <span className="text-[9px] font-black bg-red-600 text-white px-3 py-1 rounded-sm uppercase tracking-widest mb-6 inline-block">
-              {activeIdea.category}
+              {activeIdea.difficulty}
             </span>
             <h2 className="text-3xl font-black uppercase tracking-tighter mb-4 text-white">
               {activeIdea.title}
             </h2>
             <p className="text-sm text-gray-400 font-light leading-relaxed mb-12">
-              {activeIdea.desc}
+              {activeIdea.description}
             </p>
 
             <div className="grid grid-cols-3 gap-4 border-t border-white/5 pt-8 mb-12">
@@ -72,33 +74,30 @@ export default function IdeasPage() {
                   Complexity
                 </p>
                 <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-red-600"></div>
-                  <div className="w-2 h-2 bg-red-600"></div>
-                  <div className="w-2 h-2 bg-zinc-800"></div>
+                  <div className={`w-2 h-2 ${activeIdea.difficulty === 'Beginner' ? 'bg-red-600' : 'bg-red-600'}`}></div>
+                  <div className={`w-2 h-2 ${activeIdea.difficulty !== 'Beginner' ? 'bg-red-600' : 'bg-zinc-800'}`}></div>
+                  <div className={`w-2 h-2 ${activeIdea.difficulty === 'Advanced' ? 'bg-red-600' : 'bg-zinc-800'}`}></div>
                 </div>
               </div>
               <div>
                 <p className="text-[9px] text-gray-600 font-bold uppercase tracking-widest mb-1">
-                  Feasibility
+                  Tech Stack
                 </p>
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-red-600"></div>
-                  <div className="w-2 h-2 bg-red-600"></div>
-                  <div className="w-2 h-2 bg-red-600"></div>
-                </div>
+                <p className="text-[10px] text-white font-bold truncate">
+                  {activeIdea.recommendedTech.join(', ')}
+                </p>
               </div>
               <div>
                 <p className="text-[9px] text-gray-600 font-bold uppercase tracking-widest mb-1">
-                  Market Gap
+                  Features
                 </p>
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-red-600"></div>
-                  <div className="w-2 h-2 bg-zinc-800"></div>
-                  <div className="w-2 h-2 bg-zinc-800"></div>
-                </div>
+                <p className="text-[10px] text-white font-bold truncate">
+                  {activeIdea.keyFeatures.length} Core
+                </p>
               </div>
             </div>
           </div>
+
 
           <button
             onClick={handleGenerate}
