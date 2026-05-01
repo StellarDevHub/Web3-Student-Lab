@@ -1,0 +1,211 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+
+.subscription-dashboard {
+  font-family: 'Inter', sans-serif;
+  color: #fff;
+  background: radial-gradient(circle at 0% 0%, #1a202c 0%, #171923 100%);
+  min-height: 100vh;
+  padding: 40px;
+  box-sizing: border-box;
+}
+
+.dashboard-header {
+  margin-bottom: 40px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 20px;
+}
+
+.dashboard-header h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(135deg, #63b3ed 0%, #4299e1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.dashboard-header .subtitle {
+  color: #a0aec0;
+  font-size: 1.1rem;
+  margin-top: 8px;
+}
+
+.dashboard-content {
+  display: flex;
+  flex-direction: column;
+  gap: 60px;
+}
+
+h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 24px;
+  color: #cbd5e0;
+}
+
+/* Subscription Grid */
+.sub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+.sub-card {
+  background: rgba(45, 55, 72, 0.4);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.sub-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(66, 153, 225, 0.4);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.card-header h3 {
+  font-size: 1.25rem;
+  margin: 0;
+  color: #fff;
+}
+
+.status-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.price {
+  margin-bottom: 20px;
+}
+
+.price .amount {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #63b3ed;
+}
+
+.price .frequency {
+  font-size: 1rem;
+  color: #718096;
+}
+
+.details {
+  font-size: 0.9rem;
+  color: #a0aec0;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.card-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: auto;
+}
+
+.btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.btn-pause { background: #4a5568; color: #fff; }
+.btn-pause:hover { background: #2d3748; }
+
+.btn-resume { background: #2b6cb0; color: #fff; }
+.btn-resume:hover { background: #2c5282; }
+
+.btn-cancel { background: rgba(245, 101, 101, 0.1); color: #f56565; border: 1px solid rgba(245, 101, 101, 0.2); }
+.btn-cancel:hover { background: #f56565; color: #fff; }
+
+/* Payment Table */
+.table-container {
+  background: rgba(26, 32, 44, 0.6);
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.history-table th {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 16px 24px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #718096;
+}
+
+.history-table td {
+  padding: 16px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.95rem;
+}
+
+.status-text {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.status-text.success { color: #48bb78; }
+.status-text.failed { color: #f56565; }
+.status-text.retrying { color: #ecc94b; }
+
+/* Analytics */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+}
+
+.analytics-card {
+  background: linear-gradient(135deg, rgba(66, 153, 225, 0.1) 0%, rgba(66, 153, 225, 0.02) 100%);
+  padding: 24px;
+  border-radius: 20px;
+  border: 1px solid rgba(66, 153, 225, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.analytics-card .label {
+  font-size: 0.85rem;
+  color: #a0aec0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.analytics-card .value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.loader {
+  text-align: center;
+  padding: 100px;
+  font-size: 1.2rem;
+  color: #718096;
+}

@@ -1,0 +1,263 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+
+.marketplace-container {
+  font-family: 'Outfit', sans-serif;
+  background: radial-gradient(circle at top right, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  color: #fff;
+  min-height: 100vh;
+  padding: 40px;
+  box-sizing: border-box;
+}
+
+.marketplace-header {
+  text-align: center;
+  margin-bottom: 50px;
+}
+
+.marketplace-title {
+  font-size: 3rem;
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0px 4px 20px rgba(0, 210, 255, 0.4);
+}
+
+.marketplace-subtitle {
+  font-size: 1.2rem;
+  color: #a0aec0;
+  margin-top: 10px;
+}
+
+.marketplace-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 40px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 20px;
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.filter-group {
+  display: flex;
+  gap: 10px;
+}
+
+.filter-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: inherit;
+  font-weight: 600;
+}
+
+.filter-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.filter-btn.active {
+  background: #3a7bd5;
+  border-color: #3a7bd5;
+  box-shadow: 0 0 15px rgba(58, 123, 213, 0.5);
+}
+
+.list-asset-btn {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  border: none;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.list-asset-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(245, 87, 108, 0.6);
+}
+
+.asset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 30px;
+}
+
+.asset-card {
+  background: rgba(20, 20, 35, 0.7);
+  border-radius: 16px;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.asset-card:hover {
+  transform: translateY(-10px) scale(1.02);
+}
+
+/* Rarity Styles */
+.asset-card.rarity-legendary {
+  border: 1px solid rgba(255, 215, 0, 0.5);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+}
+.asset-card.rarity-legendary:hover {
+  box-shadow: 0 0 40px rgba(255, 215, 0, 0.4);
+}
+.rarity-badge.rarity-legendary { background: linear-gradient(45deg, #ffd700, #ff8c00); color: #000; }
+
+.asset-card.rarity-epic { border: 1px solid rgba(163, 51, 200, 0.5); }
+.asset-card.rarity-epic:hover { box-shadow: 0 0 30px rgba(163, 51, 200, 0.4); }
+.rarity-badge.rarity-epic { background: #a333c8; color: #fff; }
+
+.asset-card.rarity-rare { border: 1px solid rgba(33, 133, 208, 0.5); }
+.asset-card.rarity-rare:hover { box-shadow: 0 0 30px rgba(33, 133, 208, 0.4); }
+.rarity-badge.rarity-rare { background: #2185d0; color: #fff; }
+
+.asset-card.rarity-uncommon { border: 1px solid rgba(33, 186, 69, 0.5); }
+.asset-card.rarity-uncommon:hover { box-shadow: 0 0 30px rgba(33, 186, 69, 0.4); }
+.rarity-badge.rarity-uncommon { background: #21ba45; color: #fff; }
+
+.asset-card.rarity-common { border: 1px solid rgba(118, 118, 118, 0.5); }
+.rarity-badge.rarity-common { background: #767676; color: #fff; }
+
+.asset-image-container {
+  position: relative;
+  height: 200px;
+  overflow: hidden;
+}
+
+.asset-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.asset-card:hover .asset-image {
+  transform: scale(1.1);
+}
+
+.rarity-badge {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+
+.asset-details {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.asset-name {
+  margin: 0 0 10px 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.game-id-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: #a0aec0;
+  margin-bottom: 15px;
+  width: fit-content;
+}
+
+.asset-attributes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.attribute-tag {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.attr-key {
+  color: #a0aec0;
+}
+
+.asset-footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 15px;
+}
+
+.price-tag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.price-amount {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #00d2ff;
+}
+
+.price-currency {
+  font-size: 0.9rem;
+  color: #a0aec0;
+  margin-top: 5px;
+}
+
+.buy-btn {
+  background: #3a7bd5;
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.buy-btn:hover {
+  background: #00d2ff;
+  box-shadow: 0 0 10px rgba(0, 210, 255, 0.4);
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 3px solid rgba(255,255,255,0.1);
+  border-radius: 50%;
+  border-top-color: #00d2ff;
+  animation: spin 1s ease-in-out infinite;
+  margin: 100px auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
