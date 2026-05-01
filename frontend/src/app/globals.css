@@ -166,3 +166,21 @@ html {
   background-size: 1000px 100%;
 }
 
+/* ============================================
+   HIDE Y-MONACO DEFAULT CURSOR RENDERING
+   We use our own Framer Motion animated cursors
+   ============================================ */
+
+.yRemoteSelectionHead {
+  display: none !important;
+}
+
+.yRemoteSelectionHead::after {
+  display: none !important;
+}
+
+/* Keep selection highlights but customize them */
+.yRemoteSelection {
+  opacity: 0.3 !important;
+  border-radius: 2px !important;
+}

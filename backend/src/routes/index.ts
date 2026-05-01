@@ -19,6 +19,8 @@ import webhookRouter from './webhooks.js';
 import activityRouter from './activity.routes.js';
 import analyticsRouter from './analytics.routes.js';
 import securityRouter from './security.routes.js';
+import subscriptionsRouter from './subscriptions.js';
+import lendingRouter from './lending.routes.js';
 
 import healthRouter from './health.routes.js';
 
@@ -47,6 +49,9 @@ router.use('/export', exportRouter);
 
 // Blockchain routes
 router.use('/blockchain', blockchainRouter);
+
+router.use('/subscriptions', subscriptionsRouter);
+router.use('/lending', lendingRouter);
 
 router.use('/webhooks', webhookRouter);
 

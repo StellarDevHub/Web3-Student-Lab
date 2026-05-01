@@ -24,6 +24,7 @@ import Navbar from "@/components/layout/Navbar";
 import ResiliencyBanner from "@/components/layout/ResiliencyBanner";
 import { ToastContainer } from "@/components/notifications/ToastContainer";
 import { NotificationProvider } from "@/contexts/NotificationContext";
+import { I18nProvider } from "@/i18n";
 
 export default function RootLayout({
   children,
@@ -65,6 +66,16 @@ export default function RootLayout({
               <main id="main-content" className="flex-grow">{children}</main>
               <ToastContainer />
             </NotificationProvider>
+            <I18nProvider>
+              <NotificationProvider>
+                <a href="#main-content" className="skip-to-content">
+                  Skip to main content
+                </a>
+                <Navbar />
+                <main id="main-content" className="flex-grow">{children}</main>
+                <ToastContainer />
+              </NotificationProvider>
+            </I18nProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

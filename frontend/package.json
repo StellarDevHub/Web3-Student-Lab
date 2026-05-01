@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "analyze": "cross-env ANALYZE=true next build"
   },
   "dependencies": {
     "@lottiefiles/react-lottie-player": "^3.6.0",
@@ -20,6 +21,7 @@
     "bignumber.js": "^10.0.2",
     "clsx": "^2.1.1",
     "d3": "^7.9.0",
+    "date-fns": "^4.1.0",
     "ethers": "^6.16.0",
     "framer-motion": "^12.38.0",
     "html2canvas": "^1.4.1",
@@ -31,7 +33,9 @@
     "next-themes": "^0.2.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-window": "^2.2.7",
     "reactflow": "^11.11.4",
+    "recharts": "^3.8.1",
     "tailwind-merge": "^3.5.0",
     "tldraw": "^4.5.10",
     "vscode-languageserver-protocol": "^3.17.5",
@@ -42,12 +46,14 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^16.2.4",
     "@tailwindcss/postcss": "^4",
     "@types/d3": "^7.4.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "prettier": "^3.8.1",

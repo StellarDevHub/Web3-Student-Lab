@@ -258,10 +258,48 @@ export const dashboardAPI = {
 };
 
 // Analytics APIs
+export interface AnalyticsOverview {
+  learningProgress: unknown[];
+  skillDistribution: unknown[];
+  courseCompletion: unknown[];
+  studyActivity: unknown[];
+  performanceTrends: unknown[];
+  timeDistribution: unknown[];
+}
+
 export const analyticsAPI = {
-  getGlobalStats: async (): Promise<any> => {
+  getGlobalStats: async (): Promise<unknown> => {
     const response = await apiClient.get("/analytics/global-stats");
     return response.data;
+  },
+
+  getOverview: async (): Promise<AnalyticsOverview> => {
+    const response = await apiClient.get("/analytics/overview");
+    return response.data;
+  },
+
+  getUserAnalytics: async (userId: string): Promise<AnalyticsOverview> => {
+    const response = await apiClient.get(`/analytics/user/${userId}`);
+    return response.data;
+  },
+
+  subscribeToUpdates: (callback: (data: unknown) => void): WebSocket | null => {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080";
+    const ws = new WebSocket(`${wsUrl}/analytics/stream?token=${token}`);
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        callback(data);
+      } catch (error) {
+        console.error("Failed to parse WebSocket message:", error);
+      }
+    };
+
+    return ws;
   },
 };
 
