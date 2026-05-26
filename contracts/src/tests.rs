@@ -304,11 +304,15 @@ fn revoke_emits_event() {
     client.revoke(&admin, &course_symbol, &student);
 
     let events = env.events().all();
-    let v1_event = events.iter().find(|e| {
-        e.0 == client.address && 
-        Symbol::from_val(&env, &e.1.get(0).unwrap()) == Symbol::new(&env, "v1_cert_revoked")
-    }).expect("v1_cert_revoked event not found");
-    
+    let v1_event = events
+        .iter()
+        .find(|e| {
+            e.0 == client.address
+                && Symbol::from_val(&env, &e.1.get(0).unwrap())
+                    == Symbol::new(&env, "v1_cert_revoked")
+        })
+        .expect("v1_cert_revoked event not found");
+
     let (_, topics, _) = v1_event;
     assert_eq!(
         Symbol::from_val(&env, &topics.get(1).unwrap()),
