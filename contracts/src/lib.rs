@@ -14,6 +14,7 @@
 pub mod activity_log;
 pub mod admin;
 pub mod crowdfunding;
+pub mod dao_treasury;
 pub mod dex_aggregator;
 pub mod distribution_manager;
 pub mod enrollment;
