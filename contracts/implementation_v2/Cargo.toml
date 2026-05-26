@@ -1,15 +1,7 @@
 [package]
-name = "soroban-certificate-contract"
+name = "implementation_v2"
 version = "0.0.0"
 edition = "2021"
-
-[workspace]
-members = [
-    ".",
-    "proxy",
-    "implementation_v1",
-    "implementation_v2"
-]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -19,4 +11,3 @@ soroban-sdk = "22.0.0"
 
 [dev-dependencies]
 soroban-sdk = { version = "22.0.0", features = ["testutils"] }
-rand = { version = "0.8", features = ["small_rng"] }
