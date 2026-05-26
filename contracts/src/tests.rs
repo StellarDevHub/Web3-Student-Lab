@@ -15,7 +15,6 @@ fn setup() -> (
     Address,
     CertificateContractClient<'static>,
 ) {
-    std::env::remove_var("SOROBAN_TEST_SNAPSHOT_FILE");
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(CertificateContract, ());
@@ -338,7 +337,6 @@ fn non_admin_cannot_revoke_certificate() {
 }
 
 fn setup_session() -> (Env, Address, SessionVerificationContractClient<'static>) {
-    std::env::remove_var("SOROBAN_TEST_SNAPSHOT_FILE");
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(SessionVerificationContract, ());

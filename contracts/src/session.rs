@@ -39,12 +39,9 @@ impl SessionVerificationContract {
         let storage_key = SessionKey::VerificationCode(student.clone());
 
         // Store the key in temporary storage.
-        // Temporary storage automatically expires and is removed from the ledger
-        // if its TTL is not bumped, making it perfect for short-lived session codes.
         env.storage().temporary().set(&storage_key, &session_code);
 
         // Explicitly set a short TTL (e.g., ~100 ledgers, roughly 8-10 minutes)
-        // ensure it lasts at least 100 ledgers from now.
         env.storage().temporary().extend_ttl(&storage_key, 100, 200);
 
         // Publish an event for transparency
