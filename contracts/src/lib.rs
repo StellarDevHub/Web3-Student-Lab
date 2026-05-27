@@ -60,6 +60,26 @@ pub mod savings_wallet;
 pub mod timestamping;
 pub mod verification_system;
 
+// Issue #511 – Reentrancy Guard & Security Primitives Module
+pub mod security_primitives;
+// Issue #498 – Cross-Chain Messaging Protocol Interface
+pub mod cross_chain_messaging;
+// Issue #500 – On-Chain Governance & Voting Proposal System
+pub mod governance;
+// Issue #502 – Flash Loan Provider with Arbitrage Protection
+pub mod flash_loan;
+
+// Test modules for the four new contracts (declared here so Rust resolves them
+// relative to lib.rs's directory, i.e. src/, where the test files live).
+#[cfg(test)]
+pub mod security_primitives_test;
+#[cfg(test)]
+pub mod cross_chain_messaging_test;
+#[cfg(test)]
+pub mod governance_test;
+#[cfg(test)]
+pub mod flash_loan_test;
+
 use crate::activity_log::{ActivityLogManager, EventType as LogEventType};
 use crate::admin::{AdminPolicy, AdminRole, Permission};
 use crate::events::EventRecorder;
