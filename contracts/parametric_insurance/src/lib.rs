@@ -263,34 +263,39 @@ mod tests {
     use super::*;
     use soroban_sdk::{testutils::Address as _, Address, Env, Symbol};
 
+    fn client(env: &Env) -> ParametricInsuranceContractClient<'_> {
+        let id = env.register(ParametricInsuranceContract, ());
+        ParametricInsuranceContractClient::new(env, &id)
+    }
+
     #[test]
     fn pays_policy_when_oracle_trigger_fires() {
         let env = Env::default();
         env.mock_all_auths();
+        let client = client(&env);
 
         let admin = Address::generate(&env);
         let oracle = Address::generate(&env);
         let buyer = Address::generate(&env);
         let underwriter = Address::generate(&env);
 
-        ParametricInsuranceContract::initialize(env.clone(), admin, oracle.clone());
-        ParametricInsuranceContract::underwrite(env.clone(), underwriter, 10_000);
+        client.initialize(&admin, &oracle);
+        client.underwrite(&underwriter, &10_000);
 
         let trigger = Symbol::new(&env, "flight_delayed");
-        let policy_id = ParametricInsuranceContract::buy_policy(
-            env.clone(),
-            buyer.clone(),
-            500,
-            4_000,
-            env.ledger().timestamp() + 50,
-            trigger.clone(),
+        let policy_id = client.buy_policy(
+            &buyer,
+            &500,
+            &4_000,
+            &(env.ledger().timestamp() + 50),
+            &trigger,
         );
 
-        ParametricInsuranceContract::post_oracle_signal(env.clone(), oracle, trigger, true);
+        client.post_oracle_signal(&oracle, &trigger, &true);
 
-        let payout = ParametricInsuranceContract::claim(env.clone(), buyer, policy_id);
+        let payout = client.claim(&buyer, &policy_id);
         assert_eq!(payout, 4_000);
-        assert!(ParametricInsuranceContract::solvency_ratio_bps(env.clone()) > 0);
+        assert!(client.solvency_ratio_bps() > 0);
     }
 
     #[test]
@@ -298,22 +303,22 @@ mod tests {
     fn rejects_policy_that_would_break_solvency() {
         let env = Env::default();
         env.mock_all_auths();
+        let client = client(&env);
 
         let admin = Address::generate(&env);
         let oracle = Address::generate(&env);
         let buyer = Address::generate(&env);
         let underwriter = Address::generate(&env);
 
-        ParametricInsuranceContract::initialize(env.clone(), admin, oracle);
-        ParametricInsuranceContract::underwrite(env.clone(), underwriter, 1_000);
+        client.initialize(&admin, &oracle);
+        client.underwrite(&underwriter, &1_000);
 
-        let _ = ParametricInsuranceContract::buy_policy(
-            env.clone(),
-            buyer,
-            10,
-            5_000,
-            env.ledger().timestamp() + 100,
-            Symbol::new(&env, "price_crash"),
+        let _ = client.buy_policy(
+            &buyer,
+            &10,
+            &5_000,
+            &(env.ledger().timestamp() + 100),
+            &Symbol::new(&env, "price_crash"),
         );
     }
 }
