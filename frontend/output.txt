@@ -1,0 +1,15 @@
+.rw-r--r--@  480 edohwares 27 Mar 01:31 .gitignore
+drwxr-xr-x@    - edohwares 27 Mar 02:04 .next
+.rw-r--r--@  465 edohwares 27 Mar 01:31 eslint.config.mjs
+.rw-r--r--@ 6.0k edohwares 27 Mar 01:31 FRONTEND_README.md
+.rw-r--r--@  247 edohwares 27 Mar 02:02 next-env.d.ts
+.rw-r--r--@  156 edohwares 27 Mar 01:31 next.config.ts
+drwxr-xr-x@    - edohwares 27 Mar 02:02 node_modules
+.rw-r--r--@    0 edohwares 27 Mar 02:05 output.txt
+.rw-r--r--@ 243k edohwares 27 Mar 02:02 package-lock.json
+.rw-r--r--@  798 edohwares 27 Mar 01:31 package.json
+.rw-r--r--@   94 edohwares 27 Mar 01:31 postcss.config.mjs
+drwxr-xr-x@    - edohwares 27 Mar 01:31 public
+.rw-r--r--@ 1.4k edohwares 27 Mar 01:31 README.md
+drwxr-xr-x@    - edohwares 27 Mar 01:31 src
+.rw-r--r--@  670 edohwares 27 Mar 01:31 tsconfig.json

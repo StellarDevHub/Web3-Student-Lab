@@ -1,0 +1,16 @@
+{
+  "nav.modules": "MODULOS",
+  "nav.roadmap": "RUTA",
+  "nav.quiz": "QUIZ",
+  "nav.playground": "LABORATORIO",
+  "nav.reviews": "REVISIONES",
+  "nav.simulator": "SIMULADOR",
+  "nav.ideas": "IDEAS",
+  "nav.verify": "VERIFICAR",
+  "nav.subscriptions": "SUSCRIPCIONES",
+  "nav.notarization": "NOTARIZACION",
+  "nav.devtools": "HERRAMIENTAS",
+  "language.english": "Ingles",
+  "language.spanish": "Espanol",
+  "language.chinese": "Chino"
+}
