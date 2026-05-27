@@ -1,6 +1,8 @@
 node_modules/
 .pnp
 .pnp.js
+target/
+contracts/target/
 
 # testing
 coverage/
