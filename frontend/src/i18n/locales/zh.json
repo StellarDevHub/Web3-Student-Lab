@@ -1,0 +1,16 @@
+{
+  "nav.modules": "模块",
+  "nav.roadmap": "路线图",
+  "nav.quiz": "测验",
+  "nav.playground": "实验场",
+  "nav.reviews": "评审",
+  "nav.simulator": "模拟器",
+  "nav.ideas": "想法",
+  "nav.verify": "验证",
+  "nav.subscriptions": "订阅",
+  "nav.notarization": "公证",
+  "nav.devtools": "开发工具",
+  "language.english": "英语",
+  "language.spanish": "西班牙语",
+  "language.chinese": "中文"
+}
