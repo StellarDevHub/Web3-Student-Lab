@@ -286,12 +286,18 @@ fn share_balance_internal(env: &Env, owner: &Address) -> i128 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
+    use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Address, BytesN, Env};
+
+    fn client(env: &Env) -> FractionalNftVaultContractClient<'_> {
+        let id = env.register(FractionalNftVaultContract, ());
+        FractionalNftVaultContractClient::new(env, &id)
+    }
 
     #[test]
     fn distributes_buyout_payout_pro_rata() {
         let env = Env::default();
         env.mock_all_auths();
+        let client = client(&env);
 
         let admin = Address::generate(&env);
         let user_a = Address::generate(&env);
@@ -299,24 +305,24 @@ mod tests {
         let nft = Address::generate(&env);
         let token_id = BytesN::from_array(&env, &[7; 32]);
 
-        FractionalNftVaultContract::initialize(env.clone(), admin.clone(), nft, token_id);
-        FractionalNftVaultContract::fractionalize(env.clone(), admin.clone(), 1_000);
-        FractionalNftVaultContract::transfer_shares(env.clone(), admin.clone(), user_a.clone(), 200);
-        FractionalNftVaultContract::transfer_shares(env.clone(), admin.clone(), user_b.clone(), 300);
+        client.initialize(&admin, &nft, &token_id);
+        client.fractionalize(&admin, &1_000);
+        client.transfer_shares(&admin, &user_a, &200);
+        client.transfer_shares(&admin, &user_b, &300);
 
         let deadline = env.ledger().timestamp() + 10;
-        FractionalNftVaultContract::propose_buyout(env.clone(), admin.clone(), 10_000, deadline);
+        client.propose_buyout(&admin, &10_000, &deadline);
 
-        FractionalNftVaultContract::vote_buyout(env.clone(), admin.clone(), true);
-        FractionalNftVaultContract::vote_buyout(env.clone(), user_a.clone(), true);
-        FractionalNftVaultContract::vote_buyout(env.clone(), user_b.clone(), true);
+        client.vote_buyout(&admin, &true);
+        client.vote_buyout(&user_a, &true);
+        client.vote_buyout(&user_b, &true);
 
         env.ledger().with_mut(|li| li.timestamp = deadline + 1);
-        FractionalNftVaultContract::finalize_buyout(env.clone(), admin.clone());
+        client.finalize_buyout(&admin);
 
-        let payout_admin = FractionalNftVaultContract::claim_buyout_payout(env.clone(), admin);
-        let payout_a = FractionalNftVaultContract::claim_buyout_payout(env.clone(), user_a);
-        let payout_b = FractionalNftVaultContract::claim_buyout_payout(env.clone(), user_b);
+        let payout_admin = client.claim_buyout_payout(&admin);
+        let payout_a = client.claim_buyout_payout(&user_a);
+        let payout_b = client.claim_buyout_payout(&user_b);
 
         assert_eq!(payout_admin, 5_000);
         assert_eq!(payout_a, 2_000);
@@ -328,25 +334,16 @@ mod tests {
     fn cannot_vote_twice() {
         let env = Env::default();
         env.mock_all_auths();
+        let client = client(&env);
 
         let admin = Address::generate(&env);
         let nft = Address::generate(&env);
 
-        FractionalNftVaultContract::initialize(
-            env.clone(),
-            admin.clone(),
-            nft,
-            BytesN::from_array(&env, &[1; 32]),
-        );
-        FractionalNftVaultContract::fractionalize(env.clone(), admin.clone(), 100);
-        FractionalNftVaultContract::propose_buyout(
-            env.clone(),
-            admin.clone(),
-            1_000,
-            env.ledger().timestamp() + 20,
-        );
+        client.initialize(&admin, &nft, &BytesN::from_array(&env, &[1; 32]));
+        client.fractionalize(&admin, &100);
+        client.propose_buyout(&admin, &1_000, &(env.ledger().timestamp() + 20));
 
-        FractionalNftVaultContract::vote_buyout(env.clone(), admin.clone(), true);
-        FractionalNftVaultContract::vote_buyout(env.clone(), admin, false);
+        client.vote_buyout(&admin, &true);
+        client.vote_buyout(&admin, &false);
     }
 }
