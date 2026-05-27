@@ -1,0 +1,109 @@
+{
+  "name": "Web3 Student Lab - Blockchain Education Platform",
+  "short_name": "Web3 Student Lab",
+  "description": "Learn blockchain development with hands-on experience using Soroban smart contracts and Stellar blockchain",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#000000",
+  "background_color": "#000000",
+  "categories": ["education", "productivity"],
+  "screenshots": [
+    {
+      "src": "/screenshot-192x144.png",
+      "sizes": "192x144",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/screenshot-512x384.png",
+      "sizes": "512x384",
+      "type": "image/png",
+      "form_factor": "wide"
+    }
+  ],
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "My Courses",
+      "short_name": "Courses",
+      "description": "View your enrolled courses",
+      "url": "/courses",
+      "icons": [
+        {
+          "src": "/icon-shortcut-courses-96x96.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "View your learning dashboard",
+      "url": "/dashboard",
+      "icons": [
+        {
+          "src": "/icon-shortcut-dashboard-96x96.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Certificates",
+      "short_name": "Certificates",
+      "description": "View your certificates",
+      "url": "/certificates",
+      "icons": [
+        {
+          "src": "/icon-shortcut-certificates-96x96.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "web+stellar",
+      "url": "/verify?uri=%s"
+    }
+  ]
+}

@@ -1,0 +1,1846 @@
+2026-05-04 16:43:37 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-04 16:43:37 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-04 16:43:37 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-04 16:43:37 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-04 16:43:37 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-04 16:43:37 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-04 16:43:37 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-04 16:43:37 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-04 16:43:37 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-04 16:43:37 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-04 16:43:37 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-04 16:43:37 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-04 16:43:37 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-04 16:43:37 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:26:31 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:26:32 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:26:32 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:26:32 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:26:32 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:26:32 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:26:32 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:26:32 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:26:32 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:26:32 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:26:32 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:26:32 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:26:32 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:26:32 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:29:43 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:29:44 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:29:44 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:29:44 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:29:44 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:29:44 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:29:44 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:29:44 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:29:44 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:29:44 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:29:44 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:29:44 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:29:44 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:29:44 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:43:14 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:43:15 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:43:15 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:43:15 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:43:15 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:43:16 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:43:16 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:43:16 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:43:16 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:43:16 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:43:16 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:43:16 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:43:16 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 15:43:16 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:11:52 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:11:52 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:11:52 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:11:52 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:11:52 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:11:52 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:11:52 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:11:52 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:11:52 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:11:52 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:17:08 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:17:08 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:17:08 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:17:08 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:17:08 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:17:08 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:17:08 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:17:08 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:17:08 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:17:08 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID non-existent-student not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:09 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:17:25 error: Mint certificate error: Student with ID api-student-123 not found
+2026-05-09 16:18:02 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:18:02 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:18:02 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:18:02 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:18:02 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:18:02 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:18:02 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:18:02 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:18:02 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:18:02 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:18:02 error: Mint certificate error: Student with ID non-existent-student not found
+2026-05-09 16:18:02 error: Mint certificate error: Course with ID non-existent-course not found
+2026-05-09 16:18:04 error: Reissue error: 
+Invalid `prisma.certificate.create()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:70:50
+
+  67 const tokenIdValue = tokenId || Math.floor(Math.random() * 1000000).toString();
+  68 
+  69 // Create certificate record before minting (so we have the ID for metadata)
+→ 70 const certificate = await prisma.certificate.create(
+Unique constraint failed on the fields: (`tokenId`)
+2026-05-09 16:18:04 error: Reissue error: 
+Invalid `prisma.certificate.create()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:70:50
+
+  67 const tokenIdValue = tokenId || Math.floor(Math.random() * 1000000).toString();
+  68 
+  69 // Create certificate record before minting (so we have the ID for metadata)
+→ 70 const certificate = await prisma.certificate.create(
+Unique constraint failed on the fields: (`tokenId`)
+2026-05-09 16:48:15 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:48:15 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:48:15 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:48:15 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:48:15 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:48:15 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:48:15 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:48:15 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:48:15 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:48:15 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 16:48:16 error: Mint certificate error: Student with ID non-existent-student not found
+2026-05-09 16:48:16 error: Mint certificate error: Course with ID non-existent-course not found
+2026-05-09 16:48:18 error: Reissue error: 
+Invalid `prisma.certificate.create()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:70:50
+
+  67 const tokenIdValue = tokenId || Math.floor(Math.random() * 1000000).toString();
+  68 
+  69 // Create certificate record before minting (so we have the ID for metadata)
+→ 70 const certificate = await prisma.certificate.create(
+Unique constraint failed on the fields: (`tokenId`)
+2026-05-09 16:48:18 error: Reissue error: 
+Invalid `prisma.certificate.create()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:70:50
+
+  67 const tokenIdValue = tokenId || Math.floor(Math.random() * 1000000).toString();
+  68 
+  69 // Create certificate record before minting (so we have the ID for metadata)
+→ 70 const certificate = await prisma.certificate.create(
+Unique constraint failed on the fields: (`tokenId`)
+2026-05-09 16:48:53 error: Mint certificate error: Student with ID non-existent-student not found
+2026-05-09 16:48:53 error: Mint certificate error: Course with ID non-existent-course not found
+2026-05-09 16:48:55 error: Reissue error: 
+Invalid `prisma.certificate.create()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:70:50
+
+  67 const tokenIdValue = tokenId || Math.floor(Math.random() * 1000000).toString();
+  68 
+  69 // Create certificate record before minting (so we have the ID for metadata)
+→ 70 const certificate = await prisma.certificate.create(
+Unique constraint failed on the fields: (`tokenId`)
+2026-05-09 16:48:55 error: Reissue error: 
+Invalid `prisma.certificate.create()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:70:50
+
+  67 const tokenIdValue = tokenId || Math.floor(Math.random() * 1000000).toString();
+  68 
+  69 // Create certificate record before minting (so we have the ID for metadata)
+→ 70 const certificate = await prisma.certificate.create(
+Unique constraint failed on the fields: (`tokenId`)
+2026-05-09 17:09:47 error: Mint certificate error: Student with ID non-existent-student not found
+2026-05-09 17:09:47 error: Mint certificate error: Course with ID non-existent-course not found
+2026-05-09 17:10:34 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 17:10:34 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 17:10:34 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 17:10:34 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 17:10:34 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 17:10:34 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 17:10:34 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 17:10:34 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 17:10:34 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 17:10:34 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-09 17:10:35 error: Mint certificate error: Student with ID non-existent-student not found
+2026-05-09 17:10:35 error: Mint certificate error: Course with ID non-existent-course not found
+2026-05-20 09:43:43 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:43:43 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:43:43 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:43:43 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:43:43 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:43:43 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:43:43 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:43:43 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:43:43 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:43:43 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:43:50 error: Mint certificate error: Student with ID non-existent-student not found
+2026-05-20 09:43:50 error: Mint certificate error: Course with ID non-existent-course not found
+2026-05-20 09:44:52 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:177:7)
+2026-05-20 09:44:53 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:187:26)
+2026-05-20 09:44:53 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:220:21)
+2026-05-20 09:44:53 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:260:26)
+2026-05-20 09:44:53 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:293:20)
+2026-05-20 09:44:53 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:312:20)
+2026-05-20 09:44:53 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:335:24)
+2026-05-20 09:44:53 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:357:20)
+2026-05-20 09:44:53 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:376:9)
+2026-05-20 09:44:53 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:463:22)
+2026-05-20 09:44:53 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:487:18)
+2026-05-20 09:44:53 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:44:53 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:44:53 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:44:53 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:44:53 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:44:53 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:44:53 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:44:53 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:44:53 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:44:53 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-20 09:44:53 error: Mint certificate error: Student with ID non-existent-student not found
+2026-05-20 09:44:53 error: Mint certificate error: Course with ID non-existent-course not found
+2026-05-20 09:46:57 error: Mint certificate error: Student with ID non-existent-student not found
+2026-05-20 09:46:57 error: Mint certificate error: Course with ID non-existent-course not found
+2026-05-20 09:47:16 error: Mint certificate error: Student with ID non-existent-student not found
+2026-05-20 09:47:16 error: Mint certificate error: Course with ID non-existent-course not found
+2026-05-20 09:47:30 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:177:7)
+2026-05-20 09:47:30 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:187:26)
+2026-05-20 09:47:30 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:220:21)
+2026-05-20 09:47:30 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:260:26)
+2026-05-20 09:47:30 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:293:20)
+2026-05-20 09:47:30 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:312:20)
+2026-05-20 09:47:30 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:335:24)
+2026-05-20 09:47:30 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:357:20)
+2026-05-20 09:47:30 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:376:9)
+2026-05-20 09:47:30 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:463:22)
+2026-05-20 09:47:30 error: PrismaClientKnownRequestError: 
+Invalid `prisma.certificate.update()` invocation in
+/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:32
+
+  95 const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+  96 
+  97 // Update certificate with blockchain transaction details
+→ 98 await prisma.certificate.update(
+Unique constraint failed on the fields: (`tokenId`)
+    at ei.handleRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:13)
+    at ei.handleAndLogRequestError (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12)
+    at ei.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12)
+    at a (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24)
+    at CertificateService.mintCertificate (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/certificates/CertificateService.ts:98:7)
+    at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:487:18)
+2026-05-20 09:55:55 error: Mint certificate error: Student with ID non-existent-student not found
+2026-05-20 09:55:55 error: Mint certificate error: Course with ID non-existent-course not found

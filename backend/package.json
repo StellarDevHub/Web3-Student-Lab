@@ -4,25 +4,58 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "nodemon src/index.ts"
+    "build": "prisma generate && tsc",
+    "start": "node dist/src/index.js",
+    "start:prod": "node dist/src/index.js",
+    "dev": "tsx watch src/index.ts",
+
+
+    "collaboration": "tsx src/collaborationServer.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@prisma/config": "^7.8.0",
+    "@stellar/stellar-sdk": "^14.6.1",
+    "@types/ioredis": "^4.28.10",
+    "@types/json2csv": "^5.0.7",
+    "bcryptjs": "^3.0.2",
+    "bullmq": "^5.76.1",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
-    "express": "^5.2.1"
+    "ethers": "^5.8.0",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.1",
+    "ioredis": "^5.10.1",
+    "json2csv": "^6.0.0-alpha.2",
+    "jsonwebtoken": "^9.0.2",
+    "openai": "^6.32.0",
+    "pg": "^8.20.0",
+    "prisma": "^7.8.0",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.3",
+    "winston": "^3.19.0",
+    "ws": "^8.20.0",
+    "y-websocket": "^3.0.0",
+    "yjs": "^13.6.30",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",
-    "nodemon": "^3.1.14",
+    "@types/qrcode": "^1.5.5",
+    "@types/ws": "^8.18.1",
     "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
-  "type": "module"
+  "type": "module",
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
 }

@@ -1,0 +1,1 @@
+src/routes/auth/auth.routes.ts(38,30): error TS2304: Cannot find name 'LoginRequest'.
