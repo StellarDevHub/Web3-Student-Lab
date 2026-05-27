@@ -56,6 +56,9 @@ pub mod upgrade;
 pub mod lending;
 #[cfg(test)]
 pub mod lending_tests;
+pub mod circuit_breaker;
+#[cfg(test)]
+pub mod circuit_breaker_tests;
 
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
 
