@@ -1,0 +1,46 @@
+{
+  "recommendations": [
+    // TypeScript/JavaScript
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "ms-vscode.vscode-typescript-next",
+    "bradlc.vscode-tailwindcss",
+    "formulahendry.auto-rename-tag",
+    "christian-kohler.path-intellisense",
+
+    // Rust
+    "rust-lang.rust-analyzer",
+    "vadimcn.vscode-lldb",
+    "tamasfe.even-better-toml",
+
+    // General Development
+    "ms-vscode.vscode-json",
+    "redhat.vscode-yaml",
+    "ms-vscode-remote.remote-containers",
+    "github.copilot",
+    "github.copilot-chat",
+    "ms-vscode.hexeditor",
+
+    // Web3/Blockchain
+    "juanblanco.solidity",
+    "nomicfoundation.hardhat-solidity",
+    "tintinweb.vscode-solidity-auditor",
+
+    // Productivity
+    "ms-vscode.vscode-git-graph",
+    "eamodio.gitlens",
+    "ms-vscode.test-adapter-converter",
+    "humao.rest-client",
+
+    // Code Quality
+    "streetsidesoftware.code-spell-checker",
+    "esbenp.vscode-eslint",
+    "sonarsource.sonarlint-vscode",
+
+    // UI/UX
+    "pkief.material-icon-theme",
+    "zhuangtongfa.material-theme",
+    "ms-vscode.vscode-color-picker"
+  ],
+  "unwantedRecommendations": ["ms-vscode.vscode-typescript", "hookyqr.beautify"]
+}

@@ -30,3 +30,24 @@ yarn-error.log*
 
 # vercel
 .vercel
+target
+Cargo.lock
+
+# build artifacts
+dist/
+backend/dist/
+*.js
+*.js.map
+*.d.ts
+!jest.config.js
+!next.config.ts
+!postcss.config.mjs
+!eslint.config.mjs
+
+
+# temp error logs
+frontend/ts_errors.txt
+frontend/tsc_errors.log
+frontend/tsc_errors_new.log
+frontend/tsc_errors_new2.log
+contracts/test_output_activity.txt

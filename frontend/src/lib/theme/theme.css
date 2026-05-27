@@ -1,0 +1,141 @@
+/* Theme CSS Variables for Light Mode */
+[data-theme='light'],
+.light {
+  /* Background Colors */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f8f8f8;
+  --color-bg-tertiary: #f0f0f0;
+  --color-bg-accent: #fafafa;
+
+  /* Text Colors */
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #666666;
+  --color-text-tertiary: #999999;
+  --color-text-muted: #cccccc;
+
+  /* Border Colors */
+  --color-border-light: #e5e5e5;
+  --color-border-medium: #d0d0d0;
+  --color-border-dark: #b0b0b0;
+
+  /* Interactive Colors */
+  --color-interactive-primary: #7c3aed;
+  --color-interactive-primary-hover: #6d28d9;
+  --color-interactive-secondary: #f0f0f0;
+  --color-interactive-secondary-hover: #e0e0e0;
+
+  /* Status Colors */
+  --color-status-success: #10b981;
+  --color-status-error: #ef4444;
+  --color-status-warning: #f59e0b;
+  --color-status-info: #3b82f6;
+
+  /* Chart Colors */
+  --color-chart-primary: #7c3aed;
+  --color-chart-accent: #a78bfa;
+  --color-chart-neutral: #d1d5db;
+  --color-chart-text: #1a1a1a;
+}
+
+/* Theme CSS Variables for Dark Mode */
+[data-theme='dark'],
+.dark {
+  /* Background Colors */
+  --color-bg-primary: #000000;
+  --color-bg-secondary: #0a0a0a;
+  --color-bg-tertiary: #121212;
+  --color-bg-accent: #1a1a1a;
+
+  /* Text Colors */
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #e5e5e5;
+  --color-text-tertiary: #a0a0a0;
+  --color-text-muted: #666666;
+
+  /* Border Colors */
+  --color-border-light: #2d2d2d;
+  --color-border-medium: #3d3d3d;
+  --color-border-dark: #4d4d4d;
+
+  /* Interactive Colors */
+  --color-interactive-primary: #7c3aed;
+  --color-interactive-primary-hover: #a78bfa;
+  --color-interactive-secondary: #2d2d2d;
+  --color-interactive-secondary-hover: #3d3d3d;
+
+  /* Status Colors */
+  --color-status-success: #10b981;
+  --color-status-error: #ef4444;
+  --color-status-warning: #f59e0b;
+  --color-status-info: #3b82f6;
+
+  /* Chart Colors */
+  --color-chart-primary: #7c3aed;
+  --color-chart-accent: #a78bfa;
+  --color-chart-neutral: #4b5563;
+  --color-chart-text: #ffffff;
+}
+
+/* Ensure theme transitions are smooth */
+html {
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+
+html.dark {
+  color-scheme: dark;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+html:not(.dark) {
+  color-scheme: light;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+/* Utility classes for theme colors */
+.text-theme-primary {
+  color: var(--color-text-primary);
+}
+
+.text-theme-secondary {
+  color: var(--color-text-secondary);
+}
+
+.text-theme-tertiary {
+  color: var(--color-text-tertiary);
+}
+
+.text-theme-muted {
+  color: var(--color-text-muted);
+}
+
+.bg-theme-primary {
+  background-color: var(--color-bg-primary);
+}
+
+.bg-theme-secondary {
+  background-color: var(--color-bg-secondary);
+}
+
+.bg-theme-tertiary {
+  background-color: var(--color-bg-tertiary);
+}
+
+.bg-theme-accent {
+  background-color: var(--color-bg-accent);
+}
+
+.border-theme-light {
+  border-color: var(--color-border-light);
+}
+
+.border-theme-medium {
+  border-color: var(--color-border-medium);
+}
+
+.border-theme-dark {
+  border-color: var(--color-border-dark);
+}

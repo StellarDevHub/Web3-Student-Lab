@@ -1,0 +1,6 @@
+# Backend build output
+dist/
+node_modules/
+logs/
+*.log
+.prisma/

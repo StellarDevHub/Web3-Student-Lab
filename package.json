@@ -1,0 +1,25 @@
+{
+  "name": "web3-student-lab-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Root configuration for Web3 Student Lab monorepo",
+  "scripts": {
+    "prepare": "husky",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "format:staged": "lint-staged",
+    "install-all": "npm install && npm install --prefix backend && npm install --prefix frontend",
+    "dev-all": "concurrently --kill-others-on-fail \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "build-all": "npm run build --prefix backend && npm run build --prefix frontend",
+    "start-all": "concurrently --kill-others-on-fail \"npm run start --prefix backend\" \"npm run start --prefix frontend\"",
+    "test-all": "npm run test --prefix backend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+
+  "dependencies": {
+    "@stellar/stellar-sdk": "^14.6.1"
+  },
+  "packageManager": "pnpm@10.26.1+sha512.664074abc367d2c9324fdc18037097ce0a8f126034160f709928e9e9f95d98714347044e5c3164d65bd5da6c59c6be362b107546292a8eecb7999196e5ce58fa"
+}
