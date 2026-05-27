@@ -15,20 +15,21 @@ pub mod activity_log;
 pub mod admin;
 pub mod crowdfunding;
 pub mod dao_treasury;
-pub mod dynamic_staking;
 pub mod dex_aggregator;
-pub mod oracle_aggregator;
 pub mod distribution_manager;
+pub mod dynamic_staking;
 pub mod enrollment;
 pub mod events;
 pub mod execution_engine;
 pub mod gaming_asset_exchange;
 pub mod membership_nft;
+pub mod oracle_aggregator;
 pub mod paymaster;
 pub mod payment_gateway;
 pub mod payment_scheduler;
 pub mod quadratic_voting;
 pub mod rarity_validator;
+pub mod rbac;
 pub mod reputation_system;
 pub mod revocation;
 pub mod route_optimizer;
@@ -174,6 +175,22 @@ enum DataKey {
     RevocationHistory(u128),
     /// Next certificate token ID counter for reissuance tracking.
     NextTokenId,
+
+    // RBAC System Keys
+    /// RBAC system initialization flag
+    RBACInitialized,
+    /// Role definitions (RoleLevel -> Role)
+    RoleDefinition(crate::rbac::RoleLevel),
+    /// User role assignments (Address -> UserRole)
+    UserRole(Address),
+    /// Permission delegations (delegatee, permission -> Delegation)
+    Delegation(Address, crate::rbac::Permission),
+    /// User's delegation list (delegator -> Vec<DataKey>)
+    UserDelegations(Address),
+    /// Temporary permissions (user, permission -> TemporaryPermission)
+    TemporaryPermission(Address, crate::rbac::Permission),
+    /// User's temporary permissions list (user -> Vec<DataKey>)
+    UserTemporaryPermissions(Address),
 }
 
 #[contracterror]
