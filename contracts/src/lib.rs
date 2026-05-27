@@ -53,6 +53,9 @@ pub mod merkle_distributor;
 pub mod milestone_release;
 pub mod token;
 pub mod upgrade;
+pub mod lending;
+#[cfg(test)]
+pub mod lending_tests;
 
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
 
