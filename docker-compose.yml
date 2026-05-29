@@ -23,8 +23,102 @@ services:
     restart: always
     ports:
       - "6380:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Sentinel 1 - Monitors primary Redis instance
+  redis-sentinel-1:
+    image: redis:7-alpine
+    container_name: web3-student-lab-sentinel-1
+    restart: always
+    ports:
+      - "26379:26379"
+    command: redis-sentinel /etc/sentinel.conf --port 26379
+    volumes:
+      - ./redis-sentinel.conf:/etc/sentinel.conf:ro
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Sentinel 2
+  redis-sentinel-2:
+    image: redis:7-alpine
+    container_name: web3-student-lab-sentinel-2
+    restart: always
+    ports:
+      - "26380:26379"
+    command: redis-sentinel /etc/sentinel.conf --port 26379
+    volumes:
+      - ./redis-sentinel.conf:/etc/sentinel.conf:ro
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cluster Node 1
+  redis-cluster-1:
+    image: redis:7-alpine
+    container_name: web3-student-lab-redis-cluster-1
+    restart: always
+    ports:
+      - "6381:6381"
+      - "16381:16381"
+    command: redis-server --port 6381 --cluster-enabled yes --cluster-config-file nodes-1.conf --cluster-node-timeout 5000 --appendonly yes
+    volumes:
+      - redis_cluster_1_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6381", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cluster Node 2
+  redis-cluster-2:
+    image: redis:7-alpine
+    container_name: web3-student-lab-redis-cluster-2
+    restart: always
+    ports:
+      - "6382:6382"
+      - "16382:16382"
+    command: redis-server --port 6382 --cluster-enabled yes --cluster-config-file nodes-2.conf --cluster-node-timeout 5000 --appendonly yes
+    volumes:
+      - redis_cluster_2_data:/data
+    depends_on:
+      - redis-cluster-1
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6382", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cluster Node 3
+  redis-cluster-3:
+    image: redis:7-alpine
+    container_name: web3-student-lab-redis-cluster-3
+    restart: always
+    ports:
+      - "6383:6383"
+      - "16383:16383"
+    command: redis-server --port 6383 --cluster-enabled yes --cluster-config-file nodes-3.conf --cluster-node-timeout 5000 --appendonly yes
+    volumes:
+      - redis_cluster_3_data:/data
+    depends_on:
+      - redis-cluster-1
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6383", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -39,17 +133,37 @@ services:
       - "8080:8080"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/web3-student-lab?schema=public
-      - REDIS_URL=redis://redis:6379
       - NODE_ENV=development
       - JWT_SECRET=your-secret-key-change-in-production
+      # Redis Configuration - Choose one of: standalone, sentinel, cluster
+      - REDIS_MODE=standalone
+      # Standalone Redis
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      # Redis Sentinel (activate by setting REDIS_MODE=sentinel)
+      - REDIS_SENTINELS=redis-sentinel-1:26379,redis-sentinel-2:26380
+      - REDIS_SENTINEL_NAME=mymaster
+      # Redis Cluster (activate by setting REDIS_MODE=cluster)
+      - REDIS_CLUSTER_NODES=redis-cluster-1:6381,redis-cluster-2:6382,redis-cluster-3:6383
+      # Cache warming and block polling
+      - CACHE_WARMING_INTERVAL=300000
+      - BLOCK_POLL_INTERVAL=10000
+      - INSTANCE_ID=backend-1
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - web3-network
+
+networks:
+  web3-network:
+    driver: bridge
 
 volumes:
   postgres_data:
   redis_data:
+  redis_cluster_1_data:
+  redis_cluster_2_data:
+  redis_cluster_3_data:

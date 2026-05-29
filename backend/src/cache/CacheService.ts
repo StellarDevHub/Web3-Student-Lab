@@ -1,11 +1,12 @@
-import redisClient from './RedisClient.js';
 import logger from '../utils/logger.js';
+import redisClient from './RedisClient.js';
 
 export const CACHE_KEYS = {
   user: {
     profile: (userId: string) => `user:profile:${userId}`,
     progress: (userId: string) => `user:progress:${userId}`,
     certificates: (userId: string) => `user:certs:${userId}`,
+    onChainData: (userId: string) => `user:onchain:${userId}`,
   },
   courses: {
     list: () => 'courses:list',
@@ -15,6 +16,17 @@ export const CACHE_KEYS = {
   leaderboard: {
     global: () => 'leaderboard:global',
     weekly: () => 'leaderboard:weekly',
+  },
+  blockchain: {
+    latestBlock: () => 'blockchain:latest-block',
+    blockByHeight: (height: number) => `blockchain:block:${height}`,
+    account: (address: string) => `account:${address}`,
+    balance: (address: string) => `account:balance:${address}`,
+    contractState: (contractId: string) => `contract:state:${contractId}`,
+    contractData: (contractId: string, key: string) => `contract:data:${contractId}:${key}`,
+    transaction: (txHash: string) => `transaction:${txHash}`,
+    transactionStatus: (txHash: string) => `transaction:status:${txHash}`,
+    tokenMetadata: (tokenId: string) => `token:metadata:${tokenId}`,
   },
 };
 
@@ -100,6 +112,114 @@ class CacheService {
       misses: this.metrics.misses,
       hitRate: hitRate.toFixed(2) + '%',
     };
+  }
+
+  /**
+   * Cache blockchain account data
+   */
+  async cacheAccountData(
+    address: string,
+    data: any,
+    ttl: number = 30
+  ): Promise<void> {
+    try {
+      const key = CACHE_KEYS.blockchain.account(address);
+      await this.set(key, data, ttl);
+      logger.debug(`Cached account data for ${address}`);
+    } catch (error) {
+      logger.error(`Error caching account data for ${address}:`, error);
+    }
+  }
+
+  /**
+   * Get cached blockchain account data
+   */
+  async getAccountData(address: string): Promise<any | null> {
+    try {
+      const key = CACHE_KEYS.blockchain.account(address);
+      return await this.get(key);
+    } catch (error) {
+      logger.error(`Error retrieving account data for ${address}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Cache contract state
+   */
+  async cacheContractState(
+    contractId: string,
+    state: any,
+    ttl: number = 60
+  ): Promise<void> {
+    try {
+      const key = CACHE_KEYS.blockchain.contractState(contractId);
+      await this.set(key, state, ttl);
+      logger.debug(`Cached contract state for ${contractId}`);
+    } catch (error) {
+      logger.error(`Error caching contract state for ${contractId}:`, error);
+    }
+  }
+
+  /**
+   * Get cached contract state
+   */
+  async getContractState(contractId: string): Promise<any | null> {
+    try {
+      const key = CACHE_KEYS.blockchain.contractState(contractId);
+      return await this.get(key);
+    } catch (error) {
+      logger.error(`Error retrieving contract state for ${contractId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Cache transaction status
+   */
+  async cacheTransactionStatus(
+    txHash: string,
+    status: any,
+    ttl: number = 120
+  ): Promise<void> {
+    try {
+      const key = CACHE_KEYS.blockchain.transactionStatus(txHash);
+      await this.set(key, status, ttl);
+      logger.debug(`Cached transaction status for ${txHash}`);
+    } catch (error) {
+      logger.error(`Error caching transaction status for ${txHash}:`, error);
+    }
+  }
+
+  /**
+   * Get cached transaction status
+   */
+  async getTransactionStatus(txHash: string): Promise<any | null> {
+    try {
+      const key = CACHE_KEYS.blockchain.transactionStatus(txHash);
+      return await this.get(key);
+    } catch (error) {
+      logger.error(`Error retrieving transaction status for ${txHash}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Invalidate all blockchain caches
+   */
+  async invalidateBlockchainCache(): Promise<void> {
+    try {
+      await Promise.all([
+        this.delPattern('blockchain:*'),
+        this.delPattern('account:*'),
+        this.delPattern('contract:*'),
+        this.delPattern('transaction:*'),
+        this.delPattern('token:*'),
+      ]);
+      logger.info('Invalidated all blockchain caches');
+    } catch (error) {
+      logger.error('Error invalidating blockchain caches:', error);
+    }
   }
 
   resetMetrics() {

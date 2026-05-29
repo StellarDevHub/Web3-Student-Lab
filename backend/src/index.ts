@@ -1,10 +1,13 @@
 import cors from 'cors';
-import dotenv from 'dotenv';
 import express, { Request, Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { createServer } from 'http';
+import blockHeaderListener from './cache/BlockHeaderListener.js';
 import cacheMetrics from './cache/CacheMetrics.js';
+import cacheWarmer from './cache/CacheWarmer.js';
+import distributedCacheManager from './cache/DistributedCacheManager.js';
 import redisClient from './cache/RedisClient.js';
+import { rpcCacheHeadersMiddleware, rpcCacheMiddleware } from './cache/RPCInterceptor.js';
 import prisma from './db/index.js';
 import { dbRoutingMiddleware } from './middleware/dbRouting.js';
 import { decryptionMiddleware } from './middleware/encryptionMiddleware.js';
@@ -32,6 +35,17 @@ if (process.env.NODE_ENV !== 'test') {
   redisClient.connect().catch((err) => {
     logger.warn('Redis connection failed, continuing without cache:', err);
   });
+
+  // Initialize distributed caching components
+  blockHeaderListener.start().catch((err) => {
+    logger.warn('BlockHeaderListener failed to start:', err);
+  });
+
+  cacheWarmer.start().catch((err) => {
+    logger.warn('CacheWarmer failed to start:', err);
+  });
+
+  logger.info('Distributed caching layer initialized');
 }
 
 export const app: express.Application = express();
@@ -68,11 +82,19 @@ app.get('/health', (_req: Request, res: Response) => {
     uptime: process.uptime(),
     version: '1.0.0',
     redis: redisClient.isHealthy() ? 'connected' : 'disconnected',
+    redisMode: redisClient.getMode(),
+    blockHeaderListener: blockHeaderListener.getStatus(),
+    cacheWarmer: cacheWarmer.getStatus(),
   });
 });
 
 // Cache metrics endpoint
 app.use('/api/v1/cache', cacheMetrics);
+
+// RPC caching middleware for Soroban calls
+// This middleware intercepts and caches RPC method calls
+app.use('/api/rpc', rpcCacheHeadersMiddleware);
+app.use('/api/rpc', rpcCacheMiddleware);
 
 // API Routes - with workspace isolation
 app.use('/api/v1', requireWorkspaceMiddleware, routes);
@@ -90,9 +112,17 @@ if (process.env.NODE_ENV !== 'test') {
   // Graceful shutdown
   process.on('SIGINT', async () => {
     logger.info('Shutting down gracefully...');
+
+    // Stop cache components
+    blockHeaderListener.stop();
+    cacheWarmer.stop();
+    await distributedCacheManager.gracefulShutdown();
+
+    // Clean up connections
     await redisClient.disconnect();
     await prisma.$disconnect();
     await Promise.all([redisConnection.quit(), pubClient.quit(), subClient.quit()]);
+
     server?.close(() => {
       logger.info('Server closed');
       process.exit(0);
@@ -101,9 +131,17 @@ if (process.env.NODE_ENV !== 'test') {
 
   process.on('SIGTERM', async () => {
     logger.info('Shutting down gracefully...');
+
+    // Stop cache components
+    blockHeaderListener.stop();
+    cacheWarmer.stop();
+    await distributedCacheManager.gracefulShutdown();
+
+    // Clean up connections
     await redisClient.disconnect();
     await prisma.$disconnect();
     await Promise.all([redisConnection.quit(), pubClient.quit(), subClient.quit()]);
+
     server?.close(() => {
       logger.info('Server closed');
       process.exit(0);
