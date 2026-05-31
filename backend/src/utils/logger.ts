@@ -34,4 +34,23 @@ const logger = winston.createLogger({
   ],
 });
 
+// Immutable file logger specifically for audit events
+export const auditLogger = winston.createLogger({
+  level: 'info',
+  format: combine(
+    timestamp(),
+    printf((info) => {
+      // Use JSON format for structured, easily parseable logs
+      return JSON.stringify(info);
+    })
+  ),
+  transports: [
+    new winston.transports.File({
+      filename: 'logs/audit-immutable.log',
+      // By default, Winston's file transport appends to the file,
+      // creating an immutable record of events over time.
+    }),
+  ],
+});
+
 export default logger;

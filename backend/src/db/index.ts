@@ -16,7 +16,9 @@ const workspaceModels = new Set([
   'Canvas',
 ]);
 
-const basePrisma = globalForPrisma.prisma ?? new PrismaClient();
+const basePrisma = globalForPrisma.prisma ?? new PrismaClient({
+  accelerateUrl: process.env.DATABASE_URL || 'prisma://dummy:dummy@localhost:5432/dummy'
+});
 
 const prisma = basePrisma.$extends({
   name: 'workspace-isolation',
