@@ -8,8 +8,6 @@
     "start": "node dist/src/index.js",
     "start:prod": "node dist/src/index.js",
     "dev": "tsx watch src/index.ts",
-
-
     "collaboration": "tsx src/collaborationServer.ts"
   },
   "keywords": [],
@@ -37,6 +35,8 @@
     "prisma": "^7.8.0",
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.3",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1",
     "winston": "^3.19.0",
     "ws": "^8.20.0",
     "y-websocket": "^3.0.0",
@@ -47,9 +47,17 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
     "@types/node": "^25.5.0",
     "@types/qrcode": "^1.5.5",
+    "@types/supertest": "^7.2.0",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/swagger-ui-express": "^4.1.8",
     "@types/ws": "^8.18.1",
+    "ioredis-mock": "^8.13.1",
+    "jest": "^30.4.2",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"

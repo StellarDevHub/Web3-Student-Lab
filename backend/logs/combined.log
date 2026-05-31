@@ -3823,3 +3823,9 @@ Unique constraint failed on the fields: (`tokenId`)
 2026-05-20 09:55:58 info: Certificate minted on-chain: cert-api-stud-api-cour-1779267358588 -> token 295396
 2026-05-20 09:55:58 info: Certificate minted: cert-api-stud-api-cour-1779267358588
 2026-05-20 09:55:58 info: GET /api/v1/certificates/verify/295396
+2026-05-31 10:58:30 info: RSA Key rotated. New Key ID: 39431d76-3a74-4482-8b8f-dddaef95d07a
+2026-05-31 10:58:31 info: Blockchain service initialized in simulation mode
+2026-05-31 10:58:33 info: GET /api-docs
+2026-05-31 10:58:33 info: GET /api-docs/
+2026-05-31 10:58:33 info: GET /api-docs/swagger-ui-init.js
+2026-05-31 10:59:35 info: RSA Key rotated. New Key ID: 4378b973-ea24-496d-bc4c-5469e7e1fb72

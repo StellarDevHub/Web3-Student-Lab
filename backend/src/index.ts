@@ -19,6 +19,8 @@ import routes from './routes/index.js';
 import { validateEnvironment } from './utils/checkEnv.js';
 import logger from './utils/logger.js';
 import { pubClient, redisConnection, subClient } from './utils/redis.js';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger.js';
 import { initializeWebSocket } from './websocket/WebSocketServer.js';
 
 // Load environment variables
@@ -74,6 +76,37 @@ app.use(apiRateLimiter);
 app.use(limiter);
 app.use(requestLogger);
 
+/**
+ * @openapi
+ * /health:
+ *   get:
+ *     summary: Health check endpoint
+ *     description: Returns the health status of the API and its dependencies
+ *     tags: [System]
+ *     responses:
+ *       200:
+ *         description: API is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: ok
+ *                 message:
+ *                   type: string
+ *                   example: Web3 Student Lab Backend is running
+ *                 uptime:
+ *                   type: number
+ *                   example: 123.45
+ *                 version:
+ *                   type: string
+ *                   example: 1.0.0
+ *                 redis:
+ *                   type: string
+ *                   example: connected
+ */
 // Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
   res.json({
@@ -98,6 +131,13 @@ app.use('/api/rpc', rpcCacheMiddleware);
 
 // API Routes - with workspace isolation
 app.use('/api/v1', requireWorkspaceMiddleware, routes);
+
+// Swagger Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  explorer: true,
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Web3 Student Lab API Documentation'
+}));
 
 // Start server only if not in test environment
 let server: ReturnType<typeof httpServer.listen> | null = null;
