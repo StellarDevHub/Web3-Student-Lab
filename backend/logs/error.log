@@ -1844,3 +1844,483 @@ Unique constraint failed on the fields: (`tokenId`)
     at Object.<anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/tests/certificates.test.ts:487:18)
 2026-05-20 09:55:55 error: Mint certificate error: Student with ID non-existent-student not found
 2026-05-20 09:55:55 error: Mint certificate error: Course with ID non-existent-course not found
+2026-05-31 05:35:41 error: Error: Stream isn't writeable and enableOfflineQueue options is false
+    at EventEmitter.sendCommand (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/ioredis@5.11.0/node_modules/ioredis/built/Redis.js:376:32)
+    at EventEmitter.ping (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/ioredis@5.11.0/node_modules/ioredis/built/utils/Commander.js:90:25)
+    at RedisClient.ping (/workspaces/Web3-Student-Lab/backend/src/cache/RedisClient.ts:90:40)
+    at RedisClient.connect (/workspaces/Web3-Student-Lab/backend/src/cache/RedisClient.ts:79:18)
+    at Object.<anonymous> (/workspaces/Web3-Student-Lab/backend/tests/cache-distributed.test.ts:11:23)
+    at Promise.then.completed (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (<anonymous>)
+    at callAsyncCircusFn (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusHook (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:281:40)
+    at _runTestsForDescribeBlock (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:95:7)
+    at _runTestsForDescribeBlock (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
+2026-05-31 05:35:41 error: AggregateError: 
+    at internalConnectMultiple (node:net:1142:49)
+    at afterConnectMultiple (node:net:1723:7)
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: DB health check failed
+2026-05-31 05:35:43 error: Error: Stream isn't writeable and enableOfflineQueue options is false
+    at EventEmitter.sendCommand (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/ioredis@5.11.0/node_modules/ioredis/built/Redis.js:376:32)
+    at EventEmitter.ping (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/ioredis@5.11.0/node_modules/ioredis/built/utils/Commander.js:90:25)
+    at RedisClient.ping (/workspaces/Web3-Student-Lab/backend/src/cache/RedisClient.ts:90:40)
+    at RedisClient.connect (/workspaces/Web3-Student-Lab/backend/src/cache/RedisClient.ts:79:18)
+    at Object.<anonymous> (/workspaces/Web3-Student-Lab/backend/tests/cache.test.ts:7:23)
+    at Promise.then.completed (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (<anonymous>)
+    at callAsyncCircusFn (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusHook (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:281:40)
+    at _runTestsForDescribeBlock (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:95:7)
+    at _runTestsForDescribeBlock (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
+2026-05-31 11:33:24 error: PrismaClientKnownRequestError: 
+Invalid `prisma.auditLog.create()` invocation in
+/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:27
+
+  41 auditLogger.info(logEntry);
+  42 
+  43 // 4. Write to database for querying and UI display
+→ 44 await prisma.auditLog.create(
+Error validating `accelerateUrl`: the URL must start with the protocol `prisma://` or `prisma+postgres://`
+    at zr.handleRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+    at zr.request (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:963:24)
+    at logAudit (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:5)
+2026-05-31 11:33:24 error: PrismaClientKnownRequestError: 
+Invalid `prisma.auditLog.create()` invocation in
+/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:27
+
+  41 auditLogger.info(logEntry);
+  42 
+  43 // 4. Write to database for querying and UI display
+→ 44 await prisma.auditLog.create(
+Error validating `accelerateUrl`: the URL must start with the protocol `prisma://` or `prisma+postgres://`
+    at zr.handleRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+    at zr.request (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:963:24)
+    at logAudit (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:5)
+    at Object.<anonymous> (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/tests/audit-system.test.ts:48:7)
+2026-05-31 11:33:24 error: PrismaClientKnownRequestError: 
+Invalid `prisma.auditLog.create()` invocation in
+/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:27
+
+  41 auditLogger.info(logEntry);
+  42 
+  43 // 4. Write to database for querying and UI display
+→ 44 await prisma.auditLog.create(
+Error validating `accelerateUrl`: the URL must start with the protocol `prisma://` or `prisma+postgres://`
+    at zr.handleRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+    at zr.request (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:963:24)
+    at logAudit (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:5)
+    at Object.<anonymous> (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/tests/audit-system.test.ts:84:7)
+2026-05-31 11:33:24 error: PrismaClientKnownRequestError: 
+Invalid `prisma.auditLog.create()` invocation in
+/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:27
+
+  41 auditLogger.info(logEntry);
+  42 
+  43 // 4. Write to database for querying and UI display
+→ 44 await prisma.auditLog.create(
+Error validating `accelerateUrl`: the URL must start with the protocol `prisma://` or `prisma+postgres://`
+    at zr.handleRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+    at zr.request (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:963:24)
+    at logAudit (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:5)
+    at Object.<anonymous> (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/tests/audit-system.test.ts:100:7)
+2026-05-31 11:33:24 error: PrismaClientKnownRequestError: 
+Invalid `prisma.auditLog.create()` invocation in
+/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:27
+
+  41 auditLogger.info(logEntry);
+  42 
+  43 // 4. Write to database for querying and UI display
+→ 44 await prisma.auditLog.create(
+Error validating `accelerateUrl`: the URL must start with the protocol `prisma://` or `prisma+postgres://`
+    at zr.handleRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+    at zr.request (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:963:24)
+    at logAudit (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:5)
+2026-05-31 11:33:42 error: PrismaClientKnownRequestError: 
+Invalid `prisma.auditLog.create()` invocation in
+/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:27
+
+  41 auditLogger.info(logEntry);
+  42 
+  43 // 4. Write to database for querying and UI display
+→ 44 await prisma.auditLog.create(
+Error validating `accelerateUrl`: the URL must start with the protocol `prisma://` or `prisma+postgres://`
+    at zr.handleRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+    at zr.request (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:963:24)
+    at logAudit (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:5)
+    at Object.<anonymous> (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/tests/audit-system.test.ts:48:7)
+2026-05-31 11:33:42 error: PrismaClientKnownRequestError: 
+Invalid `prisma.auditLog.create()` invocation in
+/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:27
+
+  41 auditLogger.info(logEntry);
+  42 
+  43 // 4. Write to database for querying and UI display
+→ 44 await prisma.auditLog.create(
+Error validating `accelerateUrl`: the URL must start with the protocol `prisma://` or `prisma+postgres://`
+    at zr.handleRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+    at zr.request (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:963:24)
+    at logAudit (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:5)
+    at Object.<anonymous> (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/tests/audit-system.test.ts:84:7)
+2026-05-31 11:33:42 error: PrismaClientKnownRequestError: 
+Invalid `prisma.auditLog.create()` invocation in
+/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:27
+
+  41 auditLogger.info(logEntry);
+  42 
+  43 // 4. Write to database for querying and UI display
+→ 44 await prisma.auditLog.create(
+Error validating `accelerateUrl`: the URL must start with the protocol `prisma://` or `prisma+postgres://`
+    at zr.handleRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+    at zr.request (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:963:24)
+    at logAudit (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:5)
+    at Object.<anonymous> (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/tests/audit-system.test.ts:100:7)
+2026-05-31 11:33:42 error: PrismaClientKnownRequestError: 
+Invalid `prisma.auditLog.create()` invocation in
+/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:27
+
+  41 auditLogger.info(logEntry);
+  42 
+  43 // 4. Write to database for querying and UI display
+→ 44 await prisma.auditLog.create(
+Error validating `accelerateUrl`: the URL must start with the protocol `prisma://` or `prisma+postgres://`
+    at zr.handleRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+    at zr.request (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:963:24)
+    at logAudit (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:5)
+2026-05-31 11:33:42 error: PrismaClientKnownRequestError: 
+Invalid `prisma.auditLog.create()` invocation in
+/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:27
+
+  41 auditLogger.info(logEntry);
+  42 
+  43 // 4. Write to database for querying and UI display
+→ 44 await prisma.auditLog.create(
+Error validating `accelerateUrl`: the URL must start with the protocol `prisma://` or `prisma+postgres://`
+    at zr.handleRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+    at zr.request (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:963:24)
+    at logAudit (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:5)
+2026-05-31 11:34:15 error: PrismaClientKnownRequestError: 
+Invalid `prisma.auditLog.create()` invocation in
+/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:27
+
+  41 auditLogger.info(logEntry);
+  42 
+  43 // 4. Write to database for querying and UI display
+→ 44 await prisma.auditLog.create(
+Error validating `accelerateUrl`: the URL must start with the protocol `prisma://` or `prisma+postgres://`
+    at zr.handleRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+    at zr.request (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:963:24)
+    at logAudit (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:5)
+    at Object.<anonymous> (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/tests/audit-system.test.ts:48:7)
+2026-05-31 11:34:15 error: PrismaClientKnownRequestError: 
+Invalid `prisma.auditLog.create()` invocation in
+/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:27
+
+  41 auditLogger.info(logEntry);
+  42 
+  43 // 4. Write to database for querying and UI display
+→ 44 await prisma.auditLog.create(
+Error validating `accelerateUrl`: the URL must start with the protocol `prisma://` or `prisma+postgres://`
+    at zr.handleRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+    at zr.request (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:963:24)
+    at logAudit (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:5)
+    at Object.<anonymous> (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/tests/audit-system.test.ts:84:7)
+2026-05-31 11:34:15 error: PrismaClientKnownRequestError: 
+Invalid `prisma.auditLog.create()` invocation in
+/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:27
+
+  41 auditLogger.info(logEntry);
+  42 
+  43 // 4. Write to database for querying and UI display
+→ 44 await prisma.auditLog.create(
+Error validating `accelerateUrl`: the URL must start with the protocol `prisma://` or `prisma+postgres://`
+    at zr.handleRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+    at zr.request (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:963:24)
+    at logAudit (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:5)
+    at Object.<anonymous> (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/tests/audit-system.test.ts:100:7)
+2026-05-31 11:34:15 error: PrismaClientKnownRequestError: 
+Invalid `prisma.auditLog.create()` invocation in
+/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:27
+
+  41 auditLogger.info(logEntry);
+  42 
+  43 // 4. Write to database for querying and UI display
+→ 44 await prisma.auditLog.create(
+Error validating `accelerateUrl`: the URL must start with the protocol `prisma://` or `prisma+postgres://`
+    at zr.handleRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+    at zr.request (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:963:24)
+    at logAudit (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:5)
+2026-05-31 11:34:15 error: PrismaClientKnownRequestError: 
+Invalid `prisma.auditLog.create()` invocation in
+/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:27
+
+  41 auditLogger.info(logEntry);
+  42 
+  43 // 4. Write to database for querying and UI display
+→ 44 await prisma.auditLog.create(
+Error validating `accelerateUrl`: the URL must start with the protocol `prisma://` or `prisma+postgres://`
+    at zr.handleRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+    at zr.request (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:963:24)
+    at logAudit (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/src/utils/audit.ts:44:5)
+2026-05-31 11:34:56 error: Error: DB Error
+    at Object.<anonymous> (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/tests/audit-system.test.ts:52:45)
+    at Promise.finally.completed (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)
+    at new Promise (<anonymous>)
+    at callAsyncCircusFn (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)
+    at _callCircusTest (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1011:40)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at _runTest (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:951:3)
+    at /home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:853:7
+    at _runTestsForDescribeBlock (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:866:11)
+    at _runTestsForDescribeBlock (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:861:11)
+    at _runTestsForDescribeBlock (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:861:11)
+    at run (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:765:3)
+    at runAndTransformResultsToJestFormat (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1993:21)
+    at jestAdapter (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/runner.js:111:19)
+    at runTestInternal (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-runner/build/index.js:276:16)
+    at runTest (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-runner/build/index.js:344:7)
+2026-05-31 11:35:14 error: Error: DB Error
+    at Object.<anonymous> (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/tests/audit-system.test.ts:52:45)
+    at Promise.finally.completed (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)
+    at new Promise (<anonymous>)
+    at callAsyncCircusFn (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)
+    at _callCircusTest (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1011:40)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at _runTest (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:951:3)
+    at /home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:853:7
+    at _runTestsForDescribeBlock (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:866:11)
+    at _runTestsForDescribeBlock (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:861:11)
+    at _runTestsForDescribeBlock (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:861:11)
+    at run (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:765:3)
+    at runAndTransformResultsToJestFormat (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1993:21)
+    at jestAdapter (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/runner.js:111:19)
+    at runTestInternal (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-runner/build/index.js:276:16)
+    at runTest (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-runner/build/index.js:344:7)
+2026-05-31 11:35:44 error: Error: DB Error
+    at Object.<anonymous> (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/tests/audit-system.test.ts:52:45)
+    at Promise.finally.completed (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)
+    at new Promise (<anonymous>)
+    at callAsyncCircusFn (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)
+    at _callCircusTest (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1011:40)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at _runTest (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:951:3)
+    at /home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:853:7
+    at _runTestsForDescribeBlock (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:866:11)
+    at _runTestsForDescribeBlock (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:861:11)
+    at _runTestsForDescribeBlock (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:861:11)
+    at run (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:765:3)
+    at runAndTransformResultsToJestFormat (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1993:21)
+    at jestAdapter (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/runner.js:111:19)
+    at runTestInternal (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-runner/build/index.js:276:16)
+    at runTest (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-runner/build/index.js:344:7)
+2026-05-31 11:36:04 error: Error: DB Error
+    at Object.<anonymous> (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/tests/audit-system.test.ts:52:45)
+    at Promise.finally.completed (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)
+    at new Promise (<anonymous>)
+    at callAsyncCircusFn (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)
+    at _callCircusTest (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1011:40)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at _runTest (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:951:3)
+    at /home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:853:7
+    at _runTestsForDescribeBlock (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:866:11)
+    at _runTestsForDescribeBlock (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:861:11)
+    at _runTestsForDescribeBlock (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:861:11)
+    at run (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:765:3)
+    at runAndTransformResultsToJestFormat (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1993:21)
+    at jestAdapter (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/runner.js:111:19)
+    at runTestInternal (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-runner/build/index.js:276:16)
+    at runTest (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-runner/build/index.js:344:7)
+2026-05-31 11:36:39 error: Error: DB Error
+    at Object.<anonymous> (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/tests/audit-system.test.ts:52:45)
+    at Promise.finally.completed (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)
+    at new Promise (<anonymous>)
+    at callAsyncCircusFn (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)
+    at _callCircusTest (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1011:40)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at _runTest (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:951:3)
+    at /home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:853:7
+    at _runTestsForDescribeBlock (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:866:11)
+    at _runTestsForDescribeBlock (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:861:11)
+    at _runTestsForDescribeBlock (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:861:11)
+    at run (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:765:3)
+    at runAndTransformResultsToJestFormat (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/jestAdapterInit.js:1993:21)
+    at jestAdapter (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-circus/build/runner.js:111:19)
+    at runTestInternal (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-runner/build/index.js:276:16)
+    at runTest (/home/edohwares/Desktop/Room/drips/kingadams/Web3-Student-Lab/backend/node_modules/jest-runner/build/index.js:344:7)
+2026-05-31 11:03:29 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.

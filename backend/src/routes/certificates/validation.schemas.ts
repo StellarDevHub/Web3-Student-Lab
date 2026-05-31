@@ -45,33 +45,57 @@ export const CertificateMetadataSchema = z.object({
 
 export type CertificateMetadata = z.infer<typeof CertificateMetadataSchema>;
 
+const IdentifierSchema = z
+  .string()
+  .min(1, 'Identifier is required')
+  .max(100, 'Identifier cannot exceed 100 characters')
+  .regex(/^[a-zA-Z0-9_-]+$/, 'Identifiers may only include letters, numbers, underscores, and hyphens');
+
+const TokenIdSchema = z
+  .string()
+  .min(1, 'Token ID cannot be empty')
+  .max(100, 'Token ID cannot exceed 100 characters')
+  .regex(/^[a-zA-Z0-9_-]+$/, 'Token ID may only include letters, numbers, underscores, and hyphens');
+
+const DidSchema = z
+  .string()
+  .min(10, 'DID is too short')
+  .max(200, 'DID cannot exceed 200 characters')
+  .regex(/^did:[a-z0-9]+:[A-Za-z0-9._-]+$/, 'Invalid DID format');
+
 // Mint request schema
-export const MintCertificateSchema = z.object({
-  studentId: z.string().min(1),
-  courseId: z.string().min(1),
-  tokenId: z.string().optional(),
-  grade: z.string().optional(),
-  did: z.string().optional(),
-});
+export const MintCertificateSchema = z
+  .object({
+    studentId: IdentifierSchema,
+    courseId: IdentifierSchema,
+    tokenId: TokenIdSchema.optional(),
+    grade: z.string().min(1, 'Grade cannot be empty').max(20, 'Grade cannot exceed 20 characters').optional(),
+    did: DidSchema.optional(),
+  })
+  .strict();
 
 export type MintCertificateRequest = z.infer<typeof MintCertificateSchema>;
 
 // Revoke certificate schema
-export const RevokeCertificateSchema = z.object({
-  certificateId: z.string().min(1),
-  reason: z.string().min(1).max(500),
-  revokedBy: z.string().min(1),
-});
+export const RevokeCertificateSchema = z
+  .object({
+    certificateId: IdentifierSchema,
+    reason: z.string().min(1, 'Revocation reason is required').max(500, 'Reason cannot exceed 500 characters'),
+    revokedBy: DidSchema,
+  })
+  .strict();
 
 export type RevokeCertificateRequest = z.infer<typeof RevokeCertificateSchema>;
 
 // Reissue certificate schema
-export const ReissueCertificateSchema = z.object({
-  certificateId: z.string().min(1),
-  reason: z.string().min(1).max(500),
-  newGrade: z.string().optional(),
-  issuedBy: z.string().min(1),
-});
+export const ReissueCertificateSchema = z
+  .object({
+    certificateId: IdentifierSchema,
+    reason: z.string().min(1, 'Reissuance reason is required').max(500, 'Reason cannot exceed 500 characters'),
+    newGrade: z.string().min(1, 'Grade cannot be empty').max(20, 'Grade cannot exceed 20 characters').optional(),
+    issuedBy: DidSchema,
+  })
+  .strict();
 
 export type ReissueCertificateRequest = z.infer<typeof ReissueCertificateSchema>;
 

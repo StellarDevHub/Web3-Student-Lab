@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { captureException } from '../utils/sentry.js';
 
 export const asyncHandler = (
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>
@@ -10,7 +11,8 @@ export const asyncHandler = (
 
 // Global error handler middleware
 export const errorHandler = (err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error('Error:', err);
+  captureException(err);
+  console.error('Error:', err instanceof Error ? err.stack || err.message : err);
   res.status(500).json({
     status: 'error',
     message: 'Internal server error',
