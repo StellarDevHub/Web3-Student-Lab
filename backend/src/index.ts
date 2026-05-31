@@ -20,6 +20,8 @@ import { validateEnvironment } from './utils/checkEnv.js';
 import logger from './utils/logger.js';
 import { pubClient, redisConnection, subClient } from './utils/redis.js';
 import { initializeWebSocket } from './websocket/WebSocketServer.js';
+import { initializeSentry, getSentryErrorHandler, getSentryRequestHandler } from './utils/sentry.js';
+import { errorHandler } from './middleware/errorHandler.js';
 
 // Load environment variables
 // dotenv.config(); // Skip in Docker Compose - use environment variables instead
@@ -29,6 +31,9 @@ import { initializeWebSocket } from './websocket/WebSocketServer.js';
 if (process.env.NODE_ENV !== 'test') {
   validateEnvironment();
 }
+
+// Initialize Sentry if configured
+initializeSentry();
 
 // Initialize Redis connection
 if (process.env.NODE_ENV !== 'test') {
@@ -73,6 +78,7 @@ const limiter = rateLimit({
 app.use(apiRateLimiter);
 app.use(limiter);
 app.use(requestLogger);
+app.use(getSentryRequestHandler());
 
 // Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
@@ -150,3 +156,5 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 app.use('/api/freelance', freelanceRoute);
+app.use(getSentryErrorHandler());
+app.use(errorHandler);

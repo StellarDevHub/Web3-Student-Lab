@@ -131,6 +131,24 @@ describe('Certificate Validation Schemas', () => {
       const invalid = { studentId: 'student-123' };
       expect(() => MintCertificateSchema.parse(invalid)).toThrow();
     });
+
+    it('should reject invalid tokenId format', () => {
+      const invalid = {
+        studentId: 'student-123',
+        courseId: 'course-456',
+        tokenId: 'bad token!'
+      };
+      expect(() => MintCertificateSchema.parse(invalid)).toThrow();
+    });
+
+    it('should reject invalid DID values', () => {
+      const invalid = {
+        studentId: 'student-123',
+        courseId: 'course-456',
+        did: 'invalid-did',
+      };
+      expect(() => MintCertificateSchema.parse(invalid)).toThrow();
+    });
   });
 
   describe('RevokeCertificateSchema', () => {

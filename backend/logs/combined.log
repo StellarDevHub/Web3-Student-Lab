@@ -3823,3 +3823,217 @@ Unique constraint failed on the fields: (`tokenId`)
 2026-05-20 09:55:58 info: Certificate minted on-chain: cert-api-stud-api-cour-1779267358588 -> token 295396
 2026-05-20 09:55:58 info: Certificate minted: cert-api-stud-api-cour-1779267358588
 2026-05-20 09:55:58 info: GET /api/v1/certificates/verify/295396
+2026-05-31 05:35:41 info: Connecting to standalone Redis...
+2026-05-31 05:35:41 error: Error: Stream isn't writeable and enableOfflineQueue options is false
+    at EventEmitter.sendCommand (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/ioredis@5.11.0/node_modules/ioredis/built/Redis.js:376:32)
+    at EventEmitter.ping (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/ioredis@5.11.0/node_modules/ioredis/built/utils/Commander.js:90:25)
+    at RedisClient.ping (/workspaces/Web3-Student-Lab/backend/src/cache/RedisClient.ts:90:40)
+    at RedisClient.connect (/workspaces/Web3-Student-Lab/backend/src/cache/RedisClient.ts:79:18)
+    at Object.<anonymous> (/workspaces/Web3-Student-Lab/backend/tests/cache-distributed.test.ts:11:23)
+    at Promise.then.completed (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (<anonymous>)
+    at callAsyncCircusFn (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusHook (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:281:40)
+    at _runTestsForDescribeBlock (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:95:7)
+    at _runTestsForDescribeBlock (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
+2026-05-31 05:35:41 info: Invalidated all blockchain caches
+2026-05-31 05:35:41 info: BlockHeaderListener started
+2026-05-31 05:35:41 info: BlockHeaderListener stopped
+2026-05-31 05:35:41 error: AggregateError: 
+    at internalConnectMultiple (node:net:1142:49)
+    at afterConnectMultiple (node:net:1723:7)
+2026-05-31 05:35:42 warn: Redis (standalone) connection closed
+2026-05-31 05:35:42 warn: Redis (standalone) reconnecting after 50ms
+2026-05-31 05:35:42 info: BlockHeaderListener stopped
+2026-05-31 05:35:42 warn: Error: Stream isn't writeable and enableOfflineQueue options is false
+    at EventEmitter.sendCommand (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/ioredis@5.11.0/node_modules/ioredis/built/Redis.js:376:32)
+    at EventEmitter.quit (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/ioredis@5.11.0/node_modules/ioredis/built/utils/Commander.js:90:25)
+    at RedisClient.disconnect (/workspaces/Web3-Student-Lab/backend/src/cache/RedisClient.ts:119:27)
+    at Object.<anonymous> (/workspaces/Web3-Student-Lab/backend/tests/cache-distributed.test.ts:16:23)
+    at Promise.then.completed (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (<anonymous>)
+    at callAsyncCircusFn (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusHook (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:281:40)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at runNextTicks (node:internal/process/task_queues:69:3)
+    at processTimers (node:internal/timers:538:9)
+    at _runTestsForDescribeBlock (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:154:7)
+    at _runTestsForDescribeBlock (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
+2026-05-31 05:35:42 info: ✅ Environment variables validated successfully
+2026-05-31 05:35:42 info: 🌍 Environment: development
+2026-05-31 05:35:42 info: 🔌 Port: 8080
+2026-05-31 05:35:42 info: 🌐 Stellar Network: testnet
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "short"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: JWT_SECRET
+Description: Secret key for JWT token signing and verification
+Current value: "your-secret-key-change-in-production"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Invalid value for environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Current value: "invalid-url-format"
+Please check .env.example for the correct format.
+
+Missing required environment variable: REDIS_URL
+Description: Redis connection URL for background jobs and WebSockets
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: STELLAR_ISSUER_SECRET_KEY
+Description: Stellar secret key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Missing required environment variable: STELLAR_ISSUER_PUBLIC_KEY
+Description: Stellar public key for certificate issuance (production only)
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 05:35:42 info: ✅ Environment variables validated successfully
+2026-05-31 05:35:42 info: 🌍 Environment: production
+2026-05-31 05:35:42 info: 🔌 Port: 8080
+2026-05-31 05:35:42 info: 🌐 Stellar Network: testnet
+2026-05-31 05:35:42 info: ✅ Environment variables validated successfully
+2026-05-31 05:35:42 info: 🌍 Environment: development
+2026-05-31 05:35:42 info: 🔌 Port: 8080
+2026-05-31 05:35:42 info: 🌐 Stellar Network: testnet
+2026-05-31 05:35:42 info: ✅ Environment variables validated successfully
+2026-05-31 05:35:42 info: 🌍 Environment: development
+2026-05-31 05:35:42 info: 🔌 Port: 3000
+2026-05-31 05:35:42 info: 🌐 Stellar Network: mainnet
+2026-05-31 05:35:42 warn: DB health alerts
+2026-05-31 05:35:42 error: DB health check failed
+2026-05-31 05:35:43 info: Connecting to standalone Redis...
+2026-05-31 05:35:43 error: Error: Stream isn't writeable and enableOfflineQueue options is false
+    at EventEmitter.sendCommand (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/ioredis@5.11.0/node_modules/ioredis/built/Redis.js:376:32)
+    at EventEmitter.ping (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/ioredis@5.11.0/node_modules/ioredis/built/utils/Commander.js:90:25)
+    at RedisClient.ping (/workspaces/Web3-Student-Lab/backend/src/cache/RedisClient.ts:90:40)
+    at RedisClient.connect (/workspaces/Web3-Student-Lab/backend/src/cache/RedisClient.ts:79:18)
+    at Object.<anonymous> (/workspaces/Web3-Student-Lab/backend/tests/cache.test.ts:7:23)
+    at Promise.then.completed (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (<anonymous>)
+    at callAsyncCircusFn (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusHook (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:281:40)
+    at _runTestsForDescribeBlock (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:95:7)
+    at _runTestsForDescribeBlock (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
+2026-05-31 05:35:43 warn: Error: Stream isn't writeable and enableOfflineQueue options is false
+    at EventEmitter.sendCommand (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/ioredis@5.11.0/node_modules/ioredis/built/Redis.js:376:32)
+    at EventEmitter.quit (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/ioredis@5.11.0/node_modules/ioredis/built/utils/Commander.js:90:25)
+    at RedisClient.disconnect (/workspaces/Web3-Student-Lab/backend/src/cache/RedisClient.ts:119:27)
+    at Object.<anonymous> (/workspaces/Web3-Student-Lab/backend/tests/cache.test.ts:11:23)
+    at Promise.then.completed (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (<anonymous>)
+    at callAsyncCircusFn (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusHook (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:281:40)
+    at _runTestsForDescribeBlock (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:154:7)
+    at _runTestsForDescribeBlock (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
+    at run (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/workspaces/Web3-Student-Lab/backend/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)

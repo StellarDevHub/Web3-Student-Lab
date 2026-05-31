@@ -110,6 +110,14 @@ const OPTIONAL_VARS: Record<string, { defaultValue: string; description: string 
     defaultValue: '',
     description: 'OpenAI API key for project idea generation (optional)',
   },
+  SENTRY_DSN: {
+    defaultValue: '',
+    description: 'Sentry DSN for centralized error reporting (optional)',
+  },
+  SENTRY_RELEASE: {
+    defaultValue: 'web3-student-lab@1.0.0',
+    description: 'Release tag sent to Sentry for error grouping',
+  },
 };
 
 /**
