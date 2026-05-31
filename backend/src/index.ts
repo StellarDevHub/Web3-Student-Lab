@@ -21,6 +21,7 @@ import logger from './utils/logger.js';
 import { pubClient, redisConnection, subClient } from './utils/redis.js';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
+import config from './config/env.config.js';
 import { initializeWebSocket } from './websocket/WebSocketServer.js';
 
 // Load environment variables
@@ -28,12 +29,13 @@ import { initializeWebSocket } from './websocket/WebSocketServer.js';
 
 // Validate environment variables before starting the application
 // Skip validation in test environment as tests may override environment variables
-if (process.env.NODE_ENV !== 'test') {
-  validateEnvironment();
+// Note: validation is now also triggered during config module load
+if (config.app.env !== 'test') {
+  logger.info('Application Configuration Loaded', config.getSafeConfig());
 }
 
 // Initialize Redis connection
-if (process.env.NODE_ENV !== 'test') {
+if (config.app.env !== 'test') {
   redisClient.connect().catch((err) => {
     logger.warn('Redis connection failed, continuing without cache:', err);
   });
@@ -52,7 +54,7 @@ if (process.env.NODE_ENV !== 'test') {
 
 export const app: express.Application = express();
 const httpServer = createServer(app);
-const port = process.env.PORT || 8080;
+const port = config.app.port || 8080;
 
 app.use(cors());
 app.use(express.json());
@@ -142,7 +144,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 // Start server only if not in test environment
 let server: ReturnType<typeof httpServer.listen> | null = null;
 
-if (process.env.NODE_ENV !== 'test') {
+if (config.app.env !== 'test') {
   server = httpServer.listen(port, () => {
     logger.info(`Server is running on port ${port}`);
   });

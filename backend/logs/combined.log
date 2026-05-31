@@ -3829,3 +3829,37 @@ Unique constraint failed on the fields: (`tokenId`)
 2026-05-31 10:58:33 info: GET /api-docs/
 2026-05-31 10:58:33 info: GET /api-docs/swagger-ui-init.js
 2026-05-31 10:59:35 info: RSA Key rotated. New Key ID: 4378b973-ea24-496d-bc4c-5469e7e1fb72
+2026-05-31 11:03:29 info: ✅ Environment variables validated successfully
+2026-05-31 11:03:29 info: ✅ Environment variables validated successfully
+2026-05-31 11:03:29 info: ✅ Environment variables validated successfully
+2026-05-31 11:03:29 error: ❌ Environment Configuration Error: Environment validation failed:
+
+Missing required environment variable: DATABASE_URL
+Description: PostgreSQL connection string for database connectivity
+Please check your .env file and .env.example for guidance.
+
+Please copy .env.example to .env and fill in the required values.
+2026-05-31 11:03:29 info: 🌍 Environment: development
+2026-05-31 11:03:29 info: 🔌 Port: 8080
+2026-05-31 11:03:29 info: 🌐 Stellar Network: testnet
+2026-05-31 11:03:29 info: 🌍 Environment: development
+2026-05-31 11:03:29 info: 🔌 Port: 8080
+2026-05-31 11:03:29 info: 🌐 Stellar Network: testnet
+2026-05-31 11:03:29 info: 🌍 Environment: development
+2026-05-31 11:03:29 info: 🔌 Port: 8080
+2026-05-31 11:03:29 info: 🌐 Stellar Network: testnet
+2026-05-31 11:03:58 warn: Failed to load .env file, using environment variables from system.
+2026-05-31 11:03:58 info: ✅ Environment variables validated successfully
+2026-05-31 11:03:58 info: 🌍 Environment: development
+2026-05-31 11:03:58 info: 🔌 Port: 8080
+2026-05-31 11:03:58 info: 🌐 Stellar Network: testnet
+2026-05-31 11:04:21 warn: Failed to load .env file, using environment variables from system.
+2026-05-31 11:04:21 info: ✅ Environment variables validated successfully
+2026-05-31 11:04:21 info: 🌍 Environment: development
+2026-05-31 11:04:21 info: 🔌 Port: 8080
+2026-05-31 11:04:21 info: 🌐 Stellar Network: testnet
+2026-05-31 11:04:50 warn: Failed to load .env file, using environment variables from system.
+2026-05-31 11:04:50 info: ✅ Environment variables validated successfully
+2026-05-31 11:04:50 info: 🌍 Environment: development
+2026-05-31 11:04:50 info: 🔌 Port: 8080
+2026-05-31 11:04:50 info: 🌐 Stellar Network: testnet
