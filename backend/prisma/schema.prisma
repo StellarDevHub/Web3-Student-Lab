@@ -30,6 +30,7 @@ model Student {
   canvases      Canvas[]
 
   @@map("students")
+  @@index([workspaceId, email])
   @@index([firstName, lastName])
   @@index([email])
   @@index([createdAt])
@@ -51,6 +52,7 @@ model Course {
   learningProgress LearningProgress[]
 
   @@map("courses")
+  @@index([workspaceId, title])
   @@index([title])
   @@index([instructor])
   @@index([credits])
@@ -87,6 +89,8 @@ model Certificate {
   @@index([issuedAt])
   @@index([studentId])
   @@index([courseId])
+  @@index([studentId, status])
+  @@index([courseId, issuedAt])
 }
 
 model Enrollment {
@@ -102,6 +106,9 @@ model Enrollment {
 
   @@unique([studentId, courseId])
   @@map("enrollments")
+  @@index([studentId])
+  @@index([courseId])
+  @@index([status])
 }
 
 model Feedback {
@@ -140,6 +147,10 @@ model LearningProgress {
 
   @@unique([studentId, courseId])
   @@map("learning_progress")
+  @@index([studentId])
+  @@index([courseId])
+  @@index([status])
+  @@index([lastAccessedAt])
 }
 
 model AuditLog {
