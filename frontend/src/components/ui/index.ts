@@ -1,8 +1,11 @@
 export { Alert } from './Alert';
 export { Badge } from './Badge';
+export { BookmarkButton } from './BookmarkButton';
 export { Button } from './Button';
 export { Card } from './Card';
 export { Dialog } from './Dialog';
+export { ErrorBoundary } from './ErrorBoundary';
+export { ErrorFallback } from './ErrorFallback';
 export { Input } from './Input';
 export { Label } from './Label';
 export { Progress } from './Progress';

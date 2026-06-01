@@ -66,6 +66,7 @@ export interface UserState {
       title: string;
       url: string;
       addedAt: string;
+      tags?: string[];
     }>;
     notes: Array<{
       id: string;
