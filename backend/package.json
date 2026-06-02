@@ -8,10 +8,8 @@
     "start": "node dist/src/index.js",
     "start:prod": "node dist/src/index.js",
     "dev": "tsx watch src/index.ts",
-    "test": "jest --runInBand",
-    "test:coverage": "jest --coverage --runInBand",
-    "collaboration": "tsx src/collaborationServer.ts",
-    "test": "DATABASE_URL='postgres://dummy:dummy@localhost:5432/dummy' node --experimental-vm-modules node_modules/jest/bin/jest.js"
+    "test": "NODE_ENV=test jest --runInBand",
+    "test:coverage": "NODE_ENV=test jest --coverage --runInBand",
     "collaboration": "tsx src/collaborationServer.ts"
   },
   "keywords": [],
