@@ -38,6 +38,7 @@ import infrastructureRouter from '../infrastructure/infrastructure.routes.js';
 import simulatorRouter from '../simulator/simulator.routes.js';
 
 import webhooksRouter from './webhooks.js';
+import adminDLQRouter from './admin/dlq.routes.js';
 
 const router = Router();
 
@@ -67,6 +68,7 @@ router.use('/simulator', simulatorRouter);
 router.use('/playground', playgroundRouter);
 router.use('/export', exportRouter);
 router.use('/webhooks', webhooksRouter);
+router.use('/admin/dlq', adminDLQRouter);
 router.use('/user', userRouter);
 router.use('/metrics', metricsRouter);
 router.use('/dependencies', dependenciesRouter);

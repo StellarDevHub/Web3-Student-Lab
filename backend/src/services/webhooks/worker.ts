@@ -90,6 +90,8 @@ export const deliverWebhook = async (
   );
 };
 
+import { enqueueToDLQ } from '../dlq.service.js';
+
 const moveToDeadLetterQueue = async (
   job: Job<WebhookDeliveryJobData>,
   error: Error
@@ -103,6 +105,16 @@ const moveToDeadLetterQueue = async (
   await webhookDeadLetterQueue.add(job.data.event.type, deadLetterJob, {
     removeOnComplete: true,
     removeOnFail: false,
+  });
+
+  await enqueueToDLQ({
+    originalQueue: WEBHOOK_DELIVERY_QUEUE_NAME,
+    jobName: job.data.event.type,
+    data: job.data as any,
+    opts: job.opts as any,
+    error: error.message,
+    traceId: (job.data as any).traceId || job.data.deliveryId || job.data.event.id,
+    attemptsMade: job.attemptsMade || 1,
   });
 };
 
