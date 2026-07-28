@@ -162,6 +162,45 @@ services:
     networks:
       - web3-network
 
+  # Soroban / Stellar event indexer. Polls the Soroban RPC, persists events
+  # into a SQLite file (mounted as a Docker volume) and exposes a WebSocket /
+  # SSE fan-out on :3001 that the frontend can subscribe to for live event
+  # updates. Uses the same Docker network as the backend so it can also reach
+  # Postgres when DATABASE_URL is overridden.
+  indexer:
+    build:
+      context: ./indexer
+      dockerfile: Dockerfile
+    image: web3-student-lab-indexer:latest
+    container_name: web3-student-lab-indexer
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      # Default to local SQLite. To use Postgres instead uncomment the line
+      # below and remove the DATABASE_URL — the service auto-detects the
+      # scheme.
+      - DATABASE_URL=sqlite:///data/indexer.db?mode=rwc
+      # - DATABASE_URL=postgresql://postgres:postgres@db:5432/web3-student-lab
+      - SOROBAN_RPC_URL=${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
+      - POLL_INTERVAL_MS=${INDEXER_POLL_INTERVAL_MS:-5000}
+      - BATCH_SIZE=${INDEXER_BATCH_SIZE:-100}
+      - RUST_LOG=${RUST_LOG:-info,indexer=debug}
+    volumes:
+      - indexer_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/soroban-indexer", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - web3-network
+
 networks:
   web3-network:
     driver: bridge
@@ -172,3 +211,4 @@ volumes:
   redis_cluster_1_data:
   redis_cluster_2_data:
   redis_cluster_3_data:
+  indexer_data:
