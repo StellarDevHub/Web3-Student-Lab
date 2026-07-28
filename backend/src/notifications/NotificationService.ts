@@ -1,12 +1,10 @@
 // @ts-nocheck
-import {
-  CourseNotification,
-  CourseNotificationType,
-  CreateCourseNotificationDto,
-  NotificationListResponse,
-} from './notification.types.js';
 import logger from '../utils/logger.js';
-import { pubClient } from '../utils/redis.js';
+import {
+    CourseNotification,
+    CreateCourseNotificationDto,
+    NotificationListResponse
+} from './notification.types.js';
 
 /**
  * In-memory notification store keyed by user id (or 'broadcast' for global).

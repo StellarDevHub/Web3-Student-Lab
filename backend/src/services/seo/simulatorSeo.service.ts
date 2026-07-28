@@ -1,5 +1,4 @@
 // @ts-nocheck
-import { redisConnection } from '../../utils/redis.js';
 
 export interface SimulatorAsset {
   slug: string;
@@ -99,7 +98,7 @@ export class SimulatorSeoService {
   private fallbackWrites = 0;
 
   constructor(dependencies: SeoServiceDependencies = {}) {
-    this.cache = dependencies.cache ?? (redisConnection as SeoCacheClient);
+    this.cache = dependencies.cache ?? (redisClient.getClient() as SeoCacheClient);
     this.fetchAssetIndexImpl = dependencies.fetchAssetIndex ?? (async () => DEFAULT_ASSETS);
     this.fetchSitemapXmlImpl = dependencies.fetchSitemapXml ?? (async () => DEFAULT_SITEMAP_XML);
     this.now = dependencies.now ?? (() => Date.now());

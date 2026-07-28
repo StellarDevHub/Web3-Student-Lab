@@ -7,6 +7,8 @@ type RedisClientType = Redis | Cluster;
 class RedisClient {
   private static instance: RedisClient;
   private client: RedisClientType | null = null;
+  private pubClient: RedisClientType | null = null;
+  private subClient: RedisClientType | null = null;
   private memoryStore = new Map<string, string>();
   private isConnected = false;
   private mode: 'standalone' | 'cluster' | 'sentinel' = 'standalone';
@@ -29,10 +31,16 @@ class RedisClient {
       switch (this.mode) {
         case 'cluster':
           this.client = new Cluster(redisClusterConfig.nodes, redisClusterConfig.options as any);
+          // For cluster mode, pub/sub clients use the same cluster instance
+          this.pubClient = this.client;
+          this.subClient = this.client;
           logger.info('Connecting to Redis Cluster...');
           break;
         case 'sentinel':
           this.client = new Redis(redisSentinelConfig as any);
+          // Create separate pub/sub clients for sentinel mode
+          this.pubClient = new Redis(redisSentinelConfig as any);
+          this.subClient = new Redis(redisSentinelConfig as any);
           logger.info('Connecting to Redis Sentinel...');
           break;
         default:
@@ -40,6 +48,14 @@ class RedisClient {
             this.client = new Redis(process.env.REDIS_URL, redisConfig);
           } else {
             this.client = new Redis(redisConfig);
+          }
+          // For standalone mode, create separate pub/sub clients for BullMQ/WebSocket
+          if (process.env.REDIS_URL) {
+            this.pubClient = new Redis(process.env.REDIS_URL, redisConfig);
+            this.subClient = new Redis(process.env.REDIS_URL, redisConfig);
+          } else {
+            this.pubClient = new Redis(redisConfig);
+            this.subClient = new Redis(redisConfig);
           }
           logger.info('Connecting to standalone Redis...');
       }
@@ -68,6 +84,18 @@ class RedisClient {
         logger.warn(`Redis (${this.mode}) reconnecting after ${time}ms`);
       });
 
+      // Setup pub/sub client error handlers
+      if (this.pubClient && this.pubClient !== this.client) {
+        this.pubClient.on('error', (err) => {
+          logger.error('Redis pubClient error:', err);
+        });
+      }
+      if (this.subClient && this.subClient !== this.client) {
+        this.subClient.on('error', (err) => {
+          logger.error('Redis subClient error:', err);
+        });
+      }
+
       // For cluster mode, listen to cluster events
       if (this.mode === 'cluster' && this.client instanceof Cluster) {
         this.client.on('node error', (err, node) => {
@@ -84,6 +112,8 @@ class RedisClient {
     } catch (error) {
       logger.error(`Failed to initialize Redis client (${this.mode}):`, error);
       this.client = null;
+      this.pubClient = null;
+      this.subClient = null;
       this.isConnected = false;
     }
   }
@@ -128,7 +158,25 @@ class RedisClient {
       }
     }
 
+    if (this.pubClient && this.pubClient !== this.client) {
+      try {
+        await this.pubClient.quit();
+      } catch (error) {
+        logger.warn('Error during Redis pubClient disconnect:', error);
+      }
+    }
+
+    if (this.subClient && this.subClient !== this.client) {
+      try {
+        await this.subClient.quit();
+      } catch (error) {
+        logger.warn('Error during Redis subClient disconnect:', error);
+      }
+    }
+
     this.client = null;
+    this.pubClient = null;
+    this.subClient = null;
     this.isConnected = false;
     this.memoryStore.clear();
   }
@@ -155,6 +203,24 @@ class RedisClient {
         error: String(error),
       };
     }
+  }
+
+  /**
+   * Get pub/sub clients for BullMQ and WebSocket
+   */
+  getPubClient(): RedisClientType | null {
+    return this.pubClient || this.client;
+  }
+
+  getSubClient(): RedisClientType | null {
+    return this.subClient || this.client;
+  }
+
+  /**
+   * Get a client compatible with BullMQ (alias for main client)
+   */
+  getBullMQClient(): RedisClientType | null {
+    return this.client;
   }
 }
 

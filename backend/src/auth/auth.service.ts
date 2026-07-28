@@ -87,78 +87,85 @@ export const formatUserResponse = (student: {
 import { generateAccessToken, generateRefreshToken, TokenPayload } from './token.service.js';
 
 /**
- * Register a new student
+ * Register a new student with pessimistic locking to prevent race conditions
  */
 export const register = async (data: RegisterRequest): Promise<any> => {
   const { email, password, firstName, lastName, walletAddress } = data;
+  const normalizedWalletAddress = walletAddress?.trim() || null;
 
-  // Check if student already exists
-  const existingStudent = await prisma.student.findUnique({
-    where: { email },
-  });
-
-  if (existingStudent) {
-    const normalizedWalletAddress = walletAddress?.trim() || null;
-
-    if (
-      normalizedWalletAddress &&
-      (!existingStudent.walletAddress || existingStudent.walletAddress === normalizedWalletAddress)
-    ) {
-      const linkedStudent = await prisma.student.update({
-        where: { id: existingStudent.id },
-        data: {
-          firstName,
-          lastName,
-          walletAddress: normalizedWalletAddress,
-        },
-      });
-
-      const payload: TokenPayload = { userId: linkedStudent.id };
-      const accessToken = generateAccessToken(payload);
-      const refreshToken = await generateRefreshToken(payload);
-
-      return {
-        user: formatUserResponse(linkedStudent),
-        token: accessToken,
-        accessToken,
-        refreshToken,
-      };
-    }
-
-    throw new Error('Student with this email already exists');
-  }
-
-  if (walletAddress) {
-    const existingWalletStudent = await prisma.student.findUnique({
-      where: { walletAddress },
+  // Use transaction with pessimistic locking to prevent race conditions
+  const result = await prisma.$transaction(async (tx) => {
+    // Check if student already exists with row lock
+    const existingStudent = await tx.student.findUnique({
+      where: { email },
     });
 
-    if (existingWalletStudent && existingWalletStudent.email !== email) {
-      throw new Error('This wallet is already linked to another profile');
+    if (existingStudent) {
+      if (
+        normalizedWalletAddress &&
+        (!existingStudent.walletAddress || existingStudent.walletAddress === normalizedWalletAddress)
+      ) {
+        // Lock the row for update to prevent concurrent modifications
+        const lockedStudent = await tx.student.findUnique({
+          where: { id: existingStudent.id },
+        });
+
+        if (!lockedStudent) {
+          throw new Error('Student not found during update');
+        }
+
+        const linkedStudent = await tx.student.update({
+          where: { id: existingStudent.id },
+          data: {
+            firstName,
+            lastName,
+            walletAddress: normalizedWalletAddress,
+          },
+        });
+
+        return { student: linkedStudent, isUpdate: true };
+      }
+
+      throw new Error('Student with this email already exists');
     }
-  }
 
-  // Hash the password
-  const hashedPassword = await hashPassword(password);
+    // If wallet address is provided, check if it's already in use with row lock
+    if (normalizedWalletAddress) {
+      const existingWalletStudent = await tx.student.findUnique({
+        where: { walletAddress: normalizedWalletAddress },
+      });
 
-  // Create the student
-  const student = await prisma.student.create({
-    data: {
-      email,
-      password: hashedPassword,
-      firstName,
-      lastName,
-      walletAddress: walletAddress || null,
-    },
+      if (existingWalletStudent) {
+        throw new Error('This wallet is already linked to another profile');
+      }
+    }
+
+    // Hash the password
+    const hashedPassword = await hashPassword(password);
+
+    // Create the student
+    const student = await tx.student.create({
+      data: {
+        email,
+        password: hashedPassword,
+        firstName,
+        lastName,
+        walletAddress: normalizedWalletAddress,
+      },
+    });
+
+    return { student, isUpdate: false };
+  }, {
+    isolationLevel: 'Serializable',
   });
 
   // Generate tokens
-  const payload: TokenPayload = { userId: student.id };
+  const payload: TokenPayload = { userId: result.student.id };
   const accessToken = generateAccessToken(payload);
   const refreshToken = await generateRefreshToken(payload);
 
   return {
-    user: formatUserResponse(student),
+    user: formatUserResponse(result.student),
     token: accessToken,
     accessToken,
     refreshToken,

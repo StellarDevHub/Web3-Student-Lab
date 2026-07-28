@@ -38,9 +38,7 @@ const createQueue = (name: string, defaultJobOptions?: JobsOptions) => {
     } as unknown as Queue<WebhookDeliveryJobData>;
   }
 
-  const redisUrl = new URL(process.env.REDIS_URL || (() => {
-    throw new Error('REDIS_URL environment variable is required');
-  })());
+  const redisUrl = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
 
   return new Queue<WebhookDeliveryJobData>(name, {
     connection: {

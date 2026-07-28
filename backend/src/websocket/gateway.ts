@@ -1,8 +1,8 @@
 import { Server, Socket } from 'socket.io';
 import { verifyToken } from '../auth/auth.service.js';
+import redisClient from '../cache/RedisClient.js';
 import { sseSessionManager } from '../sse/SseSessionManager.js';
 import logger from '../utils/logger.js';
-import { pubClient, subClient } from '../utils/redis.js';
 
 export const initWebSocketGateway = (io: Server) => {
   logger.info('Initializing WebSocket Gateway...');
@@ -51,41 +51,49 @@ export const initWebSocketGateway = (io: Server) => {
   });
 
   // Redis Pub/Sub Layer
-  subClient.subscribe('dashboard_updated', 'user_metrics_updated', 'course_notifications', (err, count) => {
-    if (err) {
-      logger.error('Failed to subscribe to Redis channels', err);
-    } else {
-      logger.info(`Subscribed to ${count} Redis channels`);
-    }
-  });
-
-  subClient.on('message', (channel, message) => {
-    logger.debug(`Received message from Redis channel ${channel}: ${message}`);
-    const data = JSON.parse(message);
-
-    // Broadcast to the corresponding Socket.io room/channel
-    if (channel === 'dashboard_updated') {
-      io.emit('dashboard_updated', data);
-    } else if (channel === 'user_metrics_updated') {
-      if (data.userId) {
-        io.to(`user:${data.userId}`).emit('user_metrics_updated', data);
-        sseSessionManager.emitToUser(String(data.userId), 'user_metrics_updated', data);
-      }
-    } else if (channel === 'course_notifications') {
-      // Course notifications can be targeted or broadcast
-      if (data.userId) {
-        io.to(`user:${data.userId}`).emit('course_notification', data);
+  const subClient = redisClient.getSubClient();
+  if (subClient) {
+    subClient.subscribe('dashboard_updated', 'user_metrics_updated', 'course_notifications', (err, count) => {
+      if (err) {
+        logger.error('Failed to subscribe to Redis channels', err);
       } else {
-        // Broadcast to all connected clients
-        io.emit('course_notification', data);
+        logger.info(`Subscribed to ${count} Redis channels`);
       }
-    }
-  });
+    });
+
+    subClient.on('message', (channel, message) => {
+      logger.debug(`Received message from Redis channel ${channel}: ${message}`);
+      const data = JSON.parse(message);
+
+      // Broadcast to the corresponding Socket.io room/channel
+      if (channel === 'dashboard_updated') {
+        io.emit('dashboard_updated', data);
+      } else if (channel === 'user_metrics_updated') {
+        if (data.userId) {
+          io.to(`user:${data.userId}`).emit('user_metrics_updated', data);
+          sseSessionManager.emitToUser(String(data.userId), 'user_metrics_updated', data);
+        }
+      } else if (channel === 'course_notifications') {
+        // Course notifications can be targeted or broadcast
+        if (data.userId) {
+          io.to(`user:${data.userId}`).emit('course_notification', data);
+        } else {
+          // Broadcast to all connected clients
+          io.emit('course_notification', data);
+        }
+      }
+    });
+  } else {
+    logger.warn('Redis subClient not available, WebSocket pub/sub disabled');
+  }
 };
 
 /**
  * Utility function to broadcast events from other parts of the backend
  */
 export const broadcastEvent = async (channel: string, data: unknown) => {
-  await pubClient.publish(channel, JSON.stringify(data));
+  const pubClient = redisClient.getPubClient();
+  if (pubClient) {
+    await pubClient.publish(channel, JSON.stringify(data));
+  }
 };

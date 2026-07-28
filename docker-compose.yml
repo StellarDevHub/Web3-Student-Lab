@@ -17,6 +17,24 @@ services:
       timeout: 5s
       retries: 5
 
+  db-read-replica:
+    image: postgres:15-alpine
+    container_name: web3-student-lab-db-replica
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: web3-student-lab
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     container_name: web3-student-lab-redis
@@ -133,6 +151,7 @@ services:
       - "8080:8080"
     environment:
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/web3-student-lab?schema=public
+      - DB_READ_REPLICA_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db-read-replica:5432/web3-student-lab?schema=public
       - NODE_ENV=development
       - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
       # GitHub OAuth Configuration
@@ -157,6 +176,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      db-read-replica:
+        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
@@ -174,6 +195,7 @@ networks:
 
 volumes:
   postgres_data:
+  postgres_replica_data:
   redis_data:
   redis_cluster_1_data:
   redis_cluster_2_data:
