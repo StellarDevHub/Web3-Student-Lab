@@ -1,8 +1,8 @@
 import { HashService } from '../src/dashboard/hash.service';
-import prisma from '../src/db/prisma';
+import prisma from '../src/db/index';
 
-// Mock Prisma
-jest.mock('../src/db/prisma', () => ({
+// Mock Prisma client used by HashService
+jest.mock('../src/db/index', () => ({
   hashSimulation: {
     create: jest.fn(),
     findMany: jest.fn(),

@@ -131,8 +131,8 @@ class RedisClient {
     }
   }
 
-  getClient(): RedisClientType | null {
-    return this.isConnected ? this.client : null;
+  getClient(): RedisClientType {
+    return this.client as RedisClientType;
   }
 
   getMemoryStore(): Map<string, string> {

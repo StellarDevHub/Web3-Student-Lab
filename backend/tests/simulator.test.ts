@@ -1,8 +1,8 @@
 import { VotingService } from '../src/simulator/voting.service';
-import prisma from '../src/db/prisma';
+import prisma from '../src/db/index';
 
-// Mock Prisma
-jest.mock('../src/db/prisma', () => ({
+// Mock Prisma client used by VotingService
+jest.mock('../src/db/index', () => ({
   idea: {
     create: jest.fn(),
     findMany: jest.fn(),

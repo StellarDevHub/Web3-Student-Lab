@@ -1,6 +1,6 @@
 import prisma from '../db/index.js';
 import logger from '../utils/logger.js';
-import { redisConnection } from '../utils/redis.js';
+import redisConnection from '../utils/redis.js';
 
 export interface NotificationPreferences {
   id: string;
@@ -51,8 +51,7 @@ export class NotificationPreferencesService {
   async getByStudentId(studentId: string): Promise<NotificationPreferences | null> {
     try {
       const cacheKey = `notification_prefs:${studentId}`;
-      const client = redisClient.getClient();
-      const cached = client ? await client.get(cacheKey) : null;
+      const cached = await redisConnection.get(cacheKey);
       if (cached) {
         return JSON.parse(cached) as NotificationPreferences;
       }
@@ -62,7 +61,7 @@ export class NotificationPreferencesService {
       });
 
       if (prefs) {
-        if (client) await client.setex(cacheKey, 120, JSON.stringify(prefs));
+        await redisConnection.setex(cacheKey, 120, JSON.stringify(prefs));
       }
 
       return prefs as NotificationPreferences | null;

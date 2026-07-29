@@ -4,6 +4,9 @@ node_modules/
 target/
 contracts/target/
 
+# Orphan root lockfile causes Next/webpack SyntaxError when present without package.json
+/package-lock.json
+
 # testing
 coverage/
 

@@ -1,5 +1,6 @@
 import http from 'http';
 import { WebSocketServer } from 'ws';
+// @ts-expect-error: y-websocket does not provide type declarations for its bin utils
 import { setupWSConnection } from 'y-websocket/bin/utils';
 
 const port = process.env.WS_PORT || 1234;
