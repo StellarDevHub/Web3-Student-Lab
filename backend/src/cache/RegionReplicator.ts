@@ -1,4 +1,3 @@
-// @ts-nocheck
 import Redis from 'ioredis';
 import logger from '../utils/logger.js';
 import {
@@ -99,12 +98,14 @@ export class RegionReplicator {
     const replicated: string[] = [];
     const failed: string[] = [];
 
-    try {
-      await this.writeOne(origin, key, value, ttlSeconds);
-      replicated.push(origin);
-    } catch (error) {
-      logger.error(`RegionReplicator: origin write to ${origin} failed:`, error);
-      failed.push(origin);
+    if (origin !== undefined) {
+      try {
+        await this.writeOne(origin, key, value, ttlSeconds);
+        replicated.push(origin);
+      } catch (error) {
+        logger.error(`RegionReplicator: origin write to ${origin} failed:`, error);
+        failed.push(origin);
+      }
     }
 
     const settled = await Promise.allSettled(
@@ -112,6 +113,7 @@ export class RegionReplicator {
     );
     settled.forEach((result, i) => {
       const name = replicas[i];
+      if (name === undefined) return;
       if (result.status === 'fulfilled') {
         replicated.push(name);
       } else {

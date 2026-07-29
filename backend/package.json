@@ -13,7 +13,11 @@
     "test:migrations": "echo 'No migrations tests'",
 
     "bench": "tsx benchmarks/runBenchmarks.ts",
-    "collaboration": "tsx src/collaborationServer.ts"
+    "collaboration": "tsx src/collaborationServer.ts",
+    "db:seed": "tsx prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",

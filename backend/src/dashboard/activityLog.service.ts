@@ -1,4 +1,4 @@
-// @ts-nocheck
+import { Prisma } from '@prisma/client';
 import prisma from '../db/index.js';
 import logger from '../utils/logger.js';
 
@@ -85,7 +85,7 @@ export async function recordActivity(
         action,
         entity: entity ?? null,
         entityId: entityId ?? null,
-        details: details ?? undefined,
+        details: details === undefined ? Prisma.JsonNull : (details as Prisma.InputJsonValue),
         ipAddress: ipAddress ?? null,
       },
     });
