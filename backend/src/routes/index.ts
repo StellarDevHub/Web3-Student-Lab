@@ -29,6 +29,7 @@ import termsOfServiceRouter from './termsOfService.routes.js';
 import privacyPolicyRouter from './privacyPolicy.routes.js';
 import playgroundRouter from './playground.routes.js';
 import oauthRouter from './oauth.routes.js';
+import tokenomicsRouter from './tokenomics.routes.js';
 
 import notificationRouter from '../notifications/notification.routes.js';
 import notificationPreferencesRouter from '../notifications/preferences.routes.js';
@@ -79,5 +80,6 @@ router.use('/roadmap/tos', termsOfServiceRouter);
 router.use('/playground', playgroundRouter);
 router.use('/playground/privacy-policy', privacyPolicyRouter);
 router.use('/oauth', oauthRouter);
+router.use('/tokenomics', tokenomicsRouter);
 
 export default router;
