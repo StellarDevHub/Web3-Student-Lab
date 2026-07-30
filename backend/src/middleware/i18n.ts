@@ -23,12 +23,18 @@ export interface I18nOptions {
 
 const FALLBACK_LOCALE = 'en';
 
-function parseAcceptLanguage(headerValue: string | undefined): string | null {
+function parseAcceptLanguage(headerValue: string | string[] | undefined): string | null {
   if (!headerValue) {
     return null;
   }
 
-  const first = headerValue.split(',')[0]?.trim();
+  const headerStr = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  
+  if (!headerStr) {
+    return null;
+  }
+
+  const first = headerStr.split(',')[0]?.trim();
   if (!first) {
     return null;
   }

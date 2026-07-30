@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Router } from 'express';
 import dashboardRoutes from '../dashboard/dashboard.routes.js';
 import activityLogRouter from '../dashboard/activityLog.routes.js';
