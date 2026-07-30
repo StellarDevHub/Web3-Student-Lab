@@ -261,16 +261,15 @@ await invalidateCourseCache(courseId);
 
 ### Start Services
 ```bash
-# Standalone mode (development)
-docker-compose up
+# Recommended for development (Postgres + standalone Redis only)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
-# Scale with Sentinel (high availability)
-# Ensure REDIS_MODE=sentinel in backend environment
-docker-compose up
+# Full stack / production-like (includes Sentinel + Cluster)
+docker compose -f docker-compose.yml up -d
 
-# Scale with Cluster (distributed)
-# Ensure REDIS_MODE=cluster in backend environment
-docker-compose up
+# High-availability Redis testing (Sentinel/Cluster-oriented backend config)
+# Ensure REDIS_MODE=sentinel or REDIS_MODE=cluster as needed
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 ### Initialize Redis Cluster
