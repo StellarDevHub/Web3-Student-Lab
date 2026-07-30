@@ -14,6 +14,12 @@ export const contractCompileSchema = z.object({
   entryPoint: z.string().max(128).optional(),
 });
 
+export const contractCancelSchema = z.object({
+  cancellationId: z
+    .string()
+    .uuid({ message: 'cancellationId must be a valid UUID.' }),
+});
+
 export const contractExecutionSchema = z.object({
   contractAddress: z.string().min(32, { message: 'Contract address is required.' }),
   functionName: z.string().min(1, { message: 'Function name is required.' }),
