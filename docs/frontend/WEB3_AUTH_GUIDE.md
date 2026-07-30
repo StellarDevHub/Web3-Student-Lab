@@ -70,10 +70,10 @@ Verifies a wallet signature and authenticates the user.
     "name": "Wallet User",
     "did": null
   },
-  "accessToken": "eyJhbGciOiJIUzI1NiIs...",
-  "refreshToken": "eyJhbGciOiJIUzI1NiIs..."
+  "accessToken": "eyJhbGciOiJIUzI1NiIs..."
 }
 ```
+*Note: The refresh token is transmitted via a `Secure`, `HttpOnly`, `SameSite` cookie and is not exposed in the JSON body.*
 
 ## Database Schema
 
@@ -110,8 +110,8 @@ model Student {
 4. **Message Signing**: Frontend constructs message and requests user signature
 5. **Signature Verification**: Backend verifies signature using Ethers.js
 6. **User Creation/Retrieval**: Backend finds or creates user record
-7. **Token Issuance**: Backend issues JWT access and refresh tokens
-8. **Session Storage**: Frontend stores tokens for authenticated requests
+7. **Token Issuance**: Backend issues JWT access token in body and refresh token in HttpOnly cookie
+8. **Session Storage**: Access token stored in memory/session; refresh token kept securely in HttpOnly cookie
 
 ## Frontend Implementation
 
@@ -181,11 +181,15 @@ export default function LoginPage() {
 - 10 nonce requests per minute per IP
 - Prevents database spam and abuse
 
-### Token Security
-- Standard JWT tokens with configurable expiration
-- Access tokens: 15 minutes (configurable)
-- Refresh tokens: 7 days (configurable)
-- Token rotation on refresh
+### Hardened Token & Session Security
+- **Access Tokens**: Short-lived (15 minutes), sent via `Authorization: Bearer <token>` header.
+- **Refresh Tokens**: Issued inside `HttpOnly`, `Secure` (in production/HTTPS), `SameSite=Strict|Lax` cookies. Never readable by client JavaScript or saved in `localStorage`.
+- **Token Rotation & Reuse Detection**: Each `/api/auth/refresh` request revokes the previous refresh token and issues a new pair. If a revoked token is presented, all active sessions for that user are immediately invalidated.
+- **Environment-Aware Cookie Settings**:
+  - `httpOnly`: `true`
+  - `secure`: `true` in production (`NODE_ENV === 'production'` or `COOKIE_SECURE === 'true'`)
+  - `sameSite`: `'strict'` in production, `'lax'` in local/OAuth flows
+  - `path`: `'/'`
 
 ## Testing
 

@@ -7,13 +7,12 @@ import { User, LogOut, Shield, Key } from 'lucide-react';
 
 export default function Web3AuthExample() {
   const [user, setUser] = useState<Web3AuthResponse['user'] | null>(null);
-  const [tokens, setTokens] = useState<{ accessToken: string; refreshToken: string } | null>(null);
+  const [tokens, setTokens] = useState<{ accessToken: string } | null>(null);
 
   const handleLoginSuccess = (authResponse: Web3AuthResponse) => {
     setUser(authResponse.user);
     setTokens({
       accessToken: authResponse.accessToken,
-      refreshToken: authResponse.refreshToken,
     });
   };
 
@@ -32,16 +31,17 @@ export default function Web3AuthExample() {
 
   // Check for existing session on mount
   React.useEffect(() => {
+    // Migration: ensure legacy refreshToken is cleaned up from localStorage
+    localStorage.removeItem('refreshToken');
+
     const storedUser = localStorage.getItem('user');
     const storedAccessToken = localStorage.getItem('accessToken');
-    const storedRefreshToken = localStorage.getItem('refreshToken');
 
-    if (storedUser && storedAccessToken && storedRefreshToken) {
+    if (storedUser && storedAccessToken) {
       try {
         setUser(JSON.parse(storedUser));
         setTokens({
           accessToken: storedAccessToken,
-          refreshToken: storedRefreshToken,
         });
       } catch (error) {
         console.error('Failed to parse stored user data:', error);
@@ -109,8 +109,8 @@ export default function Web3AuthExample() {
                   </div>
                   <div>
                     <p className="mb-1 text-xs text-gray-600">Refresh Token:</p>
-                    <p className="rounded bg-gray-100 p-2 font-mono text-xs break-all text-gray-900">
-                      {tokens?.refreshToken.slice(0, 20)}...{tokens?.refreshToken.slice(-20)}
+                    <p className="rounded bg-gray-100 p-2 font-mono text-xs italic text-gray-600">
+                      Protected (Stored in Secure, HttpOnly Cookie)
                     </p>
                   </div>
                 </div>

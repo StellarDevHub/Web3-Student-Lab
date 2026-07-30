@@ -1,13 +1,14 @@
 import { Request, Response, Router } from 'express';
 import { authenticate } from '../../auth/auth.middleware.js';
 import { getProfileStatusByWallet, login, register } from '../../auth/auth.service.js';
-import { blacklistAccessToken, rotateRefreshToken } from '../../auth/token.service.js';
+import { blacklistAccessToken, rotateRefreshToken, revokeAllUserTokens, verifyRefreshToken } from '../../auth/token.service.js';
 import { LoginRequest } from '../../auth/types.js';
 import { loginSchema, registerSchema, web3VerifySchema } from '../../auth/validation.schemas.js';
 import { createNonce, verifySignature } from '../../auth/web3.service.js';
 import { slidingWindowRateLimiter } from '../../middleware/rateLimiter.js';
 import { validateRequest } from '../../utils/validation.js';
 import { auditAction } from '../../middleware/audit.js';
+import { clearRefreshTokenCookie, getRefreshTokenFromReq, setRefreshTokenCookie } from '../../utils/cookie.js';
 
 const router = Router();
 
@@ -34,6 +35,7 @@ router.post(
       walletAddress,
     });
 
+    setRefreshTokenCookie(res, authResponse.refreshToken);
     res.status(201).json(authResponse);
   } catch (_error) {
     if (_error instanceof Error && _error.message === 'Student with this email already exists') {
@@ -85,6 +87,7 @@ router.post(
     // Login the student
     const authResponse = await login({ email, password });
 
+    setRefreshTokenCookie(res, authResponse.refreshToken);
     res.json(authResponse);
   } catch (_error) {
     if (_error instanceof Error && _error.message === 'Invalid credentials') {
@@ -127,7 +130,7 @@ router.get('/me', authenticate, (req: Request, res: Response) => {
  * @access  Public
  */
 router.post('/refresh', async (req: Request, res: Response) => {
-  const { refreshToken } = req.body;
+  const refreshToken = getRefreshTokenFromReq(req);
 
   if (!refreshToken) {
     res.status(400).json({ error: 'Refresh token is required' });
@@ -136,8 +139,10 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
   try {
     const tokens = await rotateRefreshToken(refreshToken);
-    res.json(tokens);
+    setRefreshTokenCookie(res, tokens.refreshToken);
+    res.json({ accessToken: tokens.accessToken });
   } catch (_error) {
+    clearRefreshTokenCookie(res);
     res.status(401).json({ error: 'Invalid or expired refresh token' });
   }
 });
@@ -160,6 +165,19 @@ router.post(
     await blacklistAccessToken(token, 15 * 60);
   }
 
+  const refreshToken = getRefreshTokenFromReq(req);
+  if (refreshToken) {
+    try {
+      const payload = await verifyRefreshToken(refreshToken);
+      await revokeAllUserTokens(payload.userId);
+    } catch (_e) {
+      // Token already invalid/revoked
+    }
+  } else if (req.user?.id) {
+    await revokeAllUserTokens(req.user.id);
+  }
+
+  clearRefreshTokenCookie(res);
   res.json({ message: 'Logged out successfully' });
 });
 
@@ -218,7 +236,7 @@ router.post(
     const { walletAddress, signature, nonce } = req.body;
 
     const authResponse = await verifySignature(walletAddress, signature, nonce);
-
+    setRefreshTokenCookie(res, authResponse.refreshToken);
     res.json(authResponse);
   } catch (error) {
     if (error instanceof Error) {
