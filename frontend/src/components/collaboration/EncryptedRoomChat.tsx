@@ -11,8 +11,9 @@ import {
 } from '@/lib/p2p-crypto';
 import { WebsocketProvider } from 'y-websocket';
 import * as Y from 'yjs';
-import { Copy, KeyRound, Lock, Send, ShieldCheck } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Copy, KeyRound, Lock, Send, ShieldCheck, ShieldAlert, Shield } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { getItem, setItem } from '@/lib/localStorage';
 
 interface RoomPayload {
   id: string;
@@ -52,6 +53,13 @@ export function EncryptedRoomChat({ roomId }: { roomId: string }) {
   const [draft, setDraft] = useState('');
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   const [error, setError] = useState<string | null>(null);
+  const [verifiedPeers, setVerifiedPeers] = useState<Set<string>>(new Set());
+  const [mismatchedPeers, setMismatchedPeers] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const stored = getItem<string[]>('p2p-verified-peers', []);
+    setVerifiedPeers(new Set(stored));
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -76,16 +84,20 @@ export function EncryptedRoomChat({ roomId }: { roomId: string }) {
     const syncPeers = async () => {
       const ownKeyId = localIdentityRef.current?.keyId;
       const validPeers: P2PPublicIdentity[] = [];
+      const newMismatched = new Set<string>();
 
       for (const identity of Array.from(identities.values())) {
         if (identity.keyId === ownKeyId) continue;
         if (await verifyP2PIdentity(identity)) {
           validPeers.push(identity);
+        } else {
+          newMismatched.add(identity.keyId);
         }
       }
 
       if (!mounted) return;
       setPeers(validPeers);
+      setMismatchedPeers(newMismatched);
       setSelectedPeerId((current) => current || validPeers[0]?.keyId || '');
     };
 
@@ -170,6 +182,20 @@ export function EncryptedRoomChat({ roomId }: { roomId: string }) {
     }
   }
 
+  const togglePeerVerification = useCallback(() => {
+    if (!selectedPeerId) return;
+    setVerifiedPeers((prev) => {
+      const next = new Set(prev);
+      if (next.has(selectedPeerId)) {
+        next.delete(selectedPeerId);
+      } else {
+        next.add(selectedPeerId);
+      }
+      setItem('p2p-verified-peers', Array.from(next));
+      return next;
+    });
+  }, [selectedPeerId]);
+
   async function copyIdentity() {
     if (!localIdentity) return;
     await navigator.clipboard.writeText(JSON.stringify(localIdentity));
@@ -231,15 +257,53 @@ export function EncryptedRoomChat({ roomId }: { roomId: string }) {
             onChange={(event) => setSelectedPeerId(event.target.value)}
             className="mt-2 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
           >
-            <option value="">No verified peer online</option>
+            <option value="">No valid peer online</option>
             {peers.map((peer) => (
               <option key={peer.keyId} value={peer.keyId}>
-                {shortKey(peer.keyId)}
+                {shortKey(peer.keyId)} {verifiedPeers.has(peer.keyId) ? '(Verified)' : ''}
               </option>
             ))}
           </select>
         </label>
+
+        {selectedPeer && (
+          <div className="mt-3 flex items-center justify-between rounded-md bg-gray-50 p-3 dark:bg-gray-800">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                {verifiedPeers.has(selectedPeer.keyId) ? (
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                ) : (
+                  <Shield className="h-3.5 w-3.5 text-gray-400" />
+                )}
+                Peer Fingerprint
+              </div>
+              <p className="mt-1 break-all font-mono text-xs text-gray-700 dark:text-gray-200" title={selectedPeer.keyId}>
+                {shortKey(selectedPeer.keyId)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={togglePeerVerification}
+              className={`text-xs font-semibold px-2 py-1.5 rounded-md border transition-colors ${
+                verifiedPeers.has(selectedPeer.keyId)
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800/30 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/40'
+                  : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-300 dark:hover:bg-gray-800'
+              }`}
+            >
+              {verifiedPeers.has(selectedPeer.keyId) ? 'Verified' : 'Verify Identity'}
+            </button>
+          </div>
+        )}
       </div>
+
+      {mismatchedPeers.size > 0 && (
+        <div className="mx-4 mt-4 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/50 dark:text-amber-200">
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <p>
+            <strong>Warning:</strong> One or more peers in this room have an invalid identity fingerprint. Their messages have been blocked.
+          </p>
+        </div>
+      )}
 
       {error && (
         <div className="mx-4 mt-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
