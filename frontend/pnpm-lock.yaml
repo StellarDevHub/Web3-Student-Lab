@@ -159,6 +159,9 @@ importers:
       '@tailwindcss/postcss':
         specifier: ^4
         version: 4.2.4
+      '@testing-library/dom':
+        specifier: ^10.4.1
+        version: 10.4.1
       '@testing-library/jest-dom':
         specifier: ^6.9.1
         version: 6.9.1
