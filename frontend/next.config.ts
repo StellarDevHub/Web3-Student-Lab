@@ -1,5 +1,6 @@
 import type { NextConfig } from 'next';
 import path from 'path';
+import { cspDirectivesToString, getCSPConfig } from './src/lib/security/csp-config';
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: path.resolve(__dirname, '.'),
@@ -9,27 +10,17 @@ const nextConfig: NextConfig = {
 
   // Content Security Policy with nonce-based script loading
   async headers() {
+    const cspConfig = getCSPConfig();
+    const cspValue = cspDirectivesToString(cspConfig.directives);
+    const headerKey = cspConfig.reportOnly ? 'Content-Security-Policy-Report-Only' : 'Content-Security-Policy';
+
     return [
       {
         source: '/(.*)',
         headers: [
           {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'nonce-{nonce}' 'unsafe-inline' 'unsafe-eval'",
-              "style-src 'self' 'nonce-{nonce}' 'unsafe-inline'",
-              "img-src 'self' data: https: blob:",
-              "font-src 'self' data:",
-              "connect-src 'self' https: ws: wss:",
-              "frame-src 'self' https:",
-              "object-src 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-              "frame-ancestors 'none'",
-              "block-all-mixed-content",
-              "upgrade-insecure-requests",
-            ].join('; '),
+            key: headerKey,
+            value: cspValue,
           },
           {
             key: 'X-Content-Type-Options',
@@ -49,7 +40,19 @@ const nextConfig: NextConfig = {
           },
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()',
+            value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=()',
+          },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains; preload',
+          },
+          {
+            key: 'Cross-Origin-Embedder-Policy',
+            value: 'require-corp',
+          },
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin',
           },
         ],
       },

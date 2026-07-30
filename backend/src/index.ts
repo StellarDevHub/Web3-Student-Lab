@@ -93,6 +93,7 @@ setRateLimitEnvOverrides({
 
 app.use(cors());
 app.use(express.json());
+app.use(securityHeadersMiddleware); // Add security headers early in middleware chain
 app.use(decryptionMiddleware);
 app.use(dbRoutingMiddleware);
 
