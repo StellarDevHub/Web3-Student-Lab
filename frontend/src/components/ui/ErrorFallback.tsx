@@ -9,6 +9,7 @@ interface ErrorFallbackProps {
   message?: string;
   onRetry?: () => void;
   onDismiss?: () => void;
+  onReturnHome?: boolean;
   variant?: 'inline' | 'card' | 'toast';
   className?: string;
 }
@@ -18,6 +19,7 @@ export function ErrorFallback({
   message = 'An error occurred',
   onRetry,
   onDismiss,
+  onReturnHome,
   variant = 'card',
   className,
 }: ErrorFallbackProps) {
@@ -114,14 +116,24 @@ export function ErrorFallback({
         {error && process.env.NODE_ENV === 'development' && (
           <p className="mt-2 font-mono text-xs text-[var(--muted)] break-all">{error.message}</p>
         )}
-        {onRetry && (
-          <button
-            onClick={onRetry}
-            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[var(--brand-strong)] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-          >
-            Try again
-          </button>
-        )}
+        <div className="mt-4 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--brand-strong)] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            >
+              Try again
+            </button>
+          )}
+          {onReturnHome && (
+            <a
+              href="/dashboard"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-transparent px-4 py-2 text-sm font-medium text-[var(--text-strong)] transition-colors hover:bg-[var(--surface-sunken)]"
+            >
+              Return to Dashboard
+            </a>
+          )}
+        </div>
       </div>
     </div>
   );
