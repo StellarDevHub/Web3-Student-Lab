@@ -15,6 +15,7 @@ import { setRateLimitEnvOverrides } from './config/rateLimit.config.js';
 import { swaggerSpec } from './config/swagger.js';
 import type { CorsRequest } from 'cors';
 import prisma from './db/index.js';
+import { checkDbHealth } from './db/healthMonitor.js';
 import { createGraphQLServer } from './graphql/server.js';
 import { scheduleBackupCron, startBackupWorker, stopBackupWorker } from './jobs/backup.worker.js';
 import { dbRoutingMiddleware } from './middleware/dbRouting.js';
@@ -108,11 +109,83 @@ if (config.rateLimiting.enabled) {
 app.use(requestLogger);
 app.use(getSentryRequestHandler());
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+  ]);
+}
+
+/**
+ * @openapi
+ * /health/live:
+ *   get:
+ *     summary: Liveness probe
+ *     description: Lightweight endpoint that returns 200 while the process is alive. No dependency checks.
+ *     tags: [System]
+ *     responses:
+ *       200:
+ *         description: Process is alive
+ */
+app.get('/health/live', (_req: Request, res: Response) => {
+  res.json({ status: 'ok' });
+});
+
+/**
+ * @openapi
+ * /health/ready:
+ *   get:
+ *     summary: Readiness probe
+ *     description: Checks that required dependencies (PostgreSQL, Redis) are reachable.
+ *     tags: [System]
+ *     responses:
+ *       200:
+ *         description: All dependencies healthy
+ *       503:
+ *         description: One or more dependencies unavailable
+ */
+app.get('/health/ready', async (_req: Request, res: Response) => {
+  const errors: string[] = [];
+
+  let dbStatus: Awaited<ReturnType<typeof checkDbHealth>> | null = null;
+  try {
+    dbStatus = await withTimeout(checkDbHealth(), 5000);
+  } catch {
+    errors.push('Database health check timed out or failed');
+  }
+
+  if (dbStatus && dbStatus.status === 'unhealthy') {
+    errors.push(`Database: ${dbStatus.alerts.join(', ')}`);
+  }
+
+  const redisHealthy = redisClient.isHealthy();
+  if (!redisHealthy) {
+    errors.push('Redis is disconnected');
+  }
+
+  if (errors.length > 0) {
+    return res.status(503).json({
+      status: 'error',
+      errors,
+      uptime: process.uptime(),
+    });
+  }
+
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+    database: dbStatus
+      ? { status: dbStatus.status, latencyMs: dbStatus.latencyMs }
+      : { status: 'skipped' },
+    redis: redisHealthy ? 'connected' : 'disconnected',
+  });
+});
+
 /**
  * @openapi
  * /health:
  *   get:
- *     summary: Health check endpoint
+ *     summary: Health check endpoint (legacy)
  *     description: Returns the health status of the API and its dependencies
  *     tags: [System]
  *     responses:
@@ -139,7 +212,6 @@ app.use(getSentryRequestHandler());
  *                   type: string
  *                   example: connected
  */
-// Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',

@@ -181,6 +181,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # Liveness probe — lightweight, no dependency calls
+    # In Kubernetes, use separate livenessProbe (on /health/live) and
+    # readinessProbe (on /health/ready)
     healthcheck:
       # Readiness probe: container is healthy only when the API is running
       # AND database + Redis are available.
