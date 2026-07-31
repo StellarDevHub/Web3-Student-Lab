@@ -22,6 +22,7 @@ import { rateLimiter } from './middleware/rateLimiter.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { requireWorkspaceMiddleware } from './middleware/WorkspaceContext.js';
 import freelanceRoute from './routes/freelance.js';
+import { livenessHandler, readinessHandler } from './routes/health.routes.js';
 import routes from './routes/index.js';
 import { startWebhookWorker, stopWebhookWorker } from './services/webhooks/index.js';
 import logger from './utils/logger.js';
@@ -147,6 +148,13 @@ app.get('/health', (_req: Request, res: Response) => {
     cacheWarmer: cacheWarmer.getStatus(),
   });
 });
+
+// Liveness probe — no dependency calls, returns 200 while the process is alive.
+app.get('/health/live', livenessHandler);
+
+// Readiness probe — verifies database and Redis capabilities with timeouts.
+// Returns 503 when essential dependencies are unavailable.
+app.get('/health/ready', readinessHandler);
 
 // Cache metrics endpoint
 app.use('/api/v1/cache', cacheMetrics);
