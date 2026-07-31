@@ -13,7 +13,7 @@ import {
   computeLayout,
 } from '@/lib/roadmap-utils';
 import { getLearningJourney, getStoredLearningJourney } from '@/lib/learning-journey';
-import { learningAPI } from '@/lib/learning-api';
+import { learningAPI, ProgressUnavailableError } from '@/lib/learning-api';
 import { useUserStore } from '@/stores/userStore';
 import type { Course } from '@/lib/api';
 
@@ -171,7 +171,19 @@ export function useRoadmapProgress(
       }
 
       learningAPI.saveLocalProgress(course.id, updatedProgress);
-      await learningAPI.updateProgress(course.id, updatedProgress);
+
+      try {
+        await learningAPI.updateProgress(course.id, updatedProgress);
+      } catch (err) {
+        if (err instanceof ProgressUnavailableError) {
+          // Local/offline progress was saved above, but the learner
+          // must be told their progress was NOT recorded server-side —
+          // never claim a save succeeded when it didn't (#911).
+          setError(err.message);
+        } else {
+          throw err;
+        }
+      }
     },
     [course, progress, roadmapCourse, completeModule]
   );

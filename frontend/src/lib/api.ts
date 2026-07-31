@@ -184,28 +184,86 @@ export const authAPI = {
   },
 };
 
+// A course list/detail response is either backed by the live database
+// ("live") or, when the backend cannot reach the database, an
+// explicitly labeled demo/fallback dataset ("demo"). See #911 — the
+// backend never silently serves demo data as if it were live.
+export type CourseDataSource = 'live' | 'demo';
+
+export interface CoursesListResult {
+  courses: Course[];
+  dataSource: CourseDataSource;
+  message?: string;
+}
+
+export interface CourseDetailResult {
+  course: Course;
+  dataSource: CourseDataSource;
+  message?: string;
+}
+
+function normalizeCoursesResponse(data: unknown): CoursesListResult {
+  if (data && typeof data === 'object' && 'courses' in (data as Record<string, unknown>)) {
+    const d = data as { courses: Course[]; dataSource?: CourseDataSource; message?: string };
+    return {
+      courses: d.courses,
+      dataSource: d.dataSource ?? 'live',
+      message: d.message,
+    };
+  }
+  // Backward-compatible shape (plain array) in case of stale caches.
+  return { courses: (data as Course[]) ?? [], dataSource: 'live' };
+}
+
+function normalizeCourseResponse(data: unknown): CourseDetailResult {
+  if (data && typeof data === 'object' && 'course' in (data as Record<string, unknown>)) {
+    const d = data as { course: Course; dataSource?: CourseDataSource; message?: string };
+    return {
+      course: d.course,
+      dataSource: d.dataSource ?? 'live',
+      message: d.message,
+    };
+  }
+  return { course: data as Course, dataSource: 'live' };
+}
+
 // Courses APIs
 export const coursesAPI = {
-  getAll: async (): Promise<Course[]> => {
+  /**
+   * Returns the course list along with an explicit `dataSource` flag
+   * so callers can distinguish live data from the demo fallback shown
+   * when the backend database is unreachable (#911).
+   */
+  getAllWithSource: async (): Promise<CoursesListResult> => {
     return apiRequestCache.fetch(
       'courses:list',
       async () => {
         const response = await apiClient.get('/courses');
-        return response.data;
+        return normalizeCoursesResponse(response.data);
+      },
+      { ttlMs: DEFAULT_CACHE_TTL_MS }
+    );
+  },
+
+  getAll: async (): Promise<Course[]> => {
+    const result = await coursesAPI.getAllWithSource();
+    return result.courses;
+  },
+
+  getByIdWithSource: async (id: string): Promise<CourseDetailResult> => {
+    return apiRequestCache.fetch(
+      `courses:detail:${id}`,
+      async () => {
+        const response = await apiClient.get(`/courses/${id}`);
+        return normalizeCourseResponse(response.data);
       },
       { ttlMs: DEFAULT_CACHE_TTL_MS }
     );
   },
 
   getById: async (id: string): Promise<Course> => {
-    return apiRequestCache.fetch(
-      `courses:detail:${id}`,
-      async () => {
-        const response = await apiClient.get(`/courses/${id}`);
-        return response.data;
-      },
-      { ttlMs: DEFAULT_CACHE_TTL_MS }
-    );
+    const result = await coursesAPI.getByIdWithSource(id);
+    return result.course;
   },
 
   create: async (data: Partial<Course>): Promise<Course> => {
@@ -436,6 +494,16 @@ export interface ProjectIdea {
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
 }
 
+export interface GeneratedIdeaResult {
+  idea: ProjectIdea;
+  /** True when the backend substituted a safe fallback idea instead of a live AI-generated one (#908). */
+  fromMock: boolean;
+  /** Machine-readable reason for the fallback, e.g. 'ai_service_unavailable' | 'generated_idea_rejected'. */
+  fallbackReason?: string;
+  /** Human-readable, actionable explanation suitable for display. */
+  message?: string;
+}
+
 export const generatorAPI = {
   generateIdea: async (params: {
     theme: string;
@@ -444,6 +512,34 @@ export const generatorAPI = {
   }): Promise<ProjectIdea> => {
     const response = await apiClient.post('/generator/generate', params);
     return response.data.projectIdea;
+  },
+
+  /**
+   * Same endpoint as {@link generateIdea}, but surfaces whether the
+   * backend had to fall back to a safe mock idea (AI unavailable, or
+   * generated output rejected by server-side validation/safety
+   * checks) so the UI can show an actionable message instead of
+   * silently presenting a substituted idea as if it were freshly
+   * generated (#908).
+   */
+  generateIdeaWithStatus: async (params: {
+    theme: string;
+    techStack: string[];
+    difficulty: string;
+  }): Promise<GeneratedIdeaResult> => {
+    const response = await apiClient.post('/generator/generate', params);
+    const data = response.data as {
+      projectIdea: ProjectIdea;
+      fromMock?: boolean;
+      fallbackReason?: string;
+      message?: string;
+    };
+    return {
+      idea: data.projectIdea,
+      fromMock: Boolean(data.fromMock),
+      fallbackReason: data.fallbackReason,
+      message: data.message,
+    };
   },
 };
 

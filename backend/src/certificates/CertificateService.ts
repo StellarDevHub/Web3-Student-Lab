@@ -9,8 +9,8 @@ import {
     VerificationResult,
 } from '../types/certificate.types.js';
 import { certificateImageGenerator } from '../utils/certificateImageGenerator.js';
-import logger from '../utils/logger.js';
-import { MetadataGenerator } from './MetadataGenerator.js';
+import { storageService } from '../services/storage/index.js';
+import { computeCertificateContentHash, verifyCertificateContentHash } from './ContentHash.js';
 
 export class CertificateService {
   private metadataGenerator: MetadataGenerator;
@@ -125,6 +125,23 @@ export class CertificateService {
       // Call blockchain service to mint actual NFT
       const mintResult = await certificateBlockchainService.mintCertificate(metadata);
 
+      const finalTokenId = mintResult.tokenId || tokenIdValue;
+
+      // Compute the immutable content-integrity hash from the final,
+      // post-mint certificate fields. This hash binds the certificate
+      // metadata to a deterministic fingerprint that is re-verified on
+      // every retrieval/verification so tampering with stored fields
+      // can be detected instead of silently served.
+      const contentHash = computeCertificateContentHash({
+        id: certificateId,
+        studentId: certificate.studentId,
+        courseId: certificate.courseId,
+        tokenId: finalTokenId,
+        grade: certificate.grade,
+        did: certificate.did,
+        issuedAt: certificate.issuedAt,
+      });
+
       // Update certificate with blockchain transaction details
       await prisma.certificate.update({
         where: { id: certificateId },
@@ -133,7 +150,8 @@ export class CertificateService {
           contractAddress: mintResult.contractAddress,
           status: 'ACTIVE',
           metadataUri: metadataAsset.ipfsUri,
-          tokenId: mintResult.tokenId || tokenIdValue,
+          tokenId: finalTokenId,
+          contentHash,
         },
       });
 
@@ -141,7 +159,8 @@ export class CertificateService {
       certificate.certificateHash = mintResult.transactionHash;
       certificate.contractAddress = mintResult.contractAddress;
       certificate.status = 'ACTIVE' as any;
-      certificate.tokenId = mintResult.tokenId || tokenIdValue;
+      certificate.tokenId = finalTokenId;
+      certificate.contentHash = contentHash;
 
       logger.info(`Certificate minted on-chain: ${certificateId} -> token ${mintResult.tokenId}`, {
         certificateId,
@@ -234,6 +253,39 @@ export class CertificateService {
 
     const walletAddress =
       certificate.student.walletAddress || this.extractWalletFromDid(certificate.student.did);
+
+    // Re-verify the content hash on every retrieval. If the stored
+    // metadata no longer matches the hash recorded at mint time, we
+    // must surface a tamper-detected result rather than silently
+    // returning the (possibly altered) data as valid.
+    const hashCheck = verifyCertificateContentHash(
+      {
+        id: certificate.id,
+        studentId: certificate.studentId,
+        courseId: certificate.courseId,
+        tokenId: certificate.tokenId,
+        grade: certificate.grade,
+        did: certificate.did,
+        issuedAt: certificate.issuedAt,
+      },
+      (certificate as any).contentHash
+    );
+
+    if (hashCheck.state === 'tampered') {
+      logger.error(`Certificate integrity check failed for ${certificateId}`, {
+        certificateId,
+        expectedHash: hashCheck.expected,
+        actualHash: hashCheck.actual,
+      });
+      return {
+        isValid: false,
+        certificate: null,
+        status: 'TAMPERED' as any,
+        onChainData: null,
+        message: 'Certificate integrity check failed: stored metadata does not match its content hash',
+      };
+    }
+
     const metadata = this.metadataGenerator.generate(
       certificate,
       certificate.course!,
@@ -260,7 +312,10 @@ export class CertificateService {
       result.revocationInfo = {
         revokedAt: certificate.revokedAt!,
         reason: certificate.revocationReason!,
-        revokedBy: certificate.revokedBy!,
+        // NOTE: revokedBy (the actor's issuer DID) is intentionally
+        // redacted from this public-facing verification response —
+        // see VerificationService for the canonical public surface.
+        revokedBy: 'redacted',
       };
     }
 

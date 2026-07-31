@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { randomUUID } from 'crypto';
 import { Request, Response, Router } from 'express';
-import { GeneratorService } from '../../generator/generator.service.js';
+import { GeneratorService, InvalidGeneratedIdeaError } from '../../generator/generator.service.js';
 import { getRandomProjectIdea, mockProjectIdeas } from '../../generator/mockData.js';
 import { storageService } from '../../services/storage/index.js';
 import prisma from '../../db/index.js';
@@ -140,7 +140,19 @@ router.post('/generate', async (req: Request, res: Response) => {
 
       res.json({ projectIdea });
     } catch (aiError) {
-      logger.warn(`AI generation failed, using mock data: ${aiError}`);
+      // Both "AI backend unreachable" and "model output failed
+      // validation/safety checks" land here. Either way we never pass
+      // through unvalidated model output — we substitute a known-safe
+      // mock idea and tell the frontend an actionable reason (#908).
+      const isValidationFailure = aiError instanceof InvalidGeneratedIdeaError;
+      const fallbackReason = isValidationFailure
+        ? 'generated_idea_rejected'
+        : 'ai_service_unavailable';
+      const fallbackMessage = isValidationFailure
+        ? 'The generated idea did not meet our content/format requirements, so we substituted a safe example idea instead.'
+        : 'The AI idea generator is temporarily unavailable, so we substituted a safe example idea instead.';
+
+      logger.warn(`AI generation failed (${fallbackReason}), using mock data: ${aiError}`);
       // Return a random mock project idea as fallback
       const projectIdea = getRandomProjectIdea();
       if (persistToStorage) {
@@ -159,12 +171,14 @@ router.post('/generate', async (req: Request, res: Response) => {
         res.json({
           projectIdea,
           fromMock: true,
+          fallbackReason,
+          message: fallbackMessage,
           storage: storageResult,
         });
         return;
       }
 
-      res.json({ projectIdea, fromMock: true });
+      res.json({ projectIdea, fromMock: true, fallbackReason, message: fallbackMessage });
     }
   } catch (error) {
     logger.error(`Generator Route Error: ${error}`);

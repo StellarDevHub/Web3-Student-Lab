@@ -1,14 +1,7 @@
 import { Request, Response } from 'express';
 import { certificateImageGenerator } from '../utils/certificateImageGenerator.js';
 import logger from '../utils/logger.js';
-import { buildPaginatedResponse, parsePaginationQuery } from '../utils/pagination.js';
-import { qrCodeGenerator } from '../utils/qrCodeGenerator.js';
-import {
-    certificateAnalytics,
-    certificateService,
-    revocationService,
-    verificationService,
-} from './index.js';
+import { UnauthorizedIssuerError } from './RevocationService.js';
 
 /**
  * Helper to convert param to string
@@ -227,6 +220,10 @@ export class CertificateController {
         .json({ success: true, certificate: result, message: 'Certificate revoked successfully' });
     } catch (error) {
       logger.error(`Revoke error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      if (error instanceof UnauthorizedIssuerError) {
+        res.status(403).json({ error: error.message });
+        return;
+      }
       res
         .status(500)
         .json({ error: error instanceof Error ? error.message : 'Failed to revoke certificate' });
@@ -265,6 +262,10 @@ export class CertificateController {
       });
     } catch (error) {
       logger.error(`Reissue error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      if (error instanceof UnauthorizedIssuerError) {
+        res.status(403).json({ error: error.message });
+        return;
+      }
       res
         .status(500)
         .json({ error: error instanceof Error ? error.message : 'Failed to reissue certificate' });

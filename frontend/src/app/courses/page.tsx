@@ -1,11 +1,11 @@
 'use client';
 
 import { useI18n } from '@/i18n';
-import { Course, coursesAPI } from '@/lib/api';
+import { Course, CourseDataSource, coursesAPI } from '@/lib/api';
 import { ArrowRight, BookOpen, Search, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState, useCallback } from 'react';
-import { ErrorBoundary, ErrorFallback, CourseListSkeleton } from '@/components/ui';
+import { ErrorBoundary, ErrorFallback, CourseListSkeleton, DemoDataBanner } from '@/components/ui';
 
 export default function CoursesPage() {
   const { t } = useI18n();
@@ -13,13 +13,17 @@ export default function CoursesPage() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<CourseDataSource>('live');
+  const [demoMessage, setDemoMessage] = useState<string | undefined>(undefined);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await coursesAPI.getAll();
-      setCourses(data);
+      const result = await coursesAPI.getAllWithSource();
+      setCourses(result.courses);
+      setDataSource(result.dataSource);
+      setDemoMessage(result.message);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load courses');
       setCourses([]);
@@ -53,6 +57,7 @@ export default function CoursesPage() {
         <div className="absolute top-0 left-[20%] w-[50%] h-[30%] rounded-full bg-[radial-gradient(circle,rgba(220,38,38,0.1),transparent_70%)] blur-[100px] pointer-events-none" />
         
         <div className="mx-auto max-w-7xl px-4 pt-20 sm:px-6 lg:px-8 relative z-10">
+          {!loading && dataSource === 'demo' && <DemoDataBanner message={demoMessage} />}
           <section className="grid gap-12 lg:grid-cols-[1fr_1fr] items-end mb-16">
             <div className="space-y-6">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-red-500/30 bg-red-500/10 text-red-400 text-[10px] font-black tracking-widest uppercase shadow-[0_0_20px_rgba(220,38,38,0.2)]">

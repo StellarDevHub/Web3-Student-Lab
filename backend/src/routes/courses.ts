@@ -6,11 +6,17 @@ import { cacheTTL } from '../config/redis.config.js';
 import prisma from '../db/index.js';
 import { auditAction } from '../middleware/audit.js';
 import { createNotification } from '../notifications/index.js';
+import logger from '../utils/logger.js';
 
 const router = Router();
 
-// Robust Mock Database for 100% Demo Uptime
-let courses = [
+// Demo seed/fallback data (#911): used only to (a) seed a fresh empty
+// database on first boot and (b) as an EXPLICITLY LABELED "demo" dataset
+// when the database is unreachable. It must never be served as if it
+// were live data — every response that includes it carries
+// `dataSource: 'demo'` so clients can tell the difference and show
+// appropriate guidance instead of trusting stale/fake content silently.
+const DEMO_COURSES = [
   {
     id: 'cm1yxxxx-intro',
     title: 'Introduction to Web3 and Stellar',
@@ -43,24 +49,16 @@ let courses = [
   },
 ];
 
-async function ensureSeedCourses() {
-  try {
-    const count = await prisma.course.count();
-    if (count > 0) {
-      const persistedCourses = await prisma.course.findMany({
-        orderBy: {
-          createdAt: 'asc',
-        },
-      });
-      courses = persistedCourses.map((course) => ({
-        ...course,
-        createdAt: course.createdAt.toISOString(),
-        updatedAt: course.updatedAt.toISOString(),
-      }));
-      return courses;
-    }
-
-    for (const course of courses) {
+/**
+ * Ensures the database has been seeded with the starter course catalog
+ * exactly once (on first boot, when the courses table is empty). This
+ * is intentionally separate from failure-fallback behavior — seeding
+ * only ever runs against a live, reachable database.
+ */
+async function ensureSeeded() {
+  const count = await prisma.course.count();
+  if (count === 0) {
+    for (const course of DEMO_COURSES) {
       await prisma.course.create({
         data: {
           id: course.id,
@@ -71,19 +69,37 @@ async function ensureSeedCourses() {
         },
       });
     }
-
-    return courses;
-  } catch {
-    return courses;
   }
+}
+
+/**
+ * Loads the live course catalog from the database. Throws on any
+ * database failure — callers are responsible for deciding how to
+ * degrade (#911: never silently substitute mock data for a real
+ * outage without telling the caller).
+ */
+async function loadLiveCourses() {
+  await ensureSeeded();
+  const persisted = await prisma.course.findMany({ orderBy: { createdAt: 'asc' } });
+  return persisted.map((course) => ({
+    ...course,
+    createdAt: course.createdAt.toISOString(),
+    updatedAt: course.updatedAt.toISOString(),
+  }));
 }
 
 // GET /api/courses - Get all courses
 router.get('/', cacheMiddleware({ ttl: cacheTTL.courses.list }), async (req, res) => {
   try {
-    res.json(await ensureSeedCourses());
-  } catch {
-    res.status(500).json({ error: 'Failed to fetch courses' });
+    const courses = await loadLiveCourses();
+    res.json({ courses, dataSource: 'live' });
+  } catch (error) {
+    logger.error('Database unavailable in GET /courses, serving demo data', { error });
+    res.status(200).json({
+      courses: DEMO_COURSES,
+      dataSource: 'demo',
+      message: 'Live course data is temporarily unavailable. Showing demo data.',
+    });
   }
 });
 
@@ -95,23 +111,35 @@ router.get(
     keyGenerator: (req) => `course:${req.params.id}`,
   }),
   async (req, res) => {
+    const { id } = req.params;
     try {
-      const { id } = req.params;
-      const availableCourses = await ensureSeedCourses();
-      const course = availableCourses.find((c) => c.id === id);
+      const courses = await loadLiveCourses();
+      const course = courses.find((c) => c.id === id);
 
       if (!course) {
         return res.status(404).json({ error: 'Course not found' });
       }
 
-      res.json(course);
-    } catch {
-      res.status(500).json({ error: 'Failed to fetch course' });
+      res.json({ course, dataSource: 'live' });
+    } catch (error) {
+      logger.error(`Database unavailable in GET /courses/${id}, checking demo data`, { error });
+      const demoCourse = DEMO_COURSES.find((c) => c.id === id);
+      if (!demoCourse) {
+        return res.status(404).json({ error: 'Course not found', dataSource: 'demo' });
+      }
+      res.status(200).json({
+        course: demoCourse,
+        dataSource: 'demo',
+        message: 'Live course data is temporarily unavailable. Showing demo data.',
+      });
     }
   }
 );
 
 // POST /api/courses - Create a new course
+// Write operations only ever succeed against the live database — a
+// database failure here must be reported explicitly (503), never
+// silently accepted as if the course was actually persisted.
 router.post('/', auditAction('CREATE_COURSE', 'Course'), async (req, res) => {
   try {
     const { title, description, instructor, credits } = req.body;
@@ -126,25 +154,9 @@ router.post('/', auditAction('CREATE_COURSE', 'Course'), async (req, res) => {
       description,
       instructor,
       credits: credits || 3,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
     };
 
-    const createdCourse = await prisma.course.create({
-      data: {
-        id: newCourse.id,
-        title: newCourse.title,
-        description: newCourse.description,
-        instructor: newCourse.instructor,
-        credits: newCourse.credits,
-      },
-    });
-
-    courses.push({
-      ...createdCourse,
-      createdAt: createdCourse.createdAt.toISOString(),
-      updatedAt: createdCourse.updatedAt.toISOString(),
-    });
+    const createdCourse = await prisma.course.create({ data: newCourse });
     await invalidateAllCourses();
 
     // Notify students about the new course
@@ -157,85 +169,77 @@ router.post('/', auditAction('CREATE_COURSE', 'Course'), async (req, res) => {
       metadata: { instructor: newCourse.instructor, credits: newCourse.credits },
     });
 
-    res.status(201).json(newCourse);
-  } catch {
-    res.status(500).json({ error: 'Failed to create course' });
+    res.status(201).json({
+      ...createdCourse,
+      createdAt: createdCourse.createdAt.toISOString(),
+      updatedAt: createdCourse.updatedAt.toISOString(),
+    });
+  } catch (error) {
+    logger.error('Failed to create course (database unavailable)', { error });
+    res.status(503).json({
+      error: 'Course could not be created: the database is temporarily unavailable',
+    });
   }
 });
 
 // PUT /api/courses/:id - Update a course
 router.put('/:id', auditAction('UPDATE_COURSE', 'Course'), async (req, res) => {
+  const { id } = req.params;
   try {
-    const { id } = req.params;
     const { title, description, instructor, credits } = req.body;
 
-    await ensureSeedCourses();
-    const index = courses.findIndex((c) => c.id === id);
-
-    if (index === -1) {
+    const existing = await prisma.course.findUnique({ where: { id } });
+    if (!existing) {
       return res.status(404).json({ error: 'Course not found' });
     }
 
-    const targetCourse = courses[index];
-
-    const oldTitle = targetCourse?.title ?? '';
-
-    if (targetCourse) {
-      Object.assign(targetCourse, {
-        title,
-        description,
-        instructor,
-        credits,
-        updatedAt: new Date().toISOString(),
-      });
-    }
-
-    await prisma.course.update({
+    const updated = await prisma.course.update({
       where: { id },
-      data: {
-        title,
-        description,
-        instructor,
-        credits,
-      },
+      data: { title, description, instructor, credits },
     });
 
     await invalidateCourseCache(id);
 
     // Notify enrolled students about the update
-    const newTitle = targetCourse?.title ?? title ?? oldTitle;
-    if (oldTitle !== newTitle || description) {
+    if (existing.title !== updated.title || description) {
       await createNotification({
         type: 'course_updated',
         courseId: id,
-        courseTitle: newTitle,
+        courseTitle: updated.title,
         title: 'Course Updated',
-        message: `"${newTitle}" has been updated with new content. Check it out!`,
-        metadata: { oldTitle, changes: { title: title !== oldTitle, description: !!description } },
+        message: `"${updated.title}" has been updated with new content. Check it out!`,
+        metadata: {
+          oldTitle: existing.title,
+          changes: { title: title !== existing.title, description: !!description },
+        },
       });
     }
 
-    res.json(targetCourse);
-  } catch {
-    res.status(500).json({ error: 'Failed to update course' });
+    res.json({
+      ...updated,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    });
+  } catch (error) {
+    logger.error(`Failed to update course ${id} (database unavailable)`, { error });
+    res.status(503).json({
+      error: 'Course could not be updated: the database is temporarily unavailable',
+    });
   }
 });
 
 // DELETE /api/courses/:id - Delete a course
 router.delete('/:id', auditAction('DELETE_COURSE', 'Course'), async (req, res) => {
+  const { id } = req.params;
   try {
-    const { id } = req.params;
-
-    courses = courses.filter((c) => c.id !== id);
-    await prisma.course.delete({
-      where: { id },
-    });
-
+    await prisma.course.delete({ where: { id } });
     await invalidateCourseCache(id);
-
     res.status(204).send();
-  } catch {
-    res.status(500).json({ error: 'Failed to delete course' });
+  } catch (error) {
+    logger.error(`Failed to delete course ${id} (database unavailable)`, { error });
+    res.status(503).json({
+      error: 'Course could not be deleted: the database is temporarily unavailable',
+    });
   }
 });
 

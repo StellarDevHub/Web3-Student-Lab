@@ -7,6 +7,7 @@ import {
 import { CertificateService } from './CertificateService.js';
 import { MetadataGenerator } from './MetadataGenerator.js';
 import logger from '../utils/logger.js';
+import { verifyCertificateContentHash } from './ContentHash.js';
 
 export class VerificationService {
   private certificateService: CertificateService;
@@ -51,6 +52,39 @@ export class VerificationService {
           status: 'invalid' as CertificateStatus,
           onChainData: null,
           message: 'Certificate not found',
+        };
+      }
+
+      // Re-verify the content hash before serving any data. A mismatch
+      // means the stored metadata has diverged from what was hashed at
+      // mint time — surface tamper detection instead of silently
+      // returning the mismatched record.
+      const hashCheck = verifyCertificateContentHash(
+        {
+          id: certificate.id,
+          studentId: certificate.studentId,
+          courseId: certificate.courseId,
+          tokenId: certificate.tokenId,
+          grade: certificate.grade,
+          did: certificate.did,
+          issuedAt: certificate.issuedAt,
+        },
+        (certificate as any).contentHash
+      );
+
+      if (hashCheck.state === 'tampered') {
+        logger.error(`Certificate integrity check failed for token ${tokenId}`, {
+          tokenId,
+          certificateId: certificate.id,
+          expectedHash: hashCheck.expected,
+          actualHash: hashCheck.actual,
+        });
+        return {
+          isValid: false,
+          certificate: null,
+          status: 'TAMPERED' as CertificateStatus,
+          onChainData: null,
+          message: 'Certificate integrity check failed: stored metadata does not match its content hash',
         };
       }
 
@@ -123,6 +157,36 @@ export class VerificationService {
           status: 'invalid' as CertificateStatus,
           onChainData: null,
           message: 'Certificate not found',
+        });
+        continue;
+      }
+
+      const hashCheck = verifyCertificateContentHash(
+        {
+          id: cert.id,
+          studentId: cert.studentId,
+          courseId: cert.courseId,
+          tokenId: cert.tokenId,
+          grade: cert.grade,
+          did: cert.did,
+          issuedAt: cert.issuedAt,
+        },
+        (cert as any).contentHash
+      );
+
+      if (hashCheck.state === 'tampered') {
+        logger.error(`Certificate integrity check failed for token ${tokenId} (batch)`, {
+          tokenId,
+          certificateId: cert.id,
+          expectedHash: hashCheck.expected,
+          actualHash: hashCheck.actual,
+        });
+        results.push({
+          isValid: false,
+          certificate: null,
+          status: 'TAMPERED' as CertificateStatus,
+          onChainData: null,
+          message: 'Certificate integrity check failed: stored metadata does not match its content hash',
         });
         continue;
       }
@@ -241,7 +305,9 @@ export class VerificationService {
       revocationInfo: {
         revokedAt: certificate.revokedAt!,
         reason: certificate.revocationReason!,
-        revokedBy: certificate.revokedBy!,
+        // The revoking actor's issuer DID is an internal identity detail
+        // and is redacted from this public verification response.
+        revokedBy: 'redacted',
       },
       message: 'This certificate has been revoked',
     };

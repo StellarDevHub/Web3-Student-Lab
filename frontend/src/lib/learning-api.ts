@@ -27,6 +27,17 @@ export interface LearningProgressResponse {
   completedAt: string | null;
 }
 
+// Whether a response reflects the live database or the backend's
+// explicitly labeled demo/degraded fallback (#911).
+export type LearningDataSource = 'live' | 'demo';
+
+export class ProgressUnavailableError extends Error {
+  constructor(message = 'Progress could not be saved: learning service is temporarily unavailable') {
+    super(message);
+    this.name = 'ProgressUnavailableError';
+  }
+}
+
 const DEFAULT_CACHE_TTL_MS = 15_000;
 
 function normalizeProgressResponse(
@@ -110,6 +121,34 @@ export const learningAPI = {
     }
   },
 
+  /**
+   * Fetches progress along with the `dataSource` flag so callers can
+   * show a "showing demo data" indicator when the backend could not
+   * reach the database (#911).
+   */
+  getProgressWithSource: async (
+    courseId: string
+  ): Promise<{ progress: LearningProgressResponse | null; dataSource: LearningDataSource }> => {
+    try {
+      const response = await apiClient.get(
+        `/learning/courses/${courseId}/progress`
+      );
+      const data = response.data as { dataSource?: LearningDataSource };
+      return {
+        progress: normalizeProgressResponse(response.data),
+        dataSource: data?.dataSource ?? 'live',
+      };
+    } catch {
+      return { progress: null, dataSource: 'demo' };
+    }
+  },
+
+  /**
+   * Updates progress. Throws ProgressUnavailableError when the backend
+   * reports it could not persist the update (HTTP 503, learning
+   * service degraded) — callers must surface this to the learner
+   * rather than assuming the save succeeded (#911).
+   */
   updateProgress: async (
     courseId: string,
     data: Partial<{
@@ -135,7 +174,14 @@ export const learningAPI = {
         `learning:progress:${courseId}`
       );
       return normalizeProgressResponse(response.data);
-    } catch {
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number; data?: { error?: string } } })
+        ?.response?.status;
+      if (status === 503) {
+        const message = (err as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error;
+        throw new ProgressUnavailableError(message);
+      }
       return null;
     }
   },

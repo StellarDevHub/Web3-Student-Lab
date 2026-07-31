@@ -10,6 +10,7 @@ import {
     getStudentProgress,
     listCourses,
     updateStudentProgress,
+    ProgressPersistenceError,
 } from './learning.service.js';
 import {
     courseParamsSchema,
@@ -31,8 +32,8 @@ router.get(
     try {
       const difficulty =
         typeof req.query.difficulty === 'string' ? req.query.difficulty : undefined;
-      const courses = await listCourses(difficulty);
-      res.json({ courses });
+      const { data: courses, dataSource } = await listCourses(difficulty);
+      res.json({ courses, dataSource });
     } catch {
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -53,14 +54,14 @@ router.get(
       const courseId = req.params.courseId as string;
       const difficulty =
         typeof req.query.difficulty === 'string' ? req.query.difficulty : undefined;
-      const course = await getCourseCurriculum(courseId, difficulty);
+      const { data: course, dataSource } = await getCourseCurriculum(courseId, difficulty);
 
       if (!course) {
         res.status(404).json({ error: 'Course not found' });
         return;
       }
 
-      res.json({ course });
+      res.json({ course, dataSource });
     } catch {
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -128,16 +129,16 @@ router.get(
   async (req: Request, res: Response): Promise<void> => {
     try {
       const courseId = req.params.courseId as string;
-      const course = await getCourseCurriculum(courseId);
+      const { data: course } = await getCourseCurriculum(courseId);
 
       if (!course) {
         res.status(404).json({ error: 'Course not found' });
         return;
       }
 
-      const progress = await getStudentProgress(req.user!.id, courseId);
+      const { data: progress, dataSource } = await getStudentProgress(req.user!.id, courseId);
 
-      res.json({ progress });
+      res.json({ progress, dataSource });
     } catch {
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -157,7 +158,7 @@ router.patch(
   async (req: Request, res: Response): Promise<void> => {
     try {
       const courseId = req.params.courseId as string;
-      const course = await getCourseCurriculum(courseId);
+      const { data: course } = await getCourseCurriculum(courseId);
 
       if (!course) {
         res.status(404).json({ error: 'Course not found' });
@@ -165,10 +166,18 @@ router.patch(
       }
 
       const progress = await updateStudentProgress(req.user!.id, courseId, req.body);
-      res.json({ progress });
+      res.json({ progress, dataSource: 'live' });
     } catch (error: unknown) {
       if (error instanceof Error && error.message === 'LESSON_NOT_FOUND') {
         res.status(404).json({ error: 'Lesson not found' });
+        return;
+      }
+
+      if (error instanceof ProgressPersistenceError) {
+        res.status(503).json({
+          error: error.message,
+          dataSource: 'demo',
+        });
         return;
       }
 
@@ -183,8 +192,8 @@ router.patch(
  */
 router.get('/modules', async (req: Request, res: Response) => {
   try {
-    const modules = await getCourseCurriculum('course-1');
-    res.json({ modules: modules?.modules || [] });
+    const { data: course, dataSource } = await getCourseCurriculum('course-1');
+    res.json({ modules: course?.modules || [], dataSource });
   } catch (_error) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -201,8 +210,12 @@ router.post('/progress/:userId/complete', async (req: Request, res: Response) =>
       lessonId,
       status: 'completed',
     });
-    res.json({ progress, message: 'Lesson marked as complete' });
-  } catch (_error) {
+    res.json({ progress, dataSource: 'live', message: 'Lesson marked as complete' });
+  } catch (error: unknown) {
+    if (error instanceof ProgressPersistenceError) {
+      res.status(503).json({ error: error.message, dataSource: 'demo' });
+      return;
+    }
     res.status(500).json({ error: 'Internal server error' });
   }
 });

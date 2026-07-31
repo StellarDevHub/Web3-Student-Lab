@@ -11,8 +11,37 @@ import {
   ProgressUpdateInput,
 } from './types.js';
 import { enqueueWebhookDeliveries } from '../../services/webhooks/index.js';
+import logger from '../../utils/logger.js';
 
-// In-memory mock store for demo resilience
+/**
+ * Result wrapper distinguishing authoritative database-backed data from
+ * the hardcoded demo/degraded-mode fallback (#911). Consumers MUST
+ * branch on `dataSource` instead of assuming a successful call means
+ * live data.
+ */
+export type DataSource = 'live' | 'demo';
+export interface WithDataSource<T> {
+  data: T;
+  dataSource: DataSource;
+}
+
+/**
+ * Thrown when student progress could not be persisted to the database.
+ * Callers must NOT treat this as a successful save — there is no
+ * mock/demo write path for learner progress, per #911.
+ */
+export class ProgressPersistenceError extends Error {
+  constructor(message = 'Progress could not be saved: learning service is temporarily unavailable') {
+    super(message);
+    this.name = 'ProgressPersistenceError';
+  }
+}
+
+// In-memory store used ONLY as a read-through cache in front of the
+// database for getStudentProgress, and as ephemeral local state while a
+// write is in flight. It is never treated as an authoritative record of
+// progress — see updateStudentProgress, which fails explicitly instead
+// of "succeeding" against this store when the database is unreachable.
 const mockProgressStore: Record<string, Progress> = {};
 
 interface PrismaProgress {
@@ -93,12 +122,19 @@ const buildPercentage = (
 
 /**
  * List all courses with optional difficulty filter.
- * Resilient: Falls back to hardcoded COURSES if database fails.
+ *
+ * #911: On a database outage this NO LONGER silently returns the
+ * hardcoded demo catalog as if it were authoritative. It returns an
+ * explicitly labeled `dataSource: 'demo'` result and logs the failure,
+ * so callers/clients can distinguish live data from a degraded demo
+ * state and show appropriate guidance.
  */
-export const listCourses = async (difficulty?: string): Promise<CurriculumCourse[]> => {
+export const listCourses = async (
+  difficulty?: string
+): Promise<WithDataSource<CurriculumCourse[]>> => {
   const cacheKey = CACHE_KEYS.courses.list();
   const cached = await cacheService.get<CurriculumCourse[]>(cacheKey);
-  if (cached) return cached;
+  if (cached) return { data: cached, dataSource: 'live' };
 
   try {
     const courses = await prisma.course.findMany({
@@ -117,12 +153,11 @@ export const listCourses = async (difficulty?: string): Promise<CurriculumCourse
     }));
 
     await cacheService.set(cacheKey, result, cacheTTL.courses.list);
-    return result;
-  } catch (_error) {
-    console.error("LIST COURSES ERROR:", _error);
-    console.warn('Database error in listCourses, falling back to mock data');
+    return { data: result, dataSource: 'live' };
+  } catch (error) {
+    logger.error('Database unavailable in listCourses; returning demo data', { error });
     const now = new Date();
-    return COURSES.map((course) => ({
+    const demoData = COURSES.map((course) => ({
       id: course.id,
       title: course.title,
       description: course.description || null,
@@ -132,20 +167,24 @@ export const listCourses = async (difficulty?: string): Promise<CurriculumCourse
       updatedAt: now,
       modules: filterModulesByDifficulty(getCurriculumForCourse(course.id), difficulty),
     }));
+    return { data: demoData, dataSource: 'demo' };
   }
 };
 
 /**
  * Get curriculum for a specific course.
- * Resilient: Falls back to curriculumByCourseId if database fails.
+ *
+ * #911: Same explicit-degraded-state contract as listCourses — a
+ * database failure returns demo data tagged `dataSource: 'demo'`
+ * instead of masquerading as live data.
  */
 export const getCourseCurriculum = async (
   courseId: string,
   difficulty?: string
-): Promise<CurriculumCourse | null> => {
+): Promise<WithDataSource<CurriculumCourse | null>> => {
   const cacheKey = CACHE_KEYS.courses.curriculum(courseId);
   const cached = await cacheService.get<CurriculumCourse>(cacheKey);
-  if (cached) return cached;
+  if (cached) return { data: cached, dataSource: 'live' };
 
   try {
     const course = await prisma.course.findUnique({
@@ -153,22 +192,7 @@ export const getCourseCurriculum = async (
     });
 
     if (!course) {
-      // Check if course exists in our mock data
-      const mockCourse = COURSES.find((c) => c.id === courseId);
-      if (mockCourse) {
-        const now = new Date();
-        return {
-          id: mockCourse.id,
-          title: mockCourse.title,
-          description: mockCourse.description || null,
-          instructor: 'Web3 Student Lab',
-          credits: 10,
-          createdAt: now,
-          updatedAt: now,
-          modules: filterModulesByDifficulty(getCurriculumForCourse(courseId), difficulty),
-        };
-      }
-      return null;
+      return { data: null, dataSource: 'live' };
     }
 
     const result = {
@@ -183,11 +207,15 @@ export const getCourseCurriculum = async (
     };
 
     await cacheService.set(cacheKey, result, cacheTTL.courses.curriculum);
-    return result;
-  } catch (_error) {
-    console.warn('Database error in getCourseCurriculum, falling back to mock data');
+    return { data: result, dataSource: 'live' };
+  } catch (error) {
+    logger.error(`Database unavailable in getCourseCurriculum(${courseId}); returning demo data`, {
+      error,
+    });
     const mockCourse = COURSES.find((c) => c.id === courseId);
-    if (!mockCourse) return null;
+    if (!mockCourse) {
+      return { data: null, dataSource: 'demo' };
+    }
 
     const now = new Date();
     const result = {
@@ -200,24 +228,28 @@ export const getCourseCurriculum = async (
       modules: filterModulesByDifficulty(getCurriculumForCourse(courseId), difficulty),
     };
 
-    await cacheService.set(cacheKey, result, cacheTTL.courses.curriculum);
-    return result;
+    return { data: result, dataSource: 'demo' };
   }
 };
 
 /**
  * Get student progress for a course.
- * Resilient: Falls back to in-memory mockProgressStore if database fails.
+ *
+ * #911: If the database is unreachable, this returns the last known
+ * local snapshot (or a fresh "not started" placeholder) tagged
+ * `dataSource: 'demo'` — it is a read-side degraded view, not an
+ * authoritative record, and is never used as the basis for persisting
+ * further writes (see updateStudentProgress).
  */
 export const getStudentProgress = async (
   studentId: string,
   courseId: string
-): Promise<Progress> => {
+): Promise<WithDataSource<Progress>> => {
   const key = `${studentId}:${courseId}`;
   const cacheKey = `${CACHE_KEYS.user.progress(studentId)}:${courseId}`;
 
   const cached = await cacheService.get<Progress>(cacheKey);
-  if (cached) return cached;
+  if (cached) return { data: cached, dataSource: 'live' };
 
   try {
     const progress = await prisma.learningProgress.findUnique({
@@ -231,20 +263,40 @@ export const getStudentProgress = async (
 
     if (progress) {
       const p = toProgress(progress);
-      mockProgressStore[key] = p; // Sync cache
+      mockProgressStore[key] = p; // Sync local read-through cache
       await cacheService.set(cacheKey, p, cacheTTL.user.progress);
-      return p;
+      return { data: p, dataSource: 'live' };
     }
-  } catch (_error) {
-    console.warn('Database error in getStudentProgress, using mock store:', _error);
+  } catch (error) {
+    logger.error('Database unavailable in getStudentProgress; returning degraded view', {
+      studentId,
+      courseId,
+      error,
+    });
+
+    if (mockProgressStore[key]) {
+      return { data: mockProgressStore[key], dataSource: 'demo' };
+    }
+
+    const now = new Date();
+    const placeholder: Progress = {
+      id: `progress-${studentId}-${courseId}`,
+      studentId,
+      courseId,
+      completedLessons: [],
+      currentModuleId: getCurriculumForCourse(courseId)[0]?.id ?? null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: null,
+      completedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    return { data: placeholder, dataSource: 'demo' };
   }
 
-  // Fallback to mock store
-  if (mockProgressStore[key]) {
-    return mockProgressStore[key];
-  }
-
-  // Initial progress if nothing found anywhere
+  // Database reachable but no progress row exists yet — this is
+  // authoritative "not started" state, not demo data.
   const now = new Date();
   const initialProgress: Progress = {
     id: `progress-${studentId}-${courseId}`,
@@ -262,12 +314,18 @@ export const getStudentProgress = async (
 
   mockProgressStore[key] = initialProgress;
   await cacheService.set(cacheKey, initialProgress, cacheTTL.user.progress);
-  return initialProgress;
+  return { data: initialProgress, dataSource: 'live' };
 };
 
 /**
  * Update student progress for a lesson.
- * Resilient: Falls back to in-memory mockProgressStore if database fails.
+ *
+ * #911: Progress is only ever considered saved if it was actually
+ * persisted to the database. If the database is unreachable, this
+ * throws ProgressPersistenceError instead of silently "succeeding"
+ * against the in-memory mock store — there is no mock-only write path
+ * for learner progress, so a learner can never be told their progress
+ * was saved when it wasn't.
  */
 export const updateStudentProgress = async (
   studentId: string,
@@ -287,7 +345,8 @@ export const updateStudentProgress = async (
     module.lessons.some((entry) => entry.id === input.lessonId)
   );
   const totalLessons = countLessons(modules);
-  const existingProgress = await getStudentProgress(studentId, courseId);
+  const existingProgressResult = await getStudentProgress(studentId, courseId);
+  const existingProgress = existingProgressResult.data;
 
   const completedLessonSet = new Set(existingProgress.completedLessons);
 
@@ -377,9 +436,6 @@ export const updateStudentProgress = async (
     updatedAt: now,
   };
 
-  const key = `${studentId}:${courseId}`;
-  mockProgressStore[key] = updatedProgress;
-
   try {
     const progress = await prisma.learningProgress.upsert({
       where: {
@@ -408,11 +464,21 @@ export const updateStudentProgress = async (
       },
     });
 
+    const key = `${studentId}:${courseId}`;
+    mockProgressStore[key] = updatedProgress; // keep read-through cache warm
+
     await invalidateUserProgressCache(studentId);
     return toProgress(progress);
-  } catch (_error) {
-    console.warn('Database error in updateStudentProgress, updated in mock store only');
-    await invalidateUserProgressCache(studentId);
-    return updatedProgress;
+  } catch (error) {
+    logger.error('Database unavailable in updateStudentProgress; refusing to fake-save progress', {
+      studentId,
+      courseId,
+      lessonId: input.lessonId,
+      error,
+    });
+    // Do NOT write to mockProgressStore here and do NOT return as if
+    // the save succeeded — a learner's progress must never be recorded
+    // against demo/mock state (#911 acceptance criteria).
+    throw new ProgressPersistenceError();
   }
 };
