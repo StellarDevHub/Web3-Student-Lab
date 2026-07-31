@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import apiClient from '@/lib/api-client';
+import { useEffect, useState } from 'react';
 import { ListSkeleton } from '../ui/skeletons/ListSkeleton';
 
 interface AuditLog {
@@ -22,7 +22,8 @@ export default function AuditLogList() {
     async function fetchLogs() {
       try {
         const response = await apiClient.get('/audit');
-        setLogs(response.data);
+        const data = response.data;
+        setLogs(Array.isArray(data) ? data : data.items || []);
       } catch (error) {
         console.error('Failed to fetch audit logs:', error);
       } finally {

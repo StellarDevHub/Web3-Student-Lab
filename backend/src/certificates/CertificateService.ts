@@ -1,16 +1,16 @@
 // @ts-nocheck
-import prisma from '../db/index.js';
-import {
-  Certificate,
-  CertificateMetadata,
-  MintCertificateRequest,
-  VerificationResult,
-} from '../types/certificate.types.js';
-import { MetadataGenerator } from './MetadataGenerator.js';
 import { certificateBlockchainService } from '../blockchain/CertificateBlockchainService.js';
-import logger from '../utils/logger.js';
-import { certificateImageGenerator } from '../utils/certificateImageGenerator.js';
+import prisma from '../db/index.js';
 import { storageService } from '../services/storage/index.js';
+import {
+    Certificate,
+    CertificateMetadata,
+    MintCertificateRequest,
+    VerificationResult,
+} from '../types/certificate.types.js';
+import { certificateImageGenerator } from '../utils/certificateImageGenerator.js';
+import logger from '../utils/logger.js';
+import { MetadataGenerator } from './MetadataGenerator.js';
 
 export class CertificateService {
   private metadataGenerator: MetadataGenerator;
@@ -419,24 +419,35 @@ export class CertificateService {
   /**
    * Gets certificates by status (for admin/issuer)
    */
-  async getCertificatesByStatus(status: string): Promise<Certificate[]> {
-    return await prisma.certificate.findMany({
-      where: { status },
-      include: {
-        student: {
-          select: {
-            id: true,
-            email: true,
-            walletAddress: true,
-            did: true,
-            firstName: true,
-            lastName: true,
+  async getCertificatesByStatus(
+    status: string,
+    limit = 50,
+    offset = 0
+  ): Promise<{ certificates: Certificate[]; total: number }> {
+    const [certificates, total] = await Promise.all([
+      prisma.certificate.findMany({
+        where: { status },
+        include: {
+          student: {
+            select: {
+              id: true,
+              email: true,
+              walletAddress: true,
+              did: true,
+              firstName: true,
+              lastName: true,
+            },
           },
+          course: true,
         },
-        course: true,
-      },
-      orderBy: { issuedAt: 'desc' },
-    });
+        orderBy: { issuedAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.certificate.count({ where: { status } }),
+    ]);
+
+    return { certificates, total };
   }
 
   /**

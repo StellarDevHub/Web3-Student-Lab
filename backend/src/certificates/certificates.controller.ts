@@ -1,13 +1,14 @@
 import { Request, Response } from 'express';
-import {
-  certificateService,
-  verificationService,
-  revocationService,
-  certificateAnalytics,
-} from './index.js';
-import { qrCodeGenerator } from '../utils/qrCodeGenerator.js';
 import { certificateImageGenerator } from '../utils/certificateImageGenerator.js';
 import logger from '../utils/logger.js';
+import { buildPaginatedResponse, parsePaginationQuery } from '../utils/pagination.js';
+import { qrCodeGenerator } from '../utils/qrCodeGenerator.js';
+import {
+    certificateAnalytics,
+    certificateService,
+    revocationService,
+    verificationService,
+} from './index.js';
 
 /**
  * Helper to convert param to string
@@ -276,25 +277,32 @@ export class CertificateController {
    */
   async listCertificates(req: Request, res: Response): Promise<void> {
     try {
-      const limit = parseInt(req.query.limit as string) || 50;
-      const offset = parseInt(req.query.offset as string) || 0;
+      const pagination = parsePaginationQuery(req, { defaultPageSize: 50, maxPageSize: 100 });
       const status = req.query.status as string | undefined;
 
-      if (limit > 100) {
-        res.status(400).json({ error: 'Limit cannot exceed 100' });
+      if (status) {
+        const result = await certificateService.getCertificatesByStatus(status, pagination.pageSize, pagination.offset);
+        const paginationMetadata = buildPaginatedResponse(result.certificates, result.total, pagination.page, pagination.pageSize, pagination.offset);
+        res.status(200).json({
+          certificates: result.certificates,
+          total: result.total,
+          pagination: paginationMetadata.pagination,
+        });
         return;
       }
 
-      const result = status
-        ? await certificateService.getCertificatesByStatus(status)
-        : await certificateService.getAllCertificates(limit, offset);
-
-      res.status(200).json(result);
+      const result = await certificateService.getAllCertificates(pagination.pageSize, pagination.offset);
+      res.status(200).json({
+        certificates: result.certificates,
+        total: result.total,
+        pagination: buildPaginatedResponse(result.certificates, result.total, pagination.page, pagination.pageSize, pagination.offset).pagination,
+      });
     } catch (error) {
       logger.error(
         `List certificates error: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
-      res.status(500).json({ error: 'Failed to fetch certificates' });
+      const message = error instanceof Error ? error.message : 'Failed to fetch certificates';
+      res.status(message.includes('Page') || message.includes('Offset') ? 400 : 500).json({ error: message });
     }
   }
 
