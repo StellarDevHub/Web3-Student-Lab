@@ -1,10 +1,11 @@
 import { Prisma } from '@prisma/client';
 import { Request, Response, Router } from 'express';
 import { authenticate } from '../auth/auth.middleware.js';
-import { normalizeSorobanDid } from '../auth/auth.service.js';
+import { DidValidationError, validateStudentDidCompatibility } from '../auth/auth.service.js';
 import prisma from '../db/index.js';
 import { markUserWriteToPrimary } from '../db/requestContext.js';
 import { linkDidToCertificates } from '../routes/certificates.js';
+import logger from '../utils/logger.js';
 
 const router = Router();
 
@@ -64,7 +65,16 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
       did?: string | null;
     };
 
-    const normalizedDid = normalizeSorobanDid(did);
+    const existingStudent = await prisma.student.findUnique({
+      where: { id: req.user.id },
+      select: { walletAddress: true },
+    });
+
+    const normalizedDid = validateStudentDidCompatibility({
+      did,
+      walletAddress: existingStudent?.walletAddress ?? null,
+      expectedNetwork: process.env.STELLAR_NETWORK || 'testnet',
+    });
     const updateData: {
       email?: string;
       firstName?: string;
@@ -116,7 +126,12 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
       updatedAt: student.updatedAt.toISOString(),
     });
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('Invalid DID format')) {
+    if (error instanceof DidValidationError) {
+      logger.warn('Rejected DID update on user profile', {
+        route: '/api/v1/user/profile',
+        userId: req.user?.id,
+        reason: error.message,
+      });
       res.status(400).json({ error: error.message });
       return;
     }
