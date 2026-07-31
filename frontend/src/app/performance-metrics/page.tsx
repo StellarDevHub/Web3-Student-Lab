@@ -17,7 +17,8 @@ import { motion } from 'framer-motion';
  */
 export default function PerformanceMetricsPage() {
   const { user } = useAuth();
-  const { metrics, timeSpent, isLoading, error, isFallback } = usePerformanceMetrics(user?.id);
+  const { metrics, timeSpent, isLoading, isFallback, dataSource, lastVerifiedAt, retry } =
+    usePerformanceMetrics(user?.id);
 
   return (
     <div className="bg-background text-foreground relative min-h-screen overflow-hidden pb-20 transition-colors duration-200">
@@ -82,8 +83,10 @@ export default function PerformanceMetricsPage() {
             metrics={metrics}
             timeSpent={timeSpent}
             isLoading={isLoading}
-            error={error}
             isFallback={isFallback}
+            dataSource={dataSource}
+            lastVerifiedAt={lastVerifiedAt}
+            onRetry={retry}
           />
           <div className="mt-8">
             <ContributionPerformanceProfiler />

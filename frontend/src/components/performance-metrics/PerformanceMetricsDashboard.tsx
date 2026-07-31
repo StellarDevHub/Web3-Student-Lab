@@ -14,21 +14,29 @@ import {
   Legend,
 } from 'recharts';
 import {
+  DataSourceState,
   LearningMetrics,
   TimeSpentPoint,
   buildCompletionBreakdown,
   buildMetricCards,
+  createMetricsExport,
   evaluateAchievements,
 } from '@/lib/analytics/performanceMetrics';
 import AchievementBadges from './AchievementBadges';
+import DataSourceNotice from './DataSourceNotice';
 
 export interface PerformanceMetricsDashboardProps {
   metrics: LearningMetrics;
   timeSpent: TimeSpentPoint[];
   isLoading?: boolean;
-  error?: Error | null;
-  /** When true, a banner notes that fallback (mock) data is being shown. */
+  /** Deprecated in favour of `dataSource`; kept for callers using the old flag. */
   isFallback?: boolean;
+  /** What the displayed data actually is. Defaults to `live`. */
+  dataSource?: DataSourceState;
+  /** ISO timestamp of the last verified live fetch; shown for cached data. */
+  lastVerifiedAt?: string | null;
+  /** Called when the user asks to retry the live fetch. */
+  onRetry?: () => void;
 }
 
 /** Shared Recharts tooltip styling, matching the existing analytics charts. */
@@ -55,8 +63,10 @@ export default function PerformanceMetricsDashboard({
   metrics,
   timeSpent,
   isLoading = false,
-  error = null,
   isFallback = false,
+  dataSource = isFallback ? 'fallback' : 'live',
+  lastVerifiedAt = null,
+  onRetry,
 }: PerformanceMetricsDashboardProps) {
   // --- Loading state -------------------------------------------------------
   if (isLoading) {
@@ -80,18 +90,45 @@ export default function PerformanceMetricsDashboard({
   const completion = buildCompletionBreakdown(metrics);
   const badges = evaluateAchievements(metrics);
 
+  // Sample/fallback data must never be exported as real learner progress, so the
+  // export is disabled in that state. Cached (stale-but-real) data is exportable
+  // but the payload is always labelled with its provenance.
+  const exportDisabled = dataSource === 'fallback';
+
+  function handleExport() {
+    if (exportDisabled) return;
+    const payload = createMetricsExport(metrics, { state: dataSource, lastVerifiedAt });
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `learning-performance-${dataSource}-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-8">
-      {/* Fallback / error banner (graceful degradation) */}
-      {(error || isFallback) && (
-        <div
-          role="alert"
-          className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-4 text-sm text-yellow-500"
+      {/* Data-source transparency: live vs cached vs fallback */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <DataSourceNotice dataSource={dataSource} lastVerifiedAt={lastVerifiedAt} onRetry={onRetry} />
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={exportDisabled}
+          aria-disabled={exportDisabled}
+          title={
+            exportDisabled
+              ? 'Sample data cannot be exported as learner progress'
+              : `Export data (${dataSource})`
+          }
+          className="hover:bg-red-500/10 disabled:opacity-40 disabled:hover:bg-transparent rounded-lg border border-red-500/40 px-3 py-1 text-xs font-bold tracking-widest text-red-500 uppercase"
         >
-          Live analytics are unavailable right now — showing sample data so you
-          can still explore the dashboard.
-        </div>
-      )}
+          Export data
+        </button>
+      </div>
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">

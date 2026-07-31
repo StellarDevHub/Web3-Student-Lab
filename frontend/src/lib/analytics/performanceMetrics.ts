@@ -237,6 +237,125 @@ export function normalizeMetrics(raw: unknown): LearningMetrics {
 }
 
 /**
+ * What a learner-progress dashboard is actually displaying.
+ *
+ *  - `live`: freshly fetched from the analytics API.
+ *  - `cached`: the last verified live snapshot, kept on screen because the most
+ *    recent refresh failed (so stale-but-real data is never mistaken for a
+ *    fresh record — but it is also never replaced with fake numbers).
+ *  - `fallback`: no live snapshot has ever been verified, so deterministic
+ *    sample data is shown purely so the UI is explorable.
+ *
+ * Dashboards must never present `cached` or `fallback` values as if they were
+ * live progress records.
+ */
+export type DataSourceState = 'live' | 'cached' | 'fallback';
+
+/** Structured error from an analytics request, safe to surface and log. */
+export interface AnalyticsError {
+  code: string;
+  message: string;
+  /** True when a retry may succeed (network/timeout/5xx), false when the request is unusable (4xx). */
+  retriable: boolean;
+  /** HTTP status when the failure came from a server response. */
+  status?: number;
+}
+
+/** Provenance metadata attached to whatever snapshot is on screen. */
+export interface MetricsSource {
+  state: DataSourceState;
+  /** ISO timestamp of the last verified live fetch; null when never live. */
+  lastVerifiedAt: string | null;
+  /** Structured error from the most recent failed analytics request. */
+  error: AnalyticsError | null;
+}
+
+/**
+ * Normalise an unknown thrown value into a structured {@link AnalyticsError}.
+ * Axios failures carry a shape we can classify (network/timeout vs HTTP status);
+ * anything else becomes an opaque but still structured error.
+ */
+export function toAnalyticsError(error: unknown): AnalyticsError {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    'message' in error &&
+    'retriable' in error
+  ) {
+    return error as AnalyticsError;
+  }
+
+  const err = error as {
+    isAxiosError?: boolean;
+    code?: string;
+    message?: string;
+    response?: { status?: number; data?: unknown };
+  };
+
+  const status = typeof err.response?.status === 'number' ? err.response.status : undefined;
+
+  if (err.isAxiosError && status === undefined) {
+    return {
+      code: err.code === 'ECONNABORTED' ? 'TIMEOUT' : 'NETWORK_ERROR',
+      message: err.message || 'Analytics endpoint is unreachable',
+      retriable: true,
+    };
+  }
+
+  if (status !== undefined) {
+    const responseData =
+      err.response && typeof err.response.data === 'object' && err.response.data !== null
+        ? (err.response.data as Record<string, unknown>)
+        : null;
+    return {
+      code: `HTTP_${status}`,
+      message:
+        (responseData && typeof responseData.message === 'string'
+          ? responseData.message
+          : err.message) || 'Analytics request failed',
+      retriable: status >= 500,
+      status,
+    };
+  }
+
+  return {
+    code: 'UNKNOWN_ERROR',
+    message: err.message || 'Unexpected analytics error',
+    retriable: false,
+  };
+}
+
+/** Snapshot of a metrics export. */
+export interface MetricsExportPayload {
+  exportedAt: string;
+  /** Provenance of the exported numbers — never claim non-live data as live. */
+  source: DataSourceState;
+  isLive: boolean;
+  lastVerifiedAt: string | null;
+  metrics: LearningMetrics;
+}
+
+/**
+ * Build an export payload that always carries its provenance. `isLive` is false
+ * for `cached` and `fallback` data, so a downstream consumer can never mistake
+ * sample or stale numbers for a verified learner record.
+ */
+export function createMetricsExport(
+  metrics: LearningMetrics,
+  source: Pick<MetricsSource, 'state' | 'lastVerifiedAt'>,
+  exportedAt = new Date().toISOString(),
+): MetricsExportPayload {
+  return {
+    exportedAt,
+    source: source.state,
+    isLive: source.state === 'live',
+    lastVerifiedAt: source.lastVerifiedAt,
+    metrics,
+  };
+}
+
+/**
  * Deterministic-ish mock metrics for local development and the fallback path.
  * Note: kept free of Math.random so snapshots are stable in tests.
  */
