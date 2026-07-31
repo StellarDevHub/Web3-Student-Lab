@@ -17,6 +17,10 @@ if (!redisUrl) {
 // Re-export the main client for backward compatibility
 export const redisConnection = redisClient.getClient();
 
+export function getRedisClient() {
+  return redisClient.getClientOrThrow();
+}
+
 // Re-export pub/sub clients for BullMQ and WebSocket
 export const pubClient = redisClient.getPubClient();
 export const subClient = redisClient.getSubClient();

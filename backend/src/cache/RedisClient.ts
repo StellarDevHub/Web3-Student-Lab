@@ -135,6 +135,14 @@ class RedisClient {
     return this.isConnected ? this.client : null;
   }
 
+  getClientOrThrow(): RedisClientType {
+    const client = this.getClient();
+    if (!client) {
+      throw new Error('Redis client is not initialized or is disconnected');
+    }
+    return client;
+  }
+
   getMemoryStore(): Map<string, string> {
     return this.memoryStore;
   }
