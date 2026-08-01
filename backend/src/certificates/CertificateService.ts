@@ -1,5 +1,6 @@
 import prisma from '../db/index.js';
 import { storageService } from '../services/storage/index.js';
+import { certificateBlockchainService } from '../blockchain/CertificateBlockchainService.js';
 import {
     Certificate,
     CertificateMetadata,
@@ -7,7 +8,8 @@ import {
     VerificationResult,
 } from '../types/certificate.types.js';
 import { certificateImageGenerator } from '../utils/certificateImageGenerator.js';
-import { storageService } from '../services/storage/index.js';
+import logger from '../utils/logger.js';
+import { MetadataGenerator } from './MetadataGenerator.js';
 import { computeCertificateContentHash, verifyCertificateContentHash } from './ContentHash.js';
 
 export class CertificateService {
@@ -114,6 +116,11 @@ export class CertificateService {
           certificate.tokenId || tokenIdValue
         }/metadata`,
       });
+
+      if (!metadata) {
+        logger.error(`Failed to generate metadata for certificate ${certificateId}`);
+        throw new Error('Failed to generate certificate metadata');
+      }
 
       const metadataAsset = await storageService.pinCertificateMetadata({
         certificateId: certificateId,
@@ -347,7 +354,11 @@ export class CertificateService {
       },
     });
 
-    const certMap = new Map(certificates.map((c) => [c.tokenId, c]));
+    const certMap = new Map<string, typeof certificates[number]>(
+      certificates
+        .filter((c): c is typeof certificates[number] => typeof c.tokenId === 'string')
+        .map((c) => [c.tokenId, c] as const)
+    );
 
     const results: VerificationResult[] = [];
 
