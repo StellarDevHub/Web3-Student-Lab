@@ -1,4 +1,3 @@
-import { Redis } from 'ioredis';
 /**
  * Centralized Redis client exports.
  *

@@ -1,6 +1,14 @@
 import { Request, Response } from 'express';
 import { certificateImageGenerator } from '../utils/certificateImageGenerator.js';
 import logger from '../utils/logger.js';
+import { buildPaginatedResponse, parsePaginationQuery } from '../utils/pagination.js';
+import { qrCodeGenerator } from '../utils/qrCodeGenerator.js';
+import {
+  certificateAnalytics,
+  certificateService,
+  revocationService,
+  verificationService,
+} from './index.js';
 import { UnauthorizedIssuerError } from './RevocationService.js';
 
 /**
@@ -10,6 +18,12 @@ function getStringParam(value: string | string[] | undefined): string {
   if (typeof value === 'string') return value;
   if (Array.isArray(value) && value.length > 0) return value[0] || '';
   return '';
+}
+
+function getStringQuery(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string') return value[0];
+  return undefined;
 }
 
 /**
@@ -201,6 +215,10 @@ export class CertificateController {
       const certificateId = getStringParam(req.params.certificateId);
       const { reason, revokedBy } = req.body;
 
+      if (!certificateId) {
+        res.status(400).json({ error: 'Certificate ID is required' });
+        return;
+      }
       if (!reason) {
         res.status(400).json({ error: 'Revocation reason is required' });
         return;
@@ -239,6 +257,10 @@ export class CertificateController {
       const certificateId = getStringParam(req.params.certificateId);
       const { reason, newGrade, issuedBy } = req.body;
 
+      if (!certificateId) {
+        res.status(400).json({ error: 'Certificate ID is required' });
+        return;
+      }
       if (!reason) {
         res.status(400).json({ error: 'Reissuance reason is required' });
         return;
@@ -279,7 +301,7 @@ export class CertificateController {
   async listCertificates(req: Request, res: Response): Promise<void> {
     try {
       const pagination = parsePaginationQuery(req, { defaultPageSize: 50, maxPageSize: 100 });
-      const status = req.query.status as string | undefined;
+      const status = getStringQuery(req.query.status);
 
       if (status) {
         const result = await certificateService.getCertificatesByStatus(status, pagination.pageSize, pagination.offset);
@@ -368,6 +390,11 @@ export class CertificateController {
   async getQRCode(req: Request, res: Response): Promise<void> {
     try {
       const id = getStringParam(req.params.id);
+      if (!id) {
+        res.status(400).json({ error: 'Certificate ID is required' });
+        return;
+      }
+
       const certificate = await certificateService.getCertificateById(id);
       if (!certificate) {
         res.status(404).json({ error: 'Certificate not found' });
