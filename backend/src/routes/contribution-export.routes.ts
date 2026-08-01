@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { exportAsJSON, exportAsCSV } from '../services/contributionExportService.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 // GET /export/contributions/:userId/json
 router.get('/contributions/:userId/json', (req, res) => {

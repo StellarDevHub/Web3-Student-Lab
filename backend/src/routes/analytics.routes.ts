@@ -2,7 +2,7 @@ import { Router } from 'express';
 import prisma from '../db/index.js';
 import { buildPaginatedResponse, parsePaginationQuery } from '../utils/pagination.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @route GET /api/v1/analytics/global-stats

@@ -7,7 +7,7 @@ import {
   searchCurriculum,
 } from '../../search/curriculum/CurriculumSearchService.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * GET /api/v1/search

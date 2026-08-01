@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import prisma from '../db/index.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 interface Enrollment {
   id: string;

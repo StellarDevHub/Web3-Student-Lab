@@ -146,7 +146,7 @@ export class ChainIndexerEngine {
         });
 
         let processedEventCount = 0;
-        const failedEvents = [];
+        const failedEvents: Array<{ eventId: string; error: string }> = [];
 
         // Process each event in the block with idempotent tracking
         for (const eventData of block.events) {

@@ -6,7 +6,7 @@ import prisma from '../db/index.js';
 import { markUserWriteToPrimary } from '../db/requestContext.js';
 import { linkDidToCertificates } from '../routes/certificates.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @route   GET /api/user/profile

@@ -8,7 +8,7 @@ import { createVestingScheduleSchema, claimVestingTokensSchema } from './vesting
 import { validate } from '../../middleware/validation.js';
 import logger from '../../utils/logger.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 const generatorService = new GeneratorService();
 const slugify = (value: string): string =>
   value
@@ -255,7 +255,11 @@ router.get('/vesting', async (req: Request, res: Response) => {
  */
 router.get('/vesting/:projectId', async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const projectId = typeof req.params.projectId === 'string' ? req.params.projectId : undefined;
+    if (!projectId) {
+      res.status(400).json({ error: 'projectId is required' });
+      return;
+    }
     const schedule = await prisma.vestingSchedule.findUnique({
       where: { projectId }
     });
@@ -277,7 +281,11 @@ router.get('/vesting/:projectId', async (req: Request, res: Response) => {
  */
 router.post('/vesting/:projectId/claim', validate(claimVestingTokensSchema), async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const projectId = typeof req.params.projectId === 'string' ? req.params.projectId : undefined;
+    if (!projectId) {
+      res.status(400).json({ error: 'projectId is required' });
+      return;
+    }
     const { amount: claimAmount } = req.body;
     const simulatedMonths = req.body.simulatedMonthsElapsed !== undefined ? Number(req.body.simulatedMonthsElapsed) : null;
 

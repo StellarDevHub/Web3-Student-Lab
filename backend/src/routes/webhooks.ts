@@ -11,7 +11,7 @@ import {
 } from '../services/webhooks/index.js';
 import logger from '../utils/logger.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 const getIngestSecret = (): string => {
   const secret = process.env.WEBHOOK_INGEST_SECRET || process.env.WEBHOOK_SIGNING_SECRET;

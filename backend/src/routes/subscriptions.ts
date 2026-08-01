@@ -1,6 +1,6 @@
 import { Request, Response, Router } from 'express';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 // Mock database
 interface MockSubscriptionPlan {

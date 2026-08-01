@@ -8,7 +8,7 @@ import {
   BatchVerificationSchema,
 } from './certificates/validation.schemas.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * Certificate Routes

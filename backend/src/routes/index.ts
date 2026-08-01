@@ -39,7 +39,7 @@ import simulatorIdeasRouter from '../simulator/simulator.routes.js';
 import webhooksRouter from './webhooks.js';
 import adminDLQRouter from './admin/dlq.routes.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 router.use('/health', healthRouter);
 router.use('/analytics', analyticsRouter);

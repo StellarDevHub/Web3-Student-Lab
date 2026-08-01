@@ -27,8 +27,13 @@ async function checkTier(
   max: number,
   now: number
 ): Promise<TierResult> {
+  const client = redis;
+  if (!client) {
+    throw new Error('Redis unavailable');
+  }
+
   const windowStart = now - windowMs;
-  const multi = redis.multi();
+  const multi = client.multi();
   multi.zremrangebyscore(key, 0, windowStart);
   multi.zadd(key, now, now.toString());
   multi.zcard(key);
@@ -166,7 +171,11 @@ export function slidingWindowRateLimiter(options: RateLimitOptions) {
     const windowStart = now - options.windowMs;
 
     try {
-      const multi = redis.multi();
+      const client = redis;
+      if (!client) {
+        throw new Error('Redis unavailable');
+      }
+      const multi = client.multi();
       multi.zremrangebyscore(key, 0, windowStart);
       multi.zadd(key, now, now.toString());
       multi.zcard(key);

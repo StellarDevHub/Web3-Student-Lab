@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { securityService } from '../services/securityService.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @route GET /api/v1/security/public-key

@@ -7,7 +7,7 @@ import {
   replayDLQJob,
 } from '../../services/dlq.service.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 // GET /admin/dlq - List / inspect DLQ jobs
 router.get('/', async (req, res) => {

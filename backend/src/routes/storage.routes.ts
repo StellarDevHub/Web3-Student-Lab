@@ -2,7 +2,7 @@ import { Request, Response, Router } from 'express';
 import logger from '../utils/logger.js';
 import { storageService } from '../services/storage/index.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 router.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({

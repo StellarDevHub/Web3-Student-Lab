@@ -5,7 +5,7 @@ import {
   markAllAsRead,
 } from './NotificationService.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * GET /api/notifications
@@ -19,7 +19,7 @@ const router = Router();
  *   400 - Missing userId parameter
  */
 router.get('/', (req: Request, res: Response) => {
-  const userId = req.query.userId as string | undefined;
+  const userId = typeof req.query.userId === 'string' ? req.query.userId : undefined;
 
   if (!userId) {
     return res.status(400).json({ error: 'Missing required query parameter: userId' });
@@ -39,7 +39,10 @@ router.get('/', (req: Request, res: Response) => {
  *   404 - Notification not found
  */
 router.put('/:id/read', (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = typeof req.params.id === 'string' ? req.params.id : undefined;
+  if (!id) {
+    return res.status(400).json({ error: 'Missing required path parameter: id' });
+  }
   const found = markAsRead(id);
 
   if (!found) {

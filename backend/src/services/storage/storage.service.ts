@@ -326,7 +326,7 @@ export class StorageService {
   }
 
   private async persistResult(
-    request: Omit<StoragePinRequest, 'mode'> & { content?: Buffer },
+    request: Omit<StoragePinRequest, 'mode'> & { content?: unknown },
     result: StoragePinResult
   ): Promise<void> {
     await this.repository.upsertStorageAsset({

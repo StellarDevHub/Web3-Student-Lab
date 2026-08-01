@@ -18,7 +18,7 @@ import {
     progressUpdateSchema,
 } from './validation.schemas.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @route   GET /api/learning/courses

@@ -7,7 +7,7 @@ import { auditAction } from '../middleware/audit.js';
 import { createNotification } from '../notifications/index.js';
 import logger from '../utils/logger.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 // Demo seed/fallback data (#911): used only to (a) seed a fresh empty
 // database on first boot and (b) as an EXPLICITLY LABELED "demo" dataset
@@ -107,10 +107,13 @@ router.get(
   '/:id',
   cacheMiddleware({
     ttl: cacheTTL.courses.detail,
-    keyGenerator: (req) => `course:${req.params.id}`,
+    keyGenerator: (req) => `course:${typeof req.params.id === 'string' ? req.params.id : 'unknown'}`,
   }),
   async (req, res) => {
-    const { id } = req.params;
+    const id = typeof req.params.id === 'string' ? req.params.id : undefined;
+    if (!id) {
+      return res.status(400).json({ error: 'Course id is required' });
+    }
     try {
       const courses = await loadLiveCourses();
       const course = courses.find((c) => c.id === id);
@@ -183,7 +186,10 @@ router.post('/', auditAction('CREATE_COURSE', 'Course'), async (req, res) => {
 
 // PUT /api/courses/:id - Update a course
 router.put('/:id', auditAction('UPDATE_COURSE', 'Course'), async (req, res) => {
-  const { id } = req.params;
+  const id = typeof req.params.id === 'string' ? req.params.id : undefined;
+  if (!id) {
+    return res.status(400).json({ error: 'Course id is required' });
+  }
   try {
     const { title, description, instructor, credits } = req.body;
 
@@ -229,7 +235,10 @@ router.put('/:id', auditAction('UPDATE_COURSE', 'Course'), async (req, res) => {
 
 // DELETE /api/courses/:id - Delete a course
 router.delete('/:id', auditAction('DELETE_COURSE', 'Course'), async (req, res) => {
-  const { id } = req.params;
+  const id = typeof req.params.id === 'string' ? req.params.id : undefined;
+  if (!id) {
+    return res.status(400).json({ error: 'Course id is required' });
+  }
   try {
     await prisma.course.delete({ where: { id } });
     await invalidateCourseCache(id);

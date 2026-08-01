@@ -162,7 +162,7 @@ let graphqlServer: Awaited<ReturnType<typeof createGraphQLServer>> | null = null
 async function setupGraphQL() {
   try {
     graphqlServer = await createGraphQLServer();
-    const { expressMiddleware } = await import('@apollo/server/express4');
+    const { expressMiddleware } = await import('@as-integrations/express4');
 
     app.use(
       '/graphql',

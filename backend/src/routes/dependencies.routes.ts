@@ -4,7 +4,7 @@ import { validateRequest } from '../utils/validation.js';
 import logger from '../utils/logger.js';
 import { dependencyCheckSchema, dependencyUpdateSchema } from './dependencies.validation.schemas.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * POST /dependencies/check

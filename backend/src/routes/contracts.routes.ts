@@ -4,7 +4,7 @@ import logger from '../utils/logger.js';
 import { validateRequest } from '../utils/validation.js';
 import { contractCompileSchema, contractExecutionSchema } from './contracts.validation.schemas.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * Smart Contract Compilation Endpoint

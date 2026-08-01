@@ -1,4 +1,5 @@
-import type { StorageAssetRecord } from './types.js';
+import type { Prisma } from '@prisma/client';
+import type { StorageAssetKind, StorageAssetRecord } from './types.js';
 
 const getPrisma = async () => {
   const module = await import('../../db/index.js');
@@ -9,7 +10,7 @@ export const upsertStorageAsset = async (asset: {
   resourceType: string;
   resourceId: string;
   name: string;
-  kind: string;
+  kind: StorageAssetKind;
   provider: string;
   cid: string;
   ipfsUri: string;
@@ -32,7 +33,7 @@ export const upsertStorageAsset = async (asset: {
       },
     },
     update: {
-      kind: asset.kind,
+      kind: asset.kind as string,
       provider: asset.provider,
       cid: asset.cid,
       ipfsUri: asset.ipfsUri,
@@ -41,7 +42,7 @@ export const upsertStorageAsset = async (asset: {
       sizeBytes: asset.sizeBytes ?? null,
       status: asset.status ?? 'pinned',
       referenceCount: asset.referenceCount ?? 1,
-      metadata: asset.metadata ?? null,
+      metadata: (asset.metadata ?? null) as Prisma.InputJsonValue,
       error: asset.error ?? null,
       pinnedAt: asset.status === 'pinned' ? new Date() : undefined,
       unpinnedAt: null,
@@ -50,7 +51,7 @@ export const upsertStorageAsset = async (asset: {
       resourceType: asset.resourceType,
       resourceId: asset.resourceId,
       name: asset.name,
-      kind: asset.kind,
+      kind: asset.kind as string,
       provider: asset.provider,
       cid: asset.cid,
       ipfsUri: asset.ipfsUri,
@@ -59,11 +60,11 @@ export const upsertStorageAsset = async (asset: {
       sizeBytes: asset.sizeBytes ?? null,
       status: asset.status ?? 'pinned',
       referenceCount: asset.referenceCount ?? 1,
-      metadata: asset.metadata ?? null,
+      metadata: (asset.metadata ?? null) as Prisma.InputJsonValue,
       error: asset.error ?? null,
       pinnedAt: asset.status === 'pinned' ? new Date() : null,
     },
-  });
+  }) as unknown as StorageAssetRecord;
 };
 
 export const markAssetFailed = async (
@@ -109,7 +110,7 @@ export const listUnreferencedAssets = async (olderThan: Date): Promise<StorageAs
       OR: [{ unpinnedAt: null }, { unpinnedAt: { lt: olderThan } }],
       status: { in: ['pinned', 'failed', 'unreferenced'] },
     },
-  });
+  }) as unknown as StorageAssetRecord[];
 };
 
 export const markAssetUnpinned = async (cid: string): Promise<void> => {

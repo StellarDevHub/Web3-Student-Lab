@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 router.get('/resolve', (req, res) => {
   const key = typeof req.query.key === 'string' ? req.query.key : 'welcome';

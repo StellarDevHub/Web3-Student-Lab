@@ -292,9 +292,9 @@ export class CertificateService {
     }
 
     const metadata = this.metadataGenerator.generate(
-      certificate,
-      certificate.course!,
-      certificate.student
+      certificate as any,
+      certificate.course as any,
+      certificate.student as any
     );
 
     const onChainData: VerificationResult['onChainData'] = {
@@ -378,7 +378,7 @@ export class CertificateService {
 
       const walletAddress =
         cert.student.walletAddress || this.extractWalletFromDid(cert.student.did);
-      const metadata = this.metadataGenerator.generate(cert, cert.course!, cert.student);
+      const metadata = this.metadataGenerator.generate(cert as any, cert.course as any, cert.student as any);
 
       const onChainData: VerificationResult['onChainData'] = {
         tokenId: cert.tokenId || '',

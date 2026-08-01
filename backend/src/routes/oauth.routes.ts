@@ -9,7 +9,7 @@ import {
 } from '../auth/github.service.js';
 import { auditAction } from '../middleware/audit.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @route   GET /api/v1/oauth/github

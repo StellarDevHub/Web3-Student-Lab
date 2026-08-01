@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { cbManager } from '../lib/circuit-breaker/CircuitBreakerManager.js';
 import { checkDbHealth } from '../db/healthMonitor.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @openapi

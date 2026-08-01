@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { RustValidationService } from '../services/rust-validation.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 router.post('/validate', async (req: Request, res: Response) => {
   try {

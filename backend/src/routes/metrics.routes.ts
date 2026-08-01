@@ -16,7 +16,7 @@
 import { Router, Request, Response } from 'express';
 import metricsCollector from '../metrics/MetricsCollector.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @openapi

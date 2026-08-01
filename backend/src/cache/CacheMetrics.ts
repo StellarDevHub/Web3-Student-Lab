@@ -2,7 +2,7 @@ import { Router } from 'express';
 import cacheService from './CacheService.js';
 import redisClient from './RedisClient.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 router.get('/metrics', (_req, res) => {
   const metrics = cacheService.getMetrics();

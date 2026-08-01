@@ -9,7 +9,7 @@ import { slidingWindowRateLimiter } from '../../middleware/rateLimiter.js';
 import { validateRequest } from '../../utils/validation.js';
 import { auditAction } from '../../middleware/audit.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @route   POST /api/auth/register

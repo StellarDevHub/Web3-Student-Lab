@@ -1,6 +1,6 @@
 import http from 'http';
 import { WebSocketServer } from 'ws';
-import { setupWSConnection } from 'y-websocket/bin/utils';
+import { WebsocketProvider } from 'y-websocket';
 
 const port = process.env.WS_PORT || 1234;
 const server = http.createServer((request, response) => {
@@ -11,7 +11,12 @@ const server = http.createServer((request, response) => {
 const wss = new WebSocketServer({ server });
 
 wss.on('connection', (conn, req) => {
-  setupWSConnection(conn, req);
+  const url = new URL(req?.url || '/', `http://${req?.headers.host || 'localhost'}`);
+  const roomName = url.pathname.replace(/^\//, '') || 'default';
+  const provider = new WebsocketProvider(`ws://${req?.headers.host || `localhost:${port}`}`, roomName, undefined as any, {
+    WebSocketPolyfill: WebSocket,
+  });
+  provider.connect();
 });
 
 server.listen(port, () => {

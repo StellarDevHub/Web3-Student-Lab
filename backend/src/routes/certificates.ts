@@ -2,7 +2,7 @@ import { Request, Response, Router } from 'express';
 import { normalizeSorobanDid } from '../auth/auth.service.js';
 import { auditAction } from '../middleware/audit.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 // Robust Mock Database for 100% Demo Uptime
 interface MockCertificate {

@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { Request, Response, Router } from 'express';
 import { authenticate } from '../auth/auth.middleware.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 const prisma = new PrismaClient();
 
 // Apply auth middleware to all canvas routes
