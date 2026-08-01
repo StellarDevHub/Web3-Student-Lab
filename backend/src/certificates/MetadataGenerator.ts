@@ -1,10 +1,10 @@
 import {
+  Certificate,
   CertificateMetadata,
   CertificateCourseInfo,
   CertificateStudentInfo,
   CertificateVerificationInfo,
 } from '../types/certificate.types.js';
-import { Certificate } from '@prisma/client';
 import { API_BASE_URL, ISSUER_NAME, ISSUER_DID } from '../config/rpcConfig.js';
 
 export class MetadataGenerator {
