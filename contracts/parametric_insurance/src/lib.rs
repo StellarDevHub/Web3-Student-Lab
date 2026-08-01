@@ -63,7 +63,9 @@ impl ParametricInsuranceContract {
         env.storage().instance().set(&DataKey::Token, &token);
         env.storage().instance().set(&DataKey::Oracle, &oracle);
         env.storage().instance().set(&DataKey::TotalCapital, &0i128);
-        env.storage().instance().set(&DataKey::LockedLiability, &0i128);
+        env.storage()
+            .instance()
+            .set(&DataKey::LockedLiability, &0i128);
         env.storage().instance().set(&DataKey::NextPolicyId, &1u64);
     }
 
@@ -136,7 +138,9 @@ impl ParametricInsuranceContract {
 
         total += premium;
         env.storage().instance().set(&DataKey::TotalCapital, &total);
-        env.storage().instance().set(&DataKey::LockedLiability, &locked);
+        env.storage()
+            .instance()
+            .set(&DataKey::LockedLiability, &locked);
 
         let id: u64 = env
             .storage()
@@ -155,9 +159,7 @@ impl ParametricInsuranceContract {
             claimed: false,
         };
 
-        env.storage()
-            .instance()
-            .set(&DataKey::Policy(id), &policy);
+        env.storage().instance().set(&DataKey::Policy(id), &policy);
         env.storage()
             .instance()
             .set(&DataKey::NextPolicyId, &(id + 1));
@@ -267,12 +269,10 @@ impl ParametricInsuranceContract {
             panic_with_error!(&env, InsuranceError::Insolvent);
         }
 
-        env.storage()
-            .instance()
-            .set(
-                &DataKey::UnderwriterBalance(underwriter.clone()),
-                &(current - amount),
-            );
+        env.storage().instance().set(
+            &DataKey::UnderwriterBalance(underwriter.clone()),
+            &(current - amount),
+        );
         env.storage()
             .instance()
             .set(&DataKey::TotalCapital, &(total - amount));
@@ -369,7 +369,10 @@ mod tests {
     fn setup() -> (Env, Address, Address, Address, Address, Address, Address) {
         let env = Env::default();
         env.mock_all_auths();
-        env.ledger().set(Ledger { timestamp: 1_000_000, ..Default::default() });
+        env.ledger().set(Ledger {
+            timestamp: 1_000_000,
+            ..Default::default()
+        });
 
         let admin = Address::generate(&env);
         let oracle = Address::generate(&env);
@@ -396,7 +399,13 @@ mod tests {
 
         let trigger = Symbol::new(&env, "temp_celsius");
         let policy_id = client.buy_policy(
-            &buyer, &500, &10_000, &(env.ledger().timestamp() + 100), &trigger, &35i128, &true,
+            &buyer,
+            &500,
+            &10_000,
+            &(env.ledger().timestamp() + 100),
+            &trigger,
+            &35i128,
+            &true,
         );
 
         let policy = client.get_policy(&policy_id).unwrap();
@@ -419,7 +428,13 @@ mod tests {
 
         let trigger = Symbol::new(&env, "temp_celsius");
         let policy_id = client.buy_policy(
-            &buyer, &500, &10_000, &(env.ledger().timestamp() + 100), &trigger, &35i128, &true,
+            &buyer,
+            &500,
+            &10_000,
+            &(env.ledger().timestamp() + 100),
+            &trigger,
+            &35i128,
+            &true,
         );
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -438,7 +453,13 @@ mod tests {
         // Policy triggers when temp is BELOW 10
         let trigger = Symbol::new(&env, "temp_celsius");
         let policy_id = client.buy_policy(
-            &buyer, &500, &5_000, &(env.ledger().timestamp() + 100), &trigger, &10i128, &false,
+            &buyer,
+            &500,
+            &5_000,
+            &(env.ledger().timestamp() + 100),
+            &trigger,
+            &10i128,
+            &false,
         );
 
         // Oracle posts 25 - trigger NOT met (25 > 10, but we need <= 10)
@@ -460,7 +481,13 @@ mod tests {
         // Policy triggers when oracle value is BELOW 10
         let trigger = Symbol::new(&env, "temp_celsius");
         let policy_id = client.buy_policy(
-            &buyer, &500, &5_000, &(env.ledger().timestamp() + 100), &trigger, &10i128, &false,
+            &buyer,
+            &500,
+            &5_000,
+            &(env.ledger().timestamp() + 100),
+            &trigger,
+            &10i128,
+            &false,
         );
 
         client.post_oracle_value(&oracle, &trigger, &5i128);
@@ -510,7 +537,13 @@ mod tests {
 
         let trigger = Symbol::new(&env, "wind_speed");
         let policy_id = client.buy_policy(
-            &buyer, &300, &5_000, &(env.ledger().timestamp() + 100), &trigger, &80i128, &true,
+            &buyer,
+            &300,
+            &5_000,
+            &(env.ledger().timestamp() + 100),
+            &trigger,
+            &80i128,
+            &true,
         );
 
         client.post_oracle_value(&oracle, &trigger, &120i128);
@@ -583,7 +616,13 @@ mod tests {
 
         let trigger = Symbol::new(&env, "temp");
         let policy_id = client.buy_policy(
-            &buyer, &500, &10_000, &(env.ledger().timestamp() + 100), &trigger, &35i128, &true,
+            &buyer,
+            &500,
+            &10_000,
+            &(env.ledger().timestamp() + 100),
+            &trigger,
+            &35i128,
+            &true,
         );
 
         client.post_oracle_value(&oracle, &trigger, &42i128);

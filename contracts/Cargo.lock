@@ -286,6 +286,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "continuous-bonding-curve"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -382,6 +389,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.118",
+]
+
+[[package]]
+name = "dao-governance"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
 ]
 
 [[package]]
@@ -640,6 +654,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
+name = "fractional-nft-vault"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "freelance-platform"
 version = "0.1.0"
 dependencies = [
@@ -878,6 +899,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "lending-pool"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.186"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -969,6 +997,13 @@ dependencies = [
  "elliptic-curve",
  "primeorder",
  "sha2",
+]
+
+[[package]]
+name = "parametric-insurance"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
 ]
 
 [[package]]
@@ -1343,15 +1378,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "soroban-certificate-contract"
-version = "0.0.0"
-dependencies = [
- "ed25519-dalek",
- "rand",
- "soroban-sdk",
-]
-
-[[package]]
 name = "soroban-env-common"
 version = "22.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1429,6 +1455,13 @@ dependencies = [
  "serde_json",
  "stellar-xdr",
  "syn 2.0.118",
+]
+
+[[package]]
+name = "soroban-hello-world"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
 ]
 
 [[package]]
@@ -1886,6 +1919,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.118",
+]
+
+[[package]]
+name = "zk-proof-verifier"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
 ]
 
 [[package]]

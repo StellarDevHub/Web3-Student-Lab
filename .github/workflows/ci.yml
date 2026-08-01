@@ -48,18 +48,45 @@ jobs:
       - name: Build
         working-directory: ./backend
         run: npm run build
+      - name: Validate curriculum content
+        working-directory: ./backend
+        run: npm run validate:curriculum
+      - name: Create shadow database
+        # Rollback verification and drift detection (below) both need a
+        # scratch "shadow" database distinct from test_db, on the same
+        # Postgres service.
+        run: |
+          PGPASSWORD=test psql -h localhost -U test -d test_db \
+            -c "CREATE DATABASE shadow_db;"
       - name: Prisma Generate & Migrate
         working-directory: ./backend
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test_db
         run: |
           npx prisma generate
-          npx prisma migrate deploy || true
+          npx prisma migrate deploy
       - name: Test Migration Rollbacks
         working-directory: ./backend
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test_db
+          SHADOW_DATABASE_URL: postgresql://test:test@localhost:5432/shadow_db
         run: npm run test:migrations
+      - name: Detect schema/migration drift
+        # Reporting only, not yet a merge gate: schema.prisma has
+        # substantial pre-existing drift from the migration history
+        # (see PR description) that a single PR shouldn't be blocked on
+        # resolving. Once that backlog is cleared with a dedicated
+        # migration, remove `continue-on-error` so future drift fails CI.
+        working-directory: ./backend
+        continue-on-error: true
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_db
+          SHADOW_DATABASE_URL: postgresql://test:test@localhost:5432/shadow_db
+        run: |
+          npx prisma migrate diff \
+            --from-config-datasource \
+            --to-schema prisma/schema.prisma \
+            --exit-code
       - name: Run tests
         working-directory: ./backend
         env:
@@ -71,6 +98,10 @@ jobs:
           GITHUB_CLIENT_SECRET: test-github-client-secret
           GITHUB_REDIRECT_URI: http://localhost:8080/api/v1/oauth/github/callback
           FRONTEND_URL: http://localhost:3000
+        # Pre-existing test failures unrelated to migrations (12 failing
+        # suites as of this PR) — out of scope here; `|| true` intentionally
+        # left in place rather than silently making this bypass narrower
+        # without fixing what it's bypassing.
         run: npm run test:coverage || true
 
   frontend:

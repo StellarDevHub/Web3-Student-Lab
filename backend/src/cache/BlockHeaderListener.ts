@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { EventEmitter } from 'events';
 import logger from '../utils/logger.js';
 import cacheService from './CacheService.js';
@@ -18,7 +17,7 @@ export interface BlockHeader {
 export class BlockHeaderListener extends EventEmitter {
   private isListening = false;
   private lastBlockHeight = 0;
-  private pollingInterval: NodeJS.Timer | null = null;
+  private pollingInterval: NodeJS.Timeout | null = null;
   private readonly POLL_INTERVAL = parseInt(process.env.BLOCK_POLL_INTERVAL || '10000', 10); // 10 seconds default
 
   /**

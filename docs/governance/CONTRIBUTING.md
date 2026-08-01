@@ -43,6 +43,11 @@ at first.
 > [CI/CD Pipeline Guide](docs/CICD_GUIDE.md) before making any changes related to secrets, sensitive
 > data, or smart contracts.
 
+Adding or editing a course lesson? See
+[docs/backend/CURRICULUM_AUTHORING.md](../backend/CURRICULUM_AUTHORING.md)
+for the required fields and the `npm run validate:curriculum` command CI
+runs on every PR.
+
 ## 5. Make a Pull Request
 
 At this point, you should switch back to your master branch and make sure it's up to date with Web3

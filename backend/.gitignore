@@ -3,3 +3,14 @@ node_modules
 .env
 
 /src/generated/prismalogs/
+
+# test snapshots and coverage output
+**/__snapshots__/
+*.snap
+coverage/
+dist/
+*.log
+
+# generated build artifacts committed by mistake
+*.js.map
+*.d.ts.map

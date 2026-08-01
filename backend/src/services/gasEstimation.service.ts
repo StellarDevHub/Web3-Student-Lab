@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Gas Estimation Service — Open Source Contribution Trainer backend.
  *
@@ -89,7 +88,7 @@ export function estimateGas(request: GasEstimateRequest): GasEstimateResponse {
   if (!withinBudget) {
     recommendation = 'Gas exceeds budget — optimize storage writes and nested loops before submitting a PR.';
   } else if (core.warnings.length > 0) {
-    recommendation = `Within budget but review ${core.warnings[0].metric} warnings before merge.`;
+    recommendation = `Within budget but review ${core.warnings[0]!.metric} warnings before merge.`;
   }
 
   return {

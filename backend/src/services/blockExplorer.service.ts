@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Block Explorer Service — Hackathon Project Idea Generator backend.
  *
@@ -45,6 +44,11 @@ function seededRandom(seed: number): () => number {
   };
 }
 
+function pick<T>(options: readonly T[], rand: () => number): T {
+  const idx = Math.min(options.length - 1, Math.floor(rand() * options.length));
+  return options[idx] as T;
+}
+
 function generateTransactions(count: number, seed: number, startLedger: number): ExplorerTransaction[] {
   const rand = seededRandom(seed);
   return Array.from({ length: count }, (_, i) => {
@@ -55,9 +59,9 @@ function generateTransactions(count: number, seed: number, startLedger: number):
       hash: `H${seed.toString(16).padStart(8, '0')}${i.toString(16).padStart(8, '0')}`,
       source: `G${Math.floor(rand() * 1e10).toString(36).toUpperCase().padStart(10, '0')}`,
       destination: `G${Math.floor(rand() * 1e10).toString(36).toUpperCase().padStart(10, '0')}`,
-      operation: OPS[Math.floor(rand() * OPS.length)],
+      operation: pick(OPS, rand),
       amount: (rand() * 1000).toFixed(2),
-      asset: ASSETS[Math.floor(rand() * ASSETS.length)],
+      asset: pick(ASSETS, rand),
       fee: (100 + Math.floor(rand() * 900)).toString(),
       ledger,
       status,

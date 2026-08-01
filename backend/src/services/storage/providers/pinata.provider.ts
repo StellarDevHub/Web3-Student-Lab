@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { canonicalizeJson, createDeterministicCid, buildGatewayUrl } from '../utils.js';
 import type { StoragePinResult, StorageProvider } from '../types.js';
 

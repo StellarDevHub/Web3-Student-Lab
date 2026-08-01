@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Request } from 'express';
 import { createHash } from 'crypto';
 import prisma from '../db/index.js';

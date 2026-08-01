@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { randomUUID } from 'crypto';
 import { Request, Response, Router } from 'express';
 import { GeneratorService, InvalidGeneratedIdeaError } from '../../generator/generator.service.js';

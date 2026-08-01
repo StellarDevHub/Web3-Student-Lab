@@ -1,5 +1,5 @@
-// @ts-nocheck
 import crypto from 'crypto';
+import type { Prisma } from '@prisma/client';
 import prisma from '../db/index.js';
 import logger from '../utils/logger.js';
 
@@ -37,9 +37,9 @@ class AnonymizationService {
 
       // 2. Clear existing (or move to archive if needed) analytics data
       // For simplicity, we'll just add new records or clear and reload
-      await (prisma as any).analyticsData.deleteMany({});
+      await prisma.analyticsData.deleteMany({});
 
-      const analyticsBatch = [];
+      const analyticsBatch: Prisma.AnalyticsDataCreateManyInput[] = [];
 
       for (const student of students) {
         // Anonymize user
@@ -71,7 +71,7 @@ class AnonymizationService {
 
       // 3. Load sanitized data into analytics table
       if (analyticsBatch.length > 0) {
-        await (prisma as any).analyticsData.createMany({
+        await prisma.analyticsData.createMany({
           data: analyticsBatch,
         });
       }

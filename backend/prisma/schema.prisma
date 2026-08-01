@@ -428,3 +428,43 @@ model P2PMessage {
   @@index([receiverId])
   @@map("p2p_messages")
 }
+
+model ProcessedBlock {
+  id           String    @id @default(cuid())
+  chain        String
+  blockNumber  Int
+  blockHash    String    @unique
+  parentHash   String
+  timestamp    DateTime  @default(now())
+  processedAt  DateTime  @default(now())
+  isRolledBack Boolean   @default(false)
+  rolledBackAt DateTime?
+
+  bridgeEvents BridgeEvent[]
+
+  @@index([chain, blockNumber])
+  @@map("processed_blocks")
+}
+
+model BridgeEvent {
+  id               String    @id @default(cuid())
+  chain            String
+  blockNumber      Int
+  blockHash        String
+  processedBlockId String
+  eventId          String
+  eventType        String
+  sourceChain      String
+  targetChain      String
+  data             Json
+  transactionHash  String?
+  logIndex         Int?
+  processed        Boolean   @default(false)
+  processedAt      DateTime?
+
+  processedBlock ProcessedBlock @relation(fields: [processedBlockId], references: [id], onDelete: Cascade)
+
+  @@unique([chain, eventId])
+  @@index([processedBlockId])
+  @@map("bridge_events")
+}

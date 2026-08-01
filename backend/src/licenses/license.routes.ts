@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Open Source License Guide - Express Routes
  *

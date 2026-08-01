@@ -1,5 +1,5 @@
-// @ts-nocheck
 import logger from '../utils/logger.js';
+import redisClient from '../cache/RedisClient.js';
 import {
     CourseNotification,
     CreateCourseNotificationDto,
@@ -68,7 +68,8 @@ export async function createNotification(
 
   // Broadcast so all server instances & connected WebSocket clients receive it
   try {
-    await pubClient.publish('course_notifications', JSON.stringify(notification));
+    const pubClient = redisClient.getPubClient();
+    await pubClient?.publish('course_notifications', JSON.stringify(notification));
   } catch (err) {
     logger.warn('Failed to publish course_notification to Redis:', err);
   }
@@ -105,7 +106,7 @@ export function markAsRead(notificationId: string): boolean {
   for (const [, notifications] of store.entries()) {
     const idx = notifications.findIndex((n) => n.id === notificationId);
     if (idx !== -1) {
-      notifications[idx] = { ...notifications[idx], read: true };
+      notifications[idx] = { ...notifications[idx]!, read: true };
       return true;
     }
   }
@@ -125,8 +126,8 @@ export function markAllAsRead(userId: string): number {
     const notifs = store.get(key);
     if (notifs) {
       for (let i = 0; i < notifs.length; i++) {
-        if (!notifs[i].read) {
-          notifs[i] = { ...notifs[i], read: true };
+        if (!notifs[i]!.read) {
+          notifs[i] = { ...notifs[i]!, read: true };
           count++;
         }
       }
@@ -152,11 +153,11 @@ function mergeSorted(
   let j = 0;
   while (result.length < max && (i < a.length || j < b.length)) {
     if (i >= a.length) {
-      result.push(b[j++]);
+      result.push(b[j++]!);
     } else if (j >= b.length) {
-      result.push(a[i++]);
+      result.push(a[i++]!);
     } else {
-      result.push(a[i].createdAt >= b[j].createdAt ? a[i++] : b[j++]);
+      result.push(a[i]!.createdAt >= b[j]!.createdAt ? a[i++]! : b[j++]!);
     }
   }
   return result;

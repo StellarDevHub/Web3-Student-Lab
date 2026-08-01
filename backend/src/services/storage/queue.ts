@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { JobsOptions } from 'bullmq';
 import { Queue } from 'bullmq';
 import type { StorageGcJobData, StoragePinJobData } from './types.js';
@@ -20,7 +19,6 @@ const defaultPinJobOptions: JobsOptions = {
     age: 7 * 24 * 60 * 60,
     count: 1000,
   },
-  timeout: Number(process.env.STORAGE_JOB_TIMEOUT_MS || '30000'),
 };
 
 const createQueue = <T>(name: string, defaultJobOptions?: JobsOptions) => {

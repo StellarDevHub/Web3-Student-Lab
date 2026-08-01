@@ -1,5 +1,3 @@
-// @ts-nocheck
-import { certificateBlockchainService } from '../blockchain/CertificateBlockchainService.js';
 import prisma from '../db/index.js';
 import { storageService } from '../services/storage/index.js';
 import {

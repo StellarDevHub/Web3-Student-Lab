@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Cross-Chain Bridge Event Indexer Engine
  * Handles block indexing, event processing, and re-org detection for dual-chain bridges

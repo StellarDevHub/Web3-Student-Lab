@@ -1,40 +1,31 @@
-[package]
-name = "soroban-certificate-contract"
-version = "0.0.0"
-edition = "2021"
-
 [workspace]
 members = [
-    ".",
-    "proxy",
+    "auth_checker",
+    "automated_testing_suite",
+    "cicd_pipeline",
+    "commit_reveal_rng",
+    "content_management_system",
+    "continuous_bonding_curve",
+    "course_proxy",
+    "cross_chain_client",
+    "dao_governance",
+    "did_registry",
+    "fractional_nft_vault",
+    "freelance-platform",
+    "hackathon-team-matching",
+    "hello_world",
     "implementation_v1",
     "implementation_v2",
-    "smart_vault",
-    "payment_streaming",
-    "payment_gateway",
-    "commit_reveal_rng",
-    "quadratic_funding",
+    "lending_pool",
     "multisig_wallet_timelock",
-    "did_registry",
-    "course_proxy",
-    "auth_checker",
-    "cross_chain_client",
-    "freelance-platform",
+    "parametric_insurance",
+    "payment_gateway",
+    "payment_streaming",
     "pr_simulation",
-    "hackathon-team-matching",
-    "content_management_system",
+    "proxy",
+    "quadratic_funding",
+    "smart_vault",
     "testnet_faucet_integration",
-    "automated_testing_suite",
-    "cicd_pipeline"
+    "zk_proof_verifier",
 ]
-
-[lib]
-crate-type = ["cdylib", "rlib"]
-
-[dependencies]
-soroban-sdk = "22.0.0"
-
-[dev-dependencies]
-soroban-sdk = { version = "22.0.0", features = ["testutils"] }
-rand = { version = "0.8", features = ["small_rng"] }
-ed25519-dalek = { version = "2", default-features = false, features = ["std", "rand_core"] }
+resolver = "2"

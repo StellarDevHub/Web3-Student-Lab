@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Job, Worker } from 'bullmq';
 import logger from '../../utils/logger.js';
 import * as defaultRepository from './asset.repository.js';

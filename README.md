@@ -88,7 +88,6 @@ workflows in `frontend/src/app/version-control/page.tsx`.
   `frontend/src/lib/version-control/engine.ts`.
 - Core attestation creation and verification logic lives in
   `frontend/src/lib/open-source-trainer/identity.ts`.
->>>>>>> origin/main
 
 ## 🤝 Contributing
 

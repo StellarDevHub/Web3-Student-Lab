@@ -1,4 +1,4 @@
-// @ts-nocheck
+import type { Prisma } from '@prisma/client';
 import { Router } from 'express';
 import { normalizeSorobanDid } from '../auth/auth.service.js';
 import { invalidateUserCache } from '../cache/CacheInvalidation.js';
@@ -111,7 +111,7 @@ router.put('/:id', auditAction('UPDATE_STUDENT', 'Student'), auditAction('UPDATE
     const { email, firstName, lastName, did } = req.body;
     const normalizedDid = normalizeSorobanDid(did);
 
-    const updateData: Record<string, unknown> = {
+    const updateData: Prisma.StudentUpdateInput = {
       email,
       firstName,
       lastName,
