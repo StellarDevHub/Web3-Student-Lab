@@ -1,17 +1,17 @@
-import { Skeleton } from "../Skeleton";
+import { Skeleton } from '../Skeleton';
 
 export function ListSkeleton({ count = 3 }: { count?: number }) {
   return (
-    <div className="space-y-4 w-full">
+    <div className="w-full space-y-4">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="bg-black border border-white/5 p-4 rounded-lg group">
-          <div className="flex justify-between items-start mb-2">
-            <Skeleton className="w-32 h-4" />
-            <Skeleton className="w-24 h-3" />
+        <div key={i} className="group rounded-lg border border-white/5 bg-black p-4">
+          <div className="mb-2 flex items-start justify-between">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-24" />
           </div>
-          <div className="flex flex-col gap-2 mt-3">
-            <Skeleton className="w-1/2 h-4" />
-            <Skeleton className="w-2/3 h-4" />
+          <div className="mt-3 flex flex-col gap-2">
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-4 w-2/3" />
           </div>
         </div>
       ))}

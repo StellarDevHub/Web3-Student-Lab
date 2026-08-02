@@ -21,10 +21,7 @@ export const invalidateUserProgressCache = async (userId: string): Promise<void>
 };
 
 export const invalidateLeaderboardCache = async (): Promise<void> => {
-  await cacheService.del([
-    CACHE_KEYS.leaderboard.global(),
-    CACHE_KEYS.leaderboard.weekly(),
-  ]);
+  await cacheService.del([CACHE_KEYS.leaderboard.global(), CACHE_KEYS.leaderboard.weekly()]);
 };
 
 export const invalidateAllCourses = async (): Promise<void> => {

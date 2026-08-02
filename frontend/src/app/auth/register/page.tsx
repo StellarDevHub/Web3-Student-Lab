@@ -1,22 +1,41 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { useAuth } from "@/contexts/AuthContext";
+import { useEffect } from 'react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
+import { useWallet } from '@/contexts/WalletContext';
+import { markWalletProfileComplete, useWalletProfileCompletion } from '@/lib/profile-completion';
+import { WalletConnectCard } from '@/components/wallet/WalletConnectCard';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { register, error, clearError } = useAuth();
+  const { register, error, clearError, user, isLoading, refreshProfileStatus } = useAuth();
+  const { publicKey } = useWallet();
+  const completedProfile = useWalletProfileCompletion(publicKey);
+  const profileCompleted = !!completedProfile;
   const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-    confirmPassword: "",
-    firstName: "",
-    lastName: "",
+    email: '',
+    password: '',
+    confirmPassword: '',
+    firstName: '',
+    lastName: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isLoading && user) {
+      router.replace('/dashboard');
+    }
+  }, [isLoading, router, user]);
+
+  useEffect(() => {
+    if (!isLoading && !user && profileCompleted) {
+      router.replace('/auth/login');
+    }
+  }, [isLoading, profileCompleted, router, user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -34,30 +53,31 @@ export default function RegisterPage() {
 
     // Validation
     if (formData.password !== formData.confirmPassword) {
-      setLocalError("Passwords do not match");
+      setLocalError('Passwords do not match');
       setIsSubmitting(false);
       return;
     }
 
     if (formData.password.length < 6) {
-      setLocalError("Password must be at least 6 characters");
+      setLocalError('Password must be at least 6 characters');
       setIsSubmitting(false);
       return;
     }
 
     try {
-      await register(
-        formData.email,
-        formData.password,
-        formData.firstName,
-        formData.lastName,
-      );
-      router.push("/dashboard");
+      await register(formData.email, formData.password, formData.firstName, formData.lastName);
+      if (publicKey) {
+        markWalletProfileComplete(publicKey, formData.email);
+      }
+      router.push('/dashboard');
     } catch (err: unknown) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Registration failed. Please try again.";
+      const message = err instanceof Error ? err.message : 'Registration failed. Please try again.';
+      if (publicKey && message.toLowerCase().includes('already exists')) {
+        markWalletProfileComplete(publicKey, formData.email);
+        await refreshProfileStatus();
+        router.push('/dashboard');
+        return;
+      }
       setLocalError(message);
     } finally {
       setIsSubmitting(false);
@@ -65,163 +85,190 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-80px)] flex items-center justify-center bg-black relative px-4 py-12 overflow-hidden">
-      {/* Abstract Background Glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-red-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+    <div className="relative flex min-h-[calc(100vh-80px)] justify-center bg-black px-4 py-12">
+      <div className="pointer-events-none absolute top-1/2 left-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-600/10 blur-[100px]"></div>
 
-      <div className="relative z-10 max-w-lg w-full bg-zinc-950 border border-white/10 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] p-8">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-red-600 rounded-xl flex items-center justify-center mx-auto mb-6 shadow-[0_0_15px_rgba(220,38,38,0.5)] transform -rotate-6">
-            <svg
-              className="w-8 h-8 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-              />
-            </svg>
+      <div className="relative z-10 w-full max-w-5xl">
+        {!publicKey ? (
+          <WalletConnectCard
+            title="Connect Wallet First"
+            description="Before we ask for your learner details, connect the wallet you want tied to your account."
+            connectedDescription="Wallet connected. Your learner setup form is now ready below."
+          />
+        ) : null}
+
+        <div className="mt-6 w-full rounded-2xl border border-white/10 bg-zinc-950 p-8 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-6 flex h-16 w-16 -rotate-6 transform items-center justify-center rounded-xl bg-red-600 shadow-[0_0_15px_rgba(220,38,38,0.5)]">
+              <svg
+                className="h-8 w-8 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                />
+              </svg>
+            </div>
+            <h1 className="mb-2 text-3xl font-black tracking-wide text-white uppercase">
+              Complete <span className="text-red-600">Profile</span>
+            </h1>
+            <p className="font-medium text-gray-400">
+              {publicKey
+                ? 'Your wallet is connected. Add the remaining learner details to finish setup.'
+                : 'Connect your wallet above first, then add the remaining learner details.'}
+            </p>
           </div>
-          <h1 className="text-3xl font-black text-white mb-2 tracking-wide uppercase">
-            Initialize <span className="text-red-600">Node</span>
-          </h1>
-          <p className="text-gray-400 font-medium">
-            Join the decentralized education protocol
-          </p>
-        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {(error || localError) && (
-            <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4">
-              <p className="text-red-500 text-sm font-bold text-center">
-                {error || localError}
+          {publicKey && (
+            <div className="mb-6 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">
+                Connected wallet
               </p>
+              <p className="mt-2 font-mono text-sm break-all text-white">{publicKey}</p>
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <form onSubmit={handleSubmit} className={`space-y-5 ${!publicKey ? 'opacity-60' : ''}`}>
+            {(error || localError) && (
+              <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-4">
+                <p className="text-center text-sm font-bold text-red-500">{error || localError}</p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="firstName"
+                  className="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+                >
+                  First Name
+                </label>
+                <input
+                  id="firstName"
+                  name="firstName"
+                  type="text"
+                  required
+                  disabled={!publicKey || isSubmitting}
+                  value={formData.firstName}
+                  onChange={handleChange}
+                  className="w-full rounded-lg border border-white/20 bg-black px-4 py-3 text-white placeholder-gray-600 transition-colors focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                  placeholder="John"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="lastName"
+                  className="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+                >
+                  Last Name
+                </label>
+                <input
+                  id="lastName"
+                  name="lastName"
+                  type="text"
+                  required
+                  disabled={!publicKey || isSubmitting}
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  className="w-full rounded-lg border border-white/20 bg-black px-4 py-3 text-white placeholder-gray-600 transition-colors focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                  placeholder="Doe"
+                />
+              </div>
+            </div>
+
             <div>
               <label
-                htmlFor="firstName"
-                className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider"
+                htmlFor="email"
+                className="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase"
               >
-                First Name
+                Network ID (Email)
               </label>
               <input
-                id="firstName"
-                name="firstName"
-                type="text"
+                id="email"
+                name="email"
+                type="email"
                 required
-                value={formData.firstName}
+                disabled={!publicKey || isSubmitting}
+                value={formData.email}
                 onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg border border-white/20 bg-black text-white focus:ring-1 focus:ring-red-500 focus:border-red-500 transition-colors placeholder-gray-600"
-                placeholder="John"
+                className="w-full rounded-lg border border-white/20 bg-black px-4 py-3 text-white placeholder-gray-600 transition-colors focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                placeholder="student@example.com"
               />
             </div>
+
             <div>
               <label
-                htmlFor="lastName"
-                className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider"
+                htmlFor="password"
+                className="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase"
               >
-                Last Name
+                Passphrase
               </label>
               <input
-                id="lastName"
-                name="lastName"
-                type="text"
+                id="password"
+                name="password"
+                type="password"
                 required
-                value={formData.lastName}
+                disabled={!publicKey || isSubmitting}
+                value={formData.password}
                 onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg border border-white/20 bg-black text-white focus:ring-1 focus:ring-red-500 focus:border-red-500 transition-colors placeholder-gray-600"
-                placeholder="Doe"
+                className="w-full rounded-lg border border-white/20 bg-black px-4 py-3 text-white placeholder-gray-600 transition-colors focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                placeholder="••••••••"
               />
             </div>
-          </div>
 
-          <div>
-            <label
-              htmlFor="email"
-              className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider"
+            <div>
+              <label
+                htmlFor="confirmPassword"
+                className="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+              >
+                Confirm Passphrase
+              </label>
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                required
+                disabled={!publicKey || isSubmitting}
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                className="w-full rounded-lg border border-white/20 bg-black px-4 py-3 text-white placeholder-gray-600 transition-colors focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                placeholder="••••••••"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={!publicKey || isSubmitting}
+              className={`mt-2 w-full rounded-lg py-4 font-black tracking-widest uppercase shadow-[0_0_15px_rgba(220,38,38,0.3)] transition-all ${
+                !publicKey || isSubmitting
+                  ? 'cursor-not-allowed bg-red-900 text-gray-400'
+                  : 'transform bg-red-600 text-white hover:-translate-y-0.5 hover:bg-red-700 hover:shadow-[0_0_25px_rgba(220,38,38,0.6)]'
+              }`}
             >
-              Network ID (Email)
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              value={formData.email}
-              onChange={handleChange}
-              className="w-full px-4 py-3 rounded-lg border border-white/20 bg-black text-white focus:ring-1 focus:ring-red-500 focus:border-red-500 transition-colors placeholder-gray-600"
-              placeholder="student@example.com"
-            />
+              {!publicKey
+                ? 'Connect wallet to continue'
+                : isSubmitting
+                  ? 'Saving details...'
+                  : 'Finish setup'}
+            </button>
+          </form>
+
+          <div className="mt-8 border-t border-white/10 pt-6 text-center">
+            <p className="text-gray-400">
+              Already connected and set up?{' '}
+              <Link
+                href="/auth/login"
+                className="font-bold tracking-wide text-red-500 uppercase hover:text-red-400"
+              >
+                Open wallet access
+              </Link>
+            </p>
           </div>
-
-          <div>
-            <label
-              htmlFor="password"
-              className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider"
-            >
-              Passphrase
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              required
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full px-4 py-3 rounded-lg border border-white/20 bg-black text-white focus:ring-1 focus:ring-red-500 focus:border-red-500 transition-colors placeholder-gray-600"
-              placeholder="••••••••"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="confirmPassword"
-              className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider"
-            >
-              Confirm Passphrase
-            </label>
-            <input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              required
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              className="w-full px-4 py-3 rounded-lg border border-white/20 bg-black text-white focus:ring-1 focus:ring-red-500 focus:border-red-500 transition-colors placeholder-gray-600"
-              placeholder="••••••••"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className={`w-full py-4 mt-2 rounded-lg font-black tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(220,38,38,0.3)] ${
-              isSubmitting
-                ? "bg-red-900 text-gray-400 cursor-not-allowed"
-                : "bg-red-600 hover:bg-red-700 text-white hover:shadow-[0_0_25px_rgba(220,38,38,0.6)] transform hover:-translate-y-0.5"
-            }`}
-          >
-            {isSubmitting ? "Initializing..." : "Construct Block"}
-          </button>
-        </form>
-
-        <div className="mt-8 text-center border-t border-white/10 pt-6">
-          <p className="text-gray-400">
-            Node already initialized?{" "}
-            <Link
-              href="/auth/login"
-              className="text-red-500 hover:text-red-400 font-bold tracking-wide uppercase"
-            >
-              Connect Session
-            </Link>
-          </p>
         </div>
       </div>
     </div>

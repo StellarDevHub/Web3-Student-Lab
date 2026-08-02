@@ -24,7 +24,8 @@ export class MetadataGenerator {
   generate(
     certificate: Certificate & { student: any; course: any },
     course: any,
-    student: any
+    student: any,
+    options: { imageUri?: string; externalUrl?: string } = {}
   ): CertificateMetadata {
     // Build verification info
     const verification = this.buildVerificationInfo(certificate);
@@ -43,10 +44,11 @@ export class MetadataGenerator {
     const attributes = this.buildAttributes(certificate, course, student);
 
     // Build external URL (deep link to certificate viewer)
-    const externalUrl = `${this.baseUrl}/certificates/${certificate.tokenId}/view`;
+    const externalUrl =
+      options.externalUrl || `${this.baseUrl}/certificates/${certificate.tokenId}/view`;
 
     // Build image URL
-    const imageUrl = this.buildImageUrl(certificate);
+    const imageUrl = options.imageUri || this.buildImageUrl(certificate);
 
     return {
       name,

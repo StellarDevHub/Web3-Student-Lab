@@ -3,7 +3,7 @@ import prisma from '../db/index.js';
 import logger from '../utils/logger.js';
 
 // Simple in-memory cache
-const cache = new Map<string, { data: any, timestamp: number }>();
+const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL = 30 * 1000; // 30 seconds
 
 export const getAggregatedDashboardData = async (studentId: string) => {
@@ -17,25 +17,29 @@ export const getAggregatedDashboardData = async (studentId: string) => {
 
   // Define concurrent resolvers with individual error handling
   const [dashboard, studentInfo, recentAuditLogs] = await Promise.all([
-    getStudentDashboard(studentId).catch(err => {
+    getStudentDashboard(studentId).catch((err) => {
       logger.error('BFF: Failed to fetch student dashboard:', err);
       return null;
     }),
-    prisma.student.findUnique({
-      where: { id: studentId },
-      select: { email: true, firstName: true, lastName: true, createdAt: true }
-    }).catch(err => {
-      logger.error('BFF: Failed to fetch student info:', err);
-      return null;
-    }),
-    prisma.auditLog.findMany({
-      where: { userId: studentId },
-      orderBy: { timestamp: 'desc' },
-      take: 5
-    }).catch(err => {
-      logger.error('BFF: Failed to fetch audit logs:', err);
-      return [];
-    })
+    prisma.student
+      .findUnique({
+        where: { id: studentId },
+        select: { email: true, firstName: true, lastName: true, createdAt: true },
+      })
+      .catch((err) => {
+        logger.error('BFF: Failed to fetch student info:', err);
+        return null;
+      }),
+    prisma.auditLog
+      .findMany({
+        where: { userId: studentId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      })
+      .catch((err) => {
+        logger.error('BFF: Failed to fetch audit logs:', err);
+        return [];
+      }),
   ]);
 
   const aggregatedData = {
@@ -44,8 +48,8 @@ export const getAggregatedDashboardData = async (studentId: string) => {
     recentActivity: recentAuditLogs,
     meta: {
       generatedAt: new Date().toISOString(),
-      cacheTtl: CACHE_TTL / 1000
-    }
+      cacheTtl: CACHE_TTL / 1000,
+    },
   };
 
   // Cache the result

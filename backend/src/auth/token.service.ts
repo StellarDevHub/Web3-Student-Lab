@@ -15,16 +15,16 @@ export const generateAccessToken = (payload: TokenPayload): string => {
   return jwt.sign(payload, ACCESS_TOKEN_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
 };
 
-export const generateRefreshToken = async (payload: TokenPayload): string => {
-  const refreshToken = jwt.sign(payload, REFRESH_TOKEN_SECRET, { 
-    expiresIn: `${REFRESH_TOKEN_EXPIRY_DAYS}d` 
+export const generateRefreshToken = async (payload: TokenPayload): Promise<string> => {
+  const refreshToken = jwt.sign(payload, REFRESH_TOKEN_SECRET, {
+    expiresIn: `${REFRESH_TOKEN_EXPIRY_DAYS}d`,
   });
-  
+
   // Store refresh token in Redis for rotation/reuse detection
   // Key format: rt:<userId>:<tokenHash>
   const key = `rt:${payload.userId}:${refreshToken}`;
   await redis.set(key, 'valid', 'EX', REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60);
-  
+
   return refreshToken;
 };
 
@@ -34,31 +34,33 @@ export const verifyAccessToken = (token: string): TokenPayload => {
 
 export const verifyRefreshToken = async (token: string): Promise<TokenPayload> => {
   const decoded = jwt.verify(token, REFRESH_TOKEN_SECRET) as TokenPayload;
-  
+
   const key = `rt:${decoded.userId}:${token}`;
   const isValid = await redis.get(key);
-  
+
   if (!isValid) {
     // Potential reuse detected! Revoke all tokens for this user
     await revokeAllUserTokens(decoded.userId);
     throw new Error('Refresh token has been reused or revoked');
   }
-  
+
   return decoded;
 };
 
-export const rotateRefreshToken = async (oldToken: string): Promise<{ accessToken: string, refreshToken: string }> => {
+export const rotateRefreshToken = async (
+  oldToken: string
+): Promise<{ accessToken: string; refreshToken: string }> => {
   try {
     const payload = await verifyRefreshToken(oldToken);
-    
+
     // Invalidate old token
     const oldKey = `rt:${payload.userId}:${oldToken}`;
     await redis.del(oldKey);
-    
+
     // Generate new pair
     const accessToken = generateAccessToken({ userId: payload.userId });
     const refreshToken = await generateRefreshToken({ userId: payload.userId });
-    
+
     return { accessToken, refreshToken };
   } catch (error) {
     logger.error('Token rotation failed:', error);

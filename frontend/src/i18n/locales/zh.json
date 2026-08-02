@@ -1,0 +1,204 @@
+{
+  "nav": {
+    "modules": "模块",
+    "roadmap": "路线图",
+    "quiz": "测验",
+    "playground": "实验场",
+    "reviews": "评审",
+    "simulator": "模拟器",
+    "ideas": "想法",
+    "verify": "验证",
+    "subscriptions": "订阅",
+    "notarization": "公证",
+    "devtools": "开发工具",
+    "learn": "学习",
+    "dashboard": "仪表板",
+    "open_source_lab": "开源实验室",
+    "web3_student_lab": "Web3 学生实验室",
+    "certificates": "证书",
+    "notifications": "通知",
+    "sign_out": "退出",
+    "wallet_connected": "钱包已连接",
+    "connect_wallet": "连接钱包",
+    "open_wallet_access": "打开钱包访问",
+    "complete_profile": "完善资料",
+    "start_with_wallet": "使用钱包开始"
+  },
+  "language": {
+    "english": "英语",
+    "spanish": "西班牙语",
+    "chinese": "中文"
+  },
+  "courses": {
+    "page": {
+      "eyebrow": "学习模块",
+      "title": "为想要快速入门的学生提供更清晰的课程目录。",
+      "description": "浏览活跃模块，了解授课教师，直接进入下一个有用的步骤，无需在过载的屏幕中挖掘。",
+      "focus": "重点领域包括区块链基础、Soroban智能合约以及为黑客松团队提供的实用开源贡献模式。",
+      "search_label": "搜索模块",
+      "search_placeholder": "试试搜索 Soroban、DeFi、入门、Stellar...",
+      "loading": "加载模块中...",
+      "count_available": "共 {count} 个模块可用",
+      "no_results_title": "未找到模块",
+      "no_results_description": "尝试其他搜索词或清除筛选条件以查看完整学习目录。",
+      "instructor": "讲师",
+      "open": "打开",
+      "credits": "{credits} 学分",
+      "description_fallback": "描述即将推出。"
+    },
+    "detail": {
+      "back": "网络目录",
+      "badge": "模块初始化",
+      "instructor": "讲师：",
+      "payload": "负载：",
+      "unit": "单元",
+      "level": "级别：",
+      "duration": "时长：",
+      "protocol_specs": "协议规范",
+      "description_fallback": "系统元数据缺失，等待课程资料上传。",
+      "execution_objectives": "执行目标",
+      "curriculum_map": "课程地图",
+      "module": "模块 {number}",
+      "deliverables": "交付物",
+      "tools": "你将使用的工具",
+      "connection_status": "连接状态",
+      "uplink_active": "上行链路已激活",
+      "in_progress": "模块执行中...",
+      "mint_prompt": "完成课程了？执行下面的智能合约，在Stellar区块链上铸造你的可验证凭证。",
+      "token_minted": "代币已铸造",
+      "redirecting": "正在重定向到保管库...",
+      "extract_certificate": "提取证书",
+      "compiling_tx": "编译交易中...",
+      "start_enrollment": "开始注册",
+      "connect_wallet": "连接钱包",
+      "complete_profile": "完善资料",
+      "checking_session": "检查会话中...",
+      "wizard_hint": "5步向导，支持进度保存",
+      "profile_hint": "完善一次资料，注册将始终可用。",
+      "no_gas_fees": "无 Gas 费 • 公共测试网",
+      "async_execution": "异步执行",
+      "onchain_verification": "链上验证",
+      "encrypted_payload": "加密负载",
+      "not_found_title": "节点未找到",
+      "not_found_back": "返回目录"
+    }
+  },
+  "course": {
+    "cm1yxxxx-intro": {
+      "level": "入门",
+      "duration": "3周",
+      "summary": "建立关于钱包、账本、资产、共识以及Stellar在实用Web3系统中角色的清晰心智模型。",
+      "outcomes": [
+        "解释区块链网络如何达成共识并记录状态变更",
+        "理解Stellar账户、资产、信任线和支付",
+        "自信地使用钱包、交易和浏览器工具"
+      ],
+      "modules": [
+        {
+          "title": "Web3基础",
+          "description": "从中心化系统向开放共享基础设施的转变。"
+        },
+        {
+          "title": "Stellar网络原语",
+          "description": "账户、余额、资产、信任线和交易流程。"
+        },
+        {
+          "title": "动手网络操作",
+          "description": "使用钱包、检查交易、模拟真实支付场景。"
+        }
+      ],
+      "deliverables": [
+        "一份简短的生态系统说明",
+        "钱包设置和资金入门指南",
+        "一个基本的Stellar交易演示"
+      ],
+      "tools": ["Freighter", "Stellar Expert", "测试网水龙头", "浏览器工具"]
+    },
+    "cm1yxxxx-soroban": {
+      "level": "中级",
+      "duration": "5周",
+      "summary": "学习如何使用Rust构建安全的Soroban智能合约，正确测试并自信地部署它们。",
+      "outcomes": [
+        "理解Soroban合约结构和存储模式",
+        "编写具有清晰状态转换和验证的合约逻辑",
+        "测试并将基于Rust的合约部署到Stellar测试网"
+      ],
+      "modules": [
+        {
+          "title": "Soroban架构",
+          "description": "合约如何执行、存储数据以及与交易交互。"
+        },
+        {
+          "title": "Rust合约模式",
+          "description": "智能合约的函数、存储、认证和防御性设计。"
+        },
+        {
+          "title": "测试与部署",
+          "description": "运行本地测试、模拟场景并发布到测试网。"
+        }
+      ],
+      "deliverables": [
+        "一个简单的有状态合约",
+        "涵盖成功和失败案例的测试套件",
+        "一份测试网部署清单"
+      ],
+      "tools": ["Rust", "Soroban SDK", "Stellar CLI", "测试网 RPC"]
+    },
+    "cm1yxxxx-defi": {
+      "level": "中级",
+      "duration": "4周",
+      "summary": "探索DeFi系统的组成，从流动性池和AMM到激励机制和风险管理。",
+      "outcomes": [
+        "描述AMM和流动性池如何为资产定价",
+        "评估收益、波动性和滑点背后的风险",
+        "设计借贷、交换或奖励的基本代币流程"
+      ],
+      "modules": [
+        {
+          "title": "DeFi构建块",
+          "description": "流动性池、LP代币、交换、路由和费用机制。"
+        },
+        {
+          "title": "代币经济学与激励",
+          "description": "协议如何协调参与、奖励和治理。"
+        },
+        {
+          "title": "风险分析",
+          "description": "无常损失、智能合约风险和系统级权衡。"
+        }
+      ],
+      "deliverables": [
+        "一份DeFi协议分析报告",
+        "一份代币流程图",
+        "一个简单的AMM数学练习"
+      ],
+      "tools": ["AMM模拟器", "电子表格建模", "协议仪表板", "浏览器工具"]
+    },
+    "default": {
+      "level": "开放级别",
+      "duration": "4周",
+      "summary": "此模块已可注册，但其结构化课程元数据尚未完全发布。",
+      "outcomes": [
+        "理解模块涵盖的主要概念",
+        "通过动手实验室和引导练习进行实践",
+        "完成与模块主题相关的项目或评估"
+      ],
+      "modules": [
+        {
+          "title": "核心概念",
+          "description": "首先学习词汇、心智模型和系统基础知识。"
+        },
+        {
+          "title": "动手实践",
+          "description": "完成应用练习和实施演练。"
+        },
+        {
+          "title": "项目总结",
+          "description": "在最终产出或评审检查点中将各部分整合起来。"
+        }
+      ],
+      "deliverables": ["笔记和检查点", "动手实验室工作", "最终评审成果"],
+      "tools": ["钱包工具", "浏览器工具", "课程练习"]
+    }
+  }
+}

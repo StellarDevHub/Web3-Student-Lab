@@ -8,6 +8,9 @@ import {
 import { MetadataGenerator } from './MetadataGenerator.js';
 import { certificateBlockchainService } from '../blockchain/CertificateBlockchainService.js';
 import logger from '../utils/logger.js';
+import { certificateImageGenerator } from '../utils/certificateImageGenerator.js';
+import { storageService } from '../services/storage/index.js';
+import { computeCertificateContentHash, verifyCertificateContentHash } from './ContentHash.js';
 
 export class CertificateService {
   private metadataGenerator: MetadataGenerator;
@@ -87,12 +90,57 @@ export class CertificateService {
       },
     });
 
-    // Generate the metadata
-    const metadata = this.metadataGenerator.generate(certificate, course, student);
+    let metadata: CertificateMetadata | undefined;
 
     try {
+      // Generate and pin the certificate image and metadata to decentralized storage
+      const imageBuffer = await certificateImageGenerator.generateCertificateImage({
+        studentName: `${student.firstName || ''} ${student.lastName || ''}`.trim() || 'Student',
+        courseTitle: course.title,
+        instructor: course.instructor,
+        completionDate: certificate.issuedAt.toISOString(),
+        grade: certificate.grade || undefined,
+        credentialId: certificate.tokenId || tokenIdValue,
+        issuerName: process.env.ISSUER_NAME || 'Web3 Student Lab',
+      });
+
+      const imageAsset = await storageService.pinCertificateImage({
+        certificateId: certificateId,
+        content: imageBuffer,
+        mimeType: 'image/svg+xml',
+      });
+
+      metadata = this.metadataGenerator.generate(certificate, course, student, {
+        imageUri: imageAsset.ipfsUri,
+        externalUrl: `${process.env.API_BASE_URL || 'http://localhost:8080'}/api/v1/certificates/${
+          certificate.tokenId || tokenIdValue
+        }/metadata`,
+      });
+
+      const metadataAsset = await storageService.pinCertificateMetadata({
+        certificateId: certificateId,
+        content: metadata,
+      });
+
       // Call blockchain service to mint actual NFT
       const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+
+      const finalTokenId = mintResult.tokenId || tokenIdValue;
+
+      // Compute the immutable content-integrity hash from the final,
+      // post-mint certificate fields. This hash binds the certificate
+      // metadata to a deterministic fingerprint that is re-verified on
+      // every retrieval/verification so tampering with stored fields
+      // can be detected instead of silently served.
+      const contentHash = computeCertificateContentHash({
+        id: certificateId,
+        studentId: certificate.studentId,
+        courseId: certificate.courseId,
+        tokenId: finalTokenId,
+        grade: certificate.grade,
+        did: certificate.did,
+        issuedAt: certificate.issuedAt,
+      });
 
       // Update certificate with blockchain transaction details
       await prisma.certificate.update({
@@ -101,7 +149,9 @@ export class CertificateService {
           certificateHash: mintResult.transactionHash,
           contractAddress: mintResult.contractAddress,
           status: 'ACTIVE',
-          metadataUri: metadata.image,
+          metadataUri: metadataAsset.ipfsUri,
+          tokenId: finalTokenId,
+          contentHash,
         },
       });
 
@@ -109,6 +159,8 @@ export class CertificateService {
       certificate.certificateHash = mintResult.transactionHash;
       certificate.contractAddress = mintResult.contractAddress;
       certificate.status = 'ACTIVE' as any;
+      certificate.tokenId = finalTokenId;
+      certificate.contentHash = contentHash;
 
       logger.info(`Certificate minted on-chain: ${certificateId} -> token ${mintResult.tokenId}`, {
         certificateId,
@@ -116,15 +168,16 @@ export class CertificateService {
         txHash: mintResult.transactionHash,
       });
     } catch (error) {
-      logger.error(`Blockchain mint failed for ${certificateId}:`, error);
+      logger.error(`Certificate issuance failed for ${certificateId}:`, error);
       await prisma.certificate.update({
         where: { id: certificateId },
         data: {
           status: 'FAILED',
         },
       });
+      await storageService.releaseResource('certificate', certificateId);
       throw new Error(
-        `Failed to mint certificate on blockchain: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to mint certificate: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
 
@@ -200,6 +253,39 @@ export class CertificateService {
 
     const walletAddress =
       certificate.student.walletAddress || this.extractWalletFromDid(certificate.student.did);
+
+    // Re-verify the content hash on every retrieval. If the stored
+    // metadata no longer matches the hash recorded at mint time, we
+    // must surface a tamper-detected result rather than silently
+    // returning the (possibly altered) data as valid.
+    const hashCheck = verifyCertificateContentHash(
+      {
+        id: certificate.id,
+        studentId: certificate.studentId,
+        courseId: certificate.courseId,
+        tokenId: certificate.tokenId,
+        grade: certificate.grade,
+        did: certificate.did,
+        issuedAt: certificate.issuedAt,
+      },
+      (certificate as any).contentHash
+    );
+
+    if (hashCheck.state === 'tampered') {
+      logger.error(`Certificate integrity check failed for ${certificateId}`, {
+        certificateId,
+        expectedHash: hashCheck.expected,
+        actualHash: hashCheck.actual,
+      });
+      return {
+        isValid: false,
+        certificate: null,
+        status: 'TAMPERED' as any,
+        onChainData: null,
+        message: 'Certificate integrity check failed: stored metadata does not match its content hash',
+      };
+    }
+
     const metadata = this.metadataGenerator.generate(
       certificate,
       certificate.course!,
@@ -216,7 +302,7 @@ export class CertificateService {
     };
 
     const result: VerificationResult = {
-      isValid: true,
+      isValid: certificate.status === 'ACTIVE',
       certificate: metadata,
       status: certificate.status as any,
       onChainData,
@@ -226,7 +312,10 @@ export class CertificateService {
       result.revocationInfo = {
         revokedAt: certificate.revokedAt!,
         reason: certificate.revocationReason!,
-        revokedBy: certificate.revokedBy!,
+        // NOTE: revokedBy (the actor's issuer DID) is intentionally
+        // redacted from this public-facing verification response —
+        // see VerificationService for the canonical public surface.
+        revokedBy: 'redacted',
       };
     }
 
@@ -237,6 +326,10 @@ export class CertificateService {
    * Batch verification for multiple certificates
    */
   async batchVerify(tokenIds: string[]): Promise<VerificationResult[]> {
+    if (tokenIds.length > 100) {
+      throw new Error('Maximum 100 certificates allowed per batch verification');
+    }
+
     const certificates = await prisma.certificate.findMany({
       where: {
         tokenId: {
@@ -288,7 +381,7 @@ export class CertificateService {
       };
 
       results.push({
-        isValid: true,
+        isValid: cert.status === 'ACTIVE',
         certificate: metadata,
         status: cert.status as any,
         onChainData,
@@ -307,6 +400,8 @@ export class CertificateService {
       include: {
         student: {
           select: {
+            id: true,
+            email: true,
             walletAddress: true,
             did: true,
             firstName: true,
@@ -333,6 +428,8 @@ export class CertificateService {
       include: {
         student: {
           select: {
+            id: true,
+            email: true,
             walletAddress: true,
             did: true,
             firstName: true,
@@ -355,6 +452,8 @@ export class CertificateService {
       include: {
         student: {
           select: {
+            id: true,
+            email: true,
             walletAddress: true,
             did: true,
             firstName: true,
@@ -381,8 +480,12 @@ export class CertificateService {
       include: {
         student: {
           select: {
+            id: true,
+            email: true,
             walletAddress: true,
             did: true,
+            firstName: true,
+            lastName: true,
           },
         },
         course: true,
@@ -406,8 +509,12 @@ export class CertificateService {
         include: {
           student: {
             select: {
+              id: true,
+              email: true,
               walletAddress: true,
               did: true,
+              firstName: true,
+              lastName: true,
             },
           },
           course: true,
@@ -464,6 +571,40 @@ export class CertificateService {
       issuedThisWeek: 0,
       issuedToday: 0,
     };
+  }
+
+  /**
+   * Revokes a certificate by ID (delegated to RevocationService)
+   */
+  async revokeCertificate(
+    certificateId: string,
+    reason: string,
+    revokedBy: string
+  ): Promise<Certificate> {
+    const { revocationService } = await import('./RevocationService.js');
+    return revocationService.revokeCertificate(certificateId, {
+      certificateId,
+      reason,
+      revokedBy,
+    });
+  }
+
+  /**
+   * Reissues a certificate (delegated to RevocationService)
+   */
+  async reissueCertificate(
+    certificateId: string,
+    reason: string,
+    newGrade: string,
+    issuedBy: string
+  ): Promise<{ original: Certificate; new: Certificate }> {
+    const { revocationService } = await import('./RevocationService.js');
+    return revocationService.reissueCertificate({
+      certificateId,
+      reason,
+      newGrade,
+      issuedBy,
+    });
   }
 
   /**

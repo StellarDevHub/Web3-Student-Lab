@@ -1,0 +1,52 @@
+2026-06-05 11:16:41.614 [32minfo[39m: RSA Key rotated. New Key ID: 49e130a5-4a35-44a2-b866-8fd82fe540b8 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:16:43.708 [32minfo[39m: Blockchain service initialized in simulation mode {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+◇ injected env (32) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+2026-06-05 11:16:46.218 [32minfo[39m: ✅ Environment variables validated successfully {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:16:46.219 [32minfo[39m: 🌍 Environment: development {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:16:46.220 [32minfo[39m: 🔌 Port: 8080 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:16:46.221 [32minfo[39m: 🌐 Stellar Network: testnet {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:16:46.354 [32minfo[39m: Application Configuration Loaded {"metadata":{"service":"web3-student-lab-backend","environment":"development","app":{"env":"development","port":8080,"logLevel":"info"},"redis":{"url":"red...379"},"db":{"url":"pos...ire"},"security":{"jwtSecret":"***REDACTED***","jwtExpiresIn":"7d"},"stellar":{"network":"testnet","horizonUrl":"https://horizon-testnet.stellar.org","rpcUrl":"https://soroban-testnet.stellar.org","issuerPublicKey":"","issuerSecretKey":"","certificateContractId":"CAA6BTXNUO7Q775CKBBFVQYG27HU3FTFTJ6MUQ64TWFXYNATHTUQDRBH","certificateValidityDays":365,"issuerName":"Web3 Student Lab","issuerDid":"did:stellar:GBRPYHIL2CI3FYQMWVUGE62KMGOBQKLCYJ3HLKBUBIW5VZH4S4MNOWT"},"openai":{"apiKey":""}}}
+2026-06-05 11:16:46.356 [32minfo[39m: Connecting to standalone Redis... {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:16:46.359 [32minfo[39m: BlockHeaderListener started {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:16:46.360 [32minfo[39m: CacheWarmer started {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:16:46.365 [32minfo[39m: Distributed caching layer initialized {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:16:46.381 [32minfo[39m: WebSocket Server successfully initialized {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:16:46.394 [31merror[39m: Redis ping failed: Stream isn't writeable and enableOfflineQueue options is false {"metadata":{"service":"web3-student-lab-backend","environment":"development","stack":"Error: Stream isn't writeable and enableOfflineQueue options is false\n    at EventEmitter.sendCommand (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/Redis.js:376:32)\n    at EventEmitter.ping (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/utils/Commander.js:90:25)\n    at RedisClient.ping (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/cache/RedisClient.ts:90:40)\n    at RedisClient.connect (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/cache/RedisClient.ts:79:18)\n    at <anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/index.ts:49:15)\n    at ModuleJob.run (node:internal/modules/esm/module_job:345:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)"}}
+2026-06-05 11:16:46.417 [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at <anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/index.ts:163:23)
+    at ModuleJob.run (node:internal/modules/esm/module_job:345:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {"metadata":{"error":{"code":"EADDRINUSE","errno":-98,"syscall":"listen","address":"::","port":8080},"stack":"Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at Server.listen (node:net:2102:7)\n    at <anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/index.ts:163:23)\n    at ModuleJob.run (node:internal/modules/esm/module_job:345:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)","exception":true,"date":"Fri Jun 05 2026 11:16:46 GMT+0100 (West Africa Standard Time)","process":{"pid":182203,"uid":1000,"gid":1000,"cwd":"/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend","execPath":"/home/knights/.nvm/versions/node/v22.20.0/bin/node","version":"v22.20.0","argv":["/home/knights/.nvm/versions/node/v22.20.0/bin/node","/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/index.ts"],"memoryUsage":{"rss":164556800,"heapTotal":108265472,"heapUsed":86939384,"external":5326225,"arrayBuffers":288437}},"os":{"loadavg":[48.43,16.63,10.01],"uptime":52170.04},"trace":[{"column":16,"file":"node:net","function":"Server.setupListenHandle [as _listen2]","line":1940,"method":"setupListenHandle [as _listen2]","native":false},{"column":12,"file":"node:net","function":"listenInCluster","line":1997,"method":null,"native":false},{"column":7,"file":"node:net","function":"Server.listen","line":2102,"method":"listen","native":false},{"column":23,"file":"/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/index.ts","function":"<anonymous>","line":163,"method":null,"native":false},{"column":25,"file":"node:internal/modules/esm/module_job","function":"ModuleJob.run","line":345,"method":"run","native":false},{"column":26,"file":"node:internal/modules/esm/loader","function":"async onImport.tracePromise.__proto__","line":665,"method":"__proto__","native":false},{"column":5,"file":"node:internal/modules/run_main","function":"async asyncRunEntryPointWithESMLoader","line":117,"method":null,"native":false}],"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:16:46.574 [32minfo[39m: Redis (standalone) connected successfully {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:16:46.663 [32minfo[39m: Redis (standalone) ready {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+It is highly recommended to use a minimum Redis version of 6.2.0
+             Current: 6.0.16
+It is highly recommended to use a minimum Redis version of 6.2.0
+             Current: 6.0.16
+It is highly recommended to use a minimum Redis version of 6.2.0
+             Current: 6.0.16
+It is highly recommended to use a minimum Redis version of 6.2.0
+             Current: 6.0.16
+It is highly recommended to use a minimum Redis version of 6.2.0
+             Current: 6.0.16
+It is highly recommended to use a minimum Redis version of 6.2.0
+             Current: 6.0.16
+It is highly recommended to use a minimum Redis version of 6.2.0
+             Current: 6.0.16
+/client-engine-runtime/src/interpreter/query-interpreter.ts:213:41)
+        at async e.interpretNode (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client-engine-runtime/src/interpreter/query-interpreter.ts:272:41)
+        at async e.run (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client-engine-runtime/src/interpreter/query-interpreter.ts:94:23)
+        at async e.execute (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/core/engines/client/LocalExecutor.ts:81:12)
+        at async jt.request (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@prisma/client/src/runtime/core/engines/client/ClientEngine.ts:504:22) {
+      cause: [Object]
+    }
+  },
+  clientVersion: '7.8.0'
+}
+2026-06-05 13:15:20.297 [32minfo[39m: Cache invalidated for block 1780661720 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 13:19:13.061 [32minfo[39m: Cache invalidated for block 1780661948 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 13:20:30.634 [32minfo[39m: Cache invalidated for block 1780662020 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}

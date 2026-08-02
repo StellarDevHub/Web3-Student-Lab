@@ -49,6 +49,27 @@ const REQUIRED_VARS: EnvVarConfig[] = [
 ];
 
 /**
+ * Environment variables for S3 backup (required in all envs if backup is enabled)
+ */
+const BACKUP_REQUIRED_VARS: EnvVarConfig[] = [
+  {
+    name: 'BACKUP_S3_BUCKET',
+    required: false,
+    description: 'S3 bucket name for database backups',
+  },
+  {
+    name: 'BACKUP_S3_ACCESS_KEY_ID',
+    required: false,
+    description: 'AWS access key ID with S3 write permissions for backups',
+  },
+  {
+    name: 'BACKUP_S3_SECRET_ACCESS_KEY',
+    required: false,
+    description: 'AWS secret access key for S3 backup authentication',
+  },
+];
+
+/**
  * Environment variables required only in production
  */
 const PRODUCTION_REQUIRED_VARS: EnvVarConfig[] = [
@@ -109,6 +130,14 @@ const OPTIONAL_VARS: Record<string, { defaultValue: string; description: string 
   OPENAI_API_KEY: {
     defaultValue: '',
     description: 'OpenAI API key for project idea generation (optional)',
+  },
+  SENTRY_DSN: {
+    defaultValue: '',
+    description: 'Sentry DSN for centralized error reporting (optional)',
+  },
+  SENTRY_RELEASE: {
+    defaultValue: 'web3-student-lab@1.0.0',
+    description: 'Release tag sent to Sentry for error grouping',
   },
 };
 
@@ -227,7 +256,7 @@ export function getEnvVar(name: string, defaultValue?: string): string {
   if (value && value.trim() !== '') {
     return value;
   }
-  if (defaultValue) {
+  if (defaultValue !== undefined) {
     return defaultValue;
   }
   throw new EnvironmentValidationError(`Environment variable ${name} is required`);

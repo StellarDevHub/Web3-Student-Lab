@@ -1,0 +1,252 @@
+src/auth/token.service.ts(26,33): error TS2554: Expected 2 arguments, but got 4.
+src/auth/token.service.ts(73,28): error TS2339: Property 'keys' does not exist on type 'Redis | { connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; ... 8 more ...; brpop: () => Promise<...>; }'.
+  Property 'keys' does not exist on type '{ connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; info: () => Promise<string>; ... 7 more ...; brpop: () => Promise<...>; }'.
+src/auth/token.service.ts(82,39): error TS2554: Expected 2 arguments, but got 4.
+src/blockchain/chain-indexer-engine.ts(132,41): error TS2339: Property 'processedBlock' does not exist on type 'Omit<PrismaClient<PrismaClientOptions, never, DefaultArgs>, "$connect" | "$disconnect" | "$on" | "$use" | "$extends">'.
+src/blockchain/chain-indexer-engine.ts(248,41): error TS2339: Property 'processedBlock' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+src/blockchain/chain-indexer-engine.ts(276,43): error TS2339: Property 'processedBlock' does not exist on type 'Omit<PrismaClient<PrismaClientOptions, never, DefaultArgs>, "$connect" | "$disconnect" | "$on" | "$use" | "$extends">'.
+src/blockchain/chain-indexer-engine.ts(296,48): error TS7006: Parameter 'b' implicitly has an 'any' type.
+src/blockchain/chain-indexer-engine.ts(299,18): error TS2339: Property 'bridgeEvent' does not exist on type 'Omit<PrismaClient<PrismaClientOptions, never, DefaultArgs>, "$connect" | "$disconnect" | "$on" | "$use" | "$extends">'.
+src/blockchain/chain-indexer-engine.ts(308,18): error TS2339: Property 'processedBlock' does not exist on type 'Omit<PrismaClient<PrismaClientOptions, never, DefaultArgs>, "$connect" | "$disconnect" | "$on" | "$use" | "$extends">'.
+src/blockchain/chain-indexer-engine.ts(335,42): error TS2339: Property 'bridgeEvent' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+src/cache/BlockHeaderListener.ts(54,21): error TS2345: Argument of type 'Timer' is not assignable to parameter of type 'string | number | Timeout | undefined'.
+  Type 'Timer' is missing the following properties from type 'Timeout': close, _onTimeout, [Symbol.dispose]
+src/cache/CacheWarmer.ts(42,21): error TS2345: Argument of type 'Timer' is not assignable to parameter of type 'string | number | Timeout | undefined'.
+  Type 'Timer' is missing the following properties from type 'Timeout': close, _onTimeout, [Symbol.dispose]
+src/cache/DistributedCacheManager.ts(137,61): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/cache/DistributedCacheManager.ts(138,65): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/cache/DistributedCacheManager.ts(139,65): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/cache/DistributedCacheManager.ts(143,49): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/cache/DistributedCacheManager.ts(148,40): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/certificates/CertificateService.ts(12,10): error TS2305: Module '"../services/storage/index.js"' has no exported member 'storageService'.
+src/certificates/CertificateService.ts(163,30): error TS18004: No value exists in scope for the shorthand property 'metadata'. Either declare one or provide an initializer.
+src/index.ts(4,8): error TS2300: Duplicate identifier 'swaggerUi'.
+src/index.ts(11,8): error TS2300: Duplicate identifier 'config'.
+src/index.ts(12,10): error TS2300: Duplicate identifier 'swaggerSpec'.
+src/index.ts(25,8): error TS2300: Duplicate identifier 'swaggerUi'.
+src/index.ts(26,10): error TS2300: Duplicate identifier 'swaggerSpec'.
+src/index.ts(27,8): error TS2300: Duplicate identifier 'config'.
+src/index.ts(42,1): error TS2304: Cannot find name 'initializeSentry'.
+src/index.ts(91,9): error TS2304: Cannot find name 'getSentryRequestHandler'.
+src/index.ts(209,9): error TS2304: Cannot find name 'getSentryErrorHandler'.
+src/index.ts(210,9): error TS2304: Cannot find name 'errorHandler'.
+src/jobs/export.queue.ts(7,3): error TS2322: Type 'Redis | { connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; ... 8 more ...; brpop: () => Promise<...>; }' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'ConnectionOptions'.
+    Type 'Redis' is not assignable to type 'ClusterOptions | Redis | IRedisClient | Cluster'.
+      Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+        Types of property 'options' are incompatible.
+          Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+            Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+              Types of property 'Connector' are incompatible.
+                Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                  Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                    Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                      Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.
+src/jobs/export.worker.ts(109,5): error TS2322: Type 'Redis | { connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; ... 8 more ...; brpop: () => Promise<...>; }' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'ConnectionOptions'.
+    Type 'Redis' is not assignable to type 'ClusterOptions | Redis | IRedisClient | Cluster'.
+      Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+        Types of property 'options' are incompatible.
+          Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+            Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+              Types of property 'Connector' are incompatible.
+                Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                  Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                    Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                      Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.
+src/jobs/export.worker.ts(132,5): error TS2322: Type 'Redis | { connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; ... 8 more ...; brpop: () => Promise<...>; }' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'ConnectionOptions'.
+    Type 'Redis' is not assignable to type 'ClusterOptions | Redis | IRedisClient | Cluster'.
+      Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+        Types of property 'options' are incompatible.
+          Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+            Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+              Types of property 'Connector' are incompatible.
+                Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                  Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                    Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                      Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.
+src/jobs/export.worker.ts(136,54): error TS2322: Type 'Redis | { connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; ... 8 more ...; brpop: () => Promise<...>; }' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'ConnectionOptions'.
+    Type 'Redis' is not assignable to type 'ClusterOptions | Redis | IRedisClient | Cluster'.
+      Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+        Types of property 'options' are incompatible.
+          Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+            Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+              Types of property 'Connector' are incompatible.
+                Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                  Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                    Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                      Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.
+src/middleware/rateLimiter.ts(31,23): error TS2339: Property 'multi' does not exist on type 'Redis | { connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; ... 8 more ...; brpop: () => Promise<...>; }'.
+  Property 'multi' does not exist on type '{ connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; info: () => Promise<string>; ... 7 more ...; brpop: () => Promise<...>; }'.
+src/middleware/rateLimiter.ts(169,27): error TS2339: Property 'multi' does not exist on type 'Redis | { connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; ... 8 more ...; brpop: () => Promise<...>; }'.
+  Property 'multi' does not exist on type '{ connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; info: () => Promise<string>; ... 7 more ...; brpop: () => Promise<...>; }'.
+src/notifications/NotificationService.ts(72,21): error TS2339: Property 'publish' does not exist on type 'Redis | { connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; ... 8 more ...; brpop: () => Promise<...>; }'.
+  Property 'publish' does not exist on type '{ connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; info: () => Promise<string>; ... 7 more ...; brpop: () => Promise<...>; }'.
+src/notifications/NotificationService.ts(109,7): error TS2322: Type '{ read: true; id?: string | undefined; type?: CourseNotificationType | undefined; userId?: string; courseId?: string; courseTitle?: string; title?: string | undefined; message?: string | undefined; metadata?: Record<string, unknown>; createdAt?: string | undefined; }' is not assignable to type 'CourseNotification'.
+  Types of property 'id' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/notifications/NotificationService.ts(129,14): error TS2532: Object is possibly 'undefined'.
+src/notifications/NotificationService.ts(130,11): error TS2322: Type '{ read: true; id?: string | undefined; type?: CourseNotificationType | undefined; userId?: string; courseId?: string; courseTitle?: string; title?: string | undefined; message?: string | undefined; metadata?: Record<string, unknown>; createdAt?: string | undefined; }' is not assignable to type 'CourseNotification'.
+  Types of property 'id' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/notifications/NotificationService.ts(156,19): error TS2345: Argument of type 'CourseNotification | undefined' is not assignable to parameter of type 'CourseNotification'.
+  Type 'undefined' is not assignable to type 'CourseNotification'.
+src/notifications/NotificationService.ts(158,19): error TS2345: Argument of type 'CourseNotification | undefined' is not assignable to parameter of type 'CourseNotification'.
+  Type 'undefined' is not assignable to type 'CourseNotification'.
+src/notifications/NotificationService.ts(160,19): error TS2532: Object is possibly 'undefined'.
+src/notifications/NotificationService.ts(160,19): error TS2345: Argument of type 'CourseNotification | undefined' is not assignable to parameter of type 'CourseNotification'.
+  Type 'undefined' is not assignable to type 'CourseNotification'.
+src/notifications/NotificationService.ts(160,37): error TS2532: Object is possibly 'undefined'.
+src/notifications/notification.routes.ts(43,28): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/routes/contracts.validation.schemas.ts(20,72): error TS2353: Object literal may only specify known properties, and 'invalid_type_error' does not exist in type '{ error?: string | $ZodErrorMap<$ZodIssueInvalidType<unknown>> | undefined; message?: string | undefined; }'.
+src/routes/courses.ts(54,7): error TS2322: Type '{ createdAt: string; updatedAt: string; id: string; workspaceId: string; title: string; description: string | null; instructor: string; credits: number; }[]' is not assignable to type '{ id: string; title: string; description: string; instructor: string; credits: number; createdAt: string; updatedAt: string; }[]'.
+  Type '{ createdAt: string; updatedAt: string; id: string; workspaceId: string; title: string; description: string | null; instructor: string; credits: number; }' is not assignable to type '{ id: string; title: string; description: string; instructor: string; credits: number; createdAt: string; updatedAt: string; }'.
+    Types of property 'description' are incompatible.
+      Type 'string | null' is not assignable to type 'string'.
+        Type 'null' is not assignable to type 'string'.
+src/routes/courses.ts(142,18): error TS2345: Argument of type '{ createdAt: string; updatedAt: string; id: string; workspaceId: string; title: string; description: string | null; instructor: string; credits: number; }' is not assignable to parameter of type '{ id: string; title: string; description: string; instructor: string; credits: number; createdAt: string; updatedAt: string; }'.
+  Types of property 'description' are incompatible.
+    Type 'string | null' is not assignable to type 'string'.
+      Type 'null' is not assignable to type 'string'.
+src/routes/courses.ts(193,16): error TS2322: Type 'string | string[] | undefined' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/routes/courses.ts(202,33): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/routes/courses.ts(209,9): error TS2322: Type 'string | string[] | undefined' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/routes/courses.ts(230,16): error TS2322: Type 'string | string[] | undefined' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/routes/courses.ts(233,33): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/routes/generator/generator.routes.ts(6,10): error TS2305: Module '"../../services/storage/index.js"' has no exported member 'storageService'.
+src/routes/index.ts(31,30): error TS2304: Cannot find name 'notificationRouter'.
+src/routes/index.ts(35,25): error TS2304: Cannot find name 'webhooksRouter'.
+src/routes/index.ts(37,24): error TS2304: Cannot find name 'metricsRouter'.
+src/routes/storage.routes.ts(3,10): error TS2305: Module '"../services/storage/index.js"' has no exported member 'storageService'.
+src/routes/students.ts(123,16): error TS2322: Type 'string | string[] | undefined' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/routes/students.ts(129,18): error TS2322: Type 'string | string[] | undefined' is not assignable to type 'string | StringFilter<"Certificate"> | undefined'.
+  Type 'string[]' is not assignable to type 'string | StringFilter<"Certificate"> | undefined'.
+src/routes/students.ts(132,29): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/routes/students.ts(135,31): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/routes/students.ts(153,16): error TS2322: Type 'string | string[] | undefined' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/routes/students.ts(156,31): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/services/queue.service.ts(33,36): error TS2345: Argument of type 'WebhookEventName' is not assignable to parameter of type 'ExtractNameType<DataTypeOrJob, DefaultNameType> & string'.
+  Type 'string & {}' is not assignable to type 'ExtractNameType<DataTypeOrJob, DefaultNameType> & string'.
+    Type 'string & {}' is not assignable to type 'ExtractNameType<DataTypeOrJob, DefaultNameType>'.
+src/services/storage/asset.repository.ts(25,3): error TS2322: Type '{ error: string | null; metadata: JsonValue; id: string; name: string; workspaceId: string; createdAt: Date; updatedAt: Date; status: string; resourceType: string; resourceId: string; ... 9 more ...; unpinnedAt: Date | null; }' is not assignable to type 'StorageAssetRecord'.
+  Types of property 'kind' are incompatible.
+    Type 'string' is not assignable to type 'StorageAssetKind'.
+src/services/storage/asset.repository.ts(44,7): error TS2322: Type 'Record<string, unknown> | null' is not assignable to type 'InputJsonValue | NullableJsonNullValueInput | undefined'.
+  Type 'null' is not assignable to type 'InputJsonValue | NullableJsonNullValueInput | undefined'.
+src/services/storage/asset.repository.ts(62,7): error TS2322: Type 'Record<string, unknown> | null' is not assignable to type 'InputJsonValue | NullableJsonNullValueInput | undefined'.
+  Type 'null' is not assignable to type 'InputJsonValue | NullableJsonNullValueInput | undefined'.
+src/services/storage/asset.repository.ts(106,3): error TS2322: Type '{ error: string | null; metadata: JsonValue; id: string; name: string; workspaceId: string; createdAt: Date; updatedAt: Date; status: string; resourceType: string; resourceId: string; ... 9 more ...; unpinnedAt: Date | null; }[]' is not assignable to type 'StorageAssetRecord[]'.
+  Type '{ error: string | null; metadata: JsonValue; id: string; name: string; workspaceId: string; createdAt: Date; updatedAt: Date; status: string; resourceType: string; resourceId: string; ... 9 more ...; unpinnedAt: Date | null; }' is not assignable to type 'StorageAssetRecord'.
+    Types of property 'kind' are incompatible.
+      Type 'string' is not assignable to type 'StorageAssetKind'.
+src/services/storage/providers/pinata.provider.ts(74,35): error TS2322: Type 'Buffer<ArrayBufferLike>' is not assignable to type 'BlobPart'.
+  Type 'Buffer<ArrayBufferLike>' is not assignable to type 'Blob | Uint8Array<ArrayBuffer> | DataView<ArrayBuffer>'.
+    Type 'Buffer<ArrayBufferLike>' is not assignable to type 'Uint8Array<ArrayBuffer>'.
+      Types of property 'buffer' are incompatible.
+        Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+          Type 'SharedArrayBuffer' is not assignable to type 'ArrayBuffer'.
+            Types of property '[Symbol.toStringTag]' are incompatible.
+              Type '"SharedArrayBuffer"' is not assignable to type '"ArrayBuffer"'.
+src/services/storage/queue.ts(23,3): error TS2353: Object literal may only specify known properties, and 'timeout' does not exist in type 'JobsOptions'.
+src/services/storage/queue.ts(35,5): error TS2322: Type 'Redis | { connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; ... 8 more ...; brpop: () => Promise<...>; }' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'ConnectionOptions'.
+    Type 'Redis' is not assignable to type 'ClusterOptions | Redis | IRedisClient | Cluster'.
+      Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+        Types of property 'options' are incompatible.
+          Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+            Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+              Types of property 'Connector' are incompatible.
+                Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                  Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                    Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                      Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.
+src/services/storage/storage.service.ts(64,30): error TS2345: Argument of type 'Omit<StoragePinRequest, "mode">' is not assignable to parameter of type 'Omit<StoragePinRequest, "mode"> & { content?: Buffer<ArrayBufferLike> | undefined; }'.
+  Type 'Omit<StoragePinRequest, "mode">' is not assignable to type '{ content?: Buffer<ArrayBufferLike> | undefined; }'.
+    Types of property 'content' are incompatible.
+      Type 'unknown' is not assignable to type 'Buffer<ArrayBufferLike> | undefined'.
+src/services/storage/storage.service.ts(83,41): error TS2345: Argument of type 'string' is not assignable to parameter of type 'ExtractNameType<DataTypeOrJob, DefaultNameType> & string'.
+  Type 'string' is not assignable to type 'ExtractNameType<DataTypeOrJob, DefaultNameType>'.
+src/services/storage/storage.service.ts(93,41): error TS2345: Argument of type 'string' is not assignable to parameter of type 'ExtractNameType<DataTypeOrJob, DefaultNameType> & string'.
+  Type 'string' is not assignable to type 'ExtractNameType<DataTypeOrJob, DefaultNameType>'.
+src/services/storage/storage.service.ts(102,40): error TS2345: Argument of type 'string' is not assignable to parameter of type 'ExtractNameType<DataTypeOrJob, DefaultNameType> & string'.
+  Type 'string' is not assignable to type 'ExtractNameType<DataTypeOrJob, DefaultNameType>'.
+src/services/storage/worker.ts(132,52): error TS2345: Argument of type '(job: Job<StoragePinJobData>, dependencies?: StorageWorkerDependencies) => Promise<StoragePinResult>' is not assignable to parameter of type 'string | URL | Processor<StoragePinJobData, StoragePinResult, string> | null | undefined'.
+  Type '(job: Job<StoragePinJobData>, dependencies?: StorageWorkerDependencies) => Promise<StoragePinResult>' is not assignable to type 'Processor<StoragePinJobData, StoragePinResult, string>'.
+    Types of parameters 'dependencies' and 'token' are incompatible.
+      Type 'string | undefined' is not assignable to type 'StorageWorkerDependencies | undefined'.
+        Type 'string' has no properties in common with type 'StorageWorkerDependencies'.
+src/services/storage/worker.ts(147,9): error TS2322: Type 'Redis | { connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; ... 8 more ...; brpop: () => Promise<...>; }' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'ConnectionOptions'.
+    Type 'Redis' is not assignable to type 'ClusterOptions | Redis | IRedisClient | Cluster'.
+      Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+        Types of property 'options' are incompatible.
+          Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+            Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+              Types of property 'Connector' are incompatible.
+                Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                  Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                    Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                      Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.
+src/services/storage/worker.ts(178,5): error TS2345: Argument of type 'string' is not assignable to parameter of type 'ExtractNameType<DataTypeOrJob, DefaultNameType> & string'.
+  Type 'string' is not assignable to type 'ExtractNameType<DataTypeOrJob, DefaultNameType>'.
+src/services/webhooks/dispatcher.ts(44,19): error TS2345: Argument of type 'WebhookEventName' is not assignable to parameter of type 'ExtractNameType<DataTypeOrJob, DefaultNameType> & string'.
+  Type 'string & {}' is not assignable to type 'ExtractNameType<DataTypeOrJob, DefaultNameType> & string'.
+    Type 'string & {}' is not assignable to type 'ExtractNameType<DataTypeOrJob, DefaultNameType>'.
+src/services/webhooks/queue.ts(43,5): error TS2322: Type 'Redis | { connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; ... 8 more ...; brpop: () => Promise<...>; }' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'ConnectionOptions'.
+    Type 'Redis' is not assignable to type 'ClusterOptions | Redis | IRedisClient | Cluster'.
+      Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+        Types of property 'options' are incompatible.
+          Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+            Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+              Types of property 'Connector' are incompatible.
+                Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                  Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                    Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                      Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.
+src/services/webhooks/worker.ts(101,36): error TS2345: Argument of type 'WebhookEventName' is not assignable to parameter of type 'ExtractNameType<DataTypeOrJob, DefaultNameType> & string'.
+  Type 'string & {}' is not assignable to type 'ExtractNameType<DataTypeOrJob, DefaultNameType> & string'.
+    Type 'string & {}' is not assignable to type 'ExtractNameType<DataTypeOrJob, DefaultNameType>'.
+src/services/webhooks/worker.ts(143,7): error TS2322: Type 'Redis | { connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; ... 8 more ...; brpop: () => Promise<...>; }' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'ConnectionOptions'.
+    Type 'Redis' is not assignable to type 'ClusterOptions | Redis | IRedisClient | Cluster'.
+      Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+        Types of property 'options' are incompatible.
+          Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+            Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+              Types of property 'Connector' are incompatible.
+                Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                  Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                    Type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                      Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.
+src/utils/audit.ts(23,27): error TS2552: Cannot find name 'getCorrelationId'. Did you mean 'correlationId'?
+src/utils/audit.ts(31,18): error TS2304: Cannot find name 'createHash'.
+src/utils/audit.ts(65,73): error TS2304: Cannot find name 'getCorrelationId'.
+src/utils/sentry.ts(43,17): error TS2339: Property 'Handlers' does not exist on type 'typeof import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@sentry/node/build/types/index")'.
+src/utils/sentry.ts(50,17): error TS2339: Property 'Handlers' does not exist on type 'typeof import("/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/@sentry/node/build/types/index")'.
+src/websocket/gateway.ts(54,13): error TS2339: Property 'subscribe' does not exist on type 'Redis | { connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; ... 8 more ...; brpop: () => Promise<...>; }'.
+  Property 'subscribe' does not exist on type '{ connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; info: () => Promise<string>; ... 7 more ...; brpop: () => Promise<...>; }'.
+src/websocket/gateway.ts(54,93): error TS7006: Parameter 'err' implicitly has an 'any' type.
+src/websocket/gateway.ts(54,98): error TS7006: Parameter 'count' implicitly has an 'any' type.
+src/websocket/gateway.ts(90,19): error TS2339: Property 'publish' does not exist on type 'Redis | { connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; ... 8 more ...; brpop: () => Promise<...>; }'.
+  Property 'publish' does not exist on type '{ connect: () => Promise<undefined>; disconnect: () => Promise<undefined>; quit: () => Promise<undefined>; ping: () => Promise<string>; info: () => Promise<string>; ... 7 more ...; brpop: () => Promise<...>; }'.

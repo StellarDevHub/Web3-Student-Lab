@@ -101,7 +101,10 @@ export class SearchController {
         metadata: {
           query: options.query,
           filters: options.filters,
-          totalResults: courses.metadata.totalResults + students.metadata.totalResults + certificates.metadata.totalResults,
+          totalResults:
+            courses.metadata.totalResults +
+            students.metadata.totalResults +
+            certificates.metadata.totalResults,
         },
       });
     } catch (error) {

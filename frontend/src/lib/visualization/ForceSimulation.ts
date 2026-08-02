@@ -22,11 +22,21 @@ export class ForceSimulation {
   private links: TransactionEdge[] = [];
 
   constructor(width: number, height: number, onTick: () => void) {
-    this.simulation = d3.forceSimulation<NetworkNode, TransactionEdge>(this.nodes)
-      .force('link', d3.forceLink<NetworkNode, TransactionEdge>(this.links).id(d => d.id).distance(100))
-      .force('charge', d3.forceManyBody().strength(-200))
+    const shortestSide = Math.max(Math.min(width, height), 320);
+    const compactScale = Math.min(Math.max(shortestSide / 720, 0.58), 1);
+
+    this.simulation = d3
+      .forceSimulation<NetworkNode, TransactionEdge>(this.nodes)
+      .force(
+        'link',
+        d3
+          .forceLink<NetworkNode, TransactionEdge>(this.links)
+          .id((d) => d.id)
+          .distance(100 * compactScale)
+      )
+      .force('charge', d3.forceManyBody().strength(-200 * compactScale))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(50))
+      .force('collision', d3.forceCollide().radius(50 * compactScale))
       .on('tick', onTick);
   }
 

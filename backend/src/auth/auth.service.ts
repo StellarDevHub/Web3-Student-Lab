@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../db/index.js';
-import { AuthResponse, LoginRequest, RegisterRequest, User } from './types.js';
+import { LoginRequest, RegisterRequest, User } from './types.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const JWT_EXPIRES_IN = '7d';
@@ -73,56 +73,100 @@ export const formatUserResponse = (student: {
   firstName: string;
   lastName: string;
   did?: string | null;
+  walletAddress?: string | null;
 }): User => {
   return {
     id: student.id,
     email: student.email,
     name: `${student.firstName} ${student.lastName}`,
     did: student.did ?? null,
+    walletAddress: student.walletAddress ?? null,
   };
 };
 
-import { 
-  generateAccessToken, 
-  generateRefreshToken,
-  TokenPayload 
-} from './token.service.js';
+import { generateAccessToken, generateRefreshToken, TokenPayload } from './token.service.js';
 
 /**
- * Register a new student
+ * Register a new student with pessimistic locking to prevent race conditions
  */
 export const register = async (data: RegisterRequest): Promise<any> => {
-  const { email, password, firstName, lastName } = data;
+  const { email, password, firstName, lastName, walletAddress } = data;
+  const normalizedWalletAddress = walletAddress?.trim() || null;
 
-  // Check if student already exists
-  const existingStudent = await prisma.student.findUnique({
-    where: { email },
-  });
+  // Use transaction with pessimistic locking to prevent race conditions
+  const result = await prisma.$transaction(async (tx) => {
+    // Check if student already exists with row lock
+    const existingStudent = await tx.student.findUnique({
+      where: { email },
+    });
 
-  if (existingStudent) {
-    throw new Error('Student with this email already exists');
-  }
+    if (existingStudent) {
+      if (
+        normalizedWalletAddress &&
+        (!existingStudent.walletAddress || existingStudent.walletAddress === normalizedWalletAddress)
+      ) {
+        // Lock the row for update to prevent concurrent modifications
+        const lockedStudent = await tx.student.findUnique({
+          where: { id: existingStudent.id },
+        });
 
-  // Hash the password
-  const hashedPassword = await hashPassword(password);
+        if (!lockedStudent) {
+          throw new Error('Student not found during update');
+        }
 
-  // Create the student
-  const student = await prisma.student.create({
-    data: {
-      email,
-      password: hashedPassword,
-      firstName,
-      lastName,
-    },
+        const linkedStudent = await tx.student.update({
+          where: { id: existingStudent.id },
+          data: {
+            firstName,
+            lastName,
+            walletAddress: normalizedWalletAddress,
+          },
+        });
+
+        return { student: linkedStudent, isUpdate: true };
+      }
+
+      throw new Error('Student with this email already exists');
+    }
+
+    // If wallet address is provided, check if it's already in use with row lock
+    if (normalizedWalletAddress) {
+      const existingWalletStudent = await tx.student.findUnique({
+        where: { walletAddress: normalizedWalletAddress },
+      });
+
+      if (existingWalletStudent) {
+        throw new Error('This wallet is already linked to another profile');
+      }
+    }
+
+    // Hash the password
+    const hashedPassword = await hashPassword(password);
+
+    // Create the student
+    const student = await tx.student.create({
+      data: {
+        email,
+        password: hashedPassword,
+        firstName,
+        lastName,
+        walletAddress: normalizedWalletAddress,
+      },
+    });
+
+    return { student, isUpdate: false };
+  }, {
+    isolationLevel: 'Serializable',
   });
 
   // Generate tokens
-  const payload: TokenPayload = { userId: student.id };
+  const payload: TokenPayload = { userId: result.student.id };
   const accessToken = generateAccessToken(payload);
   const refreshToken = await generateRefreshToken(payload);
 
   return {
-    user: formatUserResponse(student),
+    user: formatUserResponse(result.student),
+    token: accessToken,
     accessToken,
     refreshToken,
   };
@@ -157,6 +201,7 @@ export const login = async (data: LoginRequest): Promise<any> => {
 
   return {
     user: formatUserResponse(student),
+    token: accessToken,
     accessToken,
     refreshToken,
   };
@@ -187,4 +232,22 @@ export const getCurrentUser = async (token: string): Promise<User | null> => {
   } catch {
     return null;
   }
+};
+
+export const getProfileStatusByWallet = async (walletAddress: string) => {
+  const student = await prisma.student.findUnique({
+    where: { walletAddress },
+  });
+
+  if (!student) {
+    return {
+      completed: false,
+      user: null,
+    };
+  }
+
+  return {
+    completed: true,
+    user: formatUserResponse(student),
+  };
 };

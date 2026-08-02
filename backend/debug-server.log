@@ -1,0 +1,78 @@
+2026-06-05 11:14:06.091 [32minfo[39m: RSA Key rotated. New Key ID: 652c9cd0-ce3d-4e5c-9720-5a1891b1de93 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:14:06.551 [32minfo[39m: Blockchain service initialized in simulation mode {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+◇ injected env (32) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+2026-06-05 11:14:07.297 [32minfo[39m: ✅ Environment variables validated successfully {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:14:07.298 [32minfo[39m: 🌍 Environment: development {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:14:07.298 [32minfo[39m: 🔌 Port: 8081 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:14:07.299 [32minfo[39m: 🌐 Stellar Network: testnet {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:14:07.422 [32minfo[39m: Application Configuration Loaded {"metadata":{"service":"web3-student-lab-backend","environment":"development","app":{"env":"development","port":8081,"logLevel":"info"},"redis":{"url":"red...379"},"db":{"url":"pos...ire"},"security":{"jwtSecret":"***REDACTED***","jwtExpiresIn":"7d"},"stellar":{"network":"testnet","horizonUrl":"https://horizon-testnet.stellar.org","rpcUrl":"https://soroban-testnet.stellar.org","issuerPublicKey":"","issuerSecretKey":"","certificateContractId":"CAA6BTXNUO7Q775CKBBFVQYG27HU3FTFTJ6MUQ64TWFXYNATHTUQDRBH","certificateValidityDays":365,"issuerName":"Web3 Student Lab","issuerDid":"did:stellar:GBRPYHIL2CI3FYQMWVUGE62KMGOBQKLCYJ3HLKBUBIW5VZH4S4MNOWT"},"openai":{"apiKey":""}}}
+2026-06-05 11:14:07.423 [32minfo[39m: Connecting to standalone Redis... {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:14:07.427 [32minfo[39m: BlockHeaderListener started {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:14:07.429 [32minfo[39m: CacheWarmer started {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:14:07.434 [32minfo[39m: Distributed caching layer initialized {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:14:07.450 [32minfo[39m: WebSocket Server successfully initialized {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:14:07.457 [31merror[39m: Redis ping failed: Stream isn't writeable and enableOfflineQueue options is false {"metadata":{"service":"web3-student-lab-backend","environment":"development","stack":"Error: Stream isn't writeable and enableOfflineQueue options is false\n    at EventEmitter.sendCommand (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/Redis.js:376:32)\n    at EventEmitter.ping (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/node_modules/ioredis/built/utils/Commander.js:90:25)\n    at RedisClient.ping (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/cache/RedisClient.ts:90:40)\n    at RedisClient.connect (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/cache/RedisClient.ts:79:18)\n    at <anonymous> (/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/backend/src/index.ts:49:15)\n    at ModuleJob.run (node:internal/modules/esm/module_job:345:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)"}}
+2026-06-05 11:14:07.474 [32minfo[39m: Server is running on port 8081 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:14:07.495 [32minfo[39m: Redis (standalone) connected successfully {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:14:07.528 [32minfo[39m: Redis (standalone) ready {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+It is highly recommended to use a minimum Redis version of 6.2.0
+             Current: 6.0.16
+It is highly recommended to use a minimum Redis version of 6.2.0
+             Current: 6.0.16
+It is highly recommended to use a minimum Redis version of 6.2.0
+             Current: 6.0.16
+It is highly recommended to use a minimum Redis version of 6.2.0
+             Current: 6.0.16
+It is highly recommended to use a minimum Redis version of 6.2.0
+             Current: 6.0.16
+It is highly recommended to use a minimum Redis version of 6.2.0
+             Current: 6.0.16
+It is highly recommended to use a minimum Redis version of 6.2.0
+             Current: 6.0.16
+2026-06-05 11:19:08.031 [32minfo[39m: Cache invalidated for block 1780654747 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:20:28.102 [32minfo[39m: Cache invalidated for block 1780654820 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:24:08.064 [32minfo[39m: Cache invalidated for block 1780655047 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:25:28.074 [32minfo[39m: Cache invalidated for block 1780655120 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:29:08.086 [32minfo[39m: Cache invalidated for block 1780655347 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:30:28.098 [32minfo[39m: Cache invalidated for block 1780655420 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:34:08.141 [32minfo[39m: Cache invalidated for block 1780655647 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:35:28.158 [32minfo[39m: Cache invalidated for block 1780655720 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:39:08.177 [32minfo[39m: Cache invalidated for block 1780655947 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:40:28.186 [32minfo[39m: Cache invalidated for block 1780656020 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:44:08.278 [32minfo[39m: Cache invalidated for block 1780656247 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:45:28.228 [32minfo[39m: Cache invalidated for block 1780656320 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:49:08.234 [32minfo[39m: Cache invalidated for block 1780656547 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:50:28.301 [32minfo[39m: Cache invalidated for block 1780656620 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:54:08.257 [32minfo[39m: Cache invalidated for block 1780656847 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:55:28.269 [32minfo[39m: Cache invalidated for block 1780656920 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 11:59:08.357 [32minfo[39m: Cache invalidated for block 1780657147 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:00:28.308 [32minfo[39m: Cache invalidated for block 1780657220 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:04:08.394 [32minfo[39m: Cache invalidated for block 1780657447 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:05:28.337 [32minfo[39m: Cache invalidated for block 1780657520 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:09:08.359 [32minfo[39m: Cache invalidated for block 1780657747 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:10:28.349 [32minfo[39m: Cache invalidated for block 1780657820 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:14:08.431 [32minfo[39m: Cache invalidated for block 1780658047 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:15:28.386 [32minfo[39m: Cache invalidated for block 1780658120 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:19:08.469 [32minfo[39m: Cache invalidated for block 1780658347 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:20:28.426 [32minfo[39m: Cache invalidated for block 1780658420 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:24:08.449 [32minfo[39m: Cache invalidated for block 1780658647 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:25:28.454 [32minfo[39m: Cache invalidated for block 1780658720 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:29:08.520 [32minfo[39m: Cache invalidated for block 1780658947 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:30:28.525 [32minfo[39m: Cache invalidated for block 1780659020 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:34:08.485 [32minfo[39m: Cache invalidated for block 1780659247 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:35:28.489 [32minfo[39m: Cache invalidated for block 1780659320 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:39:08.517 [32minfo[39m: Cache invalidated for block 1780659547 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:40:28.571 [32minfo[39m: Cache invalidated for block 1780659620 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:44:08.614 [32minfo[39m: Cache invalidated for block 1780659847 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:45:28.677 [32minfo[39m: Cache invalidated for block 1780659920 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:49:08.685 [32minfo[39m: Cache invalidated for block 1780660147 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:50:28.697 [32minfo[39m: Cache invalidated for block 1780660220 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:54:08.673 [32minfo[39m: Cache invalidated for block 1780660447 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:55:28.677 [32minfo[39m: Cache invalidated for block 1780660520 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 12:59:08.767 [32minfo[39m: Cache invalidated for block 1780660747 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 13:00:28.781 [32minfo[39m: Cache invalidated for block 1780660820 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 13:04:08.796 [32minfo[39m: Cache invalidated for block 1780661047 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 13:05:28.795 [32minfo[39m: Cache invalidated for block 1780661120 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 13:09:08.811 [32minfo[39m: Cache invalidated for block 1780661347 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 13:10:28.758 [32minfo[39m: Cache invalidated for block 1780661420 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}
+2026-06-05 13:14:08.784 [32minfo[39m: Cache invalidated for block 1780661647 {"metadata":{"service":"web3-student-lab-backend","environment":"development"}}

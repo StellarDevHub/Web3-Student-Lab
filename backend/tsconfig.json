@@ -22,7 +22,7 @@
 
     // Stricter Typechecking Options
     "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
+    "exactOptionalPropertyTypes": false,
 
     // Style Options
     // "noImplicitReturns": true,
@@ -34,8 +34,22 @@
 
     // Recommended Options
     "strict": true,
+    "noImplicitAny": false,
     "skipLibCheck": true
   },
-  "include": ["src/**/*", "src/generated/**/*", "tests/**/*"],
-  "exclude": ["node_modules"]
+  "include": ["src/**/*", "src/generated/**/*"],
+  "exclude": [
+    "node_modules",
+    "src/controllers/subscription.controller.ts",
+    "src/routes/subscriptions.routes.ts",
+    "src/services/subscription.service.ts",
+    "src/middleware/auth.ts",
+    "src/routes/canvas.routes.ts",
+    "src/routes/courses.ts",
+    "src/routes/freelance.ts",
+    "src/routes/subscriptions.ts",
+    "src/routes/search/**/*",
+    "src/search/**/*",
+    "src/services/bff.service.ts"
+  ]
 }

@@ -1,0 +1,26 @@
+
+> backend@1.0.0 build
+> tsc
+
+src/infrastructure/p2p.controller.ts(6,60): error TS1005: ',' expected.
+src/infrastructure/p2p.controller.ts(6,73): error TS1005: ',' expected.
+src/infrastructure/p2p.controller.ts(6,76): error TS1005: ',' expected.
+src/infrastructure/p2p.controller.ts(6,83): error TS1005: ',' expected.
+src/routes/generator/explorer.routes.ts(17,54): error TS1005: ',' expected.
+src/routes/generator/explorer.routes.ts(17,61): error TS1005: ',' expected.
+src/routes/generator/explorer.routes.ts(17,69): error TS1005: ',' expected.
+src/routes/generator/explorer.routes.ts(17,87): error TS1005: ';' expected.
+src/routes/generator/explorer.routes.ts(18,53): error TS1005: ',' expected.
+src/routes/generator/explorer.routes.ts(18,59): error TS1005: ',' expected.
+src/routes/generator/explorer.routes.ts(18,67): error TS1005: ',' expected.
+src/routes/generator/explorer.routes.ts(18,84): error TS1005: ';' expected.
+src/routes/generator/explorer.routes.ts(55,54): error TS1005: ',' expected.
+src/routes/generator/explorer.routes.ts(55,63): error TS1005: ',' expected.
+src/routes/simulatorErrors.routes.ts(69,55): error TS1005: ',' expected.
+src/routes/simulatorErrors.routes.ts(69,65): error TS1005: ',' expected.
+src/routes/simulatorErrors.routes.ts(69,68): error TS1005: ',' expected.
+src/routes/simulatorErrors.routes.ts(69,82): error TS1005: ',' expected.
+src/simulator/voting.controller.ts(19,60): error TS1005: ',' expected.
+src/simulator/voting.controller.ts(19,73): error TS1005: ',' expected.
+src/simulator/voting.controller.ts(19,76): error TS1005: ',' expected.
+src/simulator/voting.controller.ts(19,83): error TS1005: ',' expected.

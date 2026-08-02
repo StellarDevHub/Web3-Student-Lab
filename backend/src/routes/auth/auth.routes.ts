@@ -1,10 +1,13 @@
 import { Request, Response, Router } from 'express';
 import { authenticate } from '../../auth/auth.middleware.js';
-import { login, register } from '../../auth/auth.service.js';
+import { getProfileStatusByWallet, login, register } from '../../auth/auth.service.js';
+import { blacklistAccessToken, rotateRefreshToken } from '../../auth/token.service.js';
 import { LoginRequest } from '../../auth/types.js';
-import { loginSchema, registerSchema } from '../../auth/validation.schemas.js';
+import { loginSchema, registerSchema, web3VerifySchema } from '../../auth/validation.schemas.js';
+import { createNonce, verifySignature } from '../../auth/web3.service.js';
+import { slidingWindowRateLimiter } from '../../middleware/rateLimiter.js';
 import { validateRequest } from '../../utils/validation.js';
-import { rotateRefreshToken, blacklistAccessToken } from '../../auth/token.service.js';
+import { auditAction } from '../../middleware/audit.js';
 
 const router = Router();
 
@@ -13,10 +16,14 @@ const router = Router();
  * @desc    Register a new student
  * @access  Public
  */
-router.post('/register', validateRequest(registerSchema), async (req: Request, res: Response) => {
+router.post(
+  '/register',
+  validateRequest(registerSchema),
+  auditAction('USER_REGISTER', 'User'),
+  async (req: Request, res: Response) => {
   try {
     // Request body is already validated by middleware
-    const { email, password, firstName, lastName } = req.body;
+    const { email, password, firstName, lastName, walletAddress } = req.body;
 
     // Register the student
     const authResponse = await register({
@@ -24,15 +31,41 @@ router.post('/register', validateRequest(registerSchema), async (req: Request, r
       password,
       firstName,
       lastName,
+      walletAddress,
     });
 
     res.status(201).json(authResponse);
-  } catch (error) {
-    if (error instanceof Error && error.message === 'Student with this email already exists') {
-      res.status(409).json({ error: error.message });
+  } catch (_error) {
+    if (_error instanceof Error && _error.message === 'Student with this email already exists') {
+      res.status(409).json({ error: _error.message });
+      return;
+    }
+    if (
+      _error instanceof Error &&
+      _error.message === 'This wallet is already linked to another profile'
+    ) {
+      res.status(409).json({ error: _error.message });
       return;
     }
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/profile-status', async (req: Request, res: Response) => {
+  try {
+    const walletAddress =
+      typeof req.query.walletAddress === 'string' ? req.query.walletAddress.trim() : '';
+
+    if (!walletAddress) {
+      res.status(400).json({ error: 'walletAddress is required' });
+      return;
+    }
+
+    const result = await getProfileStatusByWallet(walletAddress);
+    res.json(result);
+  } catch (_error) {
+    console.error("PROFILE STATUS ERROR:", _error);
+    res.status(500).json({ error: 'Failed to fetch profile status' });
   }
 });
 
@@ -41,7 +74,11 @@ router.post('/register', validateRequest(registerSchema), async (req: Request, r
  * @desc    Login student
  * @access  Public
  */
-router.post('/login', validateRequest(loginSchema), async (req: Request, res: Response) => {
+router.post(
+  '/login',
+  validateRequest(loginSchema),
+  auditAction('USER_LOGIN', 'User'),
+  async (req: Request, res: Response) => {
   const { email, password }: LoginRequest = req.body;
 
   try {
@@ -49,9 +86,9 @@ router.post('/login', validateRequest(loginSchema), async (req: Request, res: Re
     const authResponse = await login({ email, password });
 
     res.json(authResponse);
-  } catch (error) {
-    if (error instanceof Error && error.message === 'Invalid credentials') {
-      res.status(401).json({ error: error.message });
+  } catch (_error) {
+    if (_error instanceof Error && _error.message === 'Invalid credentials') {
+      res.status(401).json({ error: _error.message });
       return;
     }
 
@@ -84,8 +121,6 @@ router.get('/me', authenticate, (req: Request, res: Response) => {
   res.json({ user: req.user });
 });
 
-
-
 /**
  * @route   POST /api/auth/refresh
  * @desc    Rotate refresh token
@@ -102,7 +137,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
   try {
     const tokens = await rotateRefreshToken(refreshToken);
     res.json(tokens);
-  } catch (error) {
+  } catch (_error) {
     res.status(401).json({ error: 'Invalid or expired refresh token' });
   }
 });
@@ -112,7 +147,11 @@ router.post('/refresh', async (req: Request, res: Response) => {
  * @desc    Logout student and blacklist current access token
  * @access  Private
  */
-router.post('/logout', authenticate, async (req: Request, res: Response) => {
+router.post(
+  '/logout',
+  authenticate,
+  auditAction('USER_LOGOUT', 'User'),
+  async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.split(' ')[1];
 
@@ -122,6 +161,83 @@ router.post('/logout', authenticate, async (req: Request, res: Response) => {
   }
 
   res.json({ message: 'Logged out successfully' });
+});
+
+/**
+ * @route   GET /api/auth/nonce
+ * @desc    Generate a cryptographic nonce for Web3 wallet authentication
+ * @access  Public
+ */
+router.get(
+  '/nonce',
+  slidingWindowRateLimiter({
+    windowMs: 60 * 1000, // 1 minute
+    limit: 10, // 10 requests per minute per IP
+    keyPrefix: 'rl:nonce',
+  }),
+  async (req: Request, res: Response) => {
+    try {
+      const { walletAddress } = req.query;
+
+      if (!walletAddress || typeof walletAddress !== 'string') {
+        res.status(400).json({ error: 'Wallet address is required' });
+        return;
+      }
+
+      // Validate wallet address format
+      if (!/^G[A-Z2-7]{55}$/.test(walletAddress)) {
+        res.status(400).json({ error: 'Invalid wallet address format' });
+        return;
+      }
+
+      const nonce = await createNonce(walletAddress);
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+      res.json({
+        nonce,
+        expiresAt: expiresAt.toISOString(),
+      });
+    } catch (error) {
+      console.error('Nonce generation error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/**
+ * @route   POST /api/auth/verify
+ * @desc    Verify Web3 wallet signature and authenticate user
+ * @access  Public
+ */
+router.post(
+  '/verify',
+  validateRequest(web3VerifySchema),
+  auditAction('WEB3_LOGIN', 'User'),
+  async (req: Request, res: Response) => {
+  try {
+    const { walletAddress, signature, nonce } = req.body;
+
+    const authResponse = await verifySignature(walletAddress, signature, nonce);
+
+    res.json(authResponse);
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === 'Invalid or expired nonce') {
+        res.status(401).json({ error: error.message });
+        return;
+      }
+      if (
+        error.message === 'Signature verification failed' ||
+        error.message === 'Invalid signature format'
+      ) {
+        res.status(401).json({ error: 'Invalid signature' });
+        return;
+      }
+    }
+
+    console.error('Signature verification error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 export default router;

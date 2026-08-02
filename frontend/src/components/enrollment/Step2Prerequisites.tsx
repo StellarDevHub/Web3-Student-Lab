@@ -89,16 +89,16 @@ export function Step2Prerequisites({
 
   return (
     <div className="space-y-6">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-black text-white uppercase tracking-wider mb-2">
+      <div className="mb-8 text-center">
+        <h2 className="mb-2 text-2xl font-black tracking-wider text-white uppercase">
           Prerequisites Check
         </h2>
-        <p className="text-zinc-400 text-sm">
+        <p className="text-sm text-zinc-400">
           Verify your qualifications or complete the skill assessment
         </p>
       </div>
 
-      <div className="flex gap-2 mb-6">
+      <div className="mb-6 flex gap-2">
         {[
           { id: 'check', label: 'Check', icon: '✓' },
           { id: 'assessment', label: 'Assessment', icon: '📝' },
@@ -107,7 +107,7 @@ export function Step2Prerequisites({
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
-            className={`flex-1 py-3 px-4 rounded-lg font-medium text-sm transition-all ${
+            className={`flex-1 rounded-lg px-4 py-3 text-sm font-medium transition-all ${
               activeTab === tab.id
                 ? 'bg-red-600 text-white'
                 : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
@@ -123,12 +123,17 @@ export function Step2Prerequisites({
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-red-500/10 border border-red-500/30 rounded-lg p-4"
+          className="rounded-lg border border-red-500/30 bg-red-500/10 p-4"
         >
           {errors.map((error, index) => (
-            <p key={index} className="text-red-400 text-sm flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <p key={index} className="flex items-center gap-2 text-sm text-red-400">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
               {error}
             </p>
@@ -138,13 +143,18 @@ export function Step2Prerequisites({
 
       {activeTab === 'check' && (
         <div className="space-y-4">
-          <h3 className="font-bold text-white mb-4">Required Prerequisites</h3>
+          <h3 className="mb-4 font-bold text-white">Required Prerequisites</h3>
 
           {coursePrerequisites.length === 0 ? (
-            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-              <p className="text-green-400 flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-4">
+              <p className="flex items-center gap-2 text-green-400">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
                 </svg>
                 No prerequisites required for this course
               </p>
@@ -156,24 +166,34 @@ export function Step2Prerequisites({
                 return (
                   <div
                     key={prereq}
-                    className={`flex items-center justify-between p-4 rounded-lg border ${
+                    className={`flex items-center justify-between rounded-lg border p-4 ${
                       isCompleted
-                        ? 'bg-green-500/10 border-green-500/30'
-                        : 'bg-zinc-900 border-zinc-800'
+                        ? 'border-green-500/30 bg-green-500/10'
+                        : 'border-zinc-800 bg-zinc-900'
                     }`}
                   >
                     <span className={isCompleted ? 'text-green-400' : 'text-zinc-400'}>
                       {prereq}
                     </span>
                     {isCompleted ? (
-                      <span className="text-green-500 text-sm flex items-center gap-1">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      <span className="flex items-center gap-1 text-sm text-green-500">
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={3}
+                            d="M5 13l4 4L19 7"
+                          />
                         </svg>
                         Completed
                       </span>
                     ) : (
-                      <span className="text-amber-500 text-sm">Required</span>
+                      <span className="text-sm text-amber-500">Required</span>
                     )}
                   </div>
                 );
@@ -182,10 +202,10 @@ export function Step2Prerequisites({
           )}
 
           {hasMissingPrereqs && (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mt-4">
-              <p className="text-amber-400 text-sm">
-                Missing prerequisites detected. You can either complete the skill assessment
-                or finish the prerequisite courses first.
+            <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+              <p className="text-sm text-amber-400">
+                Missing prerequisites detected. You can either complete the skill assessment or
+                finish the prerequisite courses first.
               </p>
             </div>
           )}
@@ -196,12 +216,13 @@ export function Step2Prerequisites({
         <div className="space-y-6">
           {!showResults ? (
             <>
-              <p className="text-zinc-400 text-sm mb-4">
-                Answer these questions to demonstrate your knowledge. Score 60% or higher to proceed.
+              <p className="mb-4 text-sm text-zinc-400">
+                Answer these questions to demonstrate your knowledge. Score 60% or higher to
+                proceed.
               </p>
               {SKILL_QUESTIONS.map((q, index) => (
-                <div key={q.id} className="bg-zinc-900 rounded-lg p-4">
-                  <p className="font-medium text-white mb-3">
+                <div key={q.id} className="rounded-lg bg-zinc-900 p-4">
+                  <p className="mb-3 font-medium text-white">
                     {index + 1}. {q.question}
                   </p>
                   <div className="space-y-2">
@@ -209,7 +230,7 @@ export function Step2Prerequisites({
                       <button
                         key={option.id}
                         onClick={() => handleAnswer(q.id, option.id)}
-                        className={`w-full text-left p-3 rounded-lg border transition-all ${
+                        className={`w-full rounded-lg border p-3 text-left transition-all ${
                           answers[q.id] === option.id
                             ? 'border-red-500 bg-red-500/10 text-white'
                             : 'border-zinc-700 text-zinc-400 hover:border-zinc-600'
@@ -228,13 +249,11 @@ export function Step2Prerequisites({
               animate={{ opacity: 1, scale: 1 }}
               className={`rounded-lg p-6 text-center ${
                 data.skillAssessmentScore >= 60
-                  ? 'bg-green-500/10 border border-green-500/30'
-                  : 'bg-red-500/10 border border-red-500/30'
+                  ? 'border border-green-500/30 bg-green-500/10'
+                  : 'border border-red-500/30 bg-red-500/10'
               }`}
             >
-              <div className="text-4xl font-black mb-2">
-                {data.skillAssessmentScore}%
-              </div>
+              <div className="mb-2 text-4xl font-black">{data.skillAssessmentScore}%</div>
               <p className={data.skillAssessmentScore >= 60 ? 'text-green-400' : 'text-red-400'}>
                 {data.skillAssessmentScore >= 60
                   ? 'Congratulations! You passed the assessment.'
@@ -247,7 +266,7 @@ export function Step2Prerequisites({
                     setShowResults(false);
                     onUpdate({ skillAssessmentScore: 0, hasRequiredSkills: false });
                   }}
-                  className="mt-4 px-4 py-2 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700"
+                  className="mt-4 rounded-lg bg-zinc-800 px-4 py-2 text-white hover:bg-zinc-700"
                 >
                   Retry Assessment
                 </button>
@@ -259,23 +278,23 @@ export function Step2Prerequisites({
 
       {activeTab === 'materials' && (
         <div className="space-y-4">
-          <p className="text-zinc-400 text-sm mb-4">
+          <p className="mb-4 text-sm text-zinc-400">
             Recommended preparation materials to help you succeed:
           </p>
           {PREP_MATERIALS.map((material) => (
             <div
               key={material.id}
-              className="flex items-center justify-between p-4 bg-zinc-900 rounded-lg border border-zinc-800"
+              className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 p-4"
             >
               <div>
                 <h4 className="font-medium text-white">{material.title}</h4>
-                <p className="text-zinc-500 text-sm">
+                <p className="text-sm text-zinc-500">
                   {material.type} • {material.duration}
                 </p>
               </div>
               <button
                 onClick={handleMaterialView}
-                className="px-3 py-2 bg-zinc-800 text-zinc-300 rounded-lg text-sm hover:bg-zinc-700 transition-colors"
+                className="rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-700"
               >
                 View
               </button>
@@ -285,10 +304,15 @@ export function Step2Prerequisites({
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="text-green-400 text-sm flex items-center gap-2"
+              className="flex items-center gap-2 text-sm text-green-400"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
               </svg>
               Prep materials viewed
             </motion.p>

@@ -23,7 +23,7 @@ class SecurityService {
   public async rotateKeys(): Promise<void> {
     try {
       const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
-        modulusLength: 2048,
+        modulusLength: 4096,
         publicKeyEncoding: {
           type: 'spki',
           format: 'pem',

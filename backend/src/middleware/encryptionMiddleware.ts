@@ -13,8 +13,9 @@ interface EncryptedPayload {
  */
 export const decryptionMiddleware = (req: Request, res: Response, next: NextFunction) => {
   // Only process if it has the encrypted flag or specific structure
-  const isEncrypted = req.get('X-Payload-Encryption') === 'true' ||
-                      (req.body && req.body.encryptedData && req.body.keyId);
+  const isEncrypted =
+    req.get('X-Payload-Encryption') === 'true' ||
+    (req.body && req.body.encryptedData && req.body.keyId);
 
   if (!isEncrypted) {
     return next();

@@ -11,11 +11,7 @@ interface Step1CourseSelectionProps {
   errors: string[];
 }
 
-export function Step1CourseSelection({
-  data,
-  onUpdate,
-  errors,
-}: Step1CourseSelectionProps) {
+export function Step1CourseSelection({ data, onUpdate, errors }: Step1CourseSelectionProps) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -53,20 +49,18 @@ export function Step1CourseSelection({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="w-12 h-12 border-4 border-red-600/30 border-t-red-600 rounded-full animate-spin" />
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-red-600/30 border-t-red-600" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-black text-white uppercase tracking-wider mb-2">
+      <div className="mb-8 text-center">
+        <h2 className="mb-2 text-2xl font-black tracking-wider text-white uppercase">
           Select Your Module
         </h2>
-        <p className="text-zinc-400 text-sm">
-          Choose a course to begin your learning journey
-        </p>
+        <p className="text-sm text-zinc-400">Choose a course to begin your learning journey</p>
       </div>
 
       <div className="relative">
@@ -75,10 +69,10 @@ export function Step1CourseSelection({
           placeholder="Search courses..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full px-4 py-3 pl-12 rounded-lg bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500 focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 pl-12 text-white placeholder-zinc-500 transition-all focus:border-transparent focus:ring-2 focus:ring-red-500"
         />
         <svg
-          className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500"
+          className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-zinc-500"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -96,12 +90,17 @@ export function Step1CourseSelection({
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-red-500/10 border border-red-500/30 rounded-lg p-4"
+          className="rounded-lg border border-red-500/30 bg-red-500/10 p-4"
         >
           {errors.map((error, index) => (
-            <p key={index} className="text-red-400 text-sm flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <p key={index} className="flex items-center gap-2 text-sm text-red-400">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
               {error}
             </p>
@@ -109,7 +108,7 @@ export function Step1CourseSelection({
         </motion.div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto pr-2">
+      <div className="grid max-h-[400px] grid-cols-1 gap-4 overflow-y-auto pr-2 md:grid-cols-2">
         {filteredCourses.map((course) => {
           const isSelected = data.selectedCourseId === course.id;
 
@@ -119,24 +118,29 @@ export function Step1CourseSelection({
               onClick={() => handleSelectCourse(course)}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className={`p-4 rounded-xl border-2 text-left transition-all ${
+              className={`rounded-xl border-2 p-4 text-left transition-all ${
                 isSelected
                   ? 'border-red-500 bg-red-500/10'
                   : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
               }`}
             >
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="font-bold text-white text-sm">{course.title}</h3>
-                <span className="text-xs font-mono text-red-500 bg-red-500/10 px-2 py-1 rounded">
+              <div className="mb-2 flex items-start justify-between">
+                <h3 className="text-sm font-bold text-white">{course.title}</h3>
+                <span className="rounded bg-red-500/10 px-2 py-1 font-mono text-xs text-red-500">
                   {course.credits} CR
                 </span>
               </div>
-              <p className="text-zinc-400 text-xs line-clamp-2 mb-3">
+              <p className="mb-3 line-clamp-2 text-xs text-zinc-400">
                 {course.description || 'No description available'}
               </p>
               <div className="flex items-center gap-2 text-xs text-zinc-500">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                  />
                 </svg>
                 {course.instructor}
               </div>
@@ -144,10 +148,20 @@ export function Step1CourseSelection({
                 <motion.div
                   initial={{ opacity: 0, scale: 0 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="absolute top-2 right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center"
+                  className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500"
                 >
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  <svg
+                    className="h-4 w-4 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={3}
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
                 </motion.div>
               )}
@@ -157,7 +171,7 @@ export function Step1CourseSelection({
       </div>
 
       {filteredCourses.length === 0 && (
-        <div className="text-center py-8">
+        <div className="py-8 text-center">
           <p className="text-zinc-500">No courses found matching your search</p>
         </div>
       )}

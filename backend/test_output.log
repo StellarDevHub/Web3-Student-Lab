@@ -1,0 +1,1105 @@
+ts-jest[config] (WARN) 
+    The "ts-jest" config option "isolatedModules" is deprecated and will be removed in v30.0.0. Please use "isolatedModules: true" in /home/knights/Documents/Drips/Web3-Student-Lab/backend/tsconfig.json instead, see https://www.typescriptlang.org/tsconfig/#isolatedModules
+  
+  console.log
+    ◇ injected env (9) from .env.test // tip: ◈ secrets for agents [www.dotenvx.com]
+
+      at _log (node_modules/.pnpm/dotenv@17.4.2/node_modules/dotenv/lib/main.js:131:11)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-1 courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: returned from cache: {
+      id: 'progress-1',
+      studentId: 'student-1',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1' ],
+      currentModuleId: 'course-1-module-1',
+      percentage: 25,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:22.887Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:22.887Z,
+      updatedAt: 2026-06-24T11:29:22.887Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:222:13)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-1 courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: {
+      id: 'progress-db-1',
+      studentId: 'student-1',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1', 'course-1-lesson-2' ],
+      currentModuleId: 'course-1-module-1',
+      percentage: 50,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:22.979Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:22.979Z,
+      updatedAt: 2026-06-24T11:29:22.979Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning parsed DB progress: {
+      id: 'progress-db-1',
+      studentId: 'student-1',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1', 'course-1-lesson-2' ],
+      currentModuleId: 'course-1-module-1',
+      percentage: 50,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:22.979Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:22.979Z,
+      updatedAt: 2026-06-24T11:29:22.979Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:241:15)
+
+  console.log
+    DEBUG getStudentProgress: studentId: new-student courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: null
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning initial progress: {
+      id: 'progress-new-student-course-1',
+      studentId: 'new-student',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: 'course-1-module-1',
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:22.997Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:22.997Z,
+      updatedAt: 2026-06-24T11:29:22.997Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:272:11)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-new courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: null
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning initial progress: {
+      id: 'progress-student-new-course-1',
+      studentId: 'student-new',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: 'course-1-module-1',
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.009Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.009Z,
+      updatedAt: 2026-06-24T11:29:23.009Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:272:11)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-fallback courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.warn
+    Database error in getStudentProgress, using mock store: Error: DB Connection failed
+        at Object.<anonymous> (/home/knights/Documents/Drips/Web3-Student-Lab/backend/tests/progress.unit.test.ts:166:50)
+        at Promise.finally.completed (/home/knights/Documents/Drips/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@30.4.2/node_modules/jest-circus/build/jestAdapterInit.js:1561:28)
+        at new Promise (<anonymous>)
+        at callAsyncCircusFn (/home/knights/Documents/Drips/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@30.4.2/node_modules/jest-circus/build/jestAdapterInit.js:1501:10)
+        at _callCircusTest (/home/knights/Documents/Drips/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@30.4.2/node_modules/jest-circus/build/jestAdapterInit.js:1011:40)
+        at _runTest (/home/knights/Documents/Drips/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@30.4.2/node_modules/jest-circus/build/jestAdapterInit.js:951:3)
+        at /home/knights/Documents/Drips/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@30.4.2/node_modules/jest-circus/build/jestAdapterInit.js:853:7
+        at _runTestsForDescribeBlock (/home/knights/Documents/Drips/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@30.4.2/node_modules/jest-circus/build/jestAdapterInit.js:866:11)
+        at _runTestsForDescribeBlock (/home/knights/Documents/Drips/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@30.4.2/node_modules/jest-circus/build/jestAdapterInit.js:861:11)
+        at _runTestsForDescribeBlock (/home/knights/Documents/Drips/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@30.4.2/node_modules/jest-circus/build/jestAdapterInit.js:861:11)
+        at run (/home/knights/Documents/Drips/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@30.4.2/node_modules/jest-circus/build/jestAdapterInit.js:765:3)
+        at runAndTransformResultsToJestFormat (/home/knights/Documents/Drips/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@30.4.2/node_modules/jest-circus/build/jestAdapterInit.js:1993:21)
+        at jestAdapter (/home/knights/Documents/Drips/Web3-Student-Lab/backend/node_modules/.pnpm/jest-circus@30.4.2/node_modules/jest-circus/build/runner.js:111:19)
+        at runTestInternal (/home/knights/Documents/Drips/Web3-Student-Lab/backend/node_modules/.pnpm/jest-runner@30.4.2/node_modules/jest-runner/build/index.js:276:16)
+        at runTest (/home/knights/Documents/Drips/Web3-Student-Lab/backend/node_modules/.pnpm/jest-runner@30.4.2/node_modules/jest-runner/build/index.js:344:7)
+
+      243 |     }
+      244 |   } catch (_error) {
+    > 245 |     console.warn('Database error in getStudentProgress, using mock store:', _error);
+          |             ^
+      246 |   }
+      247 |
+      248 |   // Fallback to mock store
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:245:13)
+      at Object.<anonymous> (tests/progress.unit.test.ts:169:22)
+
+  console.log
+    DEBUG getStudentProgress: returning initial progress: {
+      id: 'progress-student-fallback-course-1',
+      studentId: 'student-fallback',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: 'course-1-module-1',
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.055Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.055Z,
+      updatedAt: 2026-06-24T11:29:23.055Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:272:11)
+
+  console.log
+    DEBUG getStudentProgress: studentId: cache-test-student courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: {
+      id: 'progress-1',
+      studentId: 'cache-test-student',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.059Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.059Z,
+      updatedAt: 2026-06-24T11:29:23.059Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning parsed DB progress: {
+      id: 'progress-1',
+      studentId: 'cache-test-student',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.059Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.059Z,
+      updatedAt: 2026-06-24T11:29:23.059Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:241:15)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-A courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-B courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: null
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+          at async Promise.all (index 0)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: null
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+          at async Promise.all (index 1)
+
+  console.log
+    DEBUG getStudentProgress: returning initial progress: {
+      id: 'progress-student-A-course-1',
+      studentId: 'student-A',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: 'course-1-module-1',
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.071Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.071Z,
+      updatedAt: 2026-06-24T11:29:23.071Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:272:11)
+          at async Promise.all (index 0)
+
+  console.log
+    DEBUG getStudentProgress: returning initial progress: {
+      id: 'progress-student-B-course-1',
+      studentId: 'student-B',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: 'course-1-module-1',
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.072Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.072Z,
+      updatedAt: 2026-06-24T11:29:23.072Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:272:11)
+          at async Promise.all (index 1)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-add courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: null
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning initial progress: {
+      id: 'progress-student-add-course-1',
+      studentId: 'student-add',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: 'course-1-module-1',
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.095Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.095Z,
+      updatedAt: 2026-06-24T11:29:23.095Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:272:11)
+
+  console.log
+    DEBUG: studentId: student-add existingProgress: {
+      id: 'progress-student-add-course-1',
+      studentId: 'student-add',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: 'course-1-module-1',
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.095Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.095Z,
+      updatedAt: 2026-06-24T11:29:23.095Z
+    } completedLessonSet: []
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:301:11)
+
+  console.error
+    Error during lesson completion webhook trigger: TypeError: Cannot read properties of undefined (reading 'findUnique')
+        at updateStudentProgress (/home/knights/Documents/Drips/Web3-Student-Lab/backend/src/routes/learning/learning.service.ts:319:46)
+        at Object.<anonymous> (/home/knights/Documents/Drips/Web3-Student-Lab/backend/tests/progress.unit.test.ts:256:22)
+
+      361 |         }
+      362 |       } catch (err) {
+    > 363 |         console.error('Error during lesson completion webhook trigger:', err);
+          |                 ^
+      364 |       }
+      365 |     }
+      366 |     completedLessonSet.add(input.lessonId);
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:363:17)
+      at Object.<anonymous> (tests/progress.unit.test.ts:256:22)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-remove courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: {
+      id: 'progress-1',
+      studentId: 'student-add',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: 'course-1-module-1',
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.092Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.092Z,
+      updatedAt: 2026-06-24T11:29:23.092Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning parsed DB progress: {
+      id: 'progress-1',
+      studentId: 'student-add',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: 'course-1-module-1',
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.092Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.092Z,
+      updatedAt: 2026-06-24T11:29:23.092Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:241:15)
+
+  console.log
+    DEBUG: studentId: student-remove existingProgress: {
+      id: 'progress-1',
+      studentId: 'student-add',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: 'course-1-module-1',
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.092Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.092Z,
+      updatedAt: 2026-06-24T11:29:23.092Z
+    } completedLessonSet: []
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:301:11)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-nodedup courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: {
+      id: 'progress-1',
+      studentId: 'student-remove',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1' ],
+      currentModuleId: 'course-1-module-1',
+      percentage: 25,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:23.106Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.106Z,
+      updatedAt: 2026-06-24T11:29:23.106Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning parsed DB progress: {
+      id: 'progress-1',
+      studentId: 'student-remove',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1' ],
+      currentModuleId: 'course-1-module-1',
+      percentage: 25,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:23.106Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.106Z,
+      updatedAt: 2026-06-24T11:29:23.106Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:241:15)
+
+  console.log
+    DEBUG: studentId: student-nodedup existingProgress: {
+      id: 'progress-1',
+      studentId: 'student-remove',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1' ],
+      currentModuleId: 'course-1-module-1',
+      percentage: 25,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:23.106Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.106Z,
+      updatedAt: 2026-06-24T11:29:23.106Z
+    } completedLessonSet: [ 'course-1-lesson-1' ]
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:301:11)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-pct100 courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: {
+      id: 'progress-1',
+      studentId: 'student-nodedup',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1' ],
+      currentModuleId: 'course-1-module-1',
+      percentage: 25,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:23.113Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.113Z,
+      updatedAt: 2026-06-24T11:29:23.113Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning parsed DB progress: {
+      id: 'progress-1',
+      studentId: 'student-nodedup',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1' ],
+      currentModuleId: 'course-1-module-1',
+      percentage: 25,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:23.113Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.113Z,
+      updatedAt: 2026-06-24T11:29:23.113Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:241:15)
+
+  console.log
+    DEBUG: studentId: student-pct100 existingProgress: {
+      id: 'progress-1',
+      studentId: 'student-nodedup',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1' ],
+      currentModuleId: 'course-1-module-1',
+      percentage: 25,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:23.113Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.113Z,
+      updatedAt: 2026-06-24T11:29:23.113Z
+    } completedLessonSet: [ 'course-1-lesson-1' ]
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:301:11)
+
+  console.error
+    Error during lesson completion webhook trigger: TypeError: Cannot read properties of undefined (reading 'findUnique')
+        at updateStudentProgress (/home/knights/Documents/Drips/Web3-Student-Lab/backend/src/routes/learning/learning.service.ts:319:46)
+        at Object.<anonymous> (/home/knights/Documents/Drips/Web3-Student-Lab/backend/tests/progress.unit.test.ts:367:22)
+
+      361 |         }
+      362 |       } catch (err) {
+    > 363 |         console.error('Error during lesson completion webhook trigger:', err);
+          |                 ^
+      364 |       }
+      365 |     }
+      366 |     completedLessonSet.add(input.lessonId);
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:363:17)
+      at Object.<anonymous> (tests/progress.unit.test.ts:367:22)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-explicit courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: {
+      id: 'progress-1',
+      studentId: 'student-pct100',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1', 'course-1-lesson-2', 'course-1-lesson-3' ],
+      currentModuleId: 'course-1-module-2',
+      percentage: 75,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:23.122Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.122Z,
+      updatedAt: 2026-06-24T11:29:23.122Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning parsed DB progress: {
+      id: 'progress-1',
+      studentId: 'student-pct100',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1', 'course-1-lesson-2', 'course-1-lesson-3' ],
+      currentModuleId: 'course-1-module-2',
+      percentage: 75,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:23.122Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.122Z,
+      updatedAt: 2026-06-24T11:29:23.122Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:241:15)
+
+  console.log
+    DEBUG: studentId: student-explicit existingProgress: {
+      id: 'progress-1',
+      studentId: 'student-pct100',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1', 'course-1-lesson-2', 'course-1-lesson-3' ],
+      currentModuleId: 'course-1-module-2',
+      percentage: 75,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:23.122Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.122Z,
+      updatedAt: 2026-06-24T11:29:23.122Z
+    } completedLessonSet: [ 'course-1-lesson-1', 'course-1-lesson-2', 'course-1-lesson-3' ]
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:301:11)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-activity courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: {
+      id: 'progress-1',
+      studentId: 'student-explicit',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.132Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.132Z,
+      updatedAt: 2026-06-24T11:29:23.132Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning parsed DB progress: {
+      id: 'progress-1',
+      studentId: 'student-explicit',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.132Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.132Z,
+      updatedAt: 2026-06-24T11:29:23.132Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:241:15)
+
+  console.log
+    DEBUG: studentId: student-activity existingProgress: {
+      id: 'progress-1',
+      studentId: 'student-explicit',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.132Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.132Z,
+      updatedAt: 2026-06-24T11:29:23.132Z
+    } completedLessonSet: []
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:301:11)
+
+  console.error
+    Error during lesson completion webhook trigger: TypeError: Cannot read properties of undefined (reading 'findUnique')
+        at updateStudentProgress (/home/knights/Documents/Drips/Web3-Student-Lab/backend/src/routes/learning/learning.service.ts:319:46)
+        at Object.<anonymous> (/home/knights/Documents/Drips/Web3-Student-Lab/backend/tests/progress.unit.test.ts:436:7)
+
+      361 |         }
+      362 |       } catch (err) {
+    > 363 |         console.error('Error during lesson completion webhook trigger:', err);
+          |                 ^
+      364 |       }
+      365 |     }
+      366 |     completedLessonSet.add(input.lessonId);
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:363:17)
+      at Object.<anonymous> (tests/progress.unit.test.ts:436:7)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-dedup courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: {
+      id: 'progress-1',
+      studentId: 'student-activity',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.142Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.142Z,
+      updatedAt: 2026-06-24T11:29:23.142Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning parsed DB progress: {
+      id: 'progress-1',
+      studentId: 'student-activity',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.142Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.142Z,
+      updatedAt: 2026-06-24T11:29:23.142Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:241:15)
+
+  console.log
+    DEBUG: studentId: student-dedup existingProgress: {
+      id: 'progress-1',
+      studentId: 'student-activity',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.142Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.142Z,
+      updatedAt: 2026-06-24T11:29:23.142Z
+    } completedLessonSet: []
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:301:11)
+
+  console.error
+    Error during lesson completion webhook trigger: TypeError: Cannot read properties of undefined (reading 'findUnique')
+        at updateStudentProgress (/home/knights/Documents/Drips/Web3-Student-Lab/backend/src/routes/learning/learning.service.ts:319:46)
+        at Object.<anonymous> (/home/knights/Documents/Drips/Web3-Student-Lab/backend/tests/progress.unit.test.ts:464:7)
+
+      361 |         }
+      362 |       } catch (err) {
+    > 363 |         console.error('Error during lesson completion webhook trigger:', err);
+          |                 ^
+      364 |       }
+      365 |     }
+      366 |     completedLessonSet.add(input.lessonId);
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:363:17)
+      at Object.<anonymous> (tests/progress.unit.test.ts:464:7)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-fallback-upsert courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: {
+      id: 'progress-1',
+      studentId: 'student-dedup',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1' ],
+      currentModuleId: 'course-1-module-1',
+      percentage: 25,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:23.153Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.153Z,
+      updatedAt: 2026-06-24T11:29:23.153Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning parsed DB progress: {
+      id: 'progress-1',
+      studentId: 'student-dedup',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1' ],
+      currentModuleId: 'course-1-module-1',
+      percentage: 25,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:23.153Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.153Z,
+      updatedAt: 2026-06-24T11:29:23.153Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:241:15)
+
+  console.log
+    DEBUG: studentId: student-fallback-upsert existingProgress: {
+      id: 'progress-1',
+      studentId: 'student-dedup',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1' ],
+      currentModuleId: 'course-1-module-1',
+      percentage: 25,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:23.153Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.153Z,
+      updatedAt: 2026-06-24T11:29:23.153Z
+    } completedLessonSet: [ 'course-1-lesson-1' ]
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:301:11)
+
+  console.warn
+    Database error in updateStudentProgress, updated in mock store only
+
+      421 |     return toProgress(progress);
+      422 |   } catch (_error) {
+    > 423 |     console.warn('Database error in updateStudentProgress, updated in mock store only');
+          |             ^
+      424 |     await invalidateUserProgressCache(studentId);
+      425 |     return updatedProgress;
+      426 |   }
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:423:13)
+      at Object.<anonymous> (tests/progress.unit.test.ts:492:22)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-cache-invalidate courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: {
+      id: 'progress-1',
+      studentId: 'student-fallback-upsert',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.171Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.171Z,
+      updatedAt: 2026-06-24T11:29:23.171Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning parsed DB progress: {
+      id: 'progress-1',
+      studentId: 'student-fallback-upsert',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.171Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.171Z,
+      updatedAt: 2026-06-24T11:29:23.171Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:241:15)
+
+  console.log
+    DEBUG: studentId: student-cache-invalidate existingProgress: {
+      id: 'progress-1',
+      studentId: 'student-fallback-upsert',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.171Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.171Z,
+      updatedAt: 2026-06-24T11:29:23.171Z
+    } completedLessonSet: []
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:301:11)
+
+  console.error
+    Error during lesson completion webhook trigger: TypeError: Cannot read properties of undefined (reading 'findUnique')
+        at updateStudentProgress (/home/knights/Documents/Drips/Web3-Student-Lab/backend/src/routes/learning/learning.service.ts:319:46)
+        at Object.<anonymous> (/home/knights/Documents/Drips/Web3-Student-Lab/backend/tests/progress.unit.test.ts:525:7)
+
+      361 |         }
+      362 |       } catch (err) {
+    > 363 |         console.error('Error during lesson completion webhook trigger:', err);
+          |                 ^
+      364 |       }
+      365 |     }
+      366 |     completedLessonSet.add(input.lessonId);
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:363:17)
+      at Object.<anonymous> (tests/progress.unit.test.ts:525:7)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-completed-at courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: {
+      id: 'progress-1',
+      studentId: 'student-cache-invalidate',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.182Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.182Z,
+      updatedAt: 2026-06-24T11:29:23.182Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning parsed DB progress: {
+      id: 'progress-1',
+      studentId: 'student-cache-invalidate',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.182Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.182Z,
+      updatedAt: 2026-06-24T11:29:23.182Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:241:15)
+
+  console.log
+    DEBUG: studentId: student-completed-at existingProgress: {
+      id: 'progress-1',
+      studentId: 'student-cache-invalidate',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.182Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.182Z,
+      updatedAt: 2026-06-24T11:29:23.182Z
+    } completedLessonSet: []
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:301:11)
+
+  console.error
+    Error during lesson completion webhook trigger: TypeError: Cannot read properties of undefined (reading 'findUnique')
+        at updateStudentProgress (/home/knights/Documents/Drips/Web3-Student-Lab/backend/src/routes/learning/learning.service.ts:319:46)
+        at Object.<anonymous> (/home/knights/Documents/Drips/Web3-Student-Lab/backend/tests/progress.unit.test.ts:564:22)
+
+      361 |         }
+      362 |       } catch (err) {
+    > 363 |         console.error('Error during lesson completion webhook trigger:', err);
+          |                 ^
+      364 |       }
+      365 |     }
+      366 |     completedLessonSet.add(input.lessonId);
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:363:17)
+      at Object.<anonymous> (tests/progress.unit.test.ts:564:22)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-module-id courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: {
+      id: 'progress-1',
+      studentId: 'student-completed-at',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1', 'course-1-lesson-2', 'course-1-lesson-3' ],
+      currentModuleId: 'course-1-module-2',
+      percentage: 75,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:23.194Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.194Z,
+      updatedAt: 2026-06-24T11:29:23.194Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning parsed DB progress: {
+      id: 'progress-1',
+      studentId: 'student-completed-at',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1', 'course-1-lesson-2', 'course-1-lesson-3' ],
+      currentModuleId: 'course-1-module-2',
+      percentage: 75,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:23.194Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.194Z,
+      updatedAt: 2026-06-24T11:29:23.194Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:241:15)
+
+  console.log
+    DEBUG: studentId: student-module-id existingProgress: {
+      id: 'progress-1',
+      studentId: 'student-completed-at',
+      courseId: 'course-1',
+      completedLessons: [ 'course-1-lesson-1', 'course-1-lesson-2', 'course-1-lesson-3' ],
+      currentModuleId: 'course-1-module-2',
+      percentage: 75,
+      status: 'in_progress',
+      lastAccessedAt: 2026-06-24T11:29:23.194Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.194Z,
+      updatedAt: 2026-06-24T11:29:23.194Z
+    } completedLessonSet: [ 'course-1-lesson-1', 'course-1-lesson-2', 'course-1-lesson-3' ]
+
+      at updateStudentProgress (src/routes/learning/learning.service.ts:301:11)
+
+  console.log
+    DEBUG getStudentProgress: studentId: student-zero courseId: course-1
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: {
+      id: 'progress-1',
+      studentId: 'student-module-id',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.217Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.217Z,
+      updatedAt: 2026-06-24T11:29:23.217Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning parsed DB progress: {
+      id: 'progress-1',
+      studentId: 'student-module-id',
+      courseId: 'course-1',
+      completedLessons: [],
+      currentModuleId: null,
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.217Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.217Z,
+      updatedAt: 2026-06-24T11:29:23.217Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:241:15)
+
+  console.log
+    DEBUG getStudentProgress: studentId: fresh-student courseId: course-2
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:216:11)
+
+  console.log
+    DEBUG getStudentProgress: database findUnique returned: null
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:235:13)
+
+  console.log
+    DEBUG getStudentProgress: returning initial progress: {
+      id: 'progress-fresh-student-course-2',
+      studentId: 'fresh-student',
+      courseId: 'course-2',
+      completedLessons: [],
+      currentModuleId: 'course-2-module-1',
+      percentage: 0,
+      status: 'not_started',
+      lastAccessedAt: 2026-06-24T11:29:23.240Z,
+      completedAt: null,
+      createdAt: 2026-06-24T11:29:23.240Z,
+      updatedAt: 2026-06-24T11:29:23.240Z
+    }
+
+      at getStudentProgress (src/routes/learning/learning.service.ts:272:11)
+
+(node:88651) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL tests/progress.unit.test.ts
+  Progress Service - Unit Tests
+    getStudentProgress()
+      ✓ should return progress from cache when available (94 ms)
+      ✓ should fetch from database when cache misses (13 ms)
+      ✓ should return default initial progress when no record exists (12 ms)
+      ✓ should seed currentModuleId from curriculum for initial progress (7 ms)
+      ✓ should fallback to mock store when database fails (45 ms)
+      ✓ should cache database result for subsequent requests (5 ms)
+      ✓ should correctly use progress key for different student-course combinations (11 ms)
+    updateStudentProgress()
+      ✓ should throw LESSON_NOT_FOUND for invalid lesson (14 ms)
+      ✓ should add lesson to completedLessons when marking as completed (12 ms)
+      ✓ should remove lesson from completedLessons when marking as not completed (8 ms)
+      ✓ should not duplicate completed lessons on re-completion (9 ms)
+      ✓ should calculate percentage as 100 when all lessons are completed (10 ms)
+      ✓ should use explicit percentage when provided (10 ms)
+      ✓ should log student activity on new lesson completion (10 ms)
+      ✕ should not log activity when re-completing an already-completed lesson (16 ms)
+      ✓ should fallback to mock store when database upsert fails (12 ms)
+      ✓ should invalidate user progress cache after update (12 ms)
+      ✓ should set completedAt when course is completed (22 ms)
+      ✓ should update currentModuleId when completing lesson in a module (10 ms)
+    Progress Status Calculations
+      ✓ should calculate 0% for no completed lessons (5 ms)
+      ✓ should set status as not_started when no lessons completed (8 ms)
+
+  ● Progress Service - Unit Tests › updateStudentProgress() › should not log activity when re-completing an already-completed lesson
+
+    expect(jest.fn()).not.toHaveBeenCalled()
+
+    Expected number of calls: 0
+    Received number of calls: 1
+
+    1: {"data": {"action": "COMPLETED_LESSON", "courseId": "course-1", "lessonId": "course-1-lesson-1", "studentId": "student-dedup"}}
+
+      468 |
+      469 |       // Assert: Activity was NOT logged again (de-duplication)
+    > 470 |       expect(mockPrismaStudentActivityCreate).not.toHaveBeenCalled();
+          |                                                   ^
+      471 |     });
+      472 |
+      473 |     it('should fallback to mock store when database upsert fails', async () => {
+
+      at Object.<anonymous> (tests/progress.unit.test.ts:470:51)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 20 passed, 21 total
+Snapshots:   0 total
+Time:        2.668 s
+Ran all test suites matching tests/progress.unit.test.ts.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

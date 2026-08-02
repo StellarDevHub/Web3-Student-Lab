@@ -12,29 +12,54 @@ datasource db {
 }
 
 model Student {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  did          String?  @unique
-  password     String
-  firstName    String
-  lastName     String
-  walletAddress String? @unique
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                String   @id @default(cuid())
+  workspaceId       String   @default("default")
+  email             String   @unique
+  did               String?  @unique
+  password          String
+  firstName         String
+  lastName          String
+  walletAddress     String?  @unique
+  githubId          Int?     @unique
+  githubUsername    String?
+  githubAvatarUrl   String?
+  githubAccessToken String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  enrollments   Enrollment[]
-  certificates  Certificate[]
-  feedback      Feedback[]
+  enrollments      Enrollment[]
+  certificates     Certificate[]
+  feedback         Feedback[]
   learningProgress LearningProgress[]
+  canvases         Canvas[]
+  ideas            Idea[]
+  votes            Vote[]
+  hashSimulations  HashSimulation[]
 
-  @@map("students")
+  @@index([workspaceId, email])
   @@index([firstName, lastName])
   @@index([email])
   @@index([createdAt])
+  @@index([githubId])
+  @@map("students")
+}
+
+model OAuthState {
+  id        String    @id @default(cuid())
+  state     String    @unique
+  provider  String    @default("github")
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  usedAt    DateTime?
+
+  @@index([state])
+  @@index([expiresAt])
+  @@map("oauth_states")
 }
 
 model Course {
   id          String   @id @default(cuid())
+  workspaceId String   @default("default")
   title       String
   description String?
   instructor  String
@@ -42,123 +67,404 @@ model Course {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  enrollments   Enrollment[]
-  certificates  Certificate[]
-  feedback      Feedback[]
+  enrollments      Enrollment[]
+  certificates     Certificate[]
+  feedback         Feedback[]
   learningProgress LearningProgress[]
 
-  @@map("courses")
+  @@index([workspaceId, title])
   @@index([title])
   @@index([instructor])
   @@index([credits])
   @@index([createdAt])
+  @@map("courses")
 }
 
 model Certificate {
-  id               String   @id @default(cuid())
-  studentId        String
-  courseId         String
-  tokenId          String   @unique
-  issuedAt         DateTime @default(now())
-  certificateHash  String?
-  status           String   @default("pending") // MINTED, ACTIVE, REVOKED, REISSUED, EXPIRED
-  did              String?
-  metadataUri      String?
-  contractAddress  String?
-  network          String?
-  grade            String?
-  revokedAt        DateTime?
-  revocationReason String?
-  revokedBy        String?
+  id                String    @id @default(cuid())
+  workspaceId       String    @default("default")
+  studentId         String
+  courseId          String
+  tokenId           String    @unique
+  issuedAt          DateTime  @default(now())
+  certificateHash   String?
+  status            String    @default("pending") // MINTED, ACTIVE, REVOKED, REISSUED, EXPIRED
+  did               String?
+  metadataUri       String?
+  contractAddress   String?
+  network           String?
+  grade             String?
+  revokedAt         DateTime?
+  revocationReason  String?
+  revokedBy         String?
   previousVersionId String?
-  transactionHash  String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  transactionHash   String?
+  contentHash       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  student  Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  course   Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
-  @@map("certificates")
   @@index([status])
   @@index([issuedAt])
   @@index([studentId])
   @@index([courseId])
+  @@index([studentId, status])
+  @@index([courseId, issuedAt])
+  @@map("certificates")
 }
 
 model Enrollment {
-  id         String   @id @default(cuid())
-  studentId  String
-  courseId   String
-  enrolledAt DateTime @default(now())
-  status     String   @default("active")
+  id          String   @id @default(cuid())
+  workspaceId String   @default("default")
+  studentId   String
+  courseId    String
+  enrolledAt  DateTime @default(now())
+  status      String   @default("active")
 
-  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, courseId])
+  @@index([studentId])
+  @@index([courseId])
+  @@index([status])
   @@map("enrollments")
 }
 
 model Feedback {
   id          String   @id @default(cuid())
+  workspaceId String   @default("default")
   studentId   String
   courseId    String
-  rating      Int      // Rating from 1 to 5
-  review      String?  // Optional text review
+  rating      Int // Rating from 1 to 5
+  review      String? // Optional text review
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, courseId]) // One review per student per course
   @@map("feedback")
 }
 
 model LearningProgress {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
+  workspaceId      String    @default("default")
   studentId        String
   courseId         String
-  completedLessons String[] // Array of lesson ids for PostgreSQL
+  completedLessons Json // Array of lesson ids for PostgreSQL
   currentModuleId  String?
-  percentage       Int      @default(0)
-  status           String   @default("not_started")
+  percentage       Int       @default(0)
+  status           String    @default("not_started")
   lastAccessedAt   DateTime?
   completedAt      DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, courseId])
+  @@index([studentId])
+  @@index([courseId])
+  @@index([status])
+  @@index([lastAccessedAt])
   @@map("learning_progress")
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
-  userId    String?
-  userEmail String?
-  action    String
-  entity    String?
-  entityId  String?
-  details   Json?
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  workspaceId String   @default("default")
+  userId      String?
+  userEmail   String?
+  action      String
+  entity      String?
+  entityId    String?
+  details     Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
 
   @@map("audit_logs")
 }
 
+model AuthNonce {
+  id            String   @id @default(cuid())
+  walletAddress String
+  nonce         String   @unique
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([walletAddress])
+  @@index([expiresAt])
+  @@map("auth_nonces")
+}
+
 model AnalyticsData {
-  id                String   @id @default(cuid())
-  metricType        String   // "USER_STAT", "COURSE_STAT", "ENROLLMENT_STAT"
-  anonymizedUserHash String?  // SHA-256 of email
-  region            String?  // Aggregated location
-  value             Float?
-  category          String?  // course category, level, etc.
-  timestamp         DateTime @default(now())
-  metadata          Json?
+  id                 String   @id @default(cuid())
+  metricType         String // "USER_STAT", "COURSE_STAT", "ENROLLMENT_STAT"
+  anonymizedUserHash String? // SHA-256 of email
+  region             String? // Aggregated location
+  value              Float?
+  category           String? // course category, level, etc.
+  timestamp          DateTime @default(now())
+  metadata           Json?
 
   @@map("analytics_data")
+}
+
+model Canvas {
+  id             String    @id @default(cuid())
+  workspaceId    String    @default("default")
+  roomId         String    @unique
+  studentId      String
+  title          String
+  description    String?
+  data           Json? // Stores canvas state/shapes
+  isPublic       Boolean   @default(false)
+  collaborators  Json // Array of student IDs
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  lastModifiedBy String?
+  lastModifiedAt DateTime?
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+  @@index([studentId])
+  @@index([createdAt])
+  @@map("canvases")
+}
+
+model DecentralizedAsset {
+  id             String    @id @default(cuid())
+  workspaceId    String    @default("default")
+  resourceType   String
+  resourceId     String
+  name           String
+  kind           String
+  provider       String    @default("pinata")
+  cid            String    @unique
+  ipfsUri        String
+  gatewayUrl     String
+  mimeType       String?
+  sizeBytes      Int?
+  status         String    @default("queued")
+  referenceCount Int       @default(1)
+  metadata       Json?
+  error          String?
+  pinnedAt       DateTime?
+  unpinnedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([workspaceId, resourceType, resourceId, name])
+  @@index([workspaceId, status])
+  @@index([workspaceId, resourceType, resourceId])
+  @@map("decentralized_assets")
+}
+
+model WebhookSubscription {
+  id          String   @id @default(cuid())
+  workspaceId String   @default("default")
+  url         String
+  secret      String?
+  events      Json // Array of event names e.g., ["lesson.completed"]
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, url])
+  @@map("webhook_subscriptions")
+}
+
+model NotificationPreferences {
+  id              String   @id @default(cuid())
+  workspaceId     String   @default("default")
+  studentId       String
+  emailEnabled    Boolean  @default(true)
+  pushEnabled     Boolean  @default(true)
+  inAppEnabled    Boolean  @default(true)
+  courseUpdates   Boolean  @default(true)
+  announcements   Boolean  @default(true)
+  newCourses      Boolean  @default(true)
+  reminders       Boolean  @default(true)
+  frequency       String   @default("immediate")
+  quietHoursStart String?
+  quietHoursEnd   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([studentId])
+  @@index([studentId])
+  @@index([workspaceId, studentId])
+  @@map("notification_preferences")
+}
+
+model StudentActivity {
+  id        String   @id @default(cuid())
+  studentId String
+  courseId  String
+  lessonId  String
+  action    String
+  timestamp DateTime @default(now())
+
+  @@map("student_activities")
+}
+
+model TranslationEntry {
+  id          String   @id @default(cuid())
+  workspaceId String   @default("default")
+  locale      String
+  namespace   String   @default("platform")
+  key         String
+  value       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, locale, namespace, key])
+  @@index([workspaceId, locale, namespace])
+  @@map("translation_entries")
+}
+
+model VestingSchedule {
+  id             String   @id @default(cuid())
+  workspaceId    String   @default("default")
+  projectId      String   @unique
+  tokenName      String
+  tokenSymbol    String
+  amount         Float
+  cliffMonths    Int
+  durationMonths Int
+  beneficiary    String
+  claimedAmount  Float    @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([projectId])
+  @@map("vesting_schedules")
+}
+
+model Idea {
+  id          String   @id @default(cuid())
+  workspaceId String   @default("default")
+  title       String
+  description String
+  studentId   String
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  votes   Vote[]
+
+  @@index([workspaceId])
+  @@index([studentId])
+  @@map("ideas")
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  ideaId    String
+  studentId String
+  value     Int // 1 for upvote, -1 for downvote
+  createdAt DateTime @default(now())
+
+  idea    Idea    @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([ideaId, studentId])
+  @@map("votes")
+}
+
+model HashSimulation {
+  id        String   @id @default(cuid())
+  studentId String
+  inputData String
+  hashType  String // e.g., "SHA-256"
+  hashValue String
+  createdAt DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@map("hash_simulations")
+}
+
+model P2PNode {
+  id          String   @id @default(cuid())
+  workspaceId String   @default("default")
+  nodeId      String   @unique
+  nodeName    String
+  status      String   @default("online")
+  ipAddress   String?
+  port        Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messagesSent     P2PMessage[] @relation("MessagesSent")
+  messagesReceived P2PMessage[] @relation("MessagesReceived")
+
+  @@index([workspaceId])
+  @@map("p2p_nodes")
+}
+
+model P2PMessage {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  payload    Json
+  status     String   @default("pending") // pending, delivered, failed
+  createdAt  DateTime @default(now())
+
+  sender   P2PNode @relation("MessagesSent", fields: [senderId], references: [nodeId], onDelete: Cascade)
+  receiver P2PNode @relation("MessagesReceived", fields: [receiverId], references: [nodeId], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@map("p2p_messages")
+}
+
+model ProcessedBlock {
+  id           String    @id @default(cuid())
+  chain        String
+  blockNumber  Int
+  blockHash    String    @unique
+  parentHash   String
+  timestamp    DateTime  @default(now())
+  processedAt  DateTime  @default(now())
+  isRolledBack Boolean   @default(false)
+  rolledBackAt DateTime?
+
+  bridgeEvents BridgeEvent[]
+
+  @@index([chain, blockNumber])
+  @@map("processed_blocks")
+}
+
+model BridgeEvent {
+  id               String    @id @default(cuid())
+  chain            String
+  blockNumber      Int
+  blockHash        String
+  processedBlockId String
+  eventId          String
+  eventType        String
+  sourceChain      String
+  targetChain      String
+  data             Json
+  transactionHash  String?
+  logIndex         Int?
+  processed        Boolean   @default(false)
+  processedAt      DateTime?
+
+  processedBlock ProcessedBlock @relation(fields: [processedBlockId], references: [id], onDelete: Cascade)
+
+  @@unique([chain, eventId])
+  @@index([processedBlockId])
+  @@map("bridge_events")
 }

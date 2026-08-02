@@ -43,14 +43,16 @@ export interface CertificateMetadata {
 }
 
 // Certificate Status (string literal types)
-export type CertificateStatus =
-  | 'MINTED'
-  | 'ACTIVE'
-  | 'REVOKED'
-  | 'REISSUED'
-  | 'EXPIRED'
-  | 'PENDING'
-  | 'FAILED';
+export enum CertificateStatus {
+  MINTED = 'MINTED',
+  ACTIVE = 'ACTIVE',
+  REVOKED = 'REVOKED',
+  REISSUED = 'REISSUED',
+  EXPIRED = 'EXPIRED',
+  PENDING = 'PENDING',
+  FAILED = 'FAILED',
+  TAMPERED = 'TAMPERED',
+}
 
 // Certificate entity with DB fields - matches Prisma output
 export interface Certificate {
@@ -66,11 +68,12 @@ export interface Certificate {
   contractAddress: string | null;
   transactionHash: string | null;
   network: string | null;
-  grade?: string;
+  grade?: string | null;
   revokedAt?: Date | null;
   revocationReason?: string | null;
   revokedBy?: string | null;
   previousVersionId?: string | null;
+  contentHash?: string | null;
   createdAt: Date;
   updatedAt: Date;
   // Relations

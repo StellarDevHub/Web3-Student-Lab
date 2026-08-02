@@ -142,7 +142,9 @@ export class WizardPersistence {
 
 export const wizardPersistence = WizardPersistence.getInstance();
 
-export function mergeWithInitialState(savedState: EnrollmentWizardState | null): EnrollmentWizardState {
+export function mergeWithInitialState(
+  savedState: EnrollmentWizardState | null
+): EnrollmentWizardState {
   if (!savedState) return INITIAL_WIZARD_STATE;
 
   return {

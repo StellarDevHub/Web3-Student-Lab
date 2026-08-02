@@ -1,0 +1,204 @@
+{
+  "nav": {
+    "learn": "Learn",
+    "dashboard": "Dashboard",
+    "modules": "MODULES",
+    "roadmap": "ROADMAP",
+    "quiz": "QUIZ",
+    "playground": "PLAYGROUND",
+    "reviews": "REVIEWS",
+    "simulator": "SIMULATOR",
+    "ideas": "IDEAS",
+    "verify": "VERIFY",
+    "subscriptions": "SUBSCRIPTIONS",
+    "notarization": "NOTARIZATION",
+    "devtools": "DEVTOOLS",
+    "open_source_lab": "Open Source Lab",
+    "web3_student_lab": "Web3 Student Lab",
+    "certificates": "Certificates",
+    "notifications": "Notifications",
+    "sign_out": "Sign out",
+    "wallet_connected": "Wallet connected",
+    "connect_wallet": "Connect wallet",
+    "open_wallet_access": "Open wallet access",
+    "complete_profile": "Complete profile",
+    "start_with_wallet": "Start with wallet"
+  },
+  "language": {
+    "english": "English",
+    "spanish": "Spanish",
+    "chinese": "Chinese"
+  },
+  "courses": {
+    "page": {
+      "eyebrow": "Learning modules",
+      "title": "A clearer catalog for students who just want to get started.",
+      "description": "Browse the active modules, understand who teaches them, and jump into the next useful step without digging through overloaded screens.",
+      "focus": "Focus areas include blockchain fundamentals, Soroban smart contracts, and practical open-source contribution patterns for hackathon teams.",
+      "search_label": "Search modules",
+      "search_placeholder": "Try Soroban, DeFi, beginner, Stellar...",
+      "loading": "Loading modules...",
+      "count_available": "{count} module{plural} available",
+      "no_results_title": "No modules found",
+      "no_results_description": "Try a different search term or clear the filter to see the full learning catalog.",
+      "instructor": "Instructor",
+      "open": "Open",
+      "credits": "{credits} credits",
+      "description_fallback": "Description coming soon."
+    },
+    "detail": {
+      "back": "Network Directory",
+      "badge": "Module Initialization",
+      "instructor": "Instructor:",
+      "payload": "Payload:",
+      "unit": "UNIT",
+      "level": "Level:",
+      "duration": "Duration:",
+      "protocol_specs": "Protocol Specifications",
+      "description_fallback": "System metadata missing. Awaiting curriculum upload.",
+      "execution_objectives": "Execution Objectives",
+      "curriculum_map": "Curriculum Map",
+      "module": "Module {number}",
+      "deliverables": "Deliverables",
+      "tools": "Tools You Will Touch",
+      "connection_status": "Connection Status",
+      "uplink_active": "Uplink Active",
+      "in_progress": "Module execution in progress...",
+      "mint_prompt": "Completed the curriculum? Execute the smart contract below to mint your verifiable credential on the Stellar blockchain.",
+      "token_minted": "Token Minted",
+      "redirecting": "Redirecting to Vault...",
+      "extract_certificate": "Extract Certificate",
+      "compiling_tx": "Compiling tx...",
+      "start_enrollment": "Start Enrollment",
+      "connect_wallet": "Connect Wallet",
+      "complete_profile": "Complete Profile",
+      "checking_session": "Checking session...",
+      "wizard_hint": "5-step wizard with progress saving",
+      "profile_hint": "Finish your profile once, then enrollment will stay available.",
+      "no_gas_fees": "NO GAS FEES \\u2022 PUBLIC TESTNET",
+      "async_execution": "Asynchronous Execution",
+      "onchain_verification": "On-chain Verification",
+      "encrypted_payload": "Encrypted Payload",
+      "not_found_title": "Node Not Found",
+      "not_found_back": "Return to Directory"
+    }
+  },
+  "course": {
+    "cm1yxxxx-intro": {
+      "level": "Beginner",
+      "duration": "3 weeks",
+      "summary": "Build a clear mental model of wallets, ledgers, assets, consensus, and the role Stellar plays in practical Web3 systems.",
+      "outcomes": [
+        "Explain how blockchain networks reach consensus and record state changes",
+        "Understand Stellar accounts, assets, trustlines, and payments",
+        "Navigate wallets, transactions, and explorer tooling confidently"
+      ],
+      "modules": [
+        {
+          "title": "Web3 foundations",
+          "description": "The shift from centralized systems to open, shared infrastructure."
+        },
+        {
+          "title": "Stellar network primitives",
+          "description": "Accounts, balances, assets, trustlines, and transaction flow."
+        },
+        {
+          "title": "Hands-on network operations",
+          "description": "Use wallets, inspect transactions, and simulate real payment scenarios."
+        }
+      ],
+      "deliverables": [
+        "A short ecosystem explainer",
+        "A wallet setup and funding walkthrough",
+        "A basic Stellar transaction demo"
+      ],
+      "tools": ["Freighter", "Stellar Expert", "Testnet faucet", "Explorer tooling"]
+    },
+    "cm1yxxxx-soroban": {
+      "level": "Intermediate",
+      "duration": "5 weeks",
+      "summary": "Learn how to build secure Soroban smart contracts in Rust, test them properly, and deploy them with confidence.",
+      "outcomes": [
+        "Understand Soroban contract structure and storage patterns",
+        "Write contract logic with clear state transitions and validations",
+        "Test and deploy Rust-based contracts to the Stellar testnet"
+      ],
+      "modules": [
+        {
+          "title": "Soroban architecture",
+          "description": "How contracts execute, store data, and interact with transactions."
+        },
+        {
+          "title": "Rust contract patterns",
+          "description": "Functions, storage, auth, and defensive design for smart contracts."
+        },
+        {
+          "title": "Testing and deployment",
+          "description": "Run local tests, simulate scenarios, and publish to testnet."
+        }
+      ],
+      "deliverables": [
+        "A simple stateful contract",
+        "A test suite covering success and failure cases",
+        "A testnet deployment checklist"
+      ],
+      "tools": ["Rust", "Soroban SDK", "Stellar CLI", "Testnet RPC"]
+    },
+    "cm1yxxxx-defi": {
+      "level": "Intermediate",
+      "duration": "4 weeks",
+      "summary": "Explore how DeFi systems are composed, from liquidity pools and AMMs to incentives and risk management.",
+      "outcomes": [
+        "Describe how AMMs and liquidity pools price assets",
+        "Evaluate the risks behind yield, volatility, and slippage",
+        "Design basic token flows for lending, swaps, or rewards"
+      ],
+      "modules": [
+        {
+          "title": "DeFi building blocks",
+          "description": "Pools, LP tokens, swaps, routing, and fee mechanics."
+        },
+        {
+          "title": "Tokenomics and incentives",
+          "description": "How protocols align participation, rewards, and governance."
+        },
+        {
+          "title": "Risk analysis",
+          "description": "Impermanent loss, smart contract risk, and system-level tradeoffs."
+        }
+      ],
+      "deliverables": [
+        "A DeFi protocol teardown",
+        "A token-flow diagram",
+        "A simple AMM math exercise"
+      ],
+      "tools": ["AMM simulators", "Spreadsheet modeling", "Protocol dashboards", "Explorer tooling"]
+    },
+    "default": {
+      "level": "Open level",
+      "duration": "4 weeks",
+      "summary": "This module is ready for enrollment, but its structured curriculum metadata has not been fully published yet.",
+      "outcomes": [
+        "Understand the main concepts covered by the module",
+        "Practice with hands-on labs and guided exercises",
+        "Finish with a project or assessment tied to the module theme"
+      ],
+      "modules": [
+        {
+          "title": "Core concepts",
+          "description": "Learn the vocabulary, mental models, and system basics first."
+        },
+        {
+          "title": "Hands-on practice",
+          "description": "Work through applied exercises and implementation walkthroughs."
+        },
+        {
+          "title": "Project wrap-up",
+          "description": "Bring the pieces together in a final output or review checkpoint."
+        }
+      ],
+      "deliverables": ["Notes and checkpoints", "Hands-on lab work", "Final review artifact"],
+      "tools": ["Wallet tooling", "Explorer tools", "Course exercises"]
+    }
+  }
+}

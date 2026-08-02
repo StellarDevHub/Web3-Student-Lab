@@ -2,7 +2,9 @@ import { Job } from 'bullmq';
 import { Router } from 'express';
 import fs from 'fs';
 import path from 'path';
+import { verifyToken } from '../auth/auth.service.js';
 import { exportQueue } from '../jobs/export.queue.js';
+import { sseSessionManager } from '../sse/SseSessionManager.js';
 
 const EXPORTS_DIR = path.join(process.cwd(), 'exports');
 
@@ -28,6 +30,46 @@ router.post('/', async (req, res) => {
   });
 
   res.json({ jobId: job.id });
+});
+
+// GET /api/v1/export/events - Open SSE stream for export status updates
+router.get('/events', (req, res) => {
+  const authHeader = req.headers.authorization;
+  const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+  const queryToken =
+    typeof req.query.access_token === 'string' ? req.query.access_token : undefined;
+  const token = headerToken || queryToken;
+
+  if (!token) {
+    return res.status(401).json({ error: 'Authorization token required' });
+  }
+
+  let userId: string;
+
+  try {
+    userId = verifyToken(token).userId;
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (typeof res.flushHeaders === 'function') {
+    res.flushHeaders();
+  }
+
+  res.write('retry: 5000\n\n');
+  const clientId = sseSessionManager.addClient(userId, res);
+  sseSessionManager.emitToUser(userId, 'sse_connected', {
+    connected: true,
+    timestamp: new Date().toISOString(),
+  });
+
+  req.on('close', () => {
+    sseSessionManager.removeClient(userId, clientId);
+  });
 });
 
 // GET /api/v1/export/:id/status - Get job status

@@ -194,11 +194,7 @@ export function validateStep(
     case 1:
       return validationRules.courseSelection(data.step1_courseSelection);
     case 2:
-      return validationRules.prerequisites(
-        data.step2_prerequisites,
-        course,
-        completedCourseIds
-      );
+      return validationRules.prerequisites(data.step2_prerequisites, course, completedCourseIds);
     case 3:
       return validationRules.goals(data.step3_goals);
     case 4:

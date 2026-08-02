@@ -1,45 +1,170 @@
-   Compiling soroban-certificate-contract v0.0.0 (/home/edohwares/Desktop/Room/drips/ceejay/Web3-Student-Lab/contracts)
-warning: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
-  --> src/token.rs:78:31
-   |
-78 |         let contract_id = env.register_contract(None, RsTokenContract);
-   |                               ^^^^^^^^^^^^^^^^^
-   |
-   = note: `#[warn(deprecated)]` on by default
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+     Running unittests src/lib.rs (target/debug/deps/soroban_certificate_contract-3429b26b1f3e22fd)
 
-warning: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
-  --> src/token.rs:96:31
-   |
-96 |         let contract_id = env.register_contract(None, RsTokenContract);
-   |                               ^^^^^^^^^^^^^^^^^
+running 1 test
 
-warning: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
- --> src/tests.rs:7:27
-  |
-7 |     let contract_id = env.register_contract(None, CertificateContract);
-  |                           ^^^^^^^^^^^^^^^^^
+thread 'tests::mint_batch_certificates_large_batch' (25370) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Budget, ExceededLimit)
 
-warning: use of deprecated method `soroban_sdk::Env::register_contract`: use `register`
-  --> src/tests.rs:39:27
-   |
-39 |     let contract_id = env.register_contract(None, CertificateContract);
-   |                           ^^^^^^^^^^^^^^^^^
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Budget, ExceededLimit)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Budget, ExceededLimit)], data:["contract call failed", mint_batch_certificates, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4, [{address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM, course_symbol: C00, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, course_symbol: C01, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, course_symbol: C02, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5, course_symbol: C03, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON, course_symbol: C04, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVAX5, course_symbol: C05, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N, course_symbol: C06, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYRE5, course_symbol: C07, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA2ZMN, course_symbol: C08, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4BV5, course_symbol: C09, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA6J5N, course_symbol: C10, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABB6KO, course_symbol: C11, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABDWC6, course_symbol: C12, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABFO3O, course_symbol: C13, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, course_symbol: C14, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABI7IO, course_symbol: C15, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABKXA6, course_symbol: C16, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABMPZO, course_symbol: C17, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABOHR6, course_symbol: C18, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABR4OP, course_symbol: C19, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABTUG7, course_symbol: C20, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABVM7P, course_symbol: C21, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABXEX7, course_symbol: C22, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABY5MP, course_symbol: C23, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB2VE7, course_symbol: C24, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4N5P, course_symbol: C25, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB6FV7, course_symbol: C26, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACBKTY, course_symbol: C27, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACDC3I, course_symbol: C28, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACF2CY, course_symbol: C29, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACHSKI, course_symbol: C30, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACILRY, course_symbol: C31, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACKDZI, course_symbol: C32, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACM3AY, course_symbol: C33, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACOTII, course_symbol: C34, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACRIXZ, course_symbol: C35, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACTA7J, course_symbol: C36, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACVYGZ, course_symbol: C37, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACXQOJ, course_symbol: C38, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACYJVZ, course_symbol: C39, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC2B5J, course_symbol: C40, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC4ZEZ, course_symbol: C41, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC6RMJ, course_symbol: C42, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADBG3K, course_symbol: C43, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADDOT2, course_symbol: C44, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADFWKK, course_symbol: C45, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADH6C2, course_symbol: C46, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADIHZK, course_symbol: C47, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADKPR2, course_symbol: C48, grade: "B+"}, {address: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADMXIK, course_symbol: C49, grade: "B+"}], "Large Cohort Course"]]
+   2: [Diagnostic Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Budget, ExceededLimit)], data:"caught error from function"
+   3: [Diagnostic Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[error, Error(Budget, ExceededLimit)], data:"escalating error to panic"
+   4: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[cert_minted, v2], data:[189273427212195787929115675194942786520, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADIHZK, Bytes(7fcdc9f25edad5ade77a81ac695eac2ae4dc5ac0910e32ee034d05f8cb7855e4), Bytes(c5d9e4c5024065243f3ca3bf85165acdc8fdc96f37ef4d71f115d3bdc260d2ba), 0, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4]
+   5: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[v1_batch_cert_issued, batch_cert_issued, C46], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADH6C2, "Large Cohort Course"]
+   6: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[cert_minted, v2], data:[195522196984636863893544080860324750337, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADH6C2, Bytes(b9cecc87707db15da9eb6f84d35567a3b238981c874aaeb2bb9986add2dba526), Bytes(c5d9e4c5024065243f3ca3bf85165acdc8fdc96f37ef4d71f115d3bdc260d2ba), 0, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4]
+   7: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[v1_batch_cert_issued, batch_cert_issued, C45], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADFWKK, "Large Cohort Course"]
+   8: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[cert_minted, v2], data:[281925832558476305764630800712529440006, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADFWKK, Bytes(603f074d1b51a72b0d5378bbd4f03255efb707b06327c4030ce0209f2ddbbf29), Bytes(c5d9e4c5024065243f3ca3bf85165acdc8fdc96f37ef4d71f115d3bdc260d2ba), 0, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4]
+   9: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[v1_batch_cert_issued, batch_cert_issued, C44], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADDOT2, "Large Cohort Course"]
+   10: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[cert_minted, v2], data:[219745786138736078045812406019526935361, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADDOT2, Bytes(8d0b12d31819d20eba70c68df65dd15e7174bb66478e8af89f2bd336443155a0), Bytes(c5d9e4c5024065243f3ca3bf85165acdc8fdc96f37ef4d71f115d3bdc260d2ba), 0, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4]
+   11: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[v1_batch_cert_issued, batch_cert_issued, C43], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADBG3K, "Large Cohort Course"]
+   12: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[cert_minted, v2], data:[203194627126474882826856584632753449554, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADBG3K, Bytes(867e5a53dd4c85bf7b6a2c406bc79a126001e3c4e42612e12f5d3bd63751ac5d), Bytes(c5d9e4c5024065243f3ca3bf85165acdc8fdc96f37ef4d71f115d3bdc260d2ba), 0, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4]
+   13: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[v1_batch_cert_issued, batch_cert_issued, C42], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC6RMJ, "Large Cohort Course"]
+   14: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[cert_minted, v2], data:[135767548045785664045325524244403385045, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC6RMJ, Bytes(33a8cd08d32d147af7d7776a73e56c947d0befc06b7d92dd273d28c15517ecf6), Bytes(c5d9e4c5024065243f3ca3bf85165acdc8fdc96f37ef4d71f115d3bdc260d2ba), 0, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4]
+   15: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[v1_batch_cert_issued, batch_cert_issued, C41], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC4ZEZ, "Large Cohort Course"]
+   16: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[cert_minted, v2], data:[93203995947231801454535086009439007875, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC4ZEZ, Bytes(028da66389b983b90abf0fcaa43989e25c195581ee147f851da27d3e988ec809), Bytes(c5d9e4c5024065243f3ca3bf85165acdc8fdc96f37ef4d71f115d3bdc260d2ba), 0, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4]
+   17: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[v1_batch_cert_issued, batch_cert_issued, C40], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC2B5J, "Large Cohort Course"]
+   18: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[cert_minted, v2], data:[103764745926361962064241400103267982114, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC2B5J, Bytes(4d6a524e91f2f92c908bfde5b0555755ba76aa0ae41ce360db8e85c4f4cb618c), Bytes(c5d9e4c5024065243f3ca3bf85165acdc8fdc96f37ef4d71f115d3bdc260d2ba), 0, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4]
+   19: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[v1_batch_cert_issued, batch_cert_issued, C39], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACYJVZ, "Large Cohort Course"]
+   20: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[cert_minted, v2], data:[140675131301943097322979822335581669881, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACYJVZ, Bytes(652eccf59bb3a61c4646e4b159067f3e9b30235515e3e406c575557bdbb0a2a7), Bytes(c5d9e4c5024065243f3ca3bf85165acdc8fdc96f37ef4d71f115d3bdc260d2ba), 0, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4]
+   21: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[v1_batch_cert_issued, batch_cert_issued, C38], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACXQOJ, "Large Cohort Course"]
+   22: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[cert_minted, v2], data:[83502800410878699992481343667980528845, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACXQOJ, Bytes(6712f84a5b216c478ad32553d1c3e034eee183885056a3074c88d426a9fe80dd), Bytes(c5d9e4c5024065243f3ca3bf85165acdc8fdc96f37ef4d71f115d3bdc260d2ba), 0, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4]
+   23: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[v1_batch_cert_issued, batch_cert_issued, C37], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACVYGZ, "Large Cohort Course"]
+   24: [Contract Event] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, topics:[cert_minted, v2], data:[228796252103797854865944190922548496505, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACVYGZ, Bytes(ea9d228a5a716e80eb95562adbe98f582463752d921d47ac69d23aca3c107a58), Bytes(c5d9e4c5024065243f3ca3bf85165acdc8fdc96f37ef4d71f115d3bdc260d2ba), 0, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4]
+   25: ... 75 events elided ...
 
-warning: `soroban-certificate-contract` (lib test) generated 4 warnings
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.06s
-     Running unittests src/lib.rs (target/debug/deps/soroban_certificate_contract-727423dd3195a6cc)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
-running 4 tests
-test tests::returns_none_for_non_existent_certificate ... ok
-test token::tests::rejects_mint_from_non_certificate_contract - should panic ... ok
-test tests::issues_and_loads_certificate_successfully ... ok
-test token::tests::mints_balance_for_student_when_called_by_certificate_contract ... ok
+thread 'tests::mint_batch_certificates_large_batch' (25370) panicked at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.11/src/env.rs:1612:54:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Budget, ExceededLimit)
+DebugInfo not available
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+stack backtrace:
+   0:     0x5648ac3c1e82 - std::backtrace_rs::backtrace::libunwind::trace::h90e89fac33585832
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/../../backtrace/src/backtrace/libunwind.rs:117:9
+   1:     0x5648ac3c1e82 - std::backtrace_rs::backtrace::trace_unsynchronized::heebcf2380a8e7359
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/../../backtrace/src/backtrace/mod.rs:66:14
+   2:     0x5648ac3c1e82 - std::sys::backtrace::_print_fmt::hdf3e2a22d2f810db
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/sys/backtrace.rs:68:9
+   3:     0x5648ac3c1e82 - <std::sys::backtrace::BacktraceLock::print::DisplayBacktrace as core::fmt::Display>::fmt::hac1d885928ba8582
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/sys/backtrace.rs:38:26
+   4:     0x5648ac3d3277 - core::fmt::rt::Argument::fmt::h6901eb7c19abebe8
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/fmt/rt.rs:152:76
+   5:     0x5648ac3d3277 - core::fmt::write::h83ebb4d32483be9e
+   6:     0x5648ac390206 - std::io::default_write_fmt::h751a79cdae495f10
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/io/mod.rs:639:11
+   7:     0x5648ac390206 - std::io::Write::write_fmt::h9ef514f8700ff7b2
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/io/mod.rs:1994:13
+   8:     0x5648ac3a0ff9 - std::sys::backtrace::BacktraceLock::print::hcc2e1a3ac996c911
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/sys/backtrace.rs:41:9
+   9:     0x5648ac3a0ff9 - std::panicking::default_hook::{{closure}}::h8e9c4d1276f0925f
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panicking.rs:292:27
+  10:     0x5648ac3a0e91 - std::panicking::default_hook::h2b2078d38b534dfb
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panicking.rs:316:9
+  11:     0x5648abacb84e - <alloc::boxed::Box<F,A> as core::ops::function::Fn<Args>>::call::h39d051e7dedac6a7
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/alloc/src/boxed.rs:2220:9
+  12:     0x5648abacb84e - test::test_main_with_exit_callback::{{closure}}::h4b005fe75814c302
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/test/src/lib.rs:145:21
+  13:     0x5648abd90423 - <alloc::boxed::Box<F,A> as core::ops::function::Fn<Args>>::call::hbf0c41049e021b21
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/alloc/src/boxed.rs:2220:9
+  14:     0x5648abea8fa0 - soroban_env_host::testutils::call_with_suppressed_panic_hook::{{closure}}::{{closure}}::hbbe77e4852191562
+                               at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/testutils.rs:46:17
+  15:     0x5648ac3a1322 - <alloc::boxed::Box<F,A> as core::ops::function::Fn<Args>>::call::hd426070722c13cbf
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/alloc/src/boxed.rs:2220:9
+  16:     0x5648ac3a1322 - std::panicking::panic_with_hook::h39b739724e701bfd
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panicking.rs:833:13
+  17:     0x5648ac3a10b8 - std::panicking::panic_handler::{{closure}}::he540c4833054e458
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panicking.rs:698:13
+  18:     0x5648ac39c159 - std::sys::backtrace::__rust_end_short_backtrace::hfa179d89deec8aed
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/sys/backtrace.rs:176:18
+  19:     0x5648ac384a8d - __rustc[d131491b17107b07]::rust_begin_unwind
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panicking.rs:689:5
+  20:     0x5648ac3dafbc - core::panicking::panic_fmt::ha564519d657d9c46
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/panicking.rs:80:14
+  21:     0x5648ac3da772 - core::result::unwrap_failed::h23873bb39ca9a844
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/result.rs:1867:5
+  22:     0x5648abb42a6e - core::result::Result<T,E>::unwrap::hb0e4b49a993e074e
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/result.rs:1233:23
+  23:     0x5648abb42a6e - soroban_sdk::env::Env::to_ledger_snapshot::hcfb9c9cb02d679f4
+                               at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.11/src/env.rs:1612:54
+  24:     0x5648abb4066e - soroban_sdk::env::Env::to_snapshot::h29546881beac3ee1
+                               at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.11/src/env.rs:1566:26
+  25:     0x5648abb42fdb - soroban_sdk::env::Env::to_test_snapshot_file::h2b6da7bb0bac3851
+                               at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.11/src/env.rs:1702:29
+  26:     0x5648abb46412 - <soroban_sdk::env::Env as core::ops::drop::Drop>::drop::h6c86f70fcfe9578c
+                               at /home/knights/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.11/src/env.rs:1665:18
+  27:     0x5648abb283f7 - core::ptr::drop_in_place<soroban_sdk::env::Env>::h91618b8cd6b0e2df
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/ptr/mod.rs:805:1
+  28:     0x5648ab92a77c - soroban_certificate_contract::tests::mint_batch_certificates_large_batch::{{closure}}::h07d5447b5952896d
+                               at /home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/contracts/src/tests.rs:1143:5
+  29:     0x5648ab9dd31e - core::ops::function::FnOnce::call_once::h6b17eb30ee65ff04
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/ops/function.rs:250:5
+  30:     0x5648ab8ba456 - <core::panic::unwind_safe::AssertUnwindSafe<F> as core::ops::function::FnOnce<()>>::call_once::h2e021ea088dadcdb
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/panic/unwind_safe.rs:274:9
+  31:     0x5648aba0eff2 - std::panicking::catch_unwind::do_call::h1cc5ec25fbc600c6
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panicking.rs:581:40
+  32:     0x5648aba34ccb - __rust_try
+  33:     0x5648aba34ba6 - std::panicking::catch_unwind::hc97fb45ec23d9c1f
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panicking.rs:544:19
+  34:     0x5648aba34ba6 - std::panic::catch_unwind::he9d6350f68dde114
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panic.rs:359:14
+  35:     0x5648ab88fade - soroban_certificate_contract::tests::mint_batch_certificates_large_batch::hcd49f41fb294310b
+                               at /home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/contracts/src/tests.rs:1108:18
+  36:     0x5648ab92ade7 - soroban_certificate_contract::tests::mint_batch_certificates_large_batch::{{closure}}::h5d1d5e9909bb56bd
+                               at /home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/contracts/src/tests.rs:1107:41
+  37:     0x5648ab9de786 - core::ops::function::FnOnce::call_once::h902af451fcf6770a
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/ops/function.rs:250:5
+  38:     0x5648abacb67b - core::ops::function::FnOnce::call_once::h0217b30cfdee2e67
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/ops/function.rs:250:5
+  39:     0x5648abacb67b - test::__rust_begin_short_backtrace::h6d98714a1e28f556
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/test/src/lib.rs:663:18
+  40:     0x5648abadf00a - test::run_test_in_process::{{closure}}::he2c70d2634d3a3cc
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/test/src/lib.rs:686:74
+  41:     0x5648abadf00a - <core::panic::unwind_safe::AssertUnwindSafe<F> as core::ops::function::FnOnce<()>>::call_once::h40a0a825bcf17fdd
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/panic/unwind_safe.rs:274:9
+  42:     0x5648abadf00a - std::panicking::catch_unwind::do_call::h6c8eb5dd6e7b5975
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panicking.rs:581:40
+  43:     0x5648abadf00a - std::panicking::catch_unwind::h55455eac2972ad1e
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panicking.rs:544:19
+  44:     0x5648abadf00a - std::panic::catch_unwind::h0025465150a5e558
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panic.rs:359:14
+  45:     0x5648abadf00a - test::run_test_in_process::hb61e682f9b630fbc
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/test/src/lib.rs:686:27
+  46:     0x5648abadf00a - test::run_test::{{closure}}::hc2c2a7a38ab176e2
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/test/src/lib.rs:607:43
+  47:     0x5648abab92a4 - test::run_test::{{closure}}::ha91867b85cd2a911
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/test/src/lib.rs:637:41
+  48:     0x5648abab92a4 - std::sys::backtrace::__rust_begin_short_backtrace::ha00a9fe02049c339
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/sys/backtrace.rs:160:18
+  49:     0x5648ababcbd2 - std::thread::lifecycle::spawn_unchecked::{{closure}}::{{closure}}::hd629fba9153dfb55
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/thread/lifecycle.rs:92:13
+  50:     0x5648ababcbd2 - <core::panic::unwind_safe::AssertUnwindSafe<F> as core::ops::function::FnOnce<()>>::call_once::h4189018816a5c5d9
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/panic/unwind_safe.rs:274:9
+  51:     0x5648ababcbd2 - std::panicking::catch_unwind::do_call::hf9fcdbca3c2e9877
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panicking.rs:581:40
+  52:     0x5648ababcbd2 - std::panicking::catch_unwind::h97b92d88631c7c64
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panicking.rs:544:19
+  53:     0x5648ababcbd2 - std::panic::catch_unwind::ha77cdbb68e725e5e
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/panic.rs:359:14
+  54:     0x5648ababcbd2 - std::thread::lifecycle::spawn_unchecked::{{closure}}::h511f05bc1a132253
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/thread/lifecycle.rs:90:26
+  55:     0x5648ababcbd2 - core::ops::function::FnOnce::call_once{{vtable.shim}}::h6b68b31e9b685cb8
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/core/src/ops/function.rs:250:5
+  56:     0x5648ac3977df - <alloc::boxed::Box<F,A> as core::ops::function::FnOnce<Args>>::call_once::h22a27d165e4e871d
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/alloc/src/boxed.rs:2206:9
+  57:     0x5648ac3977df - std::sys::thread::unix::Thread::new::thread_start::h45cc87bb053add0f
+                               at /rustc/254b59607d4417e9dffbc307138ae5c86280fe4c/library/std/src/sys/thread/unix.rs:118:17
+  58:     0x7f9a2d59dac3 - start_thread
+                               at ./nptl/pthread_create.c:442:8
+  59:     0x7f9a2d62f8d0 - __GI___clone3
+                               at ./misc/../sysdeps/unix/sysv/linux/x86_64/clone3.S:81:0
+  60:                0x0 - <unknown>
 
-   Doc-tests soroban_certificate_contract
+thread 'tests::mint_batch_certificates_large_batch' (25370) panicked at library/core/src/panicking.rs:233:5:
+panic in a destructor during cleanup
+thread caused non-unwinding panic. aborting.
+error: test failed, to rerun pass `--lib`
 
-running 0 tests
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
+Caused by:
+  process didn't exit successfully: `/home/knights/Documents/Drips Miantainer Project/Web3-Student-Lab/contracts/target/debug/deps/soroban_certificate_contract-3429b26b1f3e22fd mint_batch_certificates_large_batch -- --nocapture` (signal: 6, SIGABRT: process abort signal)

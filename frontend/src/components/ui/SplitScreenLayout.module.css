@@ -1,0 +1,66 @@
+.container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  user-select: none;
+}
+
+/* Enforce hardware acceleration during resize actions to prevent repaint lag */
+.isDragging {
+  cursor: col-resize;
+  will-change: width;
+}
+
+.panel {
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.divider {
+  width: 8px;
+  height: 100%;
+  background-color: var(--border-color, #1e293b); /* Fallback to sleek slate-800 */
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
+  position: relative;
+  z-index: 10;
+}
+
+.divider:hover,
+.isDragging .divider {
+  background-color: var(--primary-color, #3b82f6); /* High-tech blue on active interaction */
+}
+
+/* Centralized visual grip indicator dot configuration */
+.dividerGrip {
+  width: 2px;
+  height: 16px;
+  background-color: #64748b;
+  border-radius: 1px;
+}
+
+/* Responsive UI: Collapse columns into full-width stacked rows on mobile layouts */
+@media (max-width: 768px) {
+  .container {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .panel {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 40vh;
+  }
+
+  .divider {
+    width: 100%;
+    height: 12px;
+    cursor: row-resize;
+  }
+}

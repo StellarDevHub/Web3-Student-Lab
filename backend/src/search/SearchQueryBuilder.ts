@@ -1,12 +1,15 @@
 import { Prisma } from '@prisma/client';
 
 export class SearchQueryBuilder {
-  buildWhereClause(query?: string, searchFields: string[] = []): Prisma.StudentWhereInput | Prisma.CourseWhereInput | Prisma.CertificateWhereInput {
+  buildWhereClause(
+    query?: string,
+    searchFields: string[] = []
+  ): Prisma.StudentWhereInput | Prisma.CourseWhereInput | Prisma.CertificateWhereInput {
     if (!query || searchFields.length === 0) {
       return {};
     }
 
-    const searchConditions = searchFields.map(field => ({
+    const searchConditions = searchFields.map((field) => ({
       [field]: {
         contains: query,
         mode: 'insensitive' as const,
@@ -18,7 +21,10 @@ export class SearchQueryBuilder {
     } as any;
   }
 
-  buildFilterClause(filters: Record<string, any>, filterFields: Record<string, string>): Record<string, any> {
+  buildFilterClause(
+    filters: Record<string, any>,
+    filterFields: Record<string, string>
+  ): Record<string, any> {
     const whereClause: Record<string, any> = {};
 
     for (const [key, value] of Object.entries(filters)) {

@@ -55,7 +55,7 @@ export class FilterParser {
 
     // Parse arrays for 'in' operator
     if (operator === 'in') {
-      return value.split(',').map(v => {
+      return value.split(',').map((v) => {
         const num = Number(v.trim());
         return isNaN(num) ? v.trim() : num;
       });

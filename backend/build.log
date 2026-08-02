@@ -1,0 +1,71 @@
+
+> backend@1.0.0 build
+> tsc
+
+src/cache/RegionReplicator.ts(102,27): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/cache/RegionReplicator.ts(103,23): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/cache/RegionReplicator.ts(106,19): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/cache/RegionReplicator.ts(115,25): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/cache/RegionReplicator.ts(117,21): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/config/region.config.ts(70,10): error TS2532: Object is possibly 'undefined'.
+src/dashboard/activityLog.service.ts(87,9): error TS2322: Type 'Record<string, unknown> | undefined' is not assignable to type 'InputJsonValue | NullableJsonNullValueInput | undefined'.
+  Type 'Record<string, unknown>' is not assignable to type 'InputJsonValue | NullableJsonNullValueInput | undefined'.
+    Type 'Record<string, unknown>' is missing the following properties from type 'readonly (InputJsonValue | null)[]': length, concat, join, slice, and 20 more.
+src/dashboard/hash.controller.ts(23,58): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+src/dashboard/hash.service.ts(1,20): error TS2307: Cannot find module '../db/prisma.js' or its corresponding type declarations.
+src/infrastructure/infrastructure.routes.ts(4,29): error TS2307: Cannot find module '../middleware/auth.middleware.js' or its corresponding type declarations.
+src/infrastructure/p2p.controller.ts(43,51): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/infrastructure/p2p.service.ts(1,20): error TS2307: Cannot find module '../db/prisma.js' or its corresponding type declarations.
+src/licenses/license.routes.ts(210,33): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/licenses/license.routes.ts(391,57): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/licenses/license.routes.ts(424,54): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/licenses/license.routes.ts(457,50): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/routes/generator/explorer.routes.ts(56,34): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/routes/playground/playground.routes.ts(40,7): error TS2322: Type 'LeaderboardEntry' is not assignable to type 'null'.
+src/routes/simulatorErrors.routes.ts(79,35): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/routes/simulatorErrors.routes.ts(101,38): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/services/blockExplorer.service.ts(49,3): error TS2322: Type '{ id: string; hash: string; source: string; destination: string; operation: string | undefined; amount: string; asset: string | undefined; fee: string; ledger: number; status: "FAILED" | "SUCCESS"; timestamp: string; }[]' is not assignable to type 'ExplorerTransaction[]'.
+  Type '{ id: string; hash: string; source: string; destination: string; operation: string | undefined; amount: string; asset: string | undefined; fee: string; ledger: number; status: "FAILED" | "SUCCESS"; timestamp: string; }' is not assignable to type 'ExplorerTransaction'.
+    Types of property 'operation' are incompatible.
+      Type 'string | undefined' is not assignable to type 'string'.
+        Type 'undefined' is not assignable to type 'string'.
+src/services/dependency-update.service.ts(51,7): error TS18048: 'bMaj' is possibly 'undefined'.
+src/services/dependency-update.service.ts(51,14): error TS18048: 'aMaj' is possibly 'undefined'.
+src/services/dependency-update.service.ts(52,7): error TS18048: 'bMin' is possibly 'undefined'.
+src/services/dependency-update.service.ts(52,14): error TS18048: 'aMin' is possibly 'undefined'.
+src/services/dependency-update.service.ts(53,7): error TS18048: 'bPat' is possibly 'undefined'.
+src/services/dependency-update.service.ts(53,14): error TS18048: 'aPat' is possibly 'undefined'.
+src/services/dependency-update.service.ts(78,17): error TS18048: 'section' is possibly 'undefined'.
+src/services/dependency-update.service.ts(87,19): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/services/dependency-update.service.ts(87,41): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/services/dependency-update.service.ts(94,19): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/services/dependency-update.service.ts(94,40): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/services/gasEstimation.service.ts(91,50): error TS2532: Object is possibly 'undefined'.
+src/services/rust-validation.ts(27,57): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'PropertyKey'.
+  Type 'undefined' is not assignable to type 'PropertyKey'.
+src/services/rust-validation.ts(28,24): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/services/seo/simulatorSeo.service.ts(74,41): error TS2532: Object is possibly 'undefined'.
+src/services/vulnerabilityScanner.service.ts(87,29): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/simulator/voting.controller.ts(41,47): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/simulator/voting.service.ts(1,20): error TS2307: Cannot find module '../db/prisma.js' or its corresponding type declarations.

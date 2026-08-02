@@ -1,30 +1,48 @@
-import redis from '../utils/redis.js';
-import logger from '../utils/logger.js';
+import {
+  enqueueWebhookDelivery,
+  enqueueWebhookDeliveries,
+  webhookDeadLetterQueue,
+  webhookDeliveryQueue,
+  WEBHOOK_DEAD_LETTER_QUEUE_NAME,
+  WEBHOOK_DELIVERY_QUEUE_NAME,
+} from './webhooks/index.js';
+import type {
+  DeadLetterWebhookJob,
+  WebhookDeliveryJobData,
+  WebhookDeliveryRequest,
+} from './webhooks/index.js';
 
-const WEBHOOK_QUEUE = 'webhooks:queue';
-const WEBHOOK_DLQ = 'webhooks:dlq';
+export const enqueueWebhook = async (payload: WebhookDeliveryRequest): Promise<void> => {
+  await enqueueWebhookDelivery(payload);
+};
 
-export const enqueueWebhook = async (payload: any): Promise<void> => {
-  await redis.lpush(WEBHOOK_QUEUE, JSON.stringify({
+export const enqueueWebhooks = async (
+  event: WebhookDeliveryRequest['event'],
+  destinations: WebhookDeliveryRequest['destination'][]
+): Promise<Array<{ deliveryId: string; queue: string }>> => {
+  return enqueueWebhookDeliveries(event, destinations);
+};
+
+export const enqueueDLQ = async (payload: WebhookDeliveryJobData, error: string): Promise<void> => {
+  const deadLetterJob: DeadLetterWebhookJob = {
     ...payload,
-    enqueuedAt: Date.now(),
-    retries: 0
-  }));
+    failedAt: new Date().toISOString(),
+    error,
+  };
+
+  await webhookDeadLetterQueue.add(payload.event.type, deadLetterJob);
 };
 
-export const dequeueWebhook = async (): Promise<any | null> => {
-  const data = await redis.brpop(WEBHOOK_QUEUE, 0); // Block until data is available
-  if (data) {
-    return JSON.parse(data[1]);
-  }
-  return null;
+export const dequeueWebhook = async (): Promise<null> => {
+  throw new Error(
+    `Manual dequeue is not supported by ${WEBHOOK_DELIVERY_QUEUE_NAME}; use BullMQ workers instead`
+  );
 };
 
-export const enqueueDLQ = async (payload: any, error: string): Promise<void> => {
-  await redis.lpush(WEBHOOK_DLQ, JSON.stringify({
-    ...payload,
-    failedAt: Date.now(),
-    error
-  }));
-  logger.error(`Webhook moved to DLQ: ${error}`);
+export {
+  webhookDeadLetterQueue,
+  webhookDeliveryQueue,
+  WEBHOOK_DEAD_LETTER_QUEUE_NAME,
+  WEBHOOK_DELIVERY_QUEUE_NAME,
 };
+

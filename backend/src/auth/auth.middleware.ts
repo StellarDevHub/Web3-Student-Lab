@@ -1,6 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
-import { verifyToken, getStudentById } from './auth.service.js';
-import { isAccessTokenBlacklisted } from './token.service.js';
+import { NextFunction, Request, Response } from 'express';
+import { setDbRoutingUserId } from '../db/requestContext.js';
+import { getStudentById } from './auth.service.js';
+import { isAccessTokenBlacklisted, verifyAccessToken } from './token.service.js';
 import { User } from './types.js';
 
 // Extend Express Request type to include user
@@ -36,10 +37,8 @@ export const authenticate = async (
       return;
     }
 
-
-
     // Verify the token
-    const decoded = verifyToken(token);
+    const decoded = verifyAccessToken(token);
 
     // Check if token is blacklisted
     if (await isAccessTokenBlacklisted(token)) {
@@ -57,6 +56,7 @@ export const authenticate = async (
 
     // Attach user to request object
     req.user = user;
+    setDbRoutingUserId(user.id);
 
     next();
   } catch (error) {
@@ -97,13 +97,14 @@ export const optionalAuth = async (
     }
 
     // Verify the token
-    const decoded = verifyToken(token);
+    const decoded = verifyAccessToken(token);
 
     // Get the user from database
     const user = await getStudentById(decoded.userId);
 
     if (user) {
       req.user = user;
+      setDbRoutingUserId(user.id);
     }
 
     next();

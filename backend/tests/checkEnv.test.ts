@@ -27,6 +27,7 @@ describe('Environment Variable Guard', () => {
       process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
       process.env.JWT_SECRET = 'this-is-a-very-long-secret-key-that-is-at-least-32-chars';
       process.env.NODE_ENV = 'development';
+      process.env.REDIS_URL = 'redis://localhost:6379';
 
       // Should not throw an error
       expect(() => validateEnvironment()).not.toThrow();
@@ -85,6 +86,7 @@ describe('Environment Variable Guard', () => {
       process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
       process.env.JWT_SECRET = 'this-is-a-very-long-secret-key-that-is-at-least-32-chars';
       process.env.NODE_ENV = 'production';
+      process.env.REDIS_URL = 'redis://localhost:6379';
       // Missing production variables
 
       expect(() => validateEnvironment()).toThrow(EnvironmentValidationError);
@@ -97,6 +99,7 @@ describe('Environment Variable Guard', () => {
       process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
       process.env.JWT_SECRET = 'this-is-a-very-long-secret-key-that-is-at-least-32-chars';
       process.env.NODE_ENV = 'production';
+      process.env.REDIS_URL = 'redis://localhost:6379';
       process.env.STELLAR_ISSUER_SECRET_KEY = 'production-secret-key';
       process.env.STELLAR_ISSUER_PUBLIC_KEY = 'production-public-key';
 
@@ -107,6 +110,7 @@ describe('Environment Variable Guard', () => {
       process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
       process.env.JWT_SECRET = 'this-is-a-very-long-secret-key-that-is-at-least-32-chars';
       process.env.NODE_ENV = 'development';
+      process.env.REDIS_URL = 'redis://localhost:6379';
 
       // Clear some optional variables
       delete process.env.PORT;
@@ -122,6 +126,7 @@ describe('Environment Variable Guard', () => {
       process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
       process.env.JWT_SECRET = 'this-is-a-very-long-secret-key-that-is-at-least-32-chars';
       process.env.NODE_ENV = 'development';
+      process.env.REDIS_URL = 'redis://localhost:6379';
       process.env.PORT = '3000';
       process.env.STELLAR_NETWORK = 'mainnet';
 

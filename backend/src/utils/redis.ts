@@ -1,20 +1,25 @@
-import dotenv from 'dotenv';
 import { Redis } from 'ioredis';
+/**
+ * Centralized Redis client exports.
+ *
+ * This file now re-exports from the singleton RedisClient to eliminate
+ * duplicate Redis connections and ensure a single connection manager.
+ *
+ * @deprecated Import directly from '../cache/RedisClient.js' instead
+ */
 
-dotenv.config();
+import redisClient from '../cache/RedisClient.js';
 
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+const redisUrl = process.env.REDIS_URL;
+if (!redisUrl) {
+  throw new Error('REDIS_URL environment variable is required');
+}
+// Re-export the main client for backward compatibility
+export const redisConnection = redisClient.getClient();
 
-export const redisConnection = new Redis(redisUrl, {
-  maxRetriesPerRequest: null,
-});
+// Re-export pub/sub clients for BullMQ and WebSocket
+export const pubClient = redisClient.getPubClient();
+export const subClient = redisClient.getSubClient();
 
-export const pubClient = new Redis(redisUrl, {
-  maxRetriesPerRequest: null,
-});
-
-export const subClient = new Redis(redisUrl, {
-  maxRetriesPerRequest: null,
-});
-
+// Default export for backward compatibility
 export default redisConnection;

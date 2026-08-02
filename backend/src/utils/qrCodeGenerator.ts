@@ -146,7 +146,10 @@ export class QRCodeGenerator {
       );
 
       batch.forEach((tokenId, idx) => {
-        results.set(tokenId, batchResults[idx]);
+        const result = batchResults[idx];
+        if (result) {
+          results.set(tokenId, result);
+        }
       });
 
       if (i + batchSize < tokenIds.length) {

@@ -1,0 +1,693 @@
+[
+  {
+    "title": "[Backend] Design User Onboarding Flow for Hackathon Project Idea Generator",
+    "body": "🚀 Feature Overview\n\nDesign the User Onboarding Flow within the Hackathon Project Idea Generator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for User Onboarding Flow.\n- Ensure compatibility with existing Hackathon Project Idea Generator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Frontend] Build Interactive Tutorial for Web3 Learning Roadmap",
+    "body": "🚀 Feature Overview\n\nBuild the Interactive Tutorial within the Web3 Learning Roadmap module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Interactive Tutorial.\n- Ensure compatibility with existing Web3 Learning Roadmap infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: React, Tailwind CSS\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nBeginner - Requires understanding of Frontend development.\n\n⏱️ Timeline\n\nETA: 1-2 days\n",
+    "labels": [
+      "frontend",
+      "enhancement",
+      "good first issue"
+    ]
+  },
+  {
+    "title": "[Frontend] Implement Dark Mode Toggle for Smart Contract Playground",
+    "body": "🚀 Feature Overview\n\nImplement the Dark Mode Toggle within the Smart Contract Playground module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Dark Mode Toggle.\n- Ensure compatibility with existing Smart Contract Playground infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Next.js, State Management, UI/UX\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Frontend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "frontend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Integrate Progress Tracking Dashboard for Web3 Learning Roadmap",
+    "body": "🚀 Feature Overview\n\nIntegrate the Progress Tracking Dashboard within the Web3 Learning Roadmap module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Progress Tracking Dashboard.\n- Ensure compatibility with existing Web3 Learning Roadmap infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban, DeFi\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "smart-contract",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Create Code Compilation Web Worker for Open Source Contribution Trainer",
+    "body": "🚀 Feature Overview\n\nCreate the Code Compilation Web Worker within the Open Source Contribution Trainer module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Code Compilation Web Worker.\n- Ensure compatibility with existing Open Source Contribution Trainer infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Design Real-time Chat for User Dashboard",
+    "body": "🚀 Feature Overview\n\nDesign the Real-time Chat within the User Dashboard module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Real-time Chat.\n- Ensure compatibility with existing User Dashboard infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "smart-contract",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Refactor Project Submission Portal for Smart Contract Playground",
+    "body": "🚀 Feature Overview\n\nRefactor the Project Submission Portal within the Smart Contract Playground module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Project Submission Portal.\n- Ensure compatibility with existing Smart Contract Playground infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban, DeFi\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "smart-contract",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Design Peer Review System for Blockchain Learning Simulator",
+    "body": "🚀 Feature Overview\n\nDesign the Peer Review System within the Blockchain Learning Simulator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Peer Review System.\n- Ensure compatibility with existing Blockchain Learning Simulator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Frontend] Integrate Gamification Badges for User Dashboard",
+    "body": "🚀 Feature Overview\n\nIntegrate the Gamification Badges within the User Dashboard module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Gamification Badges.\n- Ensure compatibility with existing User Dashboard infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: React, Tailwind CSS\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nBeginner - Requires understanding of Frontend development.\n\n⏱️ Timeline\n\nETA: 1-2 days\n",
+    "labels": [
+      "frontend",
+      "enhancement",
+      "good first issue"
+    ]
+  },
+  {
+    "title": "[Backend] Develop Leaderboard for Web3 Learning Roadmap",
+    "body": "🚀 Feature Overview\n\nDevelop the Leaderboard within the Web3 Learning Roadmap module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Leaderboard.\n- Ensure compatibility with existing Web3 Learning Roadmap infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Frontend] Implement Wallet Connection Modal for Web3 Learning Roadmap",
+    "body": "🚀 Feature Overview\n\nImplement the Wallet Connection Modal within the Web3 Learning Roadmap module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Wallet Connection Modal.\n- Ensure compatibility with existing Web3 Learning Roadmap infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: React, Tailwind CSS\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nBeginner - Requires understanding of Frontend development.\n\n⏱️ Timeline\n\nETA: 1-2 days\n",
+    "labels": [
+      "frontend",
+      "enhancement",
+      "good first issue"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Design Transaction History Table for Platform Infrastructure",
+    "body": "🚀 Feature Overview\n\nDesign the Transaction History Table within the Platform Infrastructure module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Transaction History Table.\n- Ensure compatibility with existing Platform Infrastructure infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "smart-contract",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Create Smart Contract Template Library for Hackathon Project Idea Generator",
+    "body": "🚀 Feature Overview\n\nCreate the Smart Contract Template Library within the Hackathon Project Idea Generator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Smart Contract Template Library.\n- Ensure compatibility with existing Hackathon Project Idea Generator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban, DeFi\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "smart-contract",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Create Auto-save Feature for Editor for Web3 Learning Roadmap",
+    "body": "🚀 Feature Overview\n\nCreate the Auto-save Feature for Editor within the Web3 Learning Roadmap module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Auto-save Feature for Editor.\n- Ensure compatibility with existing Web3 Learning Roadmap infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Design Error Highlighting in Playground for User Dashboard",
+    "body": "🚀 Feature Overview\n\nDesign the Error Highlighting in Playground within the User Dashboard module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Error Highlighting in Playground.\n- Ensure compatibility with existing User Dashboard infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Build Mobile Responsive Layout for User Dashboard",
+    "body": "🚀 Feature Overview\n\nBuild the Mobile Responsive Layout within the User Dashboard module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Mobile Responsive Layout.\n- Ensure compatibility with existing User Dashboard infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Microservices, Redis\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "backend",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Develop API Rate Limiting for Hackathon Project Idea Generator",
+    "body": "🚀 Feature Overview\n\nDevelop the API Rate Limiting within the Hackathon Project Idea Generator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for API Rate Limiting.\n- Ensure compatibility with existing Hackathon Project Idea Generator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "smart-contract",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Develop OAuth Integration for Open Source Contribution Trainer",
+    "body": "🚀 Feature Overview\n\nDevelop the OAuth Integration within the Open Source Contribution Trainer module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for OAuth Integration.\n- Ensure compatibility with existing Open Source Contribution Trainer infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Microservices, Redis\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "backend",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Implement Email Notification System for Open Source Contribution Trainer",
+    "body": "🚀 Feature Overview\n\nImplement the Email Notification System within the Open Source Contribution Trainer module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Email Notification System.\n- Ensure compatibility with existing Open Source Contribution Trainer infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Microservices, Redis\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "backend",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Frontend] Implement Database Indexing for Web3 Learning Roadmap",
+    "body": "🚀 Feature Overview\n\nImplement the Database Indexing within the Web3 Learning Roadmap module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Database Indexing.\n- Ensure compatibility with existing Web3 Learning Roadmap infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: React, Tailwind CSS\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nBeginner - Requires understanding of Frontend development.\n\n⏱️ Timeline\n\nETA: 1-2 days\n",
+    "labels": [
+      "frontend",
+      "enhancement",
+      "good first issue"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Develop Caching Layer for Smart Contract Playground",
+    "body": "🚀 Feature Overview\n\nDevelop the Caching Layer within the Smart Contract Playground module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Caching Layer.\n- Ensure compatibility with existing Smart Contract Playground infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban, DeFi\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "smart-contract",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Optimize WebSocket Subscriptions for Hackathon Project Idea Generator",
+    "body": "🚀 Feature Overview\n\nOptimize the WebSocket Subscriptions within the Hackathon Project Idea Generator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for WebSocket Subscriptions.\n- Ensure compatibility with existing Hackathon Project Idea Generator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Integrate Analytics Dashboard for Open Source Contribution Trainer",
+    "body": "🚀 Feature Overview\n\nIntegrate the Analytics Dashboard within the Open Source Contribution Trainer module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Analytics Dashboard.\n- Ensure compatibility with existing Open Source Contribution Trainer infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "smart-contract",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Create Content Management System for User Dashboard",
+    "body": "🚀 Feature Overview\n\nCreate the Content Management System within the User Dashboard module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Content Management System.\n- Ensure compatibility with existing User Dashboard infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban, DeFi\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "smart-contract",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Design Automated Testing Suite for Web3 Learning Roadmap",
+    "body": "🚀 Feature Overview\n\nDesign the Automated Testing Suite within the Web3 Learning Roadmap module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Automated Testing Suite.\n- Ensure compatibility with existing Web3 Learning Roadmap infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "smart-contract",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Create CI/CD Pipeline for Open Source Contribution Trainer",
+    "body": "🚀 Feature Overview\n\nCreate the CI/CD Pipeline within the Open Source Contribution Trainer module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for CI/CD Pipeline.\n- Ensure compatibility with existing Open Source Contribution Trainer infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban, DeFi\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "smart-contract",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[DevOps] Optimize Documentation Site for Web3 Learning Roadmap",
+    "body": "🚀 Feature Overview\n\nOptimize the Documentation Site within the Web3 Learning Roadmap module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Documentation Site.\n- Ensure compatibility with existing Web3 Learning Roadmap infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Docker, CI/CD, GitHub Actions\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of DevOps development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Build Testnet Faucet Integration for Hackathon Project Idea Generator",
+    "body": "🚀 Feature Overview\n\nBuild the Testnet Faucet Integration within the Hackathon Project Idea Generator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Testnet Faucet Integration.\n- Ensure compatibility with existing Hackathon Project Idea Generator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban, DeFi\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "smart-contract",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Frontend] Develop RPC Endpoint Switcher for Web3 Learning Roadmap",
+    "body": "🚀 Feature Overview\n\nDevelop the RPC Endpoint Switcher within the Web3 Learning Roadmap module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for RPC Endpoint Switcher.\n- Ensure compatibility with existing Web3 Learning Roadmap infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: React, Tailwind CSS\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nBeginner - Requires understanding of Frontend development.\n\n⏱️ Timeline\n\nETA: 1-2 days\n",
+    "labels": [
+      "frontend",
+      "enhancement",
+      "good first issue"
+    ]
+  },
+  {
+    "title": "[Frontend] Design Contract Verification Tool for Platform Infrastructure",
+    "body": "🚀 Feature Overview\n\nDesign the Contract Verification Tool within the Platform Infrastructure module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Contract Verification Tool.\n- Ensure compatibility with existing Platform Infrastructure infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Next.js, State Management, UI/UX\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Frontend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "frontend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Frontend] Implement Multi-sig Wallet Support for Hackathon Project Idea Generator",
+    "body": "🚀 Feature Overview\n\nImplement the Multi-sig Wallet Support within the Hackathon Project Idea Generator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Multi-sig Wallet Support.\n- Ensure compatibility with existing Hackathon Project Idea Generator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: React, Tailwind CSS\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nBeginner - Requires understanding of Frontend development.\n\n⏱️ Timeline\n\nETA: 1-2 days\n",
+    "labels": [
+      "frontend",
+      "enhancement",
+      "good first issue"
+    ]
+  },
+  {
+    "title": "[Backend] Design Token Vesting UI for Hackathon Project Idea Generator",
+    "body": "🚀 Feature Overview\n\nDesign the Token Vesting UI within the Hackathon Project Idea Generator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Token Vesting UI.\n- Ensure compatibility with existing Hackathon Project Idea Generator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[DevOps] Design Decentralized Identity Verification for Open Source Contribution Trainer",
+    "body": "🚀 Feature Overview\n\nDesign the Decentralized Identity Verification within the Open Source Contribution Trainer module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Decentralized Identity Verification.\n- Ensure compatibility with existing Open Source Contribution Trainer infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Docker, CI/CD, GitHub Actions\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of DevOps development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Optimize Hackathon Team Matching for Open Source Contribution Trainer",
+    "body": "🚀 Feature Overview\n\nOptimize the Hackathon Team Matching within the Open Source Contribution Trainer module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Hackathon Team Matching.\n- Ensure compatibility with existing Open Source Contribution Trainer infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "smart-contract",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Refactor Idea Voting Mechanism for Blockchain Learning Simulator",
+    "body": "🚀 Feature Overview\n\nRefactor the Idea Voting Mechanism within the Blockchain Learning Simulator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Idea Voting Mechanism.\n- Ensure compatibility with existing Blockchain Learning Simulator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[DevOps] Optimize Mentor Booking System for Open Source Contribution Trainer",
+    "body": "🚀 Feature Overview\n\nOptimize the Mentor Booking System within the Open Source Contribution Trainer module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Mentor Booking System.\n- Ensure compatibility with existing Open Source Contribution Trainer infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Docker, CI/CD, GitHub Actions\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of DevOps development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[DevOps] Refactor Interactive Cryptography Visualizer for Blockchain Learning Simulator",
+    "body": "🚀 Feature Overview\n\nRefactor the Interactive Cryptography Visualizer within the Blockchain Learning Simulator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Interactive Cryptography Visualizer.\n- Ensure compatibility with existing Blockchain Learning Simulator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Docker, CI/CD, GitHub Actions\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of DevOps development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Optimize Hash Function Demo for User Dashboard",
+    "body": "🚀 Feature Overview\n\nOptimize the Hash Function Demo within the User Dashboard module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Hash Function Demo.\n- Ensure compatibility with existing User Dashboard infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Frontend] Optimize Merkle Tree Builder for Platform Infrastructure",
+    "body": "🚀 Feature Overview\n\nOptimize the Merkle Tree Builder within the Platform Infrastructure module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Merkle Tree Builder.\n- Ensure compatibility with existing Platform Infrastructure infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Next.js, State Management, UI/UX\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Frontend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "frontend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Build P2P Network Simulator for Platform Infrastructure",
+    "body": "🚀 Feature Overview\n\nBuild the P2P Network Simulator within the Platform Infrastructure module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for P2P Network Simulator.\n- Ensure compatibility with existing Platform Infrastructure infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Frontend] Design Consensus Algorithm Sandbox for Web3 Learning Roadmap",
+    "body": "🚀 Feature Overview\n\nDesign the Consensus Algorithm Sandbox within the Web3 Learning Roadmap module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Consensus Algorithm Sandbox.\n- Ensure compatibility with existing Web3 Learning Roadmap infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Next.js, State Management, UI/UX\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Frontend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "frontend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Create Block Explorer Interface for Hackathon Project Idea Generator",
+    "body": "🚀 Feature Overview\n\nCreate the Block Explorer Interface within the Hackathon Project Idea Generator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Block Explorer Interface.\n- Ensure compatibility with existing Hackathon Project Idea Generator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban, DeFi\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "smart-contract",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Optimize Custom RPC URL Support for Hackathon Project Idea Generator",
+    "body": "🚀 Feature Overview\n\nOptimize the Custom RPC URL Support within the Hackathon Project Idea Generator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Custom RPC URL Support.\n- Ensure compatibility with existing Hackathon Project Idea Generator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[DevOps] Optimize Gas Estimation Calculator for Open Source Contribution Trainer",
+    "body": "🚀 Feature Overview\n\nOptimize the Gas Estimation Calculator within the Open Source Contribution Trainer module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Gas Estimation Calculator.\n- Ensure compatibility with existing Open Source Contribution Trainer infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Docker, CI/CD, GitHub Actions\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of DevOps development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Design Transaction Visualizer for Platform Infrastructure",
+    "body": "🚀 Feature Overview\n\nDesign the Transaction Visualizer within the Platform Infrastructure module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Transaction Visualizer.\n- Ensure compatibility with existing Platform Infrastructure infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Microservices, Redis\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "backend",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[DevOps] Develop Local Node Setup Script for Platform Infrastructure",
+    "body": "🚀 Feature Overview\n\nDevelop the Local Node Setup Script within the Platform Infrastructure module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Local Node Setup Script.\n- Ensure compatibility with existing Platform Infrastructure infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Docker, CI/CD, GitHub Actions\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of DevOps development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[DevOps] Develop GitHub OAuth Login for User Dashboard",
+    "body": "🚀 Feature Overview\n\nDevelop the GitHub OAuth Login within the User Dashboard module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for GitHub OAuth Login.\n- Ensure compatibility with existing User Dashboard infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Docker, CI/CD, GitHub Actions\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of DevOps development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Optimize PR Simulation Environment for Smart Contract Playground",
+    "body": "🚀 Feature Overview\n\nOptimize the PR Simulation Environment within the Smart Contract Playground module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for PR Simulation Environment.\n- Ensure compatibility with existing Smart Contract Playground infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban, DeFi\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "smart-contract",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Build Issue Triage Minigame for Smart Contract Playground",
+    "body": "🚀 Feature Overview\n\nBuild the Issue Triage Minigame within the Smart Contract Playground module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Issue Triage Minigame.\n- Ensure compatibility with existing Smart Contract Playground infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Microservices, Redis\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "backend",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Frontend] Design Git Conflict Resolution Tutorial for Open Source Contribution Trainer",
+    "body": "🚀 Feature Overview\n\nDesign the Git Conflict Resolution Tutorial within the Open Source Contribution Trainer module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Git Conflict Resolution Tutorial.\n- Ensure compatibility with existing Open Source Contribution Trainer infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: React, Tailwind CSS\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nBeginner - Requires understanding of Frontend development.\n\n⏱️ Timeline\n\nETA: 1-2 days\n",
+    "labels": [
+      "frontend",
+      "enhancement",
+      "good first issue"
+    ]
+  },
+  {
+    "title": "[Backend] Design Open Source License Guide for User Dashboard",
+    "body": "🚀 Feature Overview\n\nDesign the Open Source License Guide within the User Dashboard module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Open Source License Guide.\n- Ensure compatibility with existing User Dashboard infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Build Accessibility Auditing for Smart Contract Playground",
+    "body": "🚀 Feature Overview\n\nBuild the Accessibility Auditing within the Smart Contract Playground module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Accessibility Auditing.\n- Ensure compatibility with existing Smart Contract Playground infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "smart-contract",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Develop i18n Internationalization for Platform Infrastructure",
+    "body": "🚀 Feature Overview\n\nDevelop the i18n Internationalization within the Platform Infrastructure module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for i18n Internationalization.\n- Ensure compatibility with existing Platform Infrastructure infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Design SEO Optimization for Blockchain Learning Simulator",
+    "body": "🚀 Feature Overview\n\nDesign the SEO Optimization within the Blockchain Learning Simulator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for SEO Optimization.\n- Ensure compatibility with existing Blockchain Learning Simulator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Microservices, Redis\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "backend",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Frontend] Design Performance Profiling for Open Source Contribution Trainer",
+    "body": "🚀 Feature Overview\n\nDesign the Performance Profiling within the Open Source Contribution Trainer module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Performance Profiling.\n- Ensure compatibility with existing Open Source Contribution Trainer infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Next.js, State Management, UI/UX\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Frontend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "frontend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Design Security Vulnerability Scanner for Blockchain Learning Simulator",
+    "body": "🚀 Feature Overview\n\nDesign the Security Vulnerability Scanner within the Blockchain Learning Simulator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Security Vulnerability Scanner.\n- Ensure compatibility with existing Blockchain Learning Simulator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Refactor Dependency Update Automation for Smart Contract Playground",
+    "body": "🚀 Feature Overview\n\nRefactor the Dependency Update Automation within the Smart Contract Playground module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Dependency Update Automation.\n- Ensure compatibility with existing Smart Contract Playground infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "smart-contract",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Frontend] Build Role-based Access Control for Blockchain Learning Simulator",
+    "body": "🚀 Feature Overview\n\nBuild the Role-based Access Control within the Blockchain Learning Simulator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Role-based Access Control.\n- Ensure compatibility with existing Blockchain Learning Simulator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: React, Tailwind CSS\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nBeginner - Requires understanding of Frontend development.\n\n⏱️ Timeline\n\nETA: 1-2 days\n",
+    "labels": [
+      "frontend",
+      "enhancement",
+      "good first issue"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Integrate Data Export Feature for Open Source Contribution Trainer",
+    "body": "🚀 Feature Overview\n\nIntegrate the Data Export Feature within the Open Source Contribution Trainer module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Data Export Feature.\n- Ensure compatibility with existing Open Source Contribution Trainer infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban, DeFi\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "smart-contract",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Integrate Notification Preferences for Blockchain Learning Simulator",
+    "body": "🚀 Feature Overview\n\nIntegrate the Notification Preferences within the Blockchain Learning Simulator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Notification Preferences.\n- Ensure compatibility with existing Blockchain Learning Simulator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Refactor Social Media Sharing for Web3 Learning Roadmap",
+    "body": "🚀 Feature Overview\n\nRefactor the Social Media Sharing within the Web3 Learning Roadmap module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Social Media Sharing.\n- Ensure compatibility with existing Web3 Learning Roadmap infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban, DeFi\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "smart-contract",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Implement Referral Program System for Platform Infrastructure",
+    "body": "🚀 Feature Overview\n\nImplement the Referral Program System within the Platform Infrastructure module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Referral Program System.\n- Ensure compatibility with existing Platform Infrastructure infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "smart-contract",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Frontend] Optimize Search and Filter Enhancements for Smart Contract Playground",
+    "body": "🚀 Feature Overview\n\nOptimize the Search and Filter Enhancements within the Smart Contract Playground module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Search and Filter Enhancements.\n- Ensure compatibility with existing Smart Contract Playground infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: React, Tailwind CSS\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nBeginner - Requires understanding of Frontend development.\n\n⏱️ Timeline\n\nETA: 1-2 days\n",
+    "labels": [
+      "frontend",
+      "enhancement",
+      "good first issue"
+    ]
+  },
+  {
+    "title": "[Backend] Create Activity Log Implementation for User Dashboard",
+    "body": "🚀 Feature Overview\n\nCreate the Activity Log Implementation within the User Dashboard module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Activity Log Implementation.\n- Ensure compatibility with existing User Dashboard infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Smart Contract] Build Payment Gateway Integration for Platform Infrastructure",
+    "body": "🚀 Feature Overview\n\nBuild the Payment Gateway Integration within the Platform Infrastructure module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Payment Gateway Integration.\n- Ensure compatibility with existing Platform Infrastructure infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Rust, Soroban\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Smart Contract development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "smart-contract",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Optimize GraphQL API Support for Platform Infrastructure",
+    "body": "🚀 Feature Overview\n\nOptimize the GraphQL API Support within the Platform Infrastructure module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for GraphQL API Support.\n- Ensure compatibility with existing Platform Infrastructure infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Microservices, Redis\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "backend",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[DevOps] Create Webhooks System for Open Source Contribution Trainer",
+    "body": "🚀 Feature Overview\n\nCreate the Webhooks System within the Open Source Contribution Trainer module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Webhooks System.\n- Ensure compatibility with existing Open Source Contribution Trainer infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Docker, CI/CD, GitHub Actions\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of DevOps development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Develop Error Logging Dashboard for Blockchain Learning Simulator",
+    "body": "🚀 Feature Overview\n\nDevelop the Error Logging Dashboard within the Blockchain Learning Simulator module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Error Logging Dashboard.\n- Ensure compatibility with existing Blockchain Learning Simulator infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Refactor Terms of Service Modal for Web3 Learning Roadmap",
+    "body": "🚀 Feature Overview\n\nRefactor the Terms of Service Modal within the Web3 Learning Roadmap module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Terms of Service Modal.\n- Ensure compatibility with existing Web3 Learning Roadmap infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Microservices, Redis\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nHard - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 3-5 days\n",
+    "labels": [
+      "backend",
+      "complex",
+      "enhancement",
+      "help wanted"
+    ]
+  },
+  {
+    "title": "[Backend] Implement Privacy Policy Enforcer for Smart Contract Playground",
+    "body": "🚀 Feature Overview\n\nImplement the Privacy Policy Enforcer within the Smart Contract Playground module to enhance user experience and platform capabilities.\n\nThis is an essential, MVP-critical feature designed to take Web3 Student Lab's curriculum layer to a dynamic, production-ready level.\n\n🛠️ Implementation Requirements\n\n- Implement core logic for Privacy Policy Enforcer.\n- Ensure compatibility with existing Smart Contract Playground infrastructure.\n- Add comprehensive tests for new functionality.\n\n🔧 Technical Specifications\n\n- Tech Stack: Node.js, Express, PostgreSQL\n- Tools: relevant SDKs\n\n✅ Acceptance Criteria\n\n- [ ] Feature is fully functional and passes all automated tests.\n- [ ] Code meets project style guidelines.\n- [ ] Documentation is updated.\n\n🎓 Difficulty Level\n\nIntermediate - Requires understanding of Backend development.\n\n⏱️ Timeline\n\nETA: 2-3 days\n",
+    "labels": [
+      "backend",
+      "intermediate",
+      "enhancement",
+      "help wanted"
+    ]
+  }
+]

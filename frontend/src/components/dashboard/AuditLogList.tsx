@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import apiClient from "@/lib/api-client";
-import { ListSkeleton } from "../ui/skeletons/ListSkeleton";
+import { useEffect, useState } from 'react';
+import apiClient from '@/lib/api-client';
+import { ListSkeleton } from '../ui/skeletons/ListSkeleton';
 
 interface AuditLog {
   id: string;
@@ -21,10 +21,10 @@ export default function AuditLogList() {
   useEffect(() => {
     async function fetchLogs() {
       try {
-        const response = await apiClient.get("/audit");
+        const response = await apiClient.get('/audit');
         setLogs(response.data);
       } catch (error) {
-        console.error("Failed to fetch audit logs:", error);
+        console.error('Failed to fetch audit logs:', error);
       } finally {
         setIsLoading(false);
       }
@@ -39,7 +39,7 @@ export default function AuditLogList() {
 
   if (logs.length === 0) {
     return (
-      <div className="text-gray-500 font-light italic">
+      <div className="text-text-secondary font-light italic">
         No administrative actions recorded in the current session.
       </div>
     );
@@ -48,27 +48,34 @@ export default function AuditLogList() {
   return (
     <div className="space-y-4">
       {logs.map((log) => (
-        <div 
-          key={log.id} 
-          className="bg-black border border-white/5 p-4 rounded-lg hover:border-red-500/20 transition-colors group"
+        <div
+          key={log.id}
+          className="bg-background border-border-theme/50 group rounded-lg border p-4 transition-colors hover:border-red-500/20"
         >
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-xs font-black text-red-500 uppercase tracking-widest">
+          <div className="mb-2 flex items-start justify-between">
+            <span className="text-xs font-black tracking-widest text-red-500 uppercase">
               {log.action.replace(/_/g, ' ')}
             </span>
-            <span className="text-[10px] font-mono text-gray-600">
+            <span className="text-text-secondary font-mono text-[10px]">
               {new Date(log.createdAt).toLocaleString()}
             </span>
           </div>
           <div className="flex flex-col gap-1">
-            <p className="text-sm text-gray-300">
-              <span className="text-gray-500 font-bold uppercase text-[10px] mr-2">Operator:</span>
+            <p className="text-foreground text-sm">
+              <span className="text-text-secondary mr-2 text-[10px] font-bold uppercase">
+                Operator:
+              </span>
               {log.userEmail || 'System'}
             </p>
             {log.entity && (
-              <p className="text-sm text-gray-300">
-                <span className="text-gray-500 font-bold uppercase text-[10px] mr-2">Entity:</span>
-                {log.entity} {log.entityId && <span className="text-gray-600 font-mono text-xs">({log.entityId})</span>}
+              <p className="text-foreground text-sm">
+                <span className="text-text-secondary mr-2 text-[10px] font-bold uppercase">
+                  Entity:
+                </span>
+                {log.entity}{' '}
+                {log.entityId && (
+                  <span className="text-text-secondary font-mono text-xs">({log.entityId})</span>
+                )}
               </p>
             )}
           </div>

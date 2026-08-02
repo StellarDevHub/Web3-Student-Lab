@@ -6,16 +6,12 @@ interface CacheableOptions {
 }
 
 export function Cacheable(options: CacheableOptions) {
-  return function (
-    _target: unknown,
-    _propertyKey: string,
-    descriptor: PropertyDescriptor
-  ) {
+  return function (_target: unknown, _propertyKey: string, descriptor: PropertyDescriptor) {
     const originalMethod = descriptor.value;
 
     descriptor.value = async function (...args: unknown[]) {
       const cacheKey = options.key(...args);
-      
+
       const cached = await cacheService.get(cacheKey);
       if (cached !== null) {
         return cached;
@@ -23,7 +19,7 @@ export function Cacheable(options: CacheableOptions) {
 
       const result = await originalMethod.apply(this, args);
       await cacheService.set(cacheKey, result, options.ttl);
-      
+
       return result;
     };
 

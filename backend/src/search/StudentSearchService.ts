@@ -25,12 +25,7 @@ export class StudentSearchService extends SearchService<any> {
       this.validator.validateFilterFields(options.filters, Object.keys(this.filterFields));
     }
 
-    return this.executeSearch(
-      this.prisma.student,
-      options,
-      this.searchFields,
-      this.filterFields
-    );
+    return this.executeSearch(this.prisma.student, options, this.searchFields, this.filterFields);
   }
 
   getEntityName(): string {

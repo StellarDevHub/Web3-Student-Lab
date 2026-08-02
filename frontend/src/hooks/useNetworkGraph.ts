@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ForceSimulation, NetworkNode, TransactionEdge } from '../lib/visualization/ForceSimulation';
+import {
+  ForceSimulation,
+  NetworkNode,
+  TransactionEdge,
+} from '../lib/visualization/ForceSimulation';
+
+export interface GraphTransaction {
+  id: string;
+  source: string;
+  target?: string;
+  amount?: string;
+  asset?: string;
+}
 
 interface NetworkGraph {
   nodes: NetworkNode[];
@@ -24,7 +36,7 @@ export function useNetworkGraph(width: number, height: number) {
     return () => simulationRef.current?.stop();
   }, [width, height, onTick]);
 
-  const addTransaction = useCallback((tx: any) => {
+  const addTransaction = useCallback((tx: GraphTransaction) => {
     if (!simulationRef.current) return;
 
     const sourceId = tx.source;
@@ -34,11 +46,19 @@ export function useNetworkGraph(width: number, height: number) {
     const currentLinks = [...simulationRef.current.getLinks()];
 
     // Add nodes if they don't exist
-    if (!currentNodes.find(n => n.id === sourceId)) {
-      currentNodes.push({ id: sourceId, type: 'account', label: sourceId.slice(0, 4) + '...' });
+    if (!currentNodes.find((n) => n.id === sourceId)) {
+      currentNodes.push({
+        id: sourceId,
+        type: 'account',
+        label: sourceId.slice(0, 4) + '...',
+      });
     }
-    if (!currentNodes.find(n => n.id === targetId)) {
-      currentNodes.push({ id: targetId, type: 'account', label: targetId.slice(0, 4) + '...' });
+    if (!currentNodes.find((n) => n.id === targetId)) {
+      currentNodes.push({
+        id: targetId,
+        type: 'account',
+        label: targetId.slice(0, 4) + '...',
+      });
     }
 
     // Add edge
@@ -54,10 +74,15 @@ export function useNetworkGraph(width: number, height: number) {
 
     // Keep graph small for performance (100 nodes max as per requirement)
     const prunedNodes = currentNodes.slice(-100);
-    const prunedLinks = currentLinks.filter(l =>
-      prunedNodes.find(n => n.id === (typeof l.source === 'string' ? l.source : l.source.id)) &&
-      prunedNodes.find(n => n.id === (typeof l.target === 'string' ? l.target : l.target.id))
-    ).slice(-200);
+    const prunedLinks = currentLinks
+      .filter(
+        (l) =>
+          prunedNodes.find(
+            (n) => n.id === (typeof l.source === 'string' ? l.source : l.source.id)
+          ) &&
+          prunedNodes.find((n) => n.id === (typeof l.target === 'string' ? l.target : l.target.id))
+      )
+      .slice(-200);
 
     simulationRef.current.updateData(prunedNodes, prunedLinks);
   }, []);

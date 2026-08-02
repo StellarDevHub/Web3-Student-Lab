@@ -3,6 +3,7 @@ import { Request, Response, Router } from 'express';
 import { authenticate } from '../auth/auth.middleware.js';
 import { normalizeSorobanDid } from '../auth/auth.service.js';
 import prisma from '../db/index.js';
+import { markUserWriteToPrimary } from '../db/requestContext.js';
 import { linkDidToCertificates } from '../routes/certificates.js';
 
 const router = Router();
@@ -102,6 +103,8 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
       linkDidToCertificates(req.user.id, student.did ?? null);
     }
 
+    markUserWriteToPrimary(req.user.id);
+
     res.json({
       id: student.id,
       email: student.email,
@@ -125,6 +128,31 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
 
     res.status(500).json({ error: 'Failed to update user profile' });
   }
+});
+
+/**
+ * @route   GET /api/user/onboarding
+ * @desc    Get user onboarding state (mocked)
+ * @access  Private
+ */
+router.get('/onboarding', authenticate, async (req: Request, res: Response) => {
+  // Mock response for now, replace with actual DB query if schema is updated
+  res.json({
+    hasCompletedWalletCreation: false,
+    hasReceivedTokens: false,
+    hasDeployedContract: false,
+    currentStepIndex: 0,
+  });
+});
+
+/**
+ * @route   PUT /api/user/onboarding
+ * @desc    Update user onboarding state (mocked)
+ * @access  Private
+ */
+router.put('/onboarding', authenticate, async (req: Request, res: Response) => {
+  // Mock response for now
+  res.json({ success: true });
 });
 
 export default router;

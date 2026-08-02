@@ -1,3 +1,5 @@
+import { API_BASE_URL, getWorkspaceId } from './api-config';
+
 /**
  * Utility for End-to-End Payload Encryption
  */
@@ -12,7 +14,11 @@ export interface EncryptedPayload {
  */
 async function fetchPublicKey(): Promise<{ keyId: string; publicKey: string }> {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/v1/security/public-key`);
+    const response = await fetch(`${API_BASE_URL}/security/public-key`, {
+      headers: {
+        'x-workspace-id': getWorkspaceId(),
+      },
+    });
     const result = await response.json();
 
     if (result.status === 'success') {
@@ -29,10 +35,12 @@ async function fetchPublicKey(): Promise<{ keyId: string; publicKey: string }> {
  * Converts a PEM public key to an ArrayBuffer
  */
 function pemToArrayBuffer(pem: string): ArrayBuffer {
-  const binaryString = window.atob(pem
-    .replace(/-----BEGIN PUBLIC KEY-----/g, '')
-    .replace(/-----END PUBLIC KEY-----/g, '')
-    .replace(/\s/g, ''));
+  const binaryString = window.atob(
+    pem
+      .replace(/-----BEGIN PUBLIC KEY-----/g, '')
+      .replace(/-----END PUBLIC KEY-----/g, '')
+      .replace(/\s/g, '')
+  );
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);

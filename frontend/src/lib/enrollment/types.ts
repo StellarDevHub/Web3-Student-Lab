@@ -19,7 +19,15 @@ export interface LearningGoals {
 }
 
 export interface StudySchedule {
-  preferredDays: ('monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday')[];
+  preferredDays: (
+    | 'monday'
+    | 'tuesday'
+    | 'wednesday'
+    | 'thursday'
+    | 'friday'
+    | 'saturday'
+    | 'sunday'
+  )[];
   preferredTimeStart: string;
   preferredTimeEnd: string;
   targetCompletionDate: string;

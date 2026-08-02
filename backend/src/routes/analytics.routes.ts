@@ -18,7 +18,7 @@ router.get('/global-stats', async (req, res) => {
       },
       _avg: {
         value: true,
-      }
+      },
     });
 
     const recentTrends = await (prisma as any).analyticsData.findMany({
@@ -31,7 +31,7 @@ router.get('/global-stats', async (req, res) => {
         region: true,
         timestamp: true,
         category: true,
-      }
+      },
     });
 
     res.json({

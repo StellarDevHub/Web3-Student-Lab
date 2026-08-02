@@ -8,6 +8,7 @@ import {
 import { qrCodeGenerator } from '../utils/qrCodeGenerator.js';
 import { certificateImageGenerator } from '../utils/certificateImageGenerator.js';
 import logger from '../utils/logger.js';
+import { UnauthorizedIssuerError } from './RevocationService.js';
 
 /**
  * Helper to convert param to string
@@ -191,12 +192,10 @@ export class CertificateController {
       logger.error(
         `Mint certificate error: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
-      res
-        .status(500)
-        .json({
-          error: error instanceof Error ? error.message : 'Failed to mint certificate',
-          success: false,
-        });
+      res.status(500).json({
+        error: error instanceof Error ? error.message : 'Failed to mint certificate',
+        success: false,
+      });
     }
   }
 
@@ -228,6 +227,10 @@ export class CertificateController {
         .json({ success: true, certificate: result, message: 'Certificate revoked successfully' });
     } catch (error) {
       logger.error(`Revoke error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      if (error instanceof UnauthorizedIssuerError) {
+        res.status(403).json({ error: error.message });
+        return;
+      }
       res
         .status(500)
         .json({ error: error instanceof Error ? error.message : 'Failed to revoke certificate' });
@@ -258,16 +261,18 @@ export class CertificateController {
         newGrade,
         issuedBy,
       });
-      res
-        .status(200)
-        .json({
-          success: true,
-          original: result.original,
-          newCertificate: result.new,
-          message: 'Certificate reissued successfully',
-        });
+      res.status(200).json({
+        success: true,
+        original: result.original,
+        newCertificate: result.new,
+        message: 'Certificate reissued successfully',
+      });
     } catch (error) {
       logger.error(`Reissue error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      if (error instanceof UnauthorizedIssuerError) {
+        res.status(403).json({ error: error.message });
+        return;
+      }
       res
         .status(500)
         .json({ error: error instanceof Error ? error.message : 'Failed to reissue certificate' });

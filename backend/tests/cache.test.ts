@@ -43,7 +43,7 @@ describe('Cache Integration Tests', () => {
 
   it('should track cache metrics', async () => {
     cacheService.resetMetrics();
-    
+
     await cacheService.get('miss:key');
     await cacheService.set('hit:key', { data: 'test' }, 60);
     await cacheService.get('hit:key');

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <style>
+      .bg { fill: #000000; }
+      .accent { fill: #7C3AED; }
+      .text { fill: #FFFFFF; font-size: 24px; font-weight: bold; font-family: system-ui; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" width="192" height="192"/>
+
+  <!-- Main accent shape -->
+  <circle class="accent" cx="96" cy="60" r="35"/>
+  <rect class="accent" x="30" y="100" width="132" height="70" rx="8"/>
+
+  <!-- Code brackets -->
+  <path class="text" d="M 60 130 L 50 140 L 60 150" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path class="text" d="M 132 130 L 142 140 L 132 150" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Three dots for more content -->
+  <circle cx="96" cy="140" r="3" class="text"/>
+  <circle cx="96" cy="160" r="3" class="text"/>
+  <circle cx="96" cy="165" r="3" class="text"/>
+</svg>

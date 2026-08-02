@@ -1,0 +1,18 @@
+Running build in Washington, D.C., USA (East) – iad1
+Build machine configuration: 2 cores, 8 GB
+Cloning github.com/StellarDevHub/soroban-playground (Branch: main, Commit: f8bf289)
+Skipping build cache, deployment was triggered without cache.
+Cloning completed: 611.000ms
+Running "vercel build"
+Vercel CLI 54.12.2
+Installing dependencies...
+npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+npm warn deprecated @types/react-window@2.0.0: This is a stub types definition. react-window provides its own type definitions, so you do not need this installed.
+added 627 packages in 20s 
+164 packages are looking for funding   run `npm fund` for details
+Detected Next.js version: 16.2.6
+Running "npm run build"
+
+ > frontend@0.1.0 build
+ > next build --webpack 
+Creating an optimized production build ...

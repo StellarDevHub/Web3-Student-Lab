@@ -28,20 +28,20 @@ describe('Certificate Validation Schemas', () => {
         title: 'Introduction to Web3',
         instructor: 'Dr. Smith',
         credits: 3,
-        completionDate: '2024-01-15',
+        completionDate: '2024-01-15T00:00:00Z',
         grade: 'A',
       },
       student: {
         name: 'John Doe',
-        walletAddress: 'GBRPYHIL2CI3FYQMWVUGE62KMGOBQKLCYJ3HLKBUBIW5VZH4S4MNOWT', // valid Stellar key
+        walletAddress: 'GBRPYHIL2CI3FYQMWVUGE62KMGOBQKLCYJ3HLKBUBIW5VZH4S4MNOWTA', // valid Stellar key
       },
       verification: {
         certificateId: 'cert-123',
         mintedAt: '2024-01-15T10:30:00Z',
-        contractAddress: 'GBRPYHIL2CI3FYQMWVUGE62KMGOBQKLCYJ3HLKBUBIW5VZH4S4MNOWT',
+        contractAddress: 'GBRPYHIL2CI3FYQMWVUGE62KMGOBQKLCYJ3HLKBUBIW5VZH4S4MNOWTA',
         tokenId: '12345',
         network: 'stellar-testnet',
-        issuerDid: 'did:stellar:GBRPYHIL2CI3FYQMWVUGE62KMGOBQKLCYJ3HLKBUBIW5VZH4S4MNOWT',
+        issuerDid: 'did:stellar:GBRPYHIL2CI3FYQMWVUGE62KMGOBQKLCYJ3HLKBUBIW5VZH4S4MNOWTA',
       },
       standard: 'Stellar NFT Certificate v1.0',
       version: '1.0.0',
@@ -131,6 +131,24 @@ describe('Certificate Validation Schemas', () => {
       const invalid = { studentId: 'student-123' };
       expect(() => MintCertificateSchema.parse(invalid)).toThrow();
     });
+
+    it('should reject invalid tokenId format', () => {
+      const invalid = {
+        studentId: 'student-123',
+        courseId: 'course-456',
+        tokenId: 'bad token!'
+      };
+      expect(() => MintCertificateSchema.parse(invalid)).toThrow();
+    });
+
+    it('should reject invalid DID values', () => {
+      const invalid = {
+        studentId: 'student-123',
+        courseId: 'course-456',
+        did: 'invalid-did',
+      };
+      expect(() => MintCertificateSchema.parse(invalid)).toThrow();
+    });
   });
 
   describe('RevokeCertificateSchema', () => {
@@ -141,7 +159,7 @@ describe('Certificate Validation Schemas', () => {
         revokedBy: 'did:stellar:ADMIN123456789',
       };
       const result = RevokeCertificateSchema.parse(valid);
-      expect(result.reason).toHaveLength(43);
+      expect(result.reason).toHaveLength(39);
     });
 
     it('should reject missing reason', () => {

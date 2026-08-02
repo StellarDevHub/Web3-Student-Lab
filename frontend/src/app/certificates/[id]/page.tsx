@@ -1,38 +1,41 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import { certificatesAPI, Certificate } from "@/lib/api";
-// import { useAuth } from "@/contexts/AuthContext"; // Reserved for future auth features
+import { Certificate, certificatesAPI } from '@/lib/api';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState, useCallback } from 'react';
+import { ErrorBoundary, ErrorFallback, CertificateDetailSkeleton } from '@/components/ui';
 
 export default function CertificateNFTPage() {
   const params = useParams();
   const router = useRouter();
-  // const { user } = useAuth(); // Uncomment when user context is needed
   const [certificate, setCertificate] = useState<Certificate | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<{
     verified: boolean;
     hash?: string;
   } | null>(null);
 
-  useEffect(() => {
-    async function loadCertificate() {
-      try {
-        const data = await certificatesAPI.getById(params.id as string);
-        setCertificate(data);
-      } catch (error) {
-        console.error("Failed to load certificate:", error);
-        router.push("/certificates");
-      } finally {
-        setIsLoading(false);
-      }
+  const loadCertificate = useCallback(async () => {
+    if (!params?.id) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await certificatesAPI.getById(params?.id as string);
+      setCertificate(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load certificate');
+      console.error('Failed to load certificate:', err);
+    } finally {
+      setIsLoading(false);
     }
+  }, [params]);
 
+  useEffect(() => {
     loadCertificate();
-  }, [params.id, router]);
+  }, [loadCertificate]);
 
   const verifyOnChain = async () => {
     if (!certificate) return;
@@ -41,21 +44,22 @@ export default function CertificateNFTPage() {
       const result = await certificatesAPI.verifyOnChain(certificate.id);
       setVerificationResult(result);
     } catch (error) {
-      console.error("Failed to verify:", error);
-      alert("Network error during cryptographic verification.");
+      console.error('Failed to verify:', error);
+      alert('Network error during cryptographic verification.');
     } finally {
       setIsVerifying(false);
     }
   };
 
   if (isLoading) {
+    return <CertificateDetailSkeleton />;
+  }
+
+  if (error) {
     return (
-      <div className="min-h-[calc(100vh-80px)] flex items-center justify-center bg-black">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-red-600/30 border-t-red-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-red-500 font-mono uppercase tracking-widest text-sm">
-            Decoding Token Asset...
-          </p>
+      <div className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-black p-8">
+        <div className="w-full max-w-md">
+          <ErrorFallback message={error} onRetry={loadCertificate} variant="card" />
         </div>
       </div>
     );
@@ -64,25 +68,26 @@ export default function CertificateNFTPage() {
   if (!certificate) return null;
 
   return (
-    <div className="min-h-[calc(100vh-80px)] bg-black text-white py-12 px-4 sm:px-6 relative overflow-hidden">
+    <ErrorBoundary>
+    <div className="relative min-h-[calc(100vh-80px)] overflow-hidden bg-black px-4 py-12 text-white sm:px-6" aria-busy={isLoading}>
       {/* Background Glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-red-600/10 rounded-full blur-[150px] pointer-events-none"></div>
+      <div className="pointer-events-none absolute top-1/2 left-1/2 h-[800px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-600/10 blur-[150px]"></div>
 
-      <div className="max-w-5xl mx-auto relative z-10 flex flex-col lg:flex-row gap-12 items-center lg:items-start">
+      <div className="relative z-10 mx-auto flex max-w-5xl flex-col items-center gap-12 lg:flex-row lg:items-start">
         {/* NFT Asset Card Column */}
-        <div className="w-full lg:w-1/2 flex justify-center">
-          <div className="relative group perspective-1000 w-full max-w-sm">
+        <div className="flex w-full justify-center lg:w-1/2">
+          <div className="group perspective-1000 relative w-full max-w-sm">
             {/* Ambient Card Glow */}
-            <div className="absolute -inset-1 bg-gradient-to-r from-red-600 to-red-900 rounded-[2rem] blur opacity-30 group-hover:opacity-60 transition duration-1000 group-hover:duration-200"></div>
+            <div className="absolute -inset-1 rounded-[2rem] bg-gradient-to-r from-red-600 to-red-900 opacity-30 blur transition duration-1000 group-hover:opacity-60 group-hover:duration-200"></div>
 
             {/* The Asset Itself */}
-            <div className="relative bg-zinc-950 border border-white/20 rounded-[2rem] p-8 aspect-[3/4] flex flex-col justify-between shadow-2xl transform transition-transform duration-500 hover:scale-[1.02]">
-              <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 contrast-150 rounded-[2rem] mix-blend-overlay pointer-events-none"></div>
+            <div className="relative flex aspect-[3/4] transform flex-col justify-between rounded-[2rem] border border-white/20 bg-zinc-950 p-8 shadow-2xl transition-transform duration-500 hover:scale-[1.02]">
+              <div className="pointer-events-none absolute inset-0 rounded-[2rem] bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay contrast-150"></div>
 
-              <div className="relative z-10 flex justify-between items-start">
-                <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(220,38,38,0.5)]">
+              <div className="relative z-10 flex items-start justify-between">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-600 shadow-[0_0_20px_rgba(220,38,38,0.5)]">
                   <svg
-                    className="w-6 h-6 text-white"
+                    className="h-6 w-6 text-white"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -96,19 +101,19 @@ export default function CertificateNFTPage() {
                   </svg>
                 </div>
                 <div className="text-right">
-                  <p className="text-[10px] font-mono text-red-400 uppercase tracking-widest leading-tight">
+                  <p className="font-mono text-[10px] leading-tight tracking-widest text-red-400 uppercase">
                     Testnet
                   </p>
-                  <p className="text-[10px] font-mono text-gray-500 uppercase tracking-widest leading-tight">
+                  <p className="font-mono text-[10px] leading-tight tracking-widest text-gray-500 uppercase">
                     Soroban
                   </p>
                 </div>
               </div>
 
-              <div className="relative z-10 text-center my-8">
-                <div className="inline-block p-4 rounded-full bg-black border border-white/10 shadow-inner mb-6">
+              <div className="relative z-10 my-8 text-center">
+                <div className="mb-6 inline-block rounded-full border border-white/10 bg-black p-4 shadow-inner">
                   <svg
-                    className="w-16 h-16 text-white"
+                    className="h-16 w-16 text-white"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -121,28 +126,28 @@ export default function CertificateNFTPage() {
                     />
                   </svg>
                 </div>
-                <h3 className="text-2xl font-black text-white uppercase tracking-tighter leading-none mb-2">
+                <h3 className="mb-2 text-2xl leading-none font-black tracking-tighter text-white uppercase">
                   Web3 Lab
                 </h3>
-                <h4 className="text-sm font-bold text-red-500 uppercase tracking-widest">
+                <h4 className="text-sm font-bold tracking-widest text-red-500 uppercase">
                   Op. Credential
                 </h4>
               </div>
 
-              <div className="relative z-10 border-t border-white/10 pt-4 flex justify-between items-end">
+              <div className="relative z-10 flex items-end justify-between border-t border-white/10 pt-4">
                 <div>
-                  <p className="text-[9px] font-mono text-gray-500 uppercase tracking-widest mb-1">
+                  <p className="mb-1 font-mono text-[9px] tracking-widest text-gray-500 uppercase">
                     Holder Identity
                   </p>
-                  <p className="text-xs font-bold text-white uppercase tracking-wider truncate max-w-[150px]">
-                    {certificate.student?.name || "Unknown Operator"}
+                  <p className="max-w-[150px] truncate text-xs font-bold tracking-wider text-white uppercase">
+                    {certificate.student?.name || 'Unknown Operator'}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[9px] font-mono text-gray-500 uppercase tracking-widest mb-1">
+                  <p className="mb-1 font-mono text-[9px] tracking-widest text-gray-500 uppercase">
                     Mint Date
                   </p>
-                  <p className="text-xs font-mono text-white tracking-widest">
+                  <p className="font-mono text-xs tracking-widest text-white">
                     {new Date(certificate.issuedAt).toLocaleDateString()}
                   </p>
                 </div>
@@ -152,55 +157,52 @@ export default function CertificateNFTPage() {
         </div>
 
         {/* Info Column */}
-        <div className="w-full lg:w-1/2 space-y-8">
+        <div className="w-full space-y-8 lg:w-1/2">
           <div>
             <Link
               href="/certificates"
-              className="text-gray-500 hover:text-red-500 uppercase text-xs font-bold tracking-widest mb-6 inline-flex items-center gap-2 group transition-colors"
+              className="group mb-6 inline-flex items-center gap-2 text-xs font-bold tracking-widest text-gray-500 uppercase transition-colors hover:text-red-500"
             >
-              <span className="transform group-hover:-translate-x-1 transition-transform">
-                ←
-              </span>{" "}
+              <span className="transform transition-transform group-hover:-translate-x-1">←</span>{' '}
               Back to Vault
             </Link>
-            <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tight mb-2">
-              {certificate.course?.title || "Unknown Protocol"}
+            <h1 className="mb-2 text-4xl font-black tracking-tight text-white uppercase md:text-5xl">
+              {certificate.course?.title || 'Unknown Protocol'}
             </h1>
-            <p className="text-red-500 font-mono tracking-widest uppercase text-sm mb-6">
+            <p className="mb-6 font-mono text-sm tracking-widest text-red-500 uppercase">
               Non-Fungible Certification
             </p>
-            <p className="text-gray-400 font-light text-lg">
-              This cryptographic token proves execution and mastery of the
-              linked learning module. It exists immutably on the Stellar
-              blockchain network.
+            <p className="text-lg font-light text-gray-400">
+              This cryptographic token proves execution and mastery of the linked learning module.
+              It exists immutably on the Stellar blockchain network.
             </p>
           </div>
 
-          <div className="bg-zinc-950 border border-white/10 rounded-2xl p-6 shadow-xl">
-            <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-6 border-b border-white/10 pb-4">
+          <div className="rounded-2xl border border-white/10 bg-zinc-950 p-6 shadow-xl">
+            <h3 className="mb-6 border-b border-white/10 pb-4 text-sm font-bold tracking-widest text-white uppercase">
               Token Metadata
             </h3>
 
             <div className="space-y-4 font-mono text-sm">
-              <div className="flex justify-between items-center bg-black border border-white/5 p-3 rounded">
+              <div className="flex items-center justify-between rounded border border-white/5 bg-black p-3">
                 <span className="text-gray-500">Asset ID</span>
                 <span className="text-gray-300">{certificate.id}</span>
               </div>
-              <div className="flex justify-between items-center bg-black border border-white/5 p-3 rounded">
+              <div className="flex items-center justify-between rounded border border-white/5 bg-black p-3">
                 <span className="text-gray-500">Transaction Hash</span>
-                <span className="text-red-400 break-all ml-4 text-right">
-                  {certificate.certificateHash || "Pending confirmation"}
+                <span className="ml-4 text-right break-all text-red-400">
+                  {certificate.certificateHash || 'Pending confirmation'}
                 </span>
               </div>
-              <div className="flex justify-between items-center bg-black border border-white/5 p-3 rounded">
+              <div className="flex items-center justify-between rounded border border-white/5 bg-black p-3">
                 <span className="text-gray-500">Contract</span>
-                <span className="text-gray-300 truncate max-w-[200px]">
+                <span className="max-w-[200px] truncate text-gray-300">
                   CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
                 </span>
               </div>
-              <div className="flex justify-between items-center bg-black border border-white/5 p-3 rounded">
+              <div className="flex items-center justify-between rounded border border-white/5 bg-black p-3">
                 <span className="text-gray-500">Status</span>
-                <span className="text-green-500 font-bold uppercase tracking-widest">
+                <span className="font-bold tracking-widest text-green-500 uppercase">
                   {certificate.status}
                 </span>
               </div>
@@ -211,31 +213,36 @@ export default function CertificateNFTPage() {
             <button
               onClick={verifyOnChain}
               disabled={isVerifying}
-              className={`flex-1 py-4 font-black uppercase tracking-widest rounded-xl transition-all ${
+              className={`flex-1 rounded-xl py-4 font-black tracking-widest uppercase transition-all ${
                 isVerifying
-                  ? "bg-zinc-800 text-gray-500 cursor-wait"
-                  : "bg-white text-black hover:bg-gray-200 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.3)]"
+                  ? 'cursor-wait bg-zinc-800 text-gray-500'
+                  : 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:bg-gray-200 hover:shadow-[0_0_30px_rgba(255,255,255,0.3)]'
               }`}
             >
-              {isVerifying ? "Polling Network..." : "Verify On-Chain"}
+              {isVerifying ? 'Polling Network...' : 'Verify On-Chain'}
             </button>
-            <button className="px-6 py-4 bg-zinc-900 border border-white/10 hover:border-red-500/50 text-white rounded-xl transition-colors group">
-              <svg
-                className="w-6 h-6 group-hover:text-red-500 transition-colors"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z" />
+            <Link
+              href={`/certificates/generate?id=${certificate.id}`}
+              className="flex items-center gap-2 rounded-xl bg-red-600 px-6 py-4 text-sm font-black tracking-widest text-white uppercase transition-colors hover:bg-red-700"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                />
               </svg>
-            </button>
+              Download
+            </Link>
           </div>
 
           {verificationResult && (
-            <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 text-center animate-pulse mt-4">
-              <p className="text-green-500 font-bold uppercase tracking-widest text-sm mb-1">
+            <div className="mt-4 animate-pulse rounded-xl border border-green-500/30 bg-green-500/10 p-4 text-center">
+              <p className="mb-1 text-sm font-bold tracking-widest text-green-500 uppercase">
                 Asset Verified
               </p>
-              <p className="text-xs text-green-400/70 font-mono">
+              <p className="font-mono text-xs text-green-400/70">
                 Found immutable match on network nodes.
               </p>
             </div>
@@ -243,5 +250,6 @@ export default function CertificateNFTPage() {
         </div>
       </div>
     </div>
+    </ErrorBoundary>
   );
 }

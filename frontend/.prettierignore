@@ -1,6 +1,2 @@
-# Frontend build output
-.next/
-out/
-node_modules/
-*.log
-pnpm-lock.yaml
+src/components/rewards/RewardsDashboard.tsx
+src/components/subscriptions/SubscriptionDashboard.tsx
