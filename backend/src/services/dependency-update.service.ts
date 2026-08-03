@@ -1,4 +1,3 @@
-// @ts-nocheck
 import logger from '../utils/logger.js';
 
 export interface CargoTomlDependency {
@@ -47,8 +46,8 @@ const RELEASE_NOTES: Record<string, string> = {
 };
 
 function compareVersions(a: string, b: string): 'major' | 'minor' | 'patch' | 'none' {
-  const [aMaj, aMin, aPat] = a.split('.').map(Number);
-  const [bMaj, bMin, bPat] = b.split('.').map(Number);
+  const [aMaj = 0, aMin = 0, aPat = 0] = a.split('.').map(Number);
+  const [bMaj = 0, bMin = 0, bPat = 0] = b.split('.').map(Number);
   if (bMaj > aMaj) return 'major';
   if (bMin > aMin) return 'minor';
   if (bPat > aPat) return 'patch';
@@ -75,7 +74,7 @@ export function parseCargoTomlDependencies(cargoToml: string): Array<{ name: str
   const sectionMatch = cargoToml.match(/\[dependencies\]([\s\S]*?)(?=\n\[|$)/);
   if (!sectionMatch) return deps;
 
-  const section = sectionMatch[1];
+  const section = sectionMatch[1] ?? '';
   const lines = section.split('\n');
 
   for (const line of lines) {
@@ -85,14 +84,14 @@ export function parseCargoTomlDependencies(cargoToml: string): Array<{ name: str
     // Simple: name = "version"
     const simpleMatch = trimmed.match(/^([\w-]+)\s*=\s*"([^"]+)"/);
     if (simpleMatch) {
-      deps.push({ name: simpleMatch[1], version: simpleMatch[2] });
+      deps.push({ name: simpleMatch[1]!, version: simpleMatch[2]! });
       continue;
     }
 
     // Inline table: name = { version = "...", ... }
     const tableMatch = trimmed.match(/^([\w-]+)\s*=\s*\{[^}]*version\s*=\s*"([^"]+)"/);
     if (tableMatch) {
-      deps.push({ name: tableMatch[1], version: tableMatch[2] });
+      deps.push({ name: tableMatch[1]!, version: tableMatch[2]! });
     }
   }
 
@@ -106,13 +105,14 @@ export async function checkDependencies(cargoToml: string): Promise<DependencyCh
   const dependencies: CargoTomlDependency[] = parsed.map(({ name, version }) => {
     const latestVersion = REGISTRY[name] ?? version;
     const updateType = compareVersions(version, latestVersion);
+    const releaseNotes = RELEASE_NOTES[name];
     return {
       name,
       currentVersion: version,
       latestVersion,
       isOutdated: updateType !== 'none',
       updateType,
-      ...(RELEASE_NOTES[name] ? { releaseNotes: RELEASE_NOTES[name] } : {}),
+      ...(releaseNotes ? { releaseNotes } : {}),
     };
   });
 

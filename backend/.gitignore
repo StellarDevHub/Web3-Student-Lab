@@ -37,3 +37,12 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# test snapshots and coverage output
+**/__snapshots__/
+*.snap
+coverage/
+
+# generated build artifacts committed by mistake
+*.js.map
+*.d.ts.map

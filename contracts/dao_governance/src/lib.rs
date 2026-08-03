@@ -62,16 +62,16 @@ pub enum Key {
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum DaoError {
-    AlreadyInitialized  = 1,
-    NotInitialized      = 2,
-    Unauthorized        = 3,
-    ProposalNotFound    = 4,
-    ProposalClosed      = 5,
-    VotingDeadlineLive  = 6,
-    AlreadyVoted        = 7,
+    AlreadyInitialized = 1,
+    NotInitialized = 2,
+    Unauthorized = 3,
+    ProposalNotFound = 4,
+    ProposalClosed = 5,
+    VotingDeadlineLive = 6,
+    AlreadyVoted = 7,
     InsufficientCredits = 8,
-    ZeroVotes           = 9,
-    InvalidDeadline     = 10,
+    ZeroVotes = 9,
+    InvalidDeadline = 10,
 }
 
 // ── Contract ──────────────────────────────────────────────────────────────────
@@ -97,7 +97,8 @@ impl DaoGovernance {
         let key = Key::Credits(member.clone());
         let prev: u128 = env.storage().persistent().get(&key).unwrap_or(0);
         env.storage().persistent().set(&key, &(prev + credits));
-        env.events().publish((symbol_short!("credits"),), (member, credits));
+        env.events()
+            .publish((symbol_short!("credits"),), (member, credits));
     }
 
     /// Create a new proposal.  Returns the proposal ID.
@@ -127,8 +128,11 @@ impl DaoGovernance {
             tally: 0,
             credits_spent: 0,
         };
-        env.storage().persistent().set(&Key::Proposal(id), &proposal);
-        env.events().publish((symbol_short!("propose"),), (creator, id));
+        env.storage()
+            .persistent()
+            .set(&Key::Proposal(id), &proposal);
+        env.events()
+            .publish((symbol_short!("propose"),), (creator, id));
         id
     }
 
@@ -149,7 +153,8 @@ impl DaoGovernance {
             .get(&Key::Proposal(proposal_id))
             .unwrap_or_else(|| panic_with_error!(&env, DaoError::ProposalNotFound));
 
-        if proposal.status != ProposalStatus::Active || env.ledger().timestamp() > proposal.deadline {
+        if proposal.status != ProposalStatus::Active || env.ledger().timestamp() > proposal.deadline
+        {
             panic_with_error!(&env, DaoError::ProposalClosed);
         }
 
@@ -171,10 +176,13 @@ impl DaoGovernance {
 
         proposal.tally += votes as i128;
         proposal.credits_spent = proposal.credits_spent.saturating_add(cost);
-        env.storage().persistent().set(&Key::Proposal(proposal_id), &proposal);
+        env.storage()
+            .persistent()
+            .set(&Key::Proposal(proposal_id), &proposal);
         env.storage().persistent().set(&vote_key, &votes);
 
-        env.events().publish((symbol_short!("vote"),), (voter, proposal_id, votes, cost));
+        env.events()
+            .publish((symbol_short!("vote"),), (voter, proposal_id, votes, cost));
     }
 
     /// Finalize a proposal after its deadline.  Anyone may call this.
@@ -197,8 +205,11 @@ impl DaoGovernance {
         } else {
             ProposalStatus::Failed
         };
-        env.storage().persistent().set(&Key::Proposal(proposal_id), &proposal);
-        env.events().publish((symbol_short!("finalize"),), (proposal_id, proposal.tally));
+        env.storage()
+            .persistent()
+            .set(&Key::Proposal(proposal_id), &proposal);
+        env.events()
+            .publish((symbol_short!("finalize"),), (proposal_id, proposal.tally));
     }
 
     /// Mark a passed proposal as executed.  Admin only.
@@ -216,8 +227,11 @@ impl DaoGovernance {
             panic_with_error!(&env, DaoError::ProposalClosed);
         }
         proposal.status = ProposalStatus::Executed;
-        env.storage().persistent().set(&Key::Proposal(proposal_id), &proposal);
-        env.events().publish((symbol_short!("execute"),), (caller, proposal_id));
+        env.storage()
+            .persistent()
+            .set(&Key::Proposal(proposal_id), &proposal);
+        env.events()
+            .publish((symbol_short!("execute"),), (caller, proposal_id));
     }
 
     // ── Views ─────────────────────────────────────────────────────────────────
@@ -227,11 +241,16 @@ impl DaoGovernance {
     }
 
     pub fn credits_of(env: Env, member: Address) -> u128 {
-        env.storage().persistent().get(&Key::Credits(member)).unwrap_or(0)
+        env.storage()
+            .persistent()
+            .get(&Key::Credits(member))
+            .unwrap_or(0)
     }
 
     pub fn vote_of(env: Env, proposal_id: u64, voter: Address) -> Option<i64> {
-        env.storage().persistent().get(&Key::Vote(proposal_id, voter))
+        env.storage()
+            .persistent()
+            .get(&Key::Vote(proposal_id, voter))
     }
 
     // ── Internal ──────────────────────────────────────────────────────────────
@@ -251,7 +270,10 @@ impl DaoGovernance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::{Address as _, Ledger as _}, Env, String};
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger as _},
+        Env, String,
+    };
 
     fn setup() -> (Env, DaoGovernanceClient<'static>, Address) {
         let env = Env::default();
@@ -302,7 +324,10 @@ mod tests {
         env.ledger().with_mut(|l| l.timestamp += 200);
         client.finalize(&pid);
 
-        assert_eq!(client.get_proposal(&pid).unwrap().status, ProposalStatus::Passed);
+        assert_eq!(
+            client.get_proposal(&pid).unwrap().status,
+            ProposalStatus::Passed
+        );
     }
 
     #[test]
@@ -322,7 +347,10 @@ mod tests {
         env.ledger().with_mut(|l| l.timestamp += 200);
         client.finalize(&pid);
 
-        assert_eq!(client.get_proposal(&pid).unwrap().status, ProposalStatus::Failed);
+        assert_eq!(
+            client.get_proposal(&pid).unwrap().status,
+            ProposalStatus::Failed
+        );
     }
 
     #[test]

@@ -28,6 +28,16 @@ jest.mock('../src/utils/logger.js', () => {
 import mockLoggerImport from '../src/utils/logger.js';
 const mockLogger = mockLoggerImport as unknown as { info: jest.Mock, warn: jest.Mock, error: jest.Mock };
 
+// Mock auth middleware for authorization tests
+jest.mock('../src/middleware/auth.js', () => ({
+  authenticateToken: jest.fn((req, res, next) => next()),
+}));
+
+jest.mock('../src/auth/auth.middleware.js', () => ({
+  authenticate: jest.fn((req, res, next) => next()),
+  optionalAuth: jest.fn((req, res, next) => next()),
+}));
+
 // ─── MetricsCollector unit tests ─────────────────────────────────────────────
 
 describe('MetricsCollector', () => {
@@ -278,24 +288,78 @@ describe('MetricsCollector', () => {
   });
 });
 
-// ─── Metrics routes integration tests ────────────────────────────────────────
-
+// ─── Metrics Routes integration tests ────────────────────────────────────────────
 import express from 'express';
 import request from 'supertest';
 import metricsRouter from '../src/routes/metrics.routes.js';
 import metricsCollector from '../src/metrics/MetricsCollector.js';
+// Import mocked middleware so we can control auth state in tests
+import { authenticateToken } from '../src/middleware/auth.js';
+const mockAuthenticateToken = authenticateToken as jest.MockedFunction<typeof authenticateToken>;
 
-describe('Metrics Routes', () => {
+/**
+ * Helper to build an Express app with the metrics router and a mock
+ * authorization middleware that we can toggle per-test.
+ */
+function buildApp(options: {
+  authEnabled?: boolean;
+  userRole?: string | null;
+  rejectAuth?: boolean;
+}) {
+  const { authEnabled = false, userRole = null, rejectAuth = false } = options;
+
   const app = express();
   app.use(express.json());
-  app.use('/metrics', metricsRouter);
 
-  beforeEach(() => {
-    metricsCollector.reset();
+  // Mock auth middleware behavior
+  app.use((req, res, next) => {
+    if (!authEnabled) {
+      return next(); // public access (legacy behavior)
+    }
+    if (rejectAuth) {
+      return res.status(401).json({ status: 'error', message: 'Access token required' });
+    }
+    if (!userRole) {
+      return res.status(401).json({ status: 'error', message: 'Access token required' });
+    }
+    // Attach user to request
+    (req as any).user = { id: 'test-user-id', email: 'test@example.com', role: userRole };
+    next();
   });
 
-  describe('GET /metrics', () => {
-    it('returns 200 with a summary object', async () => {
+  // Mock admin authorization middleware
+  app.use('/metrics', (req, res, next) => {
+    // Public health/summary endpoint stays open
+    if (req.path === '/' || req.path === '') {
+      return next();
+    }
+
+    // All other endpoints require admin role
+    const user = (req as any).user;
+    if (!user) {
+      return res.status(401).json({ status: 'error', message: 'Access token required' });
+    }
+    if (user.role !== 'ADMIN') {
+      return res.status(403).json({ status: 'error', message: 'Admin access required' });
+    }
+    next();
+  });
+
+  app.use('/metrics', metricsRouter);
+
+  return app;
+}
+
+describe('Metrics Routes', () => {
+  beforeEach(() => {
+    metricsCollector.reset();
+    mockAuthenticateToken.mockClear();
+  });
+
+  // ── Public aggregate endpoint (GET /metrics) ────────────────────────────────
+  describe('GET /metrics — public aggregate endpoint', () => {
+    it('returns 200 with a summary object when unauthenticated', async () => {
+      const app = buildApp({ authEnabled: true });
       const res = await request(app).get('/metrics');
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('success');
@@ -304,68 +368,195 @@ describe('Metrics Routes', () => {
       expect(res.body.data).toHaveProperty('business');
       expect(res.body.data).toHaveProperty('system');
     });
-  });
 
-  describe('GET /metrics/performance', () => {
-    it('returns an empty array when no requests recorded', async () => {
-      const res = await request(app).get('/metrics/performance');
+    it('returns 200 with a summary object for authenticated non-admin user', async () => {
+      const app = buildApp({ authEnabled: true, userRole: 'STUDENT' });
+      const res = await request(app).get('/metrics');
       expect(res.status).toBe(200);
-      expect(res.body.data).toEqual([]);
+      expect(res.body.status).toBe('success');
+      expect(res.body.data).toHaveProperty('performance');
     });
 
-    it('returns recorded performance entries', async () => {
-      metricsCollector.recordRequest('GET', '/courses', 100, 200);
+    it('returns 200 with a summary object for authenticated admin user', async () => {
+      const app = buildApp({ authEnabled: true, userRole: 'ADMIN' });
+      const res = await request(app).get('/metrics');
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
+      expect(res.body.data).toHaveProperty('performance');
+    });
+
+    it('does NOT expose raw error content in the summary', async () => {
+      metricsCollector.recordError('ValidationError', 'bad input', 400);
+      const app = buildApp({ authEnabled: true });
+      const res = await request(app).get('/metrics');
+      expect(res.status).toBe(200);
+      // Summary only shows aggregated counts, not raw error messages
+      expect(res.body.data.errors).toHaveProperty('totalErrors');
+      expect(res.body.data.errors).toHaveProperty('errorsByType');
+      expect(res.body.data.errors).not.toHaveProperty('entries');
+      expect(res.body.data.errors).not.toHaveProperty('messages');
+    });
+  });
+
+  // ── Raw performance metrics (GET /metrics/performance) ──────────────────────
+  describe('GET /metrics/performance — admin only', () => {
+    it('returns 401 when unauthenticated', async () => {
+      const app = buildApp({ authEnabled: true });
       const res = await request(app).get('/metrics/performance');
+      expect(res.status).toBe(401);
+      expect(res.body.status).toBe('error');
+      expect(res.body.message).toMatch(/token required/i);
+    });
+
+    it('returns 403 for non-admin authenticated user', async () => {
+      const app = buildApp({ authEnabled: true, userRole: 'STUDENT' });
+      const res = await request(app).get('/metrics/performance');
+      expect(res.status).toBe(403);
+      expect(res.body.status).toBe('error');
+      expect(res.body.message).toMatch(/admin access required/i);
+    });
+
+    it('returns 200 with raw performance entries for admin user', async () => {
+      metricsCollector.recordRequest('GET', '/courses', 100, 200);
+      const app = buildApp({ authEnabled: true, userRole: 'ADMIN' });
+      const res = await request(app).get('/metrics/performance');
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
       expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0].route).toBe('/courses');
     });
-  });
 
-  describe('GET /metrics/errors', () => {
-    it('returns an empty array when no errors recorded', async () => {
-      const res = await request(app).get('/metrics/errors');
+    it('returns an empty array when no requests recorded (admin)', async () => {
+      const app = buildApp({ authEnabled: true, userRole: 'ADMIN' });
+      const res = await request(app).get('/metrics/performance');
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
+  });
 
-    it('returns recorded error entries', async () => {
-      metricsCollector.recordError('ValidationError', 'bad input', 400);
+  // ── Raw error metrics (GET /metrics/errors) ───────────────────────────────────
+  describe('GET /metrics/errors — admin only', () => {
+    it('returns 401 when unauthenticated', async () => {
+      const app = buildApp({ authEnabled: true });
       const res = await request(app).get('/metrics/errors');
+      expect(res.status).toBe(401);
+      expect(res.body.status).toBe('error');
+      expect(res.body.message).toMatch(/token required/i);
+    });
+
+    it('returns 403 for non-admin authenticated user', async () => {
+      const app = buildApp({ authEnabled: true, userRole: 'STUDENT' });
+      const res = await request(app).get('/metrics/errors');
+      expect(res.status).toBe(403);
+      expect(res.body.status).toBe('error');
+      expect(res.body.message).toMatch(/admin access required/i);
+    });
+
+    it('returns 200 with raw error entries for admin user', async () => {
+      metricsCollector.recordError('ValidationError', 'bad input', 400);
+      const app = buildApp({ authEnabled: true, userRole: 'ADMIN' });
+      const res = await request(app).get('/metrics/errors');
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
       expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0].type).toBe('ValidationError');
     });
+
+    it('returns an empty array when no errors recorded (admin)', async () => {
+      const app = buildApp({ authEnabled: true, userRole: 'ADMIN' });
+      const res = await request(app).get('/metrics/errors');
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([]);
+    });
   });
 
-  describe('GET /metrics/business', () => {
-    it('returns an empty array when no events recorded', async () => {
+  // ── Raw business metrics (GET /metrics/business) ──────────────────────────────
+  describe('GET /metrics/business — admin only', () => {
+    it('returns 401 when unauthenticated', async () => {
+      const app = buildApp({ authEnabled: true });
+      const res = await request(app).get('/metrics/business');
+      expect(res.status).toBe(401);
+      expect(res.body.status).toBe('error');
+      expect(res.body.message).toMatch(/token required/i);
+    });
+
+    it('returns 403 for non-admin authenticated user', async () => {
+      const app = buildApp({ authEnabled: true, userRole: 'STUDENT' });
+      const res = await request(app).get('/metrics/business');
+      expect(res.status).toBe(403);
+      expect(res.body.status).toBe('error');
+      expect(res.body.message).toMatch(/admin access required/i);
+    });
+
+    it('returns 200 with raw business entries for admin user', async () => {
+      metricsCollector.recordEvent('user.registered', { plan: 'pro' });
+      const app = buildApp({ authEnabled: true, userRole: 'ADMIN' });
+      const res = await request(app).get('/metrics/business');
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0].event).toBe('user.registered');
+    });
+
+    it('returns an empty array when no events recorded (admin)', async () => {
+      const app = buildApp({ authEnabled: true, userRole: 'ADMIN' });
       const res = await request(app).get('/metrics/business');
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
-
-    it('returns recorded business events', async () => {
-      metricsCollector.recordEvent('user.registered', { plan: 'pro' });
-      const res = await request(app).get('/metrics/business');
-      expect(res.body.data).toHaveLength(1);
-      expect(res.body.data[0].event).toBe('user.registered');
-    });
   });
 
-  describe('POST /metrics/reset', () => {
-    it('clears all metrics and returns success', async () => {
+  // ── Reset metrics (POST /metrics/reset) ───────────────────────────────────────
+  describe('POST /metrics/reset — admin only', () => {
+    it('returns 401 when unauthenticated', async () => {
+      const app = buildApp({ authEnabled: true });
+      const res = await request(app).post('/metrics/reset');
+      expect(res.status).toBe(401);
+      expect(res.body.status).toBe('error');
+      expect(res.body.message).toMatch(/token required/i);
+    });
+
+    it('returns 403 for non-admin authenticated user', async () => {
+      const app = buildApp({ authEnabled: true, userRole: 'STUDENT' });
+      const res = await request(app).post('/metrics/reset');
+      expect(res.status).toBe(403);
+      expect(res.body.status).toBe('error');
+      expect(res.body.message).toMatch(/admin access required/i);
+    });
+
+    it('clears all metrics and returns success for admin user', async () => {
       metricsCollector.recordRequest('GET', '/a', 50, 200);
       metricsCollector.recordError('Error', 'oops');
       metricsCollector.recordEvent('user.registered');
 
+      const app = buildApp({ authEnabled: true, userRole: 'ADMIN' });
       const res = await request(app).post('/metrics/reset');
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('success');
+      expect(res.body.message).toMatch(/reset successfully/i);
 
       // Verify data is cleared
       const summary = await request(app).get('/metrics');
       expect(summary.body.data.performance.totalRequests).toBe(0);
       expect(summary.body.data.errors.totalErrors).toBe(0);
       expect(summary.body.data.business.totalEvents).toBe(0);
+    });
+  });
+
+  // ── Legacy backward compatibility (no auth middleware applied) ────────────────
+  describe('Legacy mode — without auth middleware (backward compatibility)', () => {
+    it('GET /metrics/performance returns 200 when auth is not enabled', async () => {
+      const app = buildApp({ authEnabled: false });
+      const res = await request(app).get('/metrics/performance');
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
+    });
+
+    it('POST /metrics/reset returns 200 when auth is not enabled', async () => {
+      const app = buildApp({ authEnabled: false });
+      const res = await request(app).post('/metrics/reset');
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
     });
   });
 });

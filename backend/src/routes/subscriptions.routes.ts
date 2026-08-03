@@ -8,7 +8,7 @@ import {
 } from '../middleware/validation.js';
 import { cacheMiddleware } from '../middleware/cache.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 // Rate limiting for subscription operations
 const subscriptionRateLimit = rateLimit({

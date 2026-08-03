@@ -1,6 +1,5 @@
-import { Queue } from 'bullmq';
 import type { JobsOptions } from 'bullmq';
-import { redisConnection } from '../../utils/redis.js';
+import { Queue } from 'bullmq';
 import type { WebhookDeliveryJobData } from './types.js';
 
 export const WEBHOOK_DELIVERY_QUEUE_NAME = 'webhook-delivery-queue';
@@ -40,7 +39,7 @@ const createQueue = (name: string, defaultJobOptions?: JobsOptions) => {
   }
 
   const redisUrl = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
-  
+
   return new Queue<WebhookDeliveryJobData>(name, {
     connection: {
       host: redisUrl.hostname,

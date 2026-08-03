@@ -13,7 +13,7 @@ import {
   computeLayout,
 } from '@/lib/roadmap-utils';
 import { getLearningJourney, getStoredLearningJourney } from '@/lib/learning-journey';
-import { learningAPI } from '@/lib/learning-api';
+import { learningAPI, ProgressUnavailableError, ProgressConflictError } from '@/lib/learning-api';
 import { useUserStore } from '@/stores/userStore';
 import type { Course } from '@/lib/api';
 
@@ -142,6 +142,8 @@ export function useRoadmapProgress(
     async (moduleId: string, completed: boolean) => {
       if (!course) return;
 
+      const previousProgress = progress;
+
       const updatedProgress: ProgressData = {
         completedLessons: completed
           ? [...(progress?.completedLessons ?? []), moduleId]
@@ -153,6 +155,7 @@ export function useRoadmapProgress(
         status: 'in_progress',
         lastAccessedAt: new Date().toISOString(),
         completedAt: progress?.completedAt ?? null,
+        updatedAt: progress?.updatedAt ?? null,
       };
 
       const totalLessons = roadmapCourse?.nodes.length ?? 1;
@@ -162,18 +165,72 @@ export function useRoadmapProgress(
       if (updatedProgress.percentage >= 100) {
         updatedProgress.status = 'completed';
         updatedProgress.completedAt = new Date().toISOString();
+      } else if (updatedProgress.completedLessons.length === 0) {
+        updatedProgress.status = 'not_started';
       }
 
+      // Optimistic UI update — rolled back below if persistence fails so a
+      // failed save never leaves the UI falsely marked complete (#901).
       setProgress(updatedProgress);
+      learningAPI.saveLocalProgress(course.id, updatedProgress);
 
       if (completed) {
         completeModule(moduleId);
       }
 
-      learningAPI.saveLocalProgress(course.id, updatedProgress);
-      await learningAPI.updateProgress(course.id, updatedProgress);
+      try {
+        const saved = await learningAPI.updateProgress(course.id, {
+          completedLessons: updatedProgress.completedLessons,
+          currentModuleId: updatedProgress.currentModuleId,
+          percentage: updatedProgress.percentage,
+          status: updatedProgress.status,
+          baseUpdatedAt: previousProgress?.updatedAt ?? null,
+        });
+
+        if (saved) {
+          // Reconcile with the authoritative server snapshot (carries the
+          // fresh `updatedAt` token used for the next write).
+          const reconciled = learningAPI.convertToProgressData(saved);
+          setProgress(reconciled);
+          learningAPI.saveLocalProgress(course.id, reconciled);
+          setError(null);
+        } else {
+          throw new Error('Progress could not be saved');
+        }
+      } catch (err) {
+        if (err instanceof ProgressConflictError) {
+          // Deterministic stale/concurrent behavior (#901): the server is
+          // authoritative — refetch and reflect stored state, then tell the
+          // learner to reconcile.
+          setError(err.message);
+          if (err.current) {
+            const serverProgress = learningAPI.convertToProgressData(
+              err.current
+            );
+            setProgress(serverProgress);
+            learningAPI.saveLocalProgress(course.id, serverProgress);
+          } else {
+            await fetchProgress();
+          }
+          return;
+        }
+
+        // Roll back the optimistic update so the UI does not show a
+        // completion that was never persisted.
+        setProgress(previousProgress);
+        if (previousProgress) {
+          learningAPI.saveLocalProgress(course.id, previousProgress);
+        }
+        setError(
+          err instanceof ProgressUnavailableError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : 'Failed to save progress'
+        );
+      }
     },
-    [course, progress, roadmapCourse, completeModule]
+    [course, progress, roadmapCourse, completeModule, fetchProgress]
   );
 
   const refetch = useCallback(async () => {

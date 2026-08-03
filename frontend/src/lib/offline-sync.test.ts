@@ -56,10 +56,16 @@ describe('offline-sync', () => {
   });
 
   it('queues lesson progress and flushes it when online', async () => {
+    localStorage.setItem('token', 'test-token');
+
     await queueLessonProgressCompletion({
       courseId: 'course-1',
       lessonId: 'lesson-1',
       completedAt: '2026-06-25T00:00:00.000Z',
+      completedLessons: ['lesson-1'],
+      currentModuleId: 'mod-1',
+      percentage: 50,
+      status: 'in_progress',
     });
 
     let queuedProgress = await getQueuedLessonProgress();
@@ -74,10 +80,17 @@ describe('offline-sync', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/learning/courses/course-1/progress', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer test-token',
+      },
       credentials: 'same-origin',
       body: JSON.stringify({
-        completedLessonId: 'lesson-1',
+        lessonId: 'lesson-1',
+        status: 'completed',
+        completedLessons: ['lesson-1'],
+        currentModuleId: 'mod-1',
+        percentage: 50,
         completedAt: '2026-06-25T00:00:00.000Z',
       }),
     });

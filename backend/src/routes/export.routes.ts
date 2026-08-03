@@ -8,7 +8,7 @@ import { sseSessionManager } from '../sse/SseSessionManager.js';
 
 const EXPORTS_DIR = path.join(process.cwd(), 'exports');
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 // POST /api/v1/export - Trigger an export
 router.post('/', async (req, res) => {

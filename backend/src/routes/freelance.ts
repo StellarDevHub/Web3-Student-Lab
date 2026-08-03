@@ -1,8 +1,8 @@
-import express from 'express';
+import express, { type Router } from 'express';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { sendSuccess } from '../utils/response.js';
 
-const router = express.Router();
+const router: Router = express.Router();
 
 // Mocking reputation retrieval for the demo
 router.get(

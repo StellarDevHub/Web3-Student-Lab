@@ -36,11 +36,40 @@ export const config = {
     readReplicaUrl: getEnvVar('DATABASE_READ_REPLICA_URL', ''),
   },
   redis: {
-    url: getEnvVar('REDIS_URL', 'redis://localhost:6379'),
+    url: getEnvVar('REDIS_URL'), // Required
   },
   security: {
     jwtSecret: getEnvVar('JWT_SECRET'), // Required
     jwtExpiresIn: getEnvVar('JWT_EXPIRES_IN', '7d'),
+  },
+
+  /**
+   * Payload encryption key rotation configuration.
+   *
+   * Keys are loaded dynamically from PAYLOAD_ENCRYPTION_KEY_v<N> env vars by
+   * EncryptionKeyManager rather than being read here, so this section only
+   * holds rotation-related tunables that benefit from centralised config access.
+   */
+  encryption: {
+    /**
+     * Comma-separated list of field paths that are encrypted at rest.
+     * Informational — used by the rotation CLI / admin endpoint to know
+     * which Prisma fields to iterate when migrating ciphertexts.
+     * Example: "Student.githubAccessToken,WebhookSubscription.secret"
+     */
+    encryptedFields: process.env.ENCRYPTED_FIELDS || '',
+
+    /**
+     * Maximum number of rows to re-encrypt per rotation batch request.
+     * Prevents a single HTTP call from running for too long.
+     */
+    rotationBatchSize: parseInt(process.env.ENCRYPTION_ROTATION_BATCH_SIZE || '100', 10),
+
+    /**
+     * If true, the GET /api/v1/security/key-versions endpoint is enabled.
+     * Keep disabled in production unless accessed through an admin-only gateway.
+     */
+    exposeKeyVersionEndpoint: process.env.ENCRYPTION_EXPOSE_KEY_VERSIONS !== 'false',
   },
   stellar: {
     network: getEnvVar('STELLAR_NETWORK', 'testnet'),
@@ -84,6 +113,10 @@ export const config = {
     compress: process.env.BACKUP_COMPRESS !== 'false',
     tempDir: getEnvVar('BACKUP_TEMP_DIR', '/tmp/backups'),
   },
+  graphql: {
+    maxDepth: parseInt(getEnvVar('GRAPHQL_MAX_DEPTH', '10'), 10),
+    maxComplexity: parseInt(getEnvVar('GRAPHQL_MAX_COMPLEXITY', '100'), 10),
+  },
 
   /**
    * Helper to safely log configuration without exposing secrets
@@ -91,6 +124,7 @@ export const config = {
   getSafeConfig() {
     return {
       app: this.app,
+      graphql: this.graphql,
       redis: { url: this.maskSecret(this.redis.url) },
       db: { url: this.maskSecret(this.db.url) },
       security: {
@@ -103,6 +137,12 @@ export const config = {
       },
       openai: {
         apiKey: this.openai.apiKey ? '***REDACTED***' : '',
+      },
+      encryption: {
+        encryptedFields: this.encryption.encryptedFields,
+        rotationBatchSize: this.encryption.rotationBatchSize,
+        exposeKeyVersionEndpoint: this.encryption.exposeKeyVersionEndpoint,
+        // Key material is never stored in config — it lives in PAYLOAD_ENCRYPTION_KEY_v<N> env vars
       },
       backup: {
         s3: {

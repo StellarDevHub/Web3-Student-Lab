@@ -15,6 +15,7 @@ members = [
     "commit_reveal_rng",
     "quadratic_funding",
     "multisig_wallet_timelock",
+    "did_registry",
     "course_proxy",
     "auth_checker",
     "cross_chain_client",
@@ -24,7 +25,7 @@ members = [
     "content_management_system",
     "testnet_faucet_integration",
     "automated_testing_suite",
-    "cicd_pipeline"
+    "cicd_pipeline",
 ]
 
 [lib]
@@ -37,3 +38,4 @@ soroban-sdk = "22.0.0"
 soroban-sdk = { version = "22.0.0", features = ["testutils"] }
 rand = { version = "0.8", features = ["small_rng"] }
 ed25519-dalek = { version = "2", default-features = false, features = ["std", "rand_core"] }
+proptest = "1"

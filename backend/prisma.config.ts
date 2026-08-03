@@ -7,6 +7,11 @@ export default defineConfig({
   schema: 'prisma/schema.prisma',
   datasource: {
     url: connectionString,
+    // Required for `prisma migrate diff --from-migrations`/rollback
+    // verification (scripts/test-migration-rollback.sh). Falls back to
+    // undefined (Prisma's own default behavior) when unset, so this is a
+    // no-op for anyone not running the rollback check.
+    shadowDatabaseUrl: process.env.SHADOW_DATABASE_URL,
   },
   migrations: {
     path: 'prisma/migrations',

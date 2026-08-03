@@ -67,7 +67,7 @@ describe('curriculum search — pure builders', () => {
       expect(text).toContain('"workspaceId" = $2');
       expect(text).not.toContain('"entityType"');
       expect(text).toContain('LIMIT $3 OFFSET $4');
-      expect(text).toContain('ORDER BY rank DESC');
+      expect(text).toContain('ORDER BY rank DESC, "title" ASC, "id" ASC');
     });
 
     it('appends type, difficulty and courseId filters in order', () => {
@@ -85,6 +85,21 @@ describe('curriculum search — pure builders', () => {
       expect(text).toContain('"difficulty" = $4');
       expect(text).toContain('"courseId" = $5');
       expect(text).toContain('LIMIT $6 OFFSET $7');
+    });
+
+    it('adds a stable cursor filter when provided', () => {
+      const { text, values } = buildCurriculumSearchQuery({
+        query: 'soroban',
+        workspaceId: 'default',
+        limit: 10,
+        offset: 0,
+        cursor: { rank: 0.42, title: 'Alpha', id: 'abc' },
+      });
+
+      expect(values).toEqual(['soroban', 'default', 0.42, 'Alpha', 'abc', 10, 0]);
+      expect(text).toContain('ts_rank("searchVector", websearch_to_tsquery');
+      expect(text).toContain('OR (ts_rank("searchVector"');
+      expect(text).toContain('AND "title" > $4');
     });
   });
 

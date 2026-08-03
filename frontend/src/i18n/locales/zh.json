@@ -1,4 +1,19 @@
 {
+  "home": {
+    "title": "Web3 学生",
+    "title_accent": "实验室",
+    "subtitle": "区块链开发的终极开源教育平台。学习智能合约，协作项目，构建Web3的未来。",
+    "launch_app": "启动应用",
+    "view_source": "查看源码",
+    "feature_curriculum_title": "互动式课程",
+    "feature_curriculum_desc": "通过动手编码练习，从基础到高级智能合约开发逐步进阶。完成模块后获得区块链可验证证书。",
+    "feature_ide_title": "浏览器内IDE",
+    "feature_ide_desc": "直接在浏览器中编写、测试和部署Rust智能合约，无需本地设置。与Soroban集成，实现无缝测试。",
+    "feature_collab_title": "协作实验室",
+    "feature_collab_desc": "合作开展黑客松项目，共享组件，通过链上同行评审建立去中心化声誉。",
+    "grant_title": "项目状态：需要资助",
+    "grant_desc": "Web3 Student Lab 是一个雄心勃勃的开源项目，旨在彻底改变开发者加入Stellar生态系统的方式。我们目前正在寻求资助，以全面部署我们的基础设施，完成课程，并将此平台推向主网。"
+  },
   "nav": {
     "modules": "模块",
     "roadmap": "路线图",
@@ -167,11 +182,7 @@
           "description": "无常损失、智能合约风险和系统级权衡。"
         }
       ],
-      "deliverables": [
-        "一份DeFi协议分析报告",
-        "一份代币流程图",
-        "一个简单的AMM数学练习"
-      ],
+      "deliverables": ["一份DeFi协议分析报告", "一份代币流程图", "一个简单的AMM数学练习"],
       "tools": ["AMM模拟器", "电子表格建模", "协议仪表板", "浏览器工具"]
     },
     "default": {

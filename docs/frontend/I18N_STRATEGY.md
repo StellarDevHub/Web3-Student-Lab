@@ -164,12 +164,17 @@ cp messages/en.json messages/[your-locale].json
 #### Step 4: Validate Translations
 
 ```bash
-# Run validation script
+# From frontend/, run the locale key-parity check
 npm run validate:i18n
 
-# Test locally
-npm run dev
+# Or run it with the full frontend test suite
+npm test
 ```
+
+The validation uses `src/i18n/locales/en.json` as the reference dictionary and compares Spanish
+and Chinese against it recursively. Failures list each full path, for example
+`missing key in es: courses.detail.start_enrollment` or
+`unexpected key in zh: nav.legacy_label`.
 
 #### Step 5: Submit Pull Request
 

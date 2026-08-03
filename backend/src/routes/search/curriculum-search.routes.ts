@@ -7,7 +7,7 @@ import {
   searchCurriculum,
 } from '../../search/curriculum/CurriculumSearchService.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * GET /api/v1/search
@@ -19,9 +19,8 @@ const router = Router();
 router.get('/', validateQuery(curriculumSearchQuerySchema), async (req: Request, res: Response) => {
   try {
     // Re-parse to obtain the coerced/typed values (validateQuery only validates).
-    const { q, type, difficulty, courseId, limit, offset } = curriculumSearchQuerySchema.parse(
-      req.query
-    );
+    const { q, type, difficulty, courseId, limit, offset, cursorRank, cursorTitle, cursorId } =
+      curriculumSearchQuerySchema.parse(req.query);
     const workspaceId = getWorkspaceId() ?? 'default';
 
     const results = await searchCurriculum({
@@ -32,6 +31,10 @@ router.get('/', validateQuery(curriculumSearchQuerySchema), async (req: Request,
       courseId,
       limit,
       offset,
+      cursor:
+        cursorRank !== undefined && cursorTitle && cursorId
+          ? { rank: cursorRank, title: cursorTitle, id: cursorId }
+          : undefined,
     });
 
     res.json({ query: q, count: results.length, limit, offset, results });

@@ -42,7 +42,9 @@ impl ContinuousBondingCurveContract {
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Slope, &slope);
-        env.storage().instance().set(&DataKey::BasePrice, &base_price);
+        env.storage()
+            .instance()
+            .set(&DataKey::BasePrice, &base_price);
         env.storage().instance().set(&DataKey::Supply, &0i128);
         env.storage().instance().set(&DataKey::Reserve, &0i128);
     }
@@ -70,9 +72,13 @@ impl ContinuousBondingCurveContract {
             panic_with_error!(&env, CurveError::SlippageExceeded);
         }
 
-        env.storage().instance().set(&DataKey::Supply, &(supply + tokens_out));
+        env.storage()
+            .instance()
+            .set(&DataKey::Supply, &(supply + tokens_out));
         let reserve = read_i128(&env, DataKey::Reserve);
-        env.storage().instance().set(&DataKey::Reserve, &(reserve + cost));
+        env.storage()
+            .instance()
+            .set(&DataKey::Reserve, &(reserve + cost));
         cost
     }
 
@@ -108,8 +114,12 @@ impl ContinuousBondingCurveContract {
             panic_with_error!(&env, CurveError::InvalidAmount);
         }
 
-        env.storage().instance().set(&DataKey::Supply, &(supply - tokens_in));
-        env.storage().instance().set(&DataKey::Reserve, &(reserve - payout));
+        env.storage()
+            .instance()
+            .set(&DataKey::Supply, &(supply - tokens_in));
+        env.storage()
+            .instance()
+            .set(&DataKey::Reserve, &(reserve - payout));
         payout
     }
 
@@ -135,7 +145,10 @@ impl ContinuousBondingCurveContract {
     }
 
     pub fn state(env: Env) -> (i128, i128) {
-        (read_i128(&env, DataKey::Supply), read_i128(&env, DataKey::Reserve))
+        (
+            read_i128(&env, DataKey::Supply),
+            read_i128(&env, DataKey::Reserve),
+        )
     }
 }
 
@@ -195,7 +208,8 @@ mod tests {
 
         client.initialize(&admin, &2, &100);
 
-        let buy_cost = client.buy_exact_tokens(&user, &100, &30_000, &(env.ledger().timestamp() + 100));
+        let buy_cost =
+            client.buy_exact_tokens(&user, &100, &30_000, &(env.ledger().timestamp() + 100));
         assert!(buy_cost > 0);
 
         let (supply, reserve) = client.state();

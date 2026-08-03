@@ -324,6 +324,12 @@ textarea {
 
 .lesson-viewer .token.punctuation { color: var(--prism-punctuation); }
 
+/* ─── Playground execution status bar ─────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
 /* Thin themed scrollbar shared by simulator-style panels */
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;

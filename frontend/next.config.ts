@@ -1,11 +1,63 @@
 import type { NextConfig } from 'next';
 import path from 'path';
+import { cspDirectivesToString, getCSPConfig } from './src/lib/security/csp-config';
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: path.resolve(__dirname, '.'),
   reactCompiler: true,
   // Disable Turbopack and use Webpack (required for custom webpack config)
   // turbopack: {}, // Uncomment this line if you want to use Turbopack instead
+
+  // Content Security Policy with nonce-based script loading
+  async headers() {
+    const cspConfig = getCSPConfig();
+    const cspValue = cspDirectivesToString(cspConfig.directives);
+    const headerKey = cspConfig.reportOnly ? 'Content-Security-Policy-Report-Only' : 'Content-Security-Policy';
+
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: headerKey,
+            value: cspValue,
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=()',
+          },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains; preload',
+          },
+          {
+            key: 'Cross-Origin-Embedder-Policy',
+            value: 'require-corp',
+          },
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin',
+          },
+        ],
+      },
+    ];
+  },
 
   // Bundle optimization and tree-shaking configuration
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {

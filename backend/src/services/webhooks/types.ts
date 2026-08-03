@@ -33,6 +33,7 @@ export interface WebhookDeliveryRequest {
   destination: WebhookDestination;
   event: WebhookEventPayload;
   metadata?: Record<string, unknown>;
+  idempotencyKey?: string;
 }
 
 export interface WebhookDeliveryJobData extends WebhookDeliveryRequest {
@@ -51,5 +52,19 @@ export interface SignedWebhookHeaders {
   'x-webhook-event': string;
   'x-webhook-signature': string;
   'x-webhook-timestamp': string;
+}
+
+export type WebhookDeliveryState = 'pending' | 'delivered' | 'failed' | 'dead-letted';
+
+export interface WebhookDeliveryHistoryEntry {
+  idempotencyKey: string;
+  state: WebhookDeliveryState;
+  deliveryId: string;
+  destinationUrl: string;
+  eventId: string;
+  eventType: WebhookEventName;
+  updatedAt: string;
+  attemptsMade?: number;
+  error?: string;
 }
 

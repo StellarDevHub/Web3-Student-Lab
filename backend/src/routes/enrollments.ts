@@ -1,7 +1,9 @@
 import { Router } from 'express';
+import { DidValidationError, validateStudentDidCompatibility } from '../auth/auth.service.js';
 import prisma from '../db/index.js';
+import logger from '../utils/logger.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 interface Enrollment {
   id: string;
@@ -129,6 +131,28 @@ router.post('/', async (req, res) => {
 
     if (!student || !course) {
       return res.status(404).json({ error: 'Student or course not found' });
+    }
+
+    try {
+      validateStudentDidCompatibility({
+        did: student.did,
+        walletAddress: student.walletAddress,
+        expectedNetwork: process.env.STELLAR_NETWORK || 'testnet',
+      });
+    } catch (error) {
+      if (error instanceof DidValidationError) {
+        logger.warn('Rejected enrollment because linked DID is incompatible with student identity', {
+          route: '/api/v1/enrollments',
+          studentId,
+          courseId,
+          did: student.did,
+          walletAddress: student.walletAddress,
+          reason: error.message,
+        });
+        return res.status(400).json({ error: error.message });
+      }
+
+      throw error;
     }
 
     const newEnrollment = {

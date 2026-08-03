@@ -1,4 +1,19 @@
 {
+  "home": {
+    "title": "Web3 Student ",
+    "title_accent": "Lab",
+    "subtitle": "The ultimate open-source educational platform for blockchain development. Learn smart contracts, collaborate on projects, and build the future of Web3.",
+    "launch_app": "Launch App",
+    "view_source": "View Source",
+    "feature_curriculum_title": "Interactive Curriculum",
+    "feature_curriculum_desc": "Progress from basics to advanced smart contract development with hands-on coding exercises. Earn blockchain-verifiable certificates as you complete modules.",
+    "feature_ide_title": "In-Browser IDE",
+    "feature_ide_desc": "Write, test, and deploy Rust smart contracts directly from your browser without local setup. Integrated with Soroban for seamless testing.",
+    "feature_collab_title": "Collaborative Lab",
+    "feature_collab_desc": "Work together on Hackathon projects, share components, and build your decentralized reputation via on-chain peer reviews.",
+    "grant_title": "Project Status: Grant Required",
+    "grant_desc": "Web3 Student Lab is an ambitious open-source project designed to revolutionize developer onboarding to the Stellar ecosystem. We are currently seeking a grant to fully deploy our infrastructure, finalize our curriculum, and bring this platform to mainnet."
+  },
   "nav": {
     "learn": "Learn",
     "dashboard": "Dashboard",

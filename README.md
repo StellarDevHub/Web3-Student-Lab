@@ -77,6 +77,33 @@ web3-student-lab/
 - Rust toolchain (for smart contracts)
 - Stellar CLI
 
+### Infrastructure (Docker Compose)
+
+Most day-to-day work only needs **PostgreSQL + standalone Redis**. Prefer the development override so Sentinel and Cluster nodes are not started:
+
+```bash
+# Recommended for development (PostgreSQL + standalone Redis only)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+```
+
+Other compose profiles:
+
+```bash
+# Full stack (PostgreSQL, Redis, Sentinels, Cluster, backend) — production-like testing
+docker compose -f docker-compose.yml up -d
+
+# High-availability Redis testing (Sentinel / Cluster wired for the backend)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+| File | Purpose |
+|------|---------|
+| `docker-compose.yml` | Full stack: Postgres, Redis, Sentinels, Cluster, backend |
+| `docker-compose.dev.yml` | Dev override: Postgres + standalone Redis only |
+| `docker-compose.prod.yml` | HA override: Sentinel/Cluster-oriented backend config |
+
+Stop services with `docker compose down` (pass the same `-f` flags you used to start).
+
 ## 🔐 MVP Update: Decentralized Identity Verification
 
 The Open Source Contribution Trainer now includes decentralized identity verification for contributor
@@ -88,7 +115,6 @@ workflows in `frontend/src/app/version-control/page.tsx`.
   `frontend/src/lib/version-control/engine.ts`.
 - Core attestation creation and verification logic lives in
   `frontend/src/lib/open-source-trainer/identity.ts`.
->>>>>>> origin/main
 
 ## 🤝 Contributing
 

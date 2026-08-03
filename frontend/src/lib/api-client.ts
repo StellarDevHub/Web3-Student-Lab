@@ -5,6 +5,7 @@ import { queueOfflineRequest } from './offline-sync';
 // Create axios instance
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -74,9 +75,37 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const isBrowser = typeof window !== 'undefined';
+    const originalRequest = error.config;
+
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/auth/refresh') &&
+      !originalRequest.url?.includes('/auth/login')
+    ) {
+      originalRequest._retry = true;
+      try {
+        const refreshRes = await axios.post(
+          `${API_BASE_URL}/auth/refresh`,
+          {},
+          { withCredentials: true }
+        );
+        const newAccessToken = refreshRes.data?.accessToken;
+        if (newAccessToken) {
+          localStorage.setItem('token', newAccessToken);
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+          return apiClient(originalRequest);
+        }
+      } catch (_refreshErr) {
+        // Refresh failed, fall through to logout cleanup
+      }
+    }
+
     if (error.response?.status === 401) {
       // Token expired or invalid
       localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
       if (isBrowser) {
         const publicPaths = ['/auth/login', '/auth/register', '/roadmap', '/courses'];

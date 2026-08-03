@@ -1,9 +1,9 @@
-// @ts-nocheck
 import { Request, Response, Router } from 'express';
 import logger from '../utils/logger.js';
 import { storageService } from '../services/storage/index.js';
+import { authenticateToken } from '../middleware/auth.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 router.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({
@@ -144,6 +144,144 @@ router.post('/gc', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to queue storage cleanup',
+    });
+  }
+});
+
+/**
+ * GET /api/v1/storage/dlq
+ * List dead-letter records for the storage pin queue.
+ * Requires authentication.
+ */
+router.get('/dlq', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    const limit = _req.query.limit ? Number(_req.query.limit) : undefined;
+    const records = await storageService.getDlqRecords({ limit });
+
+    res.json({
+      status: 'success',
+      data: { records, count: records.length },
+    });
+  } catch (error: any) {
+    logger.error('Failed to list storage DLQ records:', error);
+    res.status(500).json({
+      status: 'error',
+      error: error instanceof Error ? error.message : 'Failed to list DLQ records',
+    });
+  }
+});
+
+/**
+ * GET /api/v1/storage/dlq/metrics
+ * Get DLQ metrics for the storage pin queue.
+ * Requires authentication.
+ */
+router.get('/dlq/metrics', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    const metrics = await storageService.getDlqMetrics();
+
+    res.json({
+      status: 'success',
+      data: metrics,
+    });
+  } catch (error: any) {
+    logger.error('Failed to get storage DLQ metrics:', error);
+    res.status(500).json({
+      status: 'error',
+      error: error instanceof Error ? error.message : 'Failed to get DLQ metrics',
+    });
+  }
+});
+
+/**
+ * POST /api/v1/storage/dlq/replay/:dlqId
+ * Replay a single dead-letter job back to the storage pin queue.
+ * Requires authentication. Idempotent: re-enqueues the original payload.
+ */
+router.post('/dlq/replay/:dlqId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { dlqId } = req.params;
+    const result = await storageService.replayDlqJob(dlqId);
+
+    if (!result.success) {
+      return res.status(404).json({
+        status: 'error',
+        error: result.error || `DLQ record not found: ${dlqId}`,
+      });
+    }
+
+    res.json({
+      status: 'success',
+      data: {
+        message: 'Job successfully replayed to storage pin queue',
+        replayedJobId: result.replayedJobId,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Failed to replay storage DLQ job:', error);
+    res.status(500).json({
+      status: 'error',
+      error: error instanceof Error ? error.message : 'Failed to replay DLQ job',
+    });
+  }
+});
+
+/**
+ * POST /api/v1/storage/dlq/replay
+ * Replay all dead-letter jobs for the storage pin queue.
+ * Requires authentication.
+ */
+router.post('/dlq/replay', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    const result = await storageService.replayAllDlqJobs();
+
+    res.json({
+      status: 'success',
+      data: {
+        message: `Replayed ${result.replayedCount} storage DLQ job(s)`,
+        replayedCount: result.replayedCount,
+        errors: result.errors,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Failed to replay all storage DLQ jobs:', error);
+    res.status(500).json({
+      status: 'error',
+      error: error instanceof Error ? error.message : 'Failed to replay DLQ jobs',
+    });
+  }
+});
+
+/**
+ * DELETE /api/v1/storage/dlq/purge
+ * Purge all dead-letter records for the storage pin queue.
+ * Requires authentication. Confirmation required via body { confirm: true }.
+ */
+router.delete('/dlq/purge', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { confirm } = req.body;
+
+    if (!confirm) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'Purge operation must be confirmed with confirm: true',
+      });
+    }
+
+    const result = await storageService.purgeDlq();
+
+    res.json({
+      status: 'success',
+      data: {
+        message: `Purged ${result.purgedCount} storage DLQ records`,
+        purgedCount: result.purgedCount,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Failed to purge storage DLQ records:', error);
+    res.status(500).json({
+      status: 'error',
+      error: error instanceof Error ? error.message : 'Failed to purge DLQ records',
     });
   }
 });

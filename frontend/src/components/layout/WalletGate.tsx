@@ -20,7 +20,9 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
     return null;
   }
 
-  if (isConnected || pathname === '/') {
+  // The offline recovery page must stay reachable precisely for the visitor
+  // who has no wallet connected and no connectivity to connect one.
+  if (isConnected || pathname === '/' || pathname === '/offline') {
     return <>{children}</>;
   }
 

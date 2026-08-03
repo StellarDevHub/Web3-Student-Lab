@@ -1,0 +1,28 @@
+# Build artefacts
+target/
+**/target/
+**/*.rs.bk
+
+# Local development
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Cargo cache noise
+.cargo/
+
+# Editor / OS noise
+**/*.swp
+**/*.swo
+.DS_Store
+
+# Logs / coverage
+*.log
+coverage/
+*.lcov
+
+# This file itself
+.dockerignore
+Dockerfile
+README.md

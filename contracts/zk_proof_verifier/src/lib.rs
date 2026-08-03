@@ -72,7 +72,7 @@ impl ZkProofVerifierContract {
         }
 
         let expected = expected_proof_hash(&env, &student, &public_input_hash, &nullifier);
-        let provided = env.crypto().sha256(&proof);
+        let provided: BytesN<32> = env.crypto().sha256(&proof).into();
 
         if provided != expected {
             panic_with_error!(&env, VerifierError::InvalidProof);
@@ -126,9 +126,19 @@ fn expected_proof_hash(
     payload.append(&Bytes::from_array(env, &vk_hash.to_array()));
     payload.append(&Bytes::from_array(env, &public_input_hash.to_array()));
     payload.append(&Bytes::from_array(env, &nullifier.to_array()));
-    payload.append(&student.serialize(env));
+    payload.append(&address_bytes(env, student));
 
     env.crypto().sha256(&payload).into()
+}
+
+/// Deterministic byte encoding of an `Address`, used as part of the proof
+/// binding pre-image (`Address` has no direct byte serialization method).
+fn address_bytes(env: &Env, address: &Address) -> Bytes {
+    let s = address.to_string();
+    let len = s.len() as usize;
+    let mut buf = [0u8; 64];
+    s.copy_into_slice(&mut buf[..len]);
+    Bytes::from_slice(env, &buf[..len])
 }
 
 #[cfg(test)]
@@ -147,7 +157,7 @@ mod tests {
         payload.append(&Bytes::from_array(env, &vk_hash.to_array()));
         payload.append(&Bytes::from_array(env, &public_input_hash.to_array()));
         payload.append(&Bytes::from_array(env, &nullifier.to_array()));
-        payload.append(&student.serialize(env));
+        payload.append(&address_bytes(env, student));
         payload
     }
 
@@ -175,7 +185,10 @@ mod tests {
         );
 
         assert!(ok);
-        assert!(ZkProofVerifierContract::is_nullifier_used(env.clone(), nullifier));
+        assert!(ZkProofVerifierContract::is_nullifier_used(
+            env.clone(),
+            nullifier
+        ));
     }
 
     #[test]

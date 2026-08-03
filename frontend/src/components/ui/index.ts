@@ -3,6 +3,7 @@ export { Badge } from './Badge';
 export { BookmarkButton } from './BookmarkButton';
 export { Button } from './Button';
 export { Card } from './Card';
+export { DemoDataBanner } from './DemoDataBanner';
 export { Dialog } from './Dialog';
 export { ErrorBoundary } from './ErrorBoundary';
 export { ErrorFallback } from './ErrorFallback';

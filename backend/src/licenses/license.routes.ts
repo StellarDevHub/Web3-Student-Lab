@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Open Source License Guide - Express Routes
  *
@@ -9,7 +8,11 @@ import { Request, Response, Router } from 'express';
 import logger from '../utils/logger.js';
 import * as licenseService from './license.service.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
+
+const getQueryString = (value: unknown): string | undefined => {
+  return typeof value === 'string' ? value : undefined;
+};
 
 /**
  * @openapi
@@ -65,19 +68,17 @@ const router = Router();
  */
 router.get('/', (req: Request, res: Response) => {
   try {
-    const {
-      category,
-      useCase,
-      search,
-      allowsCommercial,
-      allowsModification,
-      requiresDisclosure,
-      requiresSameLicense,
-      popularity,
-      tags,
-      page,
-      limit,
-    } = req.query;
+    const category = getQueryString(req.query.category);
+    const useCase = getQueryString(req.query.useCase);
+    const search = getQueryString(req.query.search);
+    const allowsCommercial = getQueryString(req.query.allowsCommercial);
+    const allowsModification = getQueryString(req.query.allowsModification);
+    const requiresDisclosure = getQueryString(req.query.requiresDisclosure);
+    const requiresSameLicense = getQueryString(req.query.requiresSameLicense);
+    const popularity = getQueryString(req.query.popularity);
+    const tags = getQueryString(req.query.tags);
+    const page = getQueryString(req.query.page);
+    const limit = getQueryString(req.query.limit);
 
     const filter: Record<string, unknown> = {};
     if (category) filter.category = category;
@@ -88,10 +89,10 @@ router.get('/', (req: Request, res: Response) => {
     if (requiresDisclosure !== undefined) filter.requiresDisclosure = requiresDisclosure === 'true';
     if (requiresSameLicense !== undefined) filter.requiresSameLicense = requiresSameLicense === 'true';
     if (popularity) filter.popularity = popularity;
-    if (tags) filter.tags = (tags as string).split(',');
+    if (tags) filter.tags = tags.split(',');
 
-    const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 50));
+    const pageNum = Math.max(1, parseInt(page ?? '1', 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit ?? '50', 10) || 50));
 
     const result = licenseService.getLicenses(
       Object.keys(filter).length > 0 ? (filter as any) : undefined,
@@ -206,10 +207,10 @@ router.get('/use-cases', (_req: Request, res: Response) => {
  */
 router.get('/recommend/:useCase', (req: Request, res: Response) => {
   try {
-    const { useCase } = req.params;
+    const useCase = getQueryString(req.params.useCase);
     const validUseCases = ['personal', 'commercial', 'saas', 'library', 'documentation', 'educational'];
-    if (!validUseCases.includes(useCase)) {
-      res.status(400).json({ status: 'error', error: `Invalid use case '${useCase}'. Valid values: ${validUseCases.join(', ')}` });
+    if (!useCase || !validUseCases.includes(useCase)) {
+      res.status(400).json({ status: 'error', error: `Invalid use case '${useCase ?? 'undefined'}'. Valid values: ${validUseCases.join(', ')}` });
       return;
     }
     const result = licenseService.getRecommendations(useCase as any);
@@ -388,8 +389,8 @@ router.get('/compatibility', (req: Request, res: Response) => {
  */
 router.get('/:licenseId/compatible', (req: Request, res: Response) => {
   try {
-    const { licenseId } = req.params;
-    const result = licenseService.getCompatibleLicenses(licenseId);
+    const licenseId = getQueryString(req.params.licenseId);
+    const result = licenseService.getCompatibleLicenses(licenseId ?? '');
     if (result.status === 'error') {
       res.status(404).json(result);
       return;
@@ -421,8 +422,8 @@ router.get('/:licenseId/compatible', (req: Request, res: Response) => {
  */
 router.get('/spdx/:spdxId', (req: Request, res: Response) => {
   try {
-    const { spdxId } = req.params;
-    const result = licenseService.getLicenseBySpdxId(spdxId);
+    const spdxId = getQueryString(req.params.spdxId);
+    const result = licenseService.getLicenseBySpdxId(spdxId ?? '');
     if (result.status === 'error') {
       res.status(404).json(result);
       return;
@@ -454,8 +455,8 @@ router.get('/spdx/:spdxId', (req: Request, res: Response) => {
  */
 router.get('/:licenseId', (req: Request, res: Response) => {
   try {
-    const { licenseId } = req.params;
-    const result = licenseService.getLicenseById(licenseId);
+    const licenseId = getQueryString(req.params.licenseId);
+    const result = licenseService.getLicenseById(licenseId ?? '');
     if (result.status === 'error') {
       res.status(404).json(result);
       return;

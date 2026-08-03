@@ -112,7 +112,7 @@ impl PaymentGateway {
     pub fn deposit(env: Env, user: Address, amount: i128) {
         user.require_auth();
         Self::require_not_paused(&env);
-        assert!(amount > 0, Error::InvalidAmount);
+        assert!(amount > 0, "invalid amount");
 
         let mut balance: i128 = env
             .storage()
@@ -139,7 +139,7 @@ impl PaymentGateway {
     pub fn withdraw(env: Env, user: Address, amount: i128) -> i128 {
         user.require_auth();
         Self::require_not_paused(&env);
-        assert!(amount > 0, Error::InvalidAmount);
+        assert!(amount > 0, "invalid amount");
 
         let mut balance: i128 = env
             .storage()
@@ -147,7 +147,7 @@ impl PaymentGateway {
             .get(&DataKey::Balance(user.clone()))
             .unwrap_or(0);
 
-        assert!(balance >= amount, Error::InsufficientBalance);
+        assert!(balance >= amount, "insufficient balance");
 
         balance = balance.checked_sub(amount).expect("balance underflow");
         env.storage()
@@ -172,7 +172,7 @@ impl PaymentGateway {
     ) -> PaymentRecord {
         payer.require_auth();
         Self::require_not_paused(&env);
-        assert!(amount > 0, Error::InvalidAmount);
+        assert!(amount > 0, "invalid amount");
 
         let platform_fee: u32 = env
             .storage()
@@ -189,7 +189,7 @@ impl PaymentGateway {
             .get(&DataKey::Balance(payer.clone()))
             .unwrap_or(0);
 
-        assert!(payer_balance >= total_debit, Error::InsufficientBalance);
+        assert!(payer_balance >= total_debit, "insufficient balance");
 
         payer_balance = payer_balance
             .checked_sub(total_debit)
@@ -215,12 +215,12 @@ impl PaymentGateway {
 
         let record = PaymentRecord {
             id: payment_id,
-            payer,
-            payee,
+            payer: payer.clone(),
+            payee: payee.clone(),
             amount,
             fee,
             status: PaymentStatus::Completed,
-            timestamp: env.ledger().sequence(),
+            timestamp: env.ledger().sequence() as u64,
             metadata,
         };
 
@@ -260,10 +260,10 @@ impl PaymentGateway {
             panic_with_error!(&env, Error::Unauthorized);
         }
 
-        let current_ledger = env.ledger().sequence();
+        let current_ledger = env.ledger().sequence() as u64;
         assert!(
             current_ledger <= record.timestamp + MAX_REFUND_LEDGERS,
-            Error::RefundWindowClosed
+            "refund window closed"
         );
 
         let mut payer_balance: i128 = env
@@ -390,7 +390,7 @@ impl PaymentGateway {
             .instance()
             .set(&PLATFORM_FEE_BPS, &new_fee_bps);
         env.events()
-            .publish((symbol_short!("fee_update"),), new_fee_bps);
+            .publish((symbol_short!("fee_upd"),), new_fee_bps);
     }
 
     pub fn transfer_admin(env: Env, admin: Address, new_admin: Address) {
@@ -398,7 +398,7 @@ impl PaymentGateway {
         Self::require_admin(&env, &admin);
         env.storage().instance().set(&ADMIN, &new_admin);
         env.events()
-            .publish((symbol_short!("admin_transfer"),), new_admin);
+            .publish((symbol_short!("admin_tx"),), new_admin);
     }
 }
 

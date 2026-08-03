@@ -7,7 +7,7 @@ import {
   recordPolicyConsent,
 } from '../services/privacyPolicy.service.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @route   GET /api/v1/playground/privacy-policy

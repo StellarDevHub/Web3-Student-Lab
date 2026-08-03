@@ -10,10 +10,14 @@ import distributedCacheManager from './cache/DistributedCacheManager.js';
 import redisClient from './cache/RedisClient.js';
 import { rpcCacheHeadersMiddleware, rpcCacheMiddleware } from './cache/RPCInterceptor.js';
 import config from './config/env.config.js';
+import { createCorsMiddleware } from './config/cors.config.js';
 import { setRateLimitEnvOverrides } from './config/rateLimit.config.js';
 import { swaggerSpec } from './config/swagger.js';
+import type { CorsRequest } from 'cors';
 import prisma from './db/index.js';
+import { checkDbHealth } from './db/healthMonitor.js';
 import { createGraphQLServer } from './graphql/server.js';
+import { scheduleBackupCron, startBackupWorker, stopBackupWorker } from './jobs/backup.worker.js';
 import { dbRoutingMiddleware } from './middleware/dbRouting.js';
 import { decryptionMiddleware } from './middleware/encryptionMiddleware.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -22,11 +26,10 @@ import { rateLimiter } from './middleware/rateLimiter.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { requireWorkspaceMiddleware } from './middleware/WorkspaceContext.js';
 import freelanceRoute from './routes/freelance.js';
+import { livenessHandler, readinessHandler } from './routes/health.routes.js';
 import routes from './routes/index.js';
 import { startWebhookWorker, stopWebhookWorker } from './services/webhooks/index.js';
-import { startBackupWorker, stopBackupWorker, scheduleBackupCron } from './jobs/backup.worker.js';
 import logger from './utils/logger.js';
-import { pubClient, redisConnection, subClient } from './utils/redis.js';
 import { getSentryErrorHandler, getSentryRequestHandler, initializeSentry } from './utils/sentry.js';
 import { initializeWebSocket } from './websocket/WebSocketServer.js';
 
@@ -92,8 +95,9 @@ setRateLimitEnvOverrides({
   },
 });
 
-app.use(cors());
+app.use(createCorsMiddleware());
 app.use(express.json());
+app.use(securityHeadersMiddleware); // Add security headers early in middleware chain
 app.use(decryptionMiddleware);
 app.use(dbRoutingMiddleware);
 
@@ -105,13 +109,86 @@ if (config.rateLimiting.enabled) {
 app.use(requestLogger);
 app.use(getSentryRequestHandler());
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+  ]);
+}
+
+/**
+ * @openapi
+ * /health/live:
+ *   get:
+ *     summary: Liveness probe
+ *     description: Lightweight endpoint that returns 200 while the process is alive. No dependency checks.
+ *     tags: [System]
+ *     responses:
+ *       200:
+ *         description: Process is alive
+ */
+app.get('/health/live', (_req: Request, res: Response) => {
+  res.json({ status: 'ok' });
+});
+
+/**
+ * @openapi
+ * /health/ready:
+ *   get:
+ *     summary: Readiness probe
+ *     description: Checks that required dependencies (PostgreSQL, Redis) are reachable.
+ *     tags: [System]
+ *     responses:
+ *       200:
+ *         description: All dependencies healthy
+ *       503:
+ *         description: One or more dependencies unavailable
+ */
+app.get('/health/ready', async (_req: Request, res: Response) => {
+  const errors: string[] = [];
+
+  let dbStatus: Awaited<ReturnType<typeof checkDbHealth>> | null = null;
+  try {
+    dbStatus = await withTimeout(checkDbHealth(), 5000);
+  } catch {
+    errors.push('Database health check timed out or failed');
+  }
+
+  if (dbStatus && dbStatus.status === 'unhealthy') {
+    errors.push(`Database: ${dbStatus.alerts.join(', ')}`);
+  }
+
+  const redisHealthy = redisClient.isHealthy();
+  if (!redisHealthy) {
+    errors.push('Redis is disconnected');
+  }
+
+  if (errors.length > 0) {
+    return res.status(503).json({
+      status: 'error',
+      errors,
+      uptime: process.uptime(),
+    });
+  }
+
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+    database: dbStatus
+      ? { status: dbStatus.status, latencyMs: dbStatus.latencyMs }
+      : { status: 'skipped' },
+    redis: redisHealthy ? 'connected' : 'disconnected',
+  });
+});
+
 /**
  * @openapi
  * /health:
  *   get:
- *     summary: Health check endpoint
+ *     summary: Health check endpoint (legacy)
  *     description: Returns the health status of the API and its dependencies
  *     tags: [System]
+ *     security: []
  *     responses:
  *       200:
  *         description: API is healthy
@@ -136,7 +213,6 @@ app.use(getSentryRequestHandler());
  *                   type: string
  *                   example: connected
  */
-// Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
@@ -150,6 +226,13 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
+// Liveness probe — no dependency calls, returns 200 while the process is alive.
+app.get('/health/live', livenessHandler);
+
+// Readiness probe — verifies database and Redis capabilities with timeouts.
+// Returns 503 when essential dependencies are unavailable.
+app.get('/health/ready', readinessHandler);
+
 // Cache metrics endpoint
 app.use('/api/v1/cache', cacheMetrics);
 
@@ -161,17 +244,19 @@ app.use('/api/rpc', rpcCacheMiddleware);
 // GraphQL API endpoint
 let graphqlServer: Awaited<ReturnType<typeof createGraphQLServer>> | null = null;
 
+export const graphqlSetupPromise = setupGraphQL();
+
 async function setupGraphQL() {
   try {
     graphqlServer = await createGraphQLServer();
-    const { expressMiddleware } = await import('@apollo/server/express4');
+    const { expressMiddleware } = await import('@as-integrations/express4');
 
     app.use(
       '/graphql',
       express.json(),
       cors<cors.CorsRequest>({ origin: true }),
       expressMiddleware(graphqlServer, {
-        context: async () => ({ prisma, redis: redisConnection }),
+        context: async () => ({ prisma, redis: redisClient.getClient() }),
       })
     );
     logger.info('GraphQL server initialized at /graphql');
@@ -180,7 +265,7 @@ async function setupGraphQL() {
   }
 }
 
-setupGraphQL().catch(() => {});
+
 
 // API Routes - with workspace isolation
 app.use('/api/v1', requireWorkspaceMiddleware, createI18nMiddleware(), routes);
@@ -216,7 +301,6 @@ if (config.app.env !== 'test') {
     // Clean up connections
     await redisClient.disconnect();
     await prisma.$disconnect();
-    await Promise.all([redisConnection.quit(), pubClient.quit(), subClient.quit()]);
 
     server?.close(() => {
       logger.info('Server closed');
@@ -237,7 +321,6 @@ if (config.app.env !== 'test') {
     // Clean up connections
     await redisClient.disconnect();
     await prisma.$disconnect();
-    await Promise.all([redisConnection.quit(), pubClient.quit(), subClient.quit()]);
 
     server?.close(() => {
       logger.info('Server closed');

@@ -18,6 +18,10 @@ export const invalidateCourseCache = async (courseId: string): Promise<void> => 
 
 export const invalidateUserProgressCache = async (userId: string): Promise<void> => {
   await cacheService.del(CACHE_KEYS.user.progress(userId));
+  // getStudentProgress keys progress per course as
+  // `user:progress:<userId>:<courseId>`; clear every course snapshot so no
+  // stale state survives across sessions/devices.
+  await cacheService.delPattern(`${CACHE_KEYS.user.progress(userId)}:*`);
 };
 
 export const invalidateLeaderboardCache = async (): Promise<void> => {

@@ -1,6 +1,6 @@
-import jwt from 'jsonwebtoken';
-import redis from '../utils/redis.js';
+import * as jwt from 'jsonwebtoken';
 import logger from '../utils/logger.js';
+import { getRedisClient } from '../utils/redis.js';
 
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || 'access-secret';
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || 'refresh-secret';
@@ -23,6 +23,7 @@ export const generateRefreshToken = async (payload: TokenPayload): Promise<strin
   // Store refresh token in Redis for rotation/reuse detection
   // Key format: rt:<userId>:<tokenHash>
   const key = `rt:${payload.userId}:${refreshToken}`;
+  const redis = getRedisClient();
   await redis.set(key, 'valid', 'EX', REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60);
 
   return refreshToken;
@@ -36,6 +37,7 @@ export const verifyRefreshToken = async (token: string): Promise<TokenPayload> =
   const decoded = jwt.verify(token, REFRESH_TOKEN_SECRET) as TokenPayload;
 
   const key = `rt:${decoded.userId}:${token}`;
+  const redis = getRedisClient();
   const isValid = await redis.get(key);
 
   if (!isValid) {
@@ -55,6 +57,7 @@ export const rotateRefreshToken = async (
 
     // Invalidate old token
     const oldKey = `rt:${payload.userId}:${oldToken}`;
+    const redis = getRedisClient();
     await redis.del(oldKey);
 
     // Generate new pair
@@ -70,6 +73,7 @@ export const rotateRefreshToken = async (
 
 export const revokeAllUserTokens = async (userId: string): Promise<void> => {
   const pattern = `rt:${userId}:*`;
+  const redis = getRedisClient();
   const keys = await redis.keys(pattern);
   if (keys.length > 0) {
     await redis.del(...keys);
@@ -79,11 +83,13 @@ export const revokeAllUserTokens = async (userId: string): Promise<void> => {
 
 export const blacklistAccessToken = async (token: string, expirySeconds: number): Promise<void> => {
   const key = `bl:${token}`;
+  const redis = getRedisClient();
   await redis.set(key, 'blacklisted', 'EX', expirySeconds);
 };
 
 export const isAccessTokenBlacklisted = async (token: string): Promise<boolean> => {
   const key = `bl:${token}`;
+  const redis = getRedisClient();
   const result = await redis.get(key);
   return result === 'blacklisted';
 };

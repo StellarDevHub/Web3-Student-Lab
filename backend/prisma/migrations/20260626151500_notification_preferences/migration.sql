@@ -13,8 +13,8 @@ CREATE TABLE "notification_preferences" (
     "frequency" TEXT NOT NULL DEFAULT 'immediate',
     "quietHoursStart" TEXT,
     "quietHoursEnd" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateIndex

@@ -12,11 +12,13 @@ function GitHubCallbackContent() {
   useEffect(() => {
     const error = searchParams.get('error');
     const token = searchParams.get('token');
-    const refreshToken = searchParams.get('refreshToken');
     const userEmail = searchParams.get('userEmail');
     const userName = searchParams.get('userName');
     const userId = searchParams.get('userId');
     const isNewUser = searchParams.get('isNewUser') === 'true';
+
+    // Clean up legacy refreshToken from localStorage
+    localStorage.removeItem('refreshToken');
 
     if (error) {
       setStatus('error');
@@ -27,9 +29,6 @@ function GitHubCallbackContent() {
     if (token && userId) {
       // Store auth data
       localStorage.setItem('token', token);
-      if (refreshToken) {
-        localStorage.setItem('refreshToken', refreshToken);
-      }
       if (userId) {
         localStorage.setItem('userId', userId);
       }

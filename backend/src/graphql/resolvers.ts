@@ -1,18 +1,21 @@
-import type { GraphQLContext } from './context.js';
-import prisma from '../db/index.js';
-import { redisConnection } from '../utils/redis.js';
-import logger from '../utils/logger.js';
 import crypto from 'node:crypto';
+import redisClient from '../cache/RedisClient.js';
+import prisma from '../db/index.js';
+import logger from '../utils/logger.js';
+import type { GraphQLContext } from './context.js';
 
 const CACHE_TTL = 60;
 
 async function getCached<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
-  const cached = await redisConnection.get(key);
+  const client = redisClient.getClient();
+  if (!client) return fetcher();
+
+  const cached = await client.get(key);
   if (cached) {
     return JSON.parse(cached) as T;
   }
   const result = await fetcher();
-  await redisConnection.setex(key, CACHE_TTL, JSON.stringify(result));
+  await client.setex(key, CACHE_TTL, JSON.stringify(result));
   return result;
 }
 
@@ -156,7 +159,8 @@ export const resolvers = {
         },
       });
 
-      await redisConnection.del('graphql:students');
+      const client = redisClient.getClient();
+      if (client) await client.del('graphql:students');
       logger.info('GraphQL: student created', { studentId: student.id });
       return student;
     },
@@ -177,7 +181,8 @@ export const resolvers = {
         },
       });
 
-      await redisConnection.del('graphql:enrollments');
+      const client = redisClient.getClient();
+      if (client) await client.del('graphql:enrollments');
       logger.info('GraphQL: student enrolled', {
         studentId: input.studentId,
         courseId: input.courseId,
@@ -230,7 +235,8 @@ export const resolvers = {
       });
 
       const cacheKey = `graphql:progress:${input.studentId}:${input.courseId}`;
-      await redisConnection.del(cacheKey);
+      const client = redisClient.getClient();
+      if (client) await client.del(cacheKey);
       logger.info('GraphQL: learning progress updated', {
         studentId: input.studentId,
         courseId: input.courseId,
@@ -258,7 +264,8 @@ export const resolvers = {
         },
       });
 
-      await redisConnection.del('graphql:certificates');
+      const client = redisClient.getClient();
+      if (client) await client.del('graphql:certificates');
       logger.info('GraphQL: certificate issued', {
         certificateId: certificate.id,
         studentId,
@@ -314,9 +321,12 @@ export const resolvers = {
     },
     modules: async (parent: { id: string }, _args: unknown, context: GraphQLContext) => {
       const cacheKey = `graphql:modules:${parent.id}`;
-      const cached = await redisConnection.get(cacheKey);
-      if (cached) {
-        return JSON.parse(cached);
+      const client = redisClient.getClient();
+      if (client) {
+        const cached = await client.get(cacheKey);
+        if (cached) {
+          return JSON.parse(cached);
+        }
       }
       const result = await prisma.course.findUnique({
         where: { id: parent.id },
@@ -340,7 +350,7 @@ export const resolvers = {
         },
       ];
 
-      await redisConnection.setex(cacheKey, CACHE_TTL, JSON.stringify(modules));
+      if (client) await client.setex(cacheKey, CACHE_TTL, JSON.stringify(modules));
       return modules;
     },
   },

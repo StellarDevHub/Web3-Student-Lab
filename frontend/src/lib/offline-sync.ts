@@ -21,6 +21,12 @@ export interface QueuedLessonProgress {
   completedAt: string;
   url: string;
   createdAt: number;
+  /** Snapshot of the learner's progress at queue time so the offline flush
+   *  can replay the same whole-state update the backend schema accepts. */
+  completedLessons?: string[];
+  currentModuleId?: string | null;
+  percentage?: number;
+  status?: string;
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -100,6 +106,10 @@ export async function queueLessonProgressCompletion(input: {
   courseId: string;
   lessonId: string;
   completedAt?: string;
+  completedLessons?: string[];
+  currentModuleId?: string | null;
+  percentage?: number;
+  status?: string;
 }) {
   if (typeof window === 'undefined') return;
 
@@ -111,6 +121,10 @@ export async function queueLessonProgressCompletion(input: {
     completedAt,
     url: `/learning/courses/${input.courseId}/progress`,
     createdAt: Date.now(),
+    completedLessons: input.completedLessons,
+    currentModuleId: input.currentModuleId,
+    percentage: input.percentage,
+    status: input.status,
   });
 }
 
@@ -161,12 +175,24 @@ export async function flushQueuedLessonProgress() {
   const queuedItems = await getQueuedLessonProgress();
   for (const item of queuedItems) {
     try {
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
       const response = await fetch(item.url, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         credentials: 'same-origin',
         body: JSON.stringify({
-          completedLessonId: item.lessonId,
+          lessonId: item.lessonId,
+          status: 'completed',
+          completedLessons: item.completedLessons,
+          currentModuleId: item.currentModuleId,
+          percentage: item.percentage,
           completedAt: item.completedAt,
         }),
       });

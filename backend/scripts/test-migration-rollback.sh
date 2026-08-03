@@ -49,13 +49,13 @@ cat down.sql
 
 # Execute the DOWN migration
 echo "Executing down migration..."
-npx prisma db execute --file down.sql --schema prisma/schema.prisma
+npx prisma db execute --file down.sql
 
 # Verify the database schema matches state N-1
 echo "Verifying database schema integrity post-rollback..."
 # diff DB vs N-1 migrations. Exit code 0 means no differences (schema matches perfectly).
 npx prisma migrate diff \
-  --from-schema-datasource prisma/schema.prisma \
+  --from-config-datasource \
   --to-migrations prisma/migrations_prev \
   --exit-code
 

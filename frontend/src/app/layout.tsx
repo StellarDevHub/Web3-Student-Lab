@@ -1,19 +1,18 @@
-import { AuthProvider } from '@/contexts/AuthContext';
-import { ThemeProvider } from '@/contexts/ThemeContext';
-import { WalletProvider } from '@/contexts/WalletContext';
-import { SkeletonThemeWrapper } from '@/components/ui/SkeletonThemeWrapper';
-import { I18nProvider } from '@/i18n';
 import { KeyboardShortcutsProvider } from '@/components/keyboard/KeyboardShortcutsProvider';
 import Navbar from '@/components/layout/Navbar';
-import ResiliencyBanner from '@/components/layout/ResiliencyBanner';
 import RenderWarningModal from '@/components/layout/RenderWarningModal';
+import ResiliencyBanner from '@/components/layout/ResiliencyBanner';
 import WalletGate from '@/components/layout/WalletGate';
-import { CourseNotificationListener, ToastContainer } from '@/components/notifications';
+import { OfflineNotification, CourseNotificationListener, ToastContainer } from '@/components/notifications';
 import { OfflineSyncHandler } from '@/components/OfflineSyncHandler';
-import { NotificationProvider } from '@/contexts/NotificationContext';
-import { Web3OnboardingProvider } from '@/contexts/Web3OnboardingContext';
-import { TutorialProvider } from '@/contexts/TutorialContext';
 import { SkipLink } from '@/components/ui/SkipLink';
+import { AuthProvider } from '@/contexts/AuthContext';
+import { NotificationProvider } from '@/contexts/NotificationContext';
+import { ThemeProvider } from '@/contexts/ThemeContext';
+import { TutorialProvider } from '@/contexts/TutorialContext';
+import { WalletProvider } from '@/contexts/WalletContext';
+import { Web3OnboardingProvider } from '@/contexts/Web3OnboardingContext';
+import { I18nProvider } from '@/i18n';
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
@@ -38,6 +37,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <script
+          nonce="theme-init"
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
@@ -61,6 +61,7 @@ export default function RootLayout({
             <AuthProvider>
               <I18nProvider>
                 <NotificationProvider>
+                  <CourseNotificationListener />
                   <Web3OnboardingProvider>
                     <KeyboardShortcutsProvider>
                       <TutorialProvider>
@@ -78,6 +79,7 @@ export default function RootLayout({
                           <WalletGate>{children}</WalletGate>
                         </main>
                         <ToastContainer />
+                        <OfflineNotification />
                       </TutorialProvider>
                     </KeyboardShortcutsProvider>
                   </Web3OnboardingProvider>

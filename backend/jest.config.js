@@ -52,7 +52,6 @@ export default {
     'tests/oauth.integration.test.ts',
     'tests/generator.service.test.ts',
     'tests/gas-estimation.test.ts',
-    'tests/vulnerability-scanner.test.ts',
     'tests/generator.websocket.test.ts',
     'tests/generator.rate-limit.test.ts'
   ],

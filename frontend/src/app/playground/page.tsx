@@ -14,7 +14,6 @@ import { WithSkeleton } from '@/components/ui/WithSkeleton';
 import { EditorSkeleton } from '@/components/ui/skeletons/EditorSkeleton';
 import { useTutorial } from '@/contexts/TutorialContext';
 import { CollaborationProvider } from '@/lib/collaboration/YjsProvider';
-import type { CompileWorkerResponse } from '@/lib/compiler/compileTypes';
 import { FilePresenceManager } from '@/lib/explorer/FilePresence';
 import { DatabaseManager } from '@/lib/storage/DatabaseManager';
 import { SyncManager } from '@/lib/storage/SyncManager';
@@ -22,7 +21,9 @@ import { Settings, X } from 'lucide-react';
 import { DependencyUpdatePanel } from '@/components/playground/DependencyUpdatePanel';
 import { AccessibilityAuditPanel } from '@/components/playground/AccessibilityAuditPanel';
 import { ContractSearch } from '@/components/playground/ContractSearch';
+import { ExecutionStatusBar } from '@/components/playground/ExecutionStatusBar';
 import { useAccessibilityAudit } from '@/hooks/useAccessibilityAudit';
+import { usePlaygroundExecution } from '@/hooks/usePlaygroundExecution';
 import { AssistantPanel } from '@/components/playground/AssistantPanel';
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -119,8 +120,6 @@ function moveFileNode(
 }
 
 export default function PlaygroundPage() {
-  const [compileLogs, setCompileLogs] = useState<CompileLogEntry[]>([]);
-  const [isCompiling, setIsCompiling] = useState(false);
   const [errorLog, setErrorLog] = useState('');
   const [sourceCode, setSourceCode] = useState<string>(`#![no_std]
 
@@ -136,8 +135,6 @@ impl HelloContract {
     }
 }`);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [autoComplete, setAutoComplete] = useState(true);
-  const [vimMode, setVimMode] = useState(false);
   const [selectedContract, setSelectedContract] = useState<any>(null);
   const [editorSettings, setEditorSettings] = useState({
     fontSize: 14,
@@ -155,53 +152,34 @@ impl HelloContract {
   const [isOnline, setIsOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [activeTab, setActiveTab] = useState<'editor' | 'output' | 'prsim'>('editor');
-  const workerRef = useRef<Worker | null>(null);
+
+  // ── Cancellable execution hook ──────────────────────────────────────────
+  const {
+    executionState,
+    compileLogs,
+    compile,
+    cancel,
+    reset: resetExecution,
+  } = usePlaygroundExecution();
+
+  const isCompiling =
+    executionState.phase === 'queued' || executionState.phase === 'running';
+
+  // Sync error log from execution state so AssistantPanel still works.
+  useEffect(() => {
+    if (executionState.phase === 'error') {
+      const errLines = compileLogs
+        .filter((l) => l.level === 'error')
+        .map((l) => l.message);
+      setErrorLog(errLines.join('\n') || 'Browser compile failed with unknown diagnostics.');
+    } else if (executionState.phase === 'complete') {
+      setErrorLog('');
+    }
+  }, [executionState.phase, compileLogs]);
 
   const { result: auditResult, isPending: auditPending, runAudit } = useAccessibilityAudit(sourceCode, {
     debounceMs: 500,
   });
-
-  useEffect(() => {
-    const compileWorker = new Worker(new URL('../../lib/compiler/compile.worker.ts', import.meta.url), {
-      type: 'module',
-    });
-
-    const handleWorkerMessage = (event: MessageEvent<CompileWorkerResponse>) => {
-      const data = event.data;
-      if (data.type === 'log') {
-        setCompileLogs((prev) => [...prev, data.entry]);
-        return;
-      }
-      if (data.type === 'complete') {
-        setIsCompiling(false);
-        if (!data.success) {
-          setErrorLog(data.errors.join('\n') || 'Browser compile failed with unknown diagnostics.');
-        } else {
-          setErrorLog('');
-        }
-        if (!data.success && data.errors.length === 0) {
-          setCompileLogs((prev) => [
-            ...prev,
-            {
-              id: crypto.randomUUID?.() ?? `${Date.now()}-compile-failed`,
-              level: 'error',
-              timestamp: new Date().toLocaleTimeString(),
-              message: 'Browser compile failed with unknown diagnostics.',
-            },
-          ]);
-        }
-      }
-    };
-
-    compileWorker.addEventListener('message', handleWorkerMessage);
-    workerRef.current = compileWorker;
-
-    return () => {
-      compileWorker.removeEventListener('message', handleWorkerMessage);
-      compileWorker.terminate();
-      workerRef.current = null;
-    };
-  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsInitializing(false), 1500);
@@ -279,43 +257,8 @@ impl HelloContract {
 
   const handleCompile = useCallback(() => {
     if (isCompiling) return;
-    const stamp = () => new Date().toLocaleTimeString();
-    setCompileLogs([
-      {
-        id: crypto.randomUUID?.() ?? `${Date.now()}-compile-start`,
-        level: 'info',
-        timestamp: stamp(),
-        message: `soroban contract build --file ${activeFilePath}`,
-      },
-      {
-        id: crypto.randomUUID?.() ?? `${Date.now()}-compile-check`,
-        level: 'info',
-        timestamp: stamp(),
-        message: 'Checking Rust target wasm32-unknown-unknown...',
-      },
-    ]);
-    setIsCompiling(true);
-
-    if (!workerRef.current) {
-      setCompileLogs((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID?.() ?? `${Date.now()}-compile-error`,
-          level: 'error',
-          timestamp: stamp(),
-          message: 'Unable to start browser compiler worker.',
-        },
-      ]);
-      setIsCompiling(false);
-      return;
-    }
-
-    workerRef.current.postMessage({
-      type: 'compile',
-      source: sourceCode,
-      filePath: activeFilePath,
-    });
-  }, [activeFilePath, isCompiling, sourceCode]);
+    compile(sourceCode, activeFilePath);
+  }, [compile, isCompiling, sourceCode, activeFilePath]);
 
   useEffect(() => {
     const handleShortcutCompile = () => {
@@ -498,6 +441,8 @@ impl HelloContract {
               onClick={handleCompile}
               disabled={isCompiling}
               data-tour-step="playground-compile-btn"
+              aria-label={isCompiling ? 'Compilation in progress' : 'Compile and execute the contract'}
+              aria-busy={isCompiling}
               className={`mt-4 rounded-xl py-4 text-xs font-black tracking-[0.2em] uppercase transition-all ${
                 isCompiling
                   ? 'cursor-not-allowed bg-zinc-800 text-gray-500'
@@ -506,6 +451,14 @@ impl HelloContract {
             >
               {isCompiling ? 'Compiling Context...' : 'Execute Logic'}
             </button>
+
+            {/* Execution status bar — hidden in idle state */}
+            <ExecutionStatusBar
+              state={executionState}
+              onCancel={cancel}
+              onReset={resetExecution}
+              className="mt-2"
+            />
           </div>
 
           {/* Terminal Output or PR Simulation */}

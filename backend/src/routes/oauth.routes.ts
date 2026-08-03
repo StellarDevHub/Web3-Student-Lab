@@ -8,8 +8,9 @@ import {
   linkGitHubAccount,
 } from '../auth/github.service.js';
 import { auditAction } from '../middleware/audit.js';
+import { setRefreshTokenCookie } from '../utils/cookie.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @route   GET /api/v1/oauth/github
@@ -57,13 +58,13 @@ router.get(
 
       // Complete the OAuth flow
       const authResponse = await handleGitHubCallback(code, state);
+      setRefreshTokenCookie(res, authResponse.refreshToken);
 
       // Redirect to frontend with tokens as query parameters
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const redirectUrl = new URL(`${frontendUrl}/auth/callback`);
 
       redirectUrl.searchParams.set('token', authResponse.accessToken);
-      redirectUrl.searchParams.set('refreshToken', authResponse.refreshToken);
       redirectUrl.searchParams.set('userId', authResponse.user.id);
       redirectUrl.searchParams.set('userName', authResponse.user.name);
       redirectUrl.searchParams.set('userEmail', authResponse.user.email);
@@ -102,6 +103,7 @@ router.post(
 
       // Complete the OAuth flow
       const authResponse = await handleGitHubCallback(code, state);
+      setRefreshTokenCookie(res, authResponse.refreshToken);
 
       res.json(authResponse);
     } catch (error) {
@@ -131,6 +133,9 @@ router.post(
 
       const studentId = req.user!.id;
       const authResponse = await linkGitHubAccount(studentId, code);
+      if (authResponse.refreshToken) {
+        setRefreshTokenCookie(res, authResponse.refreshToken);
+      }
 
       res.json(authResponse);
     } catch (error) {

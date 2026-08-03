@@ -38,6 +38,9 @@ export interface ProgressData {
   status: 'not_started' | 'in_progress' | 'completed';
   lastAccessedAt: string | null;
   completedAt: string | null;
+  /** Server-side `updatedAt` observed at last load; sent back as the
+   *  optimistic-concurrency token so stale writes are rejected with a 409. */
+  updatedAt?: string | null;
 }
 
 export type LayoutDirection = 'vertical' | 'horizontal';

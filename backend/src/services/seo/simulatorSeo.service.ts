@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { redisConnection } from '../../utils/redis.js';
+import redisClient from '../../cache/RedisClient.js';
 
 export interface SimulatorAsset {
   slug: string;
@@ -72,7 +71,7 @@ const SITEMAP_CACHE_KEY = 'seo:simulator:sitemap:v1';
 
 function parseSitemapXml(xml: string): string[] {
   const matches = xml.matchAll(/<loc>(.*?)<\/loc>/g);
-  return Array.from(matches, (match) => match[1].trim()).filter(Boolean);
+  return Array.from(matches, (match) => (match[1] ?? '').trim()).filter(Boolean);
 }
 
 function buildMetaTags(asset: SimulatorAsset, baseUrl: string): SimulatorMetaTags {
@@ -99,7 +98,7 @@ export class SimulatorSeoService {
   private fallbackWrites = 0;
 
   constructor(dependencies: SeoServiceDependencies = {}) {
-    this.cache = dependencies.cache ?? (redisConnection as SeoCacheClient);
+    this.cache = dependencies.cache ?? (redisClient.getClient() as SeoCacheClient);
     this.fetchAssetIndexImpl = dependencies.fetchAssetIndex ?? (async () => DEFAULT_ASSETS);
     this.fetchSitemapXmlImpl = dependencies.fetchSitemapXml ?? (async () => DEFAULT_SITEMAP_XML);
     this.now = dependencies.now ?? (() => Date.now());

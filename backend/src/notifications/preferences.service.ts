@@ -1,7 +1,6 @@
-import { NotificationPreferences as PrismaNotificationPreferences } from '@prisma/client';
-import { redisConnection } from '../utils/redis.js';
-import logger from '../utils/logger.js';
 import prisma from '../db/index.js';
+import logger from '../utils/logger.js';
+import redisClient from '../cache/RedisClient.js';
 
 export interface NotificationPreferences {
   id: string;
@@ -52,7 +51,8 @@ export class NotificationPreferencesService {
   async getByStudentId(studentId: string): Promise<NotificationPreferences | null> {
     try {
       const cacheKey = `notification_prefs:${studentId}`;
-      const cached = await redisConnection.get(cacheKey);
+      const client = redisConnection;
+      const cached = client ? await client.get(cacheKey) : null;
       if (cached) {
         return JSON.parse(cached) as NotificationPreferences;
       }
@@ -62,7 +62,7 @@ export class NotificationPreferencesService {
       });
 
       if (prefs) {
-        await redisConnection.setex(cacheKey, 120, JSON.stringify(prefs));
+        if (client) await client.setex(cacheKey, 120, JSON.stringify(prefs));
       }
 
       return prefs as NotificationPreferences | null;
@@ -90,7 +90,8 @@ export class NotificationPreferencesService {
         },
       });
 
-      await redisConnection.del(`notification_prefs:${dto.studentId}`);
+      const client = redisClient.getClient();
+      if (client) await client.del(`notification_prefs:${dto.studentId}`);
       logger.info('Notification preferences created', { studentId: dto.studentId });
       return prefs as NotificationPreferences;
     } catch (error) {
@@ -130,7 +131,8 @@ export class NotificationPreferencesService {
         },
       });
 
-      await redisConnection.del(`notification_prefs:${dto.studentId}`);
+      const client = redisClient.getClient();
+      if (client) await client.del(`notification_prefs:${dto.studentId}`);
       logger.info('Notification preferences updated', { studentId: dto.studentId });
       return prefs as NotificationPreferences;
     } catch (error) {
@@ -165,7 +167,8 @@ export class NotificationPreferencesService {
         },
       });
 
-      await redisConnection.del(`notification_prefs:${studentId}`);
+      const client = redisClient.getClient();
+      if (client) await client.del(`notification_prefs:${studentId}`);
       logger.info('Notification preferences patched', { studentId });
       return prefs as NotificationPreferences;
     } catch (error) {
@@ -180,7 +183,8 @@ export class NotificationPreferencesService {
         where: { studentId },
       });
 
-      await redisConnection.del(`notification_prefs:${studentId}`);
+      const client = redisClient.getClient();
+      if (client) await client.del(`notification_prefs:${studentId}`);
       logger.info('Notification preferences deleted', { studentId });
     } catch (error) {
       logger.error('Error deleting notification preferences:', error);

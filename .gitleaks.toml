@@ -1,0 +1,36 @@
+# Gitleaks configuration for Web3-Student-Lab
+# Docs: https://github.com/gitleaks/gitleaks#configuration
+
+[allowlist]
+  description = "Known safe patterns that should not trigger secret scanning alerts"
+
+  # Example/placeholder values in .env.example — not real secrets
+  regexes = [
+    '''CHANGE_THIS_.*''',
+    '''test-jwt-secret''',
+    '''test-github-client-id''',
+    '''test-github-client-secret''',
+    '''test-github-redirect-uri''',
+  ]
+
+  # Test fixture files and mock values
+  paths = [
+    # Test snapshots and fixtures
+    '''.*__snapshots__/.*''',
+    '''.*__fixtures__/.*''',
+    '''.*test_fixtures/.*''',
+    '''.*\.test\.(ts|tsx|js|jsx|rs)$''',
+    '''.*\.spec\.(ts|tsx|js|jsx|rs)$''',
+
+    # Example env template
+    '''\.env\.example$''',
+
+    # Documentation and policy files
+    '''docs/governance/SUPPLY_CHAIN_SECURITY\.md$''',
+    '''docs/governance/SECRET_SCANNING_POLICY\.md$''',
+
+    # Generated/compiled output
+    '''backend/coverage/.*''',
+    '''frontend/coverage/.*''',
+    '''backend/dist/.*''',
+  ]

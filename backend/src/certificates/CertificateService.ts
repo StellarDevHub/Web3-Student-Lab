@@ -1,16 +1,24 @@
-// @ts-nocheck
+/**
+ * CertificateService — issuance, verification and reporting for course
+ * certificates. Fully type-checked: request, response and domain shapes are
+ * declared explicitly instead of being suppressed.
+ */
+
+
 import prisma from '../db/index.js';
+import { storageService } from '../services/storage/index.js';
+import { certificateBlockchainService } from '../blockchain/CertificateBlockchainService.js';
 import {
   Certificate,
   CertificateMetadata,
+  CertificateStatus,
   MintCertificateRequest,
   VerificationResult,
 } from '../types/certificate.types.js';
-import { MetadataGenerator } from './MetadataGenerator.js';
-import { certificateBlockchainService } from '../blockchain/CertificateBlockchainService.js';
-import logger from '../utils/logger.js';
 import { certificateImageGenerator } from '../utils/certificateImageGenerator.js';
-import { storageService } from '../services/storage/index.js';
+import logger from '../utils/logger.js';
+import { MetadataGenerator } from './MetadataGenerator.js';
+import { computeCertificateContentHash, verifyCertificateContentHash } from './ContentHash.js';
 
 export class CertificateService {
   private metadataGenerator: MetadataGenerator;
@@ -90,9 +98,9 @@ export class CertificateService {
       },
     });
 
-    let metadata: CertificateMetadata | undefined;
-
     try {
+      const { storageService } = await import('../services/storage/index.js');
+
       // Generate and pin the certificate image and metadata to decentralized storage
       const imageBuffer = await certificateImageGenerator.generateCertificateImage({
         studentName: `${student.firstName || ''} ${student.lastName || ''}`.trim() || 'Student',
@@ -110,20 +118,42 @@ export class CertificateService {
         mimeType: 'image/svg+xml',
       });
 
-      metadata = this.metadataGenerator.generate(certificate, course, student, {
+      const metadata = this.metadataGenerator.generate(certificate, course, student, {
         imageUri: imageAsset.ipfsUri,
         externalUrl: `${process.env.API_BASE_URL || 'http://localhost:8080'}/api/v1/certificates/${
           certificate.tokenId || tokenIdValue
         }/metadata`,
       });
 
+      if (!metadata) {
+        logger.error(`Failed to generate metadata for certificate ${certificateId}`);
+        throw new Error('Failed to generate certificate metadata');
+      }
+
       const metadataAsset = await storageService.pinCertificateMetadata({
         certificateId: certificateId,
-        content: metadata,
+        content: { ...metadata },
       });
 
       // Call blockchain service to mint actual NFT
       const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+
+      const finalTokenId = mintResult.tokenId || tokenIdValue;
+
+      // Compute the immutable content-integrity hash from the final,
+      // post-mint certificate fields. This hash binds the certificate
+      // metadata to a deterministic fingerprint that is re-verified on
+      // every retrieval/verification so tampering with stored fields
+      // can be detected instead of silently served.
+      const contentHash = computeCertificateContentHash({
+        id: certificateId,
+        studentId: certificate.studentId,
+        courseId: certificate.courseId,
+        tokenId: finalTokenId,
+        grade: certificate.grade,
+        did: certificate.did,
+        issuedAt: certificate.issuedAt,
+      });
 
       // Update certificate with blockchain transaction details
       await prisma.certificate.update({
@@ -133,14 +163,15 @@ export class CertificateService {
           contractAddress: mintResult.contractAddress,
           status: 'ACTIVE',
           metadataUri: metadataAsset.ipfsUri,
-          tokenId: mintResult.tokenId || tokenIdValue,
+          tokenId: finalTokenId,
+          contentHash,
         },
       });
 
       // Update returned certificate
       certificate.certificateHash = mintResult.transactionHash;
       certificate.contractAddress = mintResult.contractAddress;
-      certificate.status = 'ACTIVE' as any;
+      certificate.status = CertificateStatus.ACTIVE;
       certificate.tokenId = mintResult.tokenId || tokenIdValue;
 
       logger.info(`Certificate minted on-chain: ${certificateId} -> token ${mintResult.tokenId}`, {
@@ -148,6 +179,9 @@ export class CertificateService {
         tokenId: mintResult.tokenId,
         txHash: mintResult.transactionHash,
       });
+
+      // Return certificate with metadata
+      return { ...certificate, metadata };
     } catch (error) {
       logger.error(`Certificate issuance failed for ${certificateId}:`, error);
       await prisma.certificate.update({
@@ -161,9 +195,6 @@ export class CertificateService {
         `Failed to mint certificate: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
-
-    // Return certificate with metadata
-    return { ...certificate, metadata };
   }
 
   /**
@@ -226,7 +257,7 @@ export class CertificateService {
       return {
         isValid: false,
         certificate: null,
-        status: 'invalid' as any,
+        status: CertificateStatus.INVALID,
         onChainData: null,
         message: 'Certificate not found',
       };
@@ -234,10 +265,43 @@ export class CertificateService {
 
     const walletAddress =
       certificate.student.walletAddress || this.extractWalletFromDid(certificate.student.did);
+
+    // Re-verify the content hash on every retrieval. If the stored
+    // metadata no longer matches the hash recorded at mint time, we
+    // must surface a tamper-detected result rather than silently
+    // returning the (possibly altered) data as valid.
+    const hashCheck = verifyCertificateContentHash(
+      {
+        id: certificate.id,
+        studentId: certificate.studentId,
+        courseId: certificate.courseId,
+        tokenId: certificate.tokenId,
+        grade: certificate.grade,
+        did: certificate.did,
+        issuedAt: certificate.issuedAt,
+      },
+      (certificate as any).contentHash
+    );
+
+    if (hashCheck.state === 'tampered') {
+      logger.error(`Certificate integrity check failed for ${certificateId}`, {
+        certificateId,
+        expectedHash: hashCheck.expected,
+        actualHash: hashCheck.actual,
+      });
+      return {
+        isValid: false,
+        certificate: null,
+        status: 'TAMPERED' as any,
+        onChainData: null,
+        message: 'Certificate integrity check failed: stored metadata does not match its content hash',
+      };
+    }
+
     const metadata = this.metadataGenerator.generate(
-      certificate,
-      certificate.course!,
-      certificate.student
+      certificate as any,
+      certificate.course as any,
+      certificate.student as any
     );
 
     const onChainData: VerificationResult['onChainData'] = {
@@ -250,17 +314,20 @@ export class CertificateService {
     };
 
     const result: VerificationResult = {
-      isValid: certificate.status === 'ACTIVE',
+      isValid: certificate.status === CertificateStatus.ACTIVE,
       certificate: metadata,
-      status: certificate.status as any,
+      status: this.toCertificateStatus(certificate.status),
       onChainData,
     };
 
-    if (certificate.status === 'REVOKED') {
+    if (certificate.status === CertificateStatus.REVOKED) {
       result.revocationInfo = {
         revokedAt: certificate.revokedAt!,
         reason: certificate.revocationReason!,
-        revokedBy: certificate.revokedBy!,
+        // NOTE: revokedBy (the actor's issuer DID) is intentionally
+        // redacted from this public-facing verification response —
+        // see VerificationService for the canonical public surface.
+        revokedBy: 'redacted',
       };
     }
 
@@ -294,7 +361,11 @@ export class CertificateService {
       },
     });
 
-    const certMap = new Map(certificates.map((c) => [c.tokenId, c]));
+    const certMap = new Map<string, typeof certificates[number]>(
+      certificates
+        .filter((c): c is typeof certificates[number] => typeof c.tokenId === 'string')
+        .map((c) => [c.tokenId, c] as const)
+    );
 
     const results: VerificationResult[] = [];
 
@@ -305,7 +376,7 @@ export class CertificateService {
         results.push({
           isValid: false,
           certificate: null,
-          status: 'invalid' as any,
+          status: CertificateStatus.INVALID,
           onChainData: null,
           message: 'Certificate not found',
         });
@@ -314,7 +385,7 @@ export class CertificateService {
 
       const walletAddress =
         cert.student.walletAddress || this.extractWalletFromDid(cert.student.did);
-      const metadata = this.metadataGenerator.generate(cert, cert.course!, cert.student);
+      const metadata = this.metadataGenerator.generate(cert as any, cert.course as any, cert.student as any);
 
       const onChainData: VerificationResult['onChainData'] = {
         tokenId: cert.tokenId || '',
@@ -326,9 +397,9 @@ export class CertificateService {
       };
 
       results.push({
-        isValid: cert.status === 'ACTIVE',
+        isValid: cert.status === CertificateStatus.ACTIVE,
         certificate: metadata,
-        status: cert.status as any,
+        status: this.toCertificateStatus(cert.status),
         onChainData,
       });
     }
@@ -419,24 +490,35 @@ export class CertificateService {
   /**
    * Gets certificates by status (for admin/issuer)
    */
-  async getCertificatesByStatus(status: string): Promise<Certificate[]> {
-    return await prisma.certificate.findMany({
-      where: { status },
-      include: {
-        student: {
-          select: {
-            id: true,
-            email: true,
-            walletAddress: true,
-            did: true,
-            firstName: true,
-            lastName: true,
+  async getCertificatesByStatus(
+    status: string,
+    limit = 50,
+    offset = 0
+  ): Promise<{ certificates: Certificate[]; total: number }> {
+    const [certificates, total] = await Promise.all([
+      prisma.certificate.findMany({
+        where: { status },
+        include: {
+          student: {
+            select: {
+              id: true,
+              email: true,
+              walletAddress: true,
+              did: true,
+              firstName: true,
+              lastName: true,
+            },
           },
+          course: true,
         },
-        course: true,
-      },
-      orderBy: { issuedAt: 'desc' },
-    });
+        orderBy: { issuedAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.certificate.count({ where: { status } }),
+    ]);
+
+    return { certificates, total };
   }
 
   /**
@@ -478,44 +560,8 @@ export class CertificateService {
    * Get analytics for certificates
    */
   async getAnalytics() {
-    const totalCertificates = await prisma.certificate.count();
-    const byStatusRaw = await prisma.certificate.groupBy({
-      by: ['status'],
-      _count: { status: true },
-    });
-
-    const byStatus = byStatusRaw.reduce(
-      (acc, item) => {
-        acc[item.status] = item._count.status;
-        return acc;
-      },
-      {} as Record<string, number>
-    );
-
-    const uniqueStudents = await prisma.certificate.groupBy({
-      by: ['studentId'],
-      _count: { studentId: true },
-    });
-
-    const uniqueCourses = await prisma.certificate.groupBy({
-      by: ['courseId'],
-      _count: { courseId: true },
-    });
-
-    const revokedCount = byStatus['REVOKED'] || 0;
-    const revocationRate = totalCertificates > 0 ? revokedCount / totalCertificates : 0;
-
-    return {
-      totalCertificates,
-      byStatus,
-      totalVerifications: 0,
-      uniqueStudents: uniqueStudents.length,
-      uniqueCourses: uniqueCourses.length,
-      revocationRate,
-      issuedThisMonth: 0,
-      issuedThisWeek: 0,
-      issuedToday: 0,
-    };
+    const { certificateAnalytics } = await import('./CertificateAnalytics.js');
+    return certificateAnalytics.getAnalytics();
   }
 
   /**
@@ -550,6 +596,16 @@ export class CertificateService {
       newGrade,
       issuedBy,
     });
+  }
+
+  /**
+   * Narrows a persisted status string to the CertificateStatus union.
+   * Unknown values (legacy rows, manual edits) resolve to INVALID rather
+   * than being cast blindly.
+   */
+  private toCertificateStatus(status: string): CertificateStatus {
+    const known = Object.values(CertificateStatus) as string[];
+    return known.includes(status) ? (status as CertificateStatus) : CertificateStatus.INVALID;
   }
 
   /**

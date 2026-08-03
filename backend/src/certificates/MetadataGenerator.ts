@@ -1,11 +1,34 @@
 import {
+  Certificate,
   CertificateMetadata,
   CertificateCourseInfo,
   CertificateStudentInfo,
   CertificateVerificationInfo,
 } from '../types/certificate.types.js';
-import { Certificate } from '@prisma/client';
 import { API_BASE_URL, ISSUER_NAME, ISSUER_DID } from '../config/rpcConfig.js';
+
+/**
+ * Minimal course shape required to build certificate metadata.
+ * Kept structural so both full Prisma rows and narrowed `select`
+ * projections satisfy it.
+ */
+export interface MetadataCourseInput {
+  /** Course identifier as stored. */
+  id: string;
+  title: string;
+  instructor: string;
+  credits: number;
+}
+
+/**
+ * Minimal student shape required to build certificate metadata.
+ * Email and other PII are deliberately absent — metadata is public.
+ */
+export interface MetadataStudentInput {
+  firstName?: string | null;
+  lastName?: string | null;
+  walletAddress?: string | null;
+}
 
 export class MetadataGenerator {
   private readonly baseUrl: string;
@@ -22,9 +45,9 @@ export class MetadataGenerator {
    * Generates complete NFT-compliant certificate metadata
    */
   generate(
-    certificate: Certificate & { student: any; course: any },
-    course: any,
-    student: any,
+    certificate: Certificate,
+    course: MetadataCourseInput,
+    student: MetadataStudentInput,
     options: { imageUri?: string; externalUrl?: string } = {}
   ): CertificateMetadata {
     // Build verification info
@@ -84,7 +107,10 @@ export class MetadataGenerator {
   /**
    * Builds course information object
    */
-  private buildCourseInfo(course: any, certificate: Certificate): CertificateCourseInfo {
+  private buildCourseInfo(
+    course: MetadataCourseInput,
+    certificate: Certificate
+  ): CertificateCourseInfo {
     const dateStr = certificate.issuedAt.toISOString().split('T')[0] || '';
     return {
       id: course.id,
@@ -99,7 +125,10 @@ export class MetadataGenerator {
   /**
    * Builds student information object (privacy-aware, no email)
    */
-  private buildStudentInfo(student: any, certificate: Certificate): CertificateStudentInfo {
+  private buildStudentInfo(
+    student: MetadataStudentInput,
+    certificate: Certificate
+  ): CertificateStudentInfo {
     const fullName = `${student.firstName || ''} ${student.lastName || ''}`.trim();
     const walletAddress = student.walletAddress || this.extractWalletFromDid(certificate.did);
 
@@ -126,7 +155,11 @@ export class MetadataGenerator {
   /**
    * Builds certificate display name
    */
-  private buildCertificateName(certificate: Certificate, course: any, student: any): string {
+  private buildCertificateName(
+    certificate: Certificate,
+    course: MetadataCourseInput,
+    student: MetadataStudentInput
+  ): string {
     const courseName = course.title;
     const studentName = `${student.firstName || ''} ${student.lastName || ''}`.trim();
 
@@ -136,7 +169,11 @@ export class MetadataGenerator {
   /**
    * Builds certificate description
    */
-  private buildCertificateDescription(certificate: Certificate, course: any, student: any): string {
+  private buildCertificateDescription(
+    certificate: Certificate,
+    course: MetadataCourseInput,
+    student: MetadataStudentInput
+  ): string {
     const studentName = `${student.firstName || ''} ${student.lastName || ''}`.trim();
     const completionDate = certificate.issuedAt.toLocaleDateString('en-US', {
       year: 'numeric',
@@ -159,8 +196,8 @@ export class MetadataGenerator {
    */
   private buildAttributes(
     certificate: Certificate,
-    course: any,
-    student: any
+    course: MetadataCourseInput,
+    student: MetadataStudentInput
   ): Array<{ trait_type: string; value: string | number }> {
     const attributes = [
       {
@@ -177,7 +214,7 @@ export class MetadataGenerator {
       },
       {
         trait_type: 'Completion Date',
-        value: certificate.issuedAt.toISOString().split('T')[0],
+        value: certificate.issuedAt.toISOString().split('T')[0] ?? '',
       },
       {
         trait_type: 'Certificate ID',

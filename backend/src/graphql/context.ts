@@ -1,6 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-import { redisConnection } from '../utils/redis.js';
-import logger from '../utils/logger.js';
+import redisClient from '../cache/RedisClient.js';
 
 export type GraphQLContext = {
   prisma: PrismaClient;
@@ -12,7 +11,7 @@ export const createGraphQLContext = async (): Promise<GraphQLContext> => {
   const prismaModule = await import('../db/index.js');
   return {
     prisma: prismaModule.prisma as PrismaClient,
-    redis: redisConnection,
+    redis: redisClient.getClient(),
     user: undefined,
   };
 };

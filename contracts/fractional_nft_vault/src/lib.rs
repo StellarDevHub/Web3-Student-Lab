@@ -58,7 +58,9 @@ impl FractionalNftVaultContract {
 
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::NftContract, &nft_contract);
+        env.storage()
+            .instance()
+            .set(&DataKey::NftContract, &nft_contract);
         env.storage().instance().set(&DataKey::TokenId, &token_id);
         env.storage().instance().set(&DataKey::TotalShares, &0i128);
         env.storage().instance().set(&DataKey::Treasury, &0i128);
@@ -79,7 +81,9 @@ impl FractionalNftVaultContract {
             panic_with_error!(&env, VaultError::Unauthorized);
         }
 
-        env.storage().instance().set(&DataKey::TotalShares, &total_shares);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalShares, &total_shares);
         env.storage()
             .instance()
             .set(&DataKey::Share(owner), &total_shares);
@@ -209,7 +213,11 @@ impl FractionalNftVaultContract {
             panic_with_error!(&env, VaultError::BuyoutNotApproved);
         }
 
-        if env.storage().instance().has(&DataKey::PayoutClaimed(holder.clone())) {
+        if env
+            .storage()
+            .instance()
+            .has(&DataKey::PayoutClaimed(holder.clone()))
+        {
             panic_with_error!(&env, VaultError::AlreadyClaimed);
         }
 
@@ -219,7 +227,11 @@ impl FractionalNftVaultContract {
         }
 
         let total_shares = read_total_shares(&env);
-        let treasury: i128 = env.storage().instance().get(&DataKey::Treasury).unwrap_or(0);
+        let treasury: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::Treasury)
+            .unwrap_or(0);
         let payout = (treasury * holder_shares) / total_shares;
 
         env.storage()

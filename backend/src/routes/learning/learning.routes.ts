@@ -10,6 +10,8 @@ import {
     getStudentProgress,
     listCourses,
     updateStudentProgress,
+    ProgressPersistenceError,
+    ProgressConflictError,
 } from './learning.service.js';
 import {
     courseParamsSchema,
@@ -17,12 +19,41 @@ import {
     progressUpdateSchema,
 } from './validation.schemas.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
- * @route   GET /api/learning/courses
- * @desc    Get all learning courses
- * @access  Public
+ * @openapi
+ * /api/v1/learning/courses:
+ *   get:
+ *     summary: List all learning courses
+ *     description: Returns all available courses, optionally filtered by difficulty level.
+ *     tags: [Learning]
+ *     security: []
+ *     parameters:
+ *       - in: query
+ *         name: difficulty
+ *         schema:
+ *           type: string
+ *           enum: [beginner, intermediate, advanced]
+ *         description: Filter courses by difficulty level
+ *     responses:
+ *       200:
+ *         description: List of courses
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 courses:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/CurriculumCourse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get(
   '/courses',
@@ -31,8 +62,8 @@ router.get(
     try {
       const difficulty =
         typeof req.query.difficulty === 'string' ? req.query.difficulty : undefined;
-      const courses = await listCourses(difficulty);
-      res.json({ courses });
+      const { data: courses, dataSource } = await listCourses(difficulty);
+      res.json({ courses, dataSource });
     } catch {
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -40,9 +71,47 @@ router.get(
 );
 
 /**
- * @route   GET /api/learning/courses/:courseId
- * @desc    Get a specific course curriculum
- * @access  Public
+ * @openapi
+ * /api/v1/learning/courses/{courseId}:
+ *   get:
+ *     summary: Get a specific course curriculum
+ *     description: Returns detailed curriculum for a course, including modules and lessons.
+ *     tags: [Learning]
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: courseId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Unique course identifier
+ *       - in: query
+ *         name: difficulty
+ *         schema:
+ *           type: string
+ *           enum: [beginner, intermediate, advanced]
+ *     responses:
+ *       200:
+ *         description: Course curriculum
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 course:
+ *                   $ref: '#/components/schemas/CurriculumCourse'
+ *       404:
+ *         description: Course not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get(
   '/courses/:courseId',
@@ -53,14 +122,14 @@ router.get(
       const courseId = req.params.courseId as string;
       const difficulty =
         typeof req.query.difficulty === 'string' ? req.query.difficulty : undefined;
-      const course = await getCourseCurriculum(courseId, difficulty);
+      const { data: course, dataSource } = await getCourseCurriculum(courseId, difficulty);
 
       if (!course) {
         res.status(404).json({ error: 'Course not found' });
         return;
       }
 
-      res.json({ course });
+      res.json({ course, dataSource });
     } catch {
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -68,9 +137,44 @@ router.get(
 );
 
 /**
- * @route   GET /api/learning/courses/:courseId/lessons/:lessonId/content
- * @desc    Get decentralized lesson content (Markdown/MDX parsed)
- * @access  Public
+ * @openapi
+ * /api/v1/learning/courses/{courseId}/lessons/{lessonId}/content:
+ *   get:
+ *     summary: Get decentralized lesson content
+ *     description: Fetches and parses Markdown/MDX lesson content from decentralized storage (IPFS). Results are cached for 24 hours.
+ *     tags: [Learning]
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: courseId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: lessonId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Unique lesson identifier
+ *     responses:
+ *       200:
+ *         description: Parsed lesson content (HTML from Markdown/MDX)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *       404:
+ *         description: Decentralized content not found for this lesson
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Failed to retrieve lesson content
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get(
   '/courses/:courseId/lessons/:lessonId/content',
@@ -117,9 +221,48 @@ router.get(
 );
 
 /**
- * @route   GET /api/learning/courses/:courseId/progress
- * @desc    Get user progress for a specific course
- * @access  Private
+ * @openapi
+ * /api/v1/learning/courses/{courseId}/progress:
+ *   get:
+ *     summary: Get student progress for a course
+ *     description: Returns the authenticated student's progress including completed lessons and percentage.
+ *     tags: [Learning]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: courseId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Student progress
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 progress:
+ *                   $ref: '#/components/schemas/Progress'
+ *       401:
+ *         description: Missing or invalid authentication token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Course not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get(
   '/courses/:courseId/progress',
@@ -128,16 +271,16 @@ router.get(
   async (req: Request, res: Response): Promise<void> => {
     try {
       const courseId = req.params.courseId as string;
-      const course = await getCourseCurriculum(courseId);
+      const { data: course } = await getCourseCurriculum(courseId);
 
       if (!course) {
         res.status(404).json({ error: 'Course not found' });
         return;
       }
 
-      const progress = await getStudentProgress(req.user!.id, courseId);
+      const { data: progress, dataSource } = await getStudentProgress(req.user!.id, courseId);
 
-      res.json({ progress });
+      res.json({ progress, dataSource });
     } catch {
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -145,9 +288,67 @@ router.get(
 );
 
 /**
- * @route   PATCH /api/learning/courses/:courseId/progress
- * @desc    Update user progress for a specific course
- * @access  Private
+ * @openapi
+ * /api/v1/learning/courses/{courseId}/progress:
+ *   patch:
+ *     summary: Update student progress for a course
+ *     description: Updates lesson completion status and overall progress percentage for the authenticated student.
+ *     tags: [Learning]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: courseId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [lessonId, status]
+ *             properties:
+ *               lessonId:
+ *                 type: string
+ *                 description: Lesson identifier to update
+ *               status:
+ *                 type: string
+ *                 enum: [not_started, in_progress, completed]
+ *               percentage:
+ *                 type: integer
+ *                 minimum: 0
+ *                 maximum: 100
+ *                 description: Overall course completion percentage
+ *     responses:
+ *       200:
+ *         description: Progress updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 progress:
+ *                   $ref: '#/components/schemas/Progress'
+ *       401:
+ *         description: Missing or invalid authentication token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Course or lesson not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.patch(
   '/courses/:courseId/progress',
@@ -157,7 +358,7 @@ router.patch(
   async (req: Request, res: Response): Promise<void> => {
     try {
       const courseId = req.params.courseId as string;
-      const course = await getCourseCurriculum(courseId);
+      const { data: course } = await getCourseCurriculum(courseId);
 
       if (!course) {
         res.status(404).json({ error: 'Course not found' });
@@ -165,10 +366,27 @@ router.patch(
       }
 
       const progress = await updateStudentProgress(req.user!.id, courseId, req.body);
-      res.json({ progress });
+      res.json({ progress, dataSource: 'live' });
     } catch (error: unknown) {
       if (error instanceof Error && error.message === 'LESSON_NOT_FOUND') {
         res.status(404).json({ error: 'Lesson not found' });
+        return;
+      }
+
+      if (error instanceof ProgressConflictError) {
+        res.status(409).json({
+          error: error.message,
+          progress: error.current,
+          dataSource: 'live',
+        });
+        return;
+      }
+
+      if (error instanceof ProgressPersistenceError) {
+        res.status(503).json({
+          error: error.message,
+          dataSource: 'demo',
+        });
         return;
       }
 
@@ -183,8 +401,8 @@ router.patch(
  */
 router.get('/modules', async (req: Request, res: Response) => {
   try {
-    const modules = await getCourseCurriculum('course-1');
-    res.json({ modules: modules?.modules || [] });
+    const { data: course, dataSource } = await getCourseCurriculum('course-1');
+    res.json({ modules: course?.modules || [], dataSource });
   } catch (_error) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -201,8 +419,12 @@ router.post('/progress/:userId/complete', async (req: Request, res: Response) =>
       lessonId,
       status: 'completed',
     });
-    res.json({ progress, message: 'Lesson marked as complete' });
-  } catch (_error) {
+    res.json({ progress, dataSource: 'live', message: 'Lesson marked as complete' });
+  } catch (error: unknown) {
+    if (error instanceof ProgressPersistenceError) {
+      res.status(503).json({ error: error.message, dataSource: 'demo' });
+      return;
+    }
     res.status(500).json({ error: 'Internal server error' });
   }
 });

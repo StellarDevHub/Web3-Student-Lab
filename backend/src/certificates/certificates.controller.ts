@@ -1,13 +1,15 @@
 import { Request, Response } from 'express';
-import {
-  certificateService,
-  verificationService,
-  revocationService,
-  certificateAnalytics,
-} from './index.js';
-import { qrCodeGenerator } from '../utils/qrCodeGenerator.js';
 import { certificateImageGenerator } from '../utils/certificateImageGenerator.js';
 import logger from '../utils/logger.js';
+import { buildPaginatedResponse, parsePaginationQuery } from '../utils/pagination.js';
+import { qrCodeGenerator } from '../utils/qrCodeGenerator.js';
+import {
+  certificateAnalytics,
+  certificateService,
+  revocationService,
+  verificationService,
+} from './index.js';
+import { UnauthorizedIssuerError } from './RevocationService.js';
 
 /**
  * Helper to convert param to string
@@ -16,6 +18,12 @@ function getStringParam(value: string | string[] | undefined): string {
   if (typeof value === 'string') return value;
   if (Array.isArray(value) && value.length > 0) return value[0] || '';
   return '';
+}
+
+function getStringQuery(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string') return value[0];
+  return undefined;
 }
 
 /**
@@ -207,6 +215,10 @@ export class CertificateController {
       const certificateId = getStringParam(req.params.certificateId);
       const { reason, revokedBy } = req.body;
 
+      if (!certificateId) {
+        res.status(400).json({ error: 'Certificate ID is required' });
+        return;
+      }
       if (!reason) {
         res.status(400).json({ error: 'Revocation reason is required' });
         return;
@@ -226,6 +238,10 @@ export class CertificateController {
         .json({ success: true, certificate: result, message: 'Certificate revoked successfully' });
     } catch (error) {
       logger.error(`Revoke error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      if (error instanceof UnauthorizedIssuerError) {
+        res.status(403).json({ error: error.message });
+        return;
+      }
       res
         .status(500)
         .json({ error: error instanceof Error ? error.message : 'Failed to revoke certificate' });
@@ -241,6 +257,10 @@ export class CertificateController {
       const certificateId = getStringParam(req.params.certificateId);
       const { reason, newGrade, issuedBy } = req.body;
 
+      if (!certificateId) {
+        res.status(400).json({ error: 'Certificate ID is required' });
+        return;
+      }
       if (!reason) {
         res.status(400).json({ error: 'Reissuance reason is required' });
         return;
@@ -264,6 +284,10 @@ export class CertificateController {
       });
     } catch (error) {
       logger.error(`Reissue error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      if (error instanceof UnauthorizedIssuerError) {
+        res.status(403).json({ error: error.message });
+        return;
+      }
       res
         .status(500)
         .json({ error: error instanceof Error ? error.message : 'Failed to reissue certificate' });
@@ -276,25 +300,32 @@ export class CertificateController {
    */
   async listCertificates(req: Request, res: Response): Promise<void> {
     try {
-      const limit = parseInt(req.query.limit as string) || 50;
-      const offset = parseInt(req.query.offset as string) || 0;
-      const status = req.query.status as string | undefined;
+      const pagination = parsePaginationQuery(req, { defaultPageSize: 50, maxPageSize: 100 });
+      const status = getStringQuery(req.query.status);
 
-      if (limit > 100) {
-        res.status(400).json({ error: 'Limit cannot exceed 100' });
+      if (status) {
+        const result = await certificateService.getCertificatesByStatus(status, pagination.pageSize, pagination.offset);
+        const paginationMetadata = buildPaginatedResponse(result.certificates, result.total, pagination.page, pagination.pageSize, pagination.offset);
+        res.status(200).json({
+          certificates: result.certificates,
+          total: result.total,
+          pagination: paginationMetadata.pagination,
+        });
         return;
       }
 
-      const result = status
-        ? await certificateService.getCertificatesByStatus(status)
-        : await certificateService.getAllCertificates(limit, offset);
-
-      res.status(200).json(result);
+      const result = await certificateService.getAllCertificates(pagination.pageSize, pagination.offset);
+      res.status(200).json({
+        certificates: result.certificates,
+        total: result.total,
+        pagination: buildPaginatedResponse(result.certificates, result.total, pagination.page, pagination.pageSize, pagination.offset).pagination,
+      });
     } catch (error) {
       logger.error(
         `List certificates error: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
-      res.status(500).json({ error: 'Failed to fetch certificates' });
+      const message = error instanceof Error ? error.message : 'Failed to fetch certificates';
+      res.status(message.includes('Page') || message.includes('Offset') ? 400 : 500).json({ error: message });
     }
   }
 
@@ -359,6 +390,11 @@ export class CertificateController {
   async getQRCode(req: Request, res: Response): Promise<void> {
     try {
       const id = getStringParam(req.params.id);
+      if (!id) {
+        res.status(400).json({ error: 'Certificate ID is required' });
+        return;
+      }
+
       const certificate = await certificateService.getCertificateById(id);
       if (!certificate) {
         res.status(404).json({ error: 'Certificate not found' });
