@@ -47,6 +47,7 @@ The application is fully deployed and accessible online:
 
 - Stellar SDK
 - Soroban Smart Contracts
+- Soroban Rust SDK `26.1.0` for every contract crate and browser-generated Cargo manifest
 
 ## 📁 Repository Structure
 

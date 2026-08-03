@@ -34,7 +34,7 @@ describe('Dependencies API - POST /dependencies/check', () => {
     const sdk = res.body.dependencies.find((d: { name: string }) => d.name === 'soroban-sdk');
     expect(sdk).toBeDefined();
     expect(sdk.isOutdated).toBe(true);
-    expect(sdk.latestVersion).toBe('22.0.7');
+    expect(sdk.latestVersion).toBe('26.1.0');
   });
 
   it('rejects missing cargoToml with 400', async () => {
@@ -66,7 +66,7 @@ describe('Dependencies API - POST /dependencies/update', () => {
     expect(res.body.status).toBe('success');
     expect(res.body.updated).toContain('soroban-sdk');
     expect(typeof res.body.suggestedCargoToml).toBe('string');
-    expect(res.body.suggestedCargoToml).toContain('"22.0.7"');
+    expect(res.body.suggestedCargoToml).toContain('"26.1.0"');
   });
 
   it('reports failure for non-existent dependencies', async () => {

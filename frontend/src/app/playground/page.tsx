@@ -41,7 +41,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-soroban-sdk = "21.7.6"
+soroban-sdk = "26.1.0"
 soroban-auth = "21.0.0"
 stellar-xdr = "21.2.0"
 num-integer = "0.1.44"

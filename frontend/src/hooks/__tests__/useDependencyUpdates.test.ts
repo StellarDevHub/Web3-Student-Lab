@@ -10,10 +10,10 @@ const CHECK_RESPONSE = {
     {
       name: 'soroban-sdk',
       currentVersion: '21.7.6',
-      latestVersion: '22.0.7',
+      latestVersion: '26.1.0',
       isOutdated: true,
       updateType: 'major',
-      releaseNotes: 'Protocol 22 support.',
+      releaseNotes: 'Protocol 26 support.',
     },
   ],
   outdatedCount: 1,
@@ -25,7 +25,7 @@ const UPDATE_RESPONSE = {
   status: 'success',
   updated: ['soroban-sdk'],
   failed: [],
-  suggestedCargoToml: '[dependencies]\nsoroban-sdk = "22.0.7"\n',
+  suggestedCargoToml: '[dependencies]\nsoroban-sdk = "26.1.0"\n',
 };
 
 beforeEach(() => {

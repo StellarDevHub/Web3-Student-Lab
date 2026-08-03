@@ -1,3 +1,5 @@
+import logger from '../utils/logger.js';
+
 // Standalone Redis configuration
 export const redisConfig: any = process.env.REDIS_URL
   ? {
@@ -9,17 +11,20 @@ export const redisConfig: any = process.env.REDIS_URL
       enableAutoPipelining: true,
       autoPipeliningIgnoredCommands: ['info', 'ping'],
     }
-  : {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      password: process.env.REDIS_PASSWORD,
-      maxRetriesPerRequest: 3,
-      retryStrategy: (times: number) => Math.min(times * 50, 2000),
-      enableOfflineQueue: false,
-      enableReadyCheck: true,
-      enableAutoPipelining: true,
-      autoPipeliningIgnoredCommands: ['info', 'ping'],
-    };
+  : (() => {
+      logger.warn('⚠️  REDIS_URL is not set, falling back to REDIS_HOST/REDIS_PORT (default localhost:6379).');
+      return {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379', 10),
+        password: process.env.REDIS_PASSWORD,
+        maxRetriesPerRequest: 3,
+        retryStrategy: (times: number) => Math.min(times * 50, 2000),
+        enableOfflineQueue: false,
+        enableReadyCheck: true,
+        enableAutoPipelining: true,
+        autoPipeliningIgnoredCommands: ['info', 'ping'],
+      };
+    })();
 
 // Redis Cluster configuration for high availability
 export const redisClusterConfig = {

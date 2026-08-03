@@ -20,6 +20,7 @@ use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, E
 // ── Storage keys ────────────────────────────────────────────────────────────
 const TOTAL_SHARES: Symbol = symbol_short!("TSHARES");
 const TOTAL_ASSETS: Symbol = symbol_short!("TASSETS");
+const LOCK: Symbol = symbol_short!("sv_lock");
 const HARVEST_COOL: u32 = 10; // minimum ledgers between harvests (front-run guard)
 
 // ── Data types ───────────────────────────────────────────────────────────────
@@ -47,9 +48,11 @@ impl SmartVault {
     ///
     /// # Panics
     /// - If `amount` is not positive.
+    /// - If reentrant call is detected.
     pub fn deposit(env: Env, user: Address, amount: i128) {
         user.require_auth();
         assert!(amount > 0, "amount must be positive");
+        Self::lock(&env);
 
         let total_assets: i128 = env.storage().instance().get(&TOTAL_ASSETS).unwrap_or(0i128);
         let total_shares: i128 = env.storage().instance().get(&TOTAL_SHARES).unwrap_or(0i128);
@@ -78,6 +81,7 @@ impl SmartVault {
             &(total_assets.checked_add(amount).expect("overflow")),
         );
 
+        Self::unlock(&env);
         env.events()
             .publish((symbol_short!("deposit"), user), (amount, new_shares));
     }
@@ -90,9 +94,11 @@ impl SmartVault {
     ///
     /// # Panics
     /// - If `shares` is not positive or exceeds the user's balance.
+    /// - If reentrant call is detected.
     pub fn withdraw(env: Env, user: Address, shares: i128) -> i128 {
         user.require_auth();
         assert!(shares > 0, "shares must be positive");
+        Self::lock(&env);
 
         let mut pos = Self::get_position(&env, &user);
         assert!(pos.shares >= shares, "insufficient shares");
@@ -119,6 +125,7 @@ impl SmartVault {
             &(total_assets.checked_sub(assets_out).expect("underflow")),
         );
 
+        Self::unlock(&env);
         env.events()
             .publish((symbol_short!("withdraw"), user), (shares, assets_out));
 
@@ -283,6 +290,22 @@ impl SmartVault {
 
     fn set_position(env: &Env, user: &Address, pos: &Position) {
         env.storage().persistent().set(user, pos);
+    }
+
+    /// Acquire reentrancy lock. Panics if already locked.
+    fn lock(env: &Env) {
+        let locked: bool = env.storage().instance().get(&LOCK).unwrap_or(false);
+        if locked {
+            panic_with_error!(env, soroban_sdk::Error::from_contract_error(
+                &soroban_sdk::Status::from_contract_value(10)
+            ));
+        }
+        env.storage().instance().set(&LOCK, &true);
+    }
+
+    /// Release reentrancy lock.
+    fn unlock(env: &Env) {
+        env.storage().instance().set(&LOCK, &false);
     }
 }
 

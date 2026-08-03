@@ -7,6 +7,7 @@ import { typeDefs } from './schema.js';
 import { resolvers } from './resolvers.js';
 import { createGraphQLContext } from './context.js';
 import { createCorsMiddleware } from '../config/cors.config.js';
+import { graphqlQueryComplexityLimiter } from '../middleware/graphqlRateLimiter.js';
 import logger from '../utils/logger.js';
 import { depthLimitRule, complexityLimitRule } from './validationRules.js';
 import config from '../config/env.config.js';
@@ -43,6 +44,8 @@ export const graphQLMiddleware = async (): Promise<RequestHandler[]> => {
 
   return [
     json(),
+    cors<cors.CorsRequest>({ origin: true }),
+    graphqlQueryComplexityLimiter,
     createCorsMiddleware(),
     expressMiddleware(server, {
       context: createGraphQLContext,

@@ -47,7 +47,7 @@ describe('checkDependencies', () => {
     const sdk = result.dependencies.find((d) => d.name === 'soroban-sdk');
     expect(sdk?.isOutdated).toBe(true);
     expect(sdk?.currentVersion).toBe('21.7.6');
-    expect(sdk?.latestVersion).toBe('22.0.7');
+    expect(sdk?.latestVersion).toBe('26.1.0');
     expect(sdk?.updateType).toBe('major');
   });
 
@@ -72,7 +72,7 @@ describe('checkDependencies', () => {
   });
 
   it('returns 0 outdated when versions are already latest', async () => {
-    const latest = '[dependencies]\nsoroban-sdk = "22.0.7"\n';
+    const latest = '[dependencies]\nsoroban-sdk = "26.1.0"\n';
     const result = await checkDependencies(latest);
     expect(result.outdatedCount).toBe(0);
   });
@@ -83,7 +83,7 @@ describe('updateDependencies', () => {
     const result = await updateDependencies(SAMPLE_TOML, ['soroban-sdk']);
     expect(result.updated).toContain('soroban-sdk');
     expect(result.failed).not.toContain('soroban-sdk');
-    expect(result.suggestedCargoToml).toContain('"22.0.7"');
+    expect(result.suggestedCargoToml).toContain('"26.1.0"');
   });
 
   it('reports failure for dependency not in registry', async () => {

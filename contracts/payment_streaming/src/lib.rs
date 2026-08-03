@@ -20,6 +20,7 @@ use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, E
 
 // ── Storage key ──────────────────────────────────────────────────────────────
 const STREAM_KEY: Symbol = symbol_short!("STREAM");
+const LOCK: Symbol = symbol_short!("ps_lock");
 
 // ── Data types ───────────────────────────────────────────────────────────────
 
@@ -84,6 +85,7 @@ impl PaymentStreaming {
         total_amount: i128,
     ) {
         sender.require_auth();
+        Self::lock(&env);
         assert!(amount_per_period > 0, "amount_per_period must be positive");
         assert!(total_amount > 0, "total_amount must be positive");
         assert!(period_length > 0, "period_length must be positive");
@@ -106,6 +108,8 @@ impl PaymentStreaming {
         env.storage().instance().set(&STREAM_KEY, &stream);
         env.events()
             .publish((symbol_short!("created"),), total_amount);
+
+        Self::unlock(&env);
     }
 
     // ── Pull payment ──────────────────────────────────────────────────────────
@@ -119,6 +123,7 @@ impl PaymentStreaming {
     /// - If no full period has elapsed since the last pull.
     pub fn pull_payment(env: Env, recipient: Address) -> i128 {
         recipient.require_auth();
+        Self::lock(&env);
 
         let mut stream: Stream = env
             .storage()
@@ -156,6 +161,7 @@ impl PaymentStreaming {
         env.events()
             .publish((symbol_short!("pulled"), recipient), owed);
 
+        Self::unlock(&env);
         owed
     }
 
@@ -170,6 +176,7 @@ impl PaymentStreaming {
     /// - If the stream is not active.
     pub fn cancel_stream(env: Env, sender: Address) -> i128 {
         sender.require_auth();
+        Self::lock(&env);
 
         let mut stream: Stream = env
             .storage()
@@ -204,6 +211,7 @@ impl PaymentStreaming {
         env.events()
             .publish((symbol_short!("cancelled"), sender), refund);
 
+        Self::unlock(&env);
         refund
     }
 
@@ -231,6 +239,22 @@ impl PaymentStreaming {
         let periods = (current - stream.last_pull_ledger) / stream.period_length;
         let remaining = stream.total_amount - stream.claimed;
         ((periods as i128) * stream.amount_per_period).min(remaining)
+    }
+
+    // ── Reentrancy guards ─────────────────────────────────────────────────
+
+    fn lock(env: &Env) {
+        let locked: bool = env.storage().instance().get(&LOCK).unwrap_or(false);
+        if locked {
+            panic_with_error!(env, soroban_sdk::Error::from_contract_error(
+                &soroban_sdk::Status::from_contract_value(10)
+            ));
+        }
+        env.storage().instance().set(&LOCK, &true);
+    }
+
+    fn unlock(env: &Env) {
+        env.storage().instance().set(&LOCK, &false);
     }
 }
 

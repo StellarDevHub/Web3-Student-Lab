@@ -2,9 +2,10 @@
 // Language: Rust (Soroban)
 
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Bytes, Env, Map, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, panic_with_error, symbol_short, Address, Bytes, Env, Map, Symbol, Vec};
 
 const MAX_SIGNERS: usize = 10;
+const LOCK: Symbol = symbol_short!("mw_lock");
 
 #[derive(Clone)]
 #[contracttype]
@@ -57,6 +58,7 @@ impl MultiSigWalletContract {
         data: Bytes,
     ) -> u32 {
         proposer.require_auth();
+        Self::lock(&env);
 
         let signers: Vec<Address> = env.storage().instance().get(&DataKey::Signers).unwrap();
         assert!(signers.contains(&proposer), "Not a signer");
@@ -96,11 +98,13 @@ impl MultiSigWalletContract {
             .instance()
             .set(&DataKey::ProposalCount, &(proposal_count + 1));
 
+        Self::unlock(&env);
         proposal_count
     }
 
     pub fn approve_proposal(env: Env, signer: Address, proposal_id: u32) {
         signer.require_auth();
+        Self::lock(&env);
 
         let signers: Vec<Address> = env.storage().instance().get(&DataKey::Signers).unwrap();
         assert!(signers.contains(&signer), "Not a signer");
@@ -117,9 +121,11 @@ impl MultiSigWalletContract {
         env.storage()
             .instance()
             .set(&DataKey::Proposals, &proposals);
+        Self::unlock(&env);
     }
 
     pub fn execute_proposal(env: Env, proposal_id: u32) {
+        Self::lock(&env);
         let mut proposals: Map<u32, Proposal> =
             env.storage().instance().get(&DataKey::Proposals).unwrap();
         let mut proposal = proposals.get(proposal_id).unwrap();
@@ -140,9 +146,11 @@ impl MultiSigWalletContract {
         env.storage()
             .instance()
             .set(&DataKey::Proposals, &proposals);
+        Self::unlock(&env);
     }
 
     pub fn add_signer(env: Env, new_signer: Address) {
+        Self::lock(&env);
         env.current_contract_address().require_auth();
 
         let mut signers: Vec<Address> = env.storage().instance().get(&DataKey::Signers).unwrap();
@@ -151,9 +159,11 @@ impl MultiSigWalletContract {
 
         signers.push_back(new_signer);
         env.storage().instance().set(&DataKey::Signers, &signers);
+        Self::unlock(&env);
     }
 
     pub fn remove_signer(env: Env, signer: Address) {
+        Self::lock(&env);
         env.current_contract_address().require_auth();
 
         let mut signers: Vec<Address> = env.storage().instance().get(&DataKey::Signers).unwrap();
@@ -164,6 +174,23 @@ impl MultiSigWalletContract {
 
         signers.remove(idx as u32);
         env.storage().instance().set(&DataKey::Signers, &signers);
+        Self::unlock(&env);
+    }
+
+    // ── Reentrancy guards ─────────────────────────────────────────────────
+
+    fn lock(env: &Env) {
+        let locked: bool = env.storage().instance().get(&LOCK).unwrap_or(false);
+        if locked {
+            panic_with_error!(env, soroban_sdk::Error::from_contract_error(
+                &soroban_sdk::Status::from_contract_value(10)
+            ));
+        }
+        env.storage().instance().set(&LOCK, &true);
+    }
+
+    fn unlock(env: &Env) {
+        env.storage().instance().set(&LOCK, &false);
     }
 }
 

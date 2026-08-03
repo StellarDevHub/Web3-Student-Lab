@@ -1,5 +1,8 @@
 import { Job, Worker } from 'bullmq';
 import logger from '../../utils/logger.js';
+import { redisConnection } from '../../utils/redis.js';
+import { webhookBreaker } from '../../lib/circuit-breaker/externalServices.js';
+import { canonicalizeWebhookPayload, buildSignedWebhookHeaders } from './signature.js';
 import {
     WEBHOOK_DELIVERY_QUEUE_NAME,
     webhookDeadLetterQueue,
@@ -56,15 +59,27 @@ export const deliverWebhook = async (
   let response: Response;
 
   try {
-    response = await fetch(job.data.destination.url, {
-      method: 'POST',
-      headers: {
-        ...headers,
-        ...job.data.destination.headers,
+    response = await webhookBreaker.execute(
+      async () => {
+        const res = await fetch(job.data.destination.url, {
+          method: 'POST',
+          headers: {
+            ...headers,
+            ...job.data.destination.headers,
+          },
+          body: serializedPayload,
+          signal: controller.signal,
+        });
+        return res;
       },
-      body: serializedPayload,
-      signal: controller.signal,
-    });
+      (error) => {
+        logger.error(`Circuit breaker fallback for webhook delivery: ${error.message}`);
+        throw new PermanentWebhookDeliveryError(
+          `Circuit breaker open for webhook delivery: ${error.message}`,
+          503
+        );
+      }
+    );
   } finally {
     clearTimeout(timer);
   }

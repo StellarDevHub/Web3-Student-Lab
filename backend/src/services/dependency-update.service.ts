@@ -24,8 +24,8 @@ export interface DependencyUpdateResult {
 
 // Simulated Soroban/Stellar Rust dependency registry (latest known versions)
 const REGISTRY: Record<string, string> = {
-  'soroban-sdk': '22.0.7',
-  'soroban-auth': '22.0.7',
+  'soroban-sdk': '26.1.0',
+  'soroban-auth': '26.1.0',
   'stellar-xdr': '22.1.0',
   'num-integer': '0.1.46',
   'num-traits': '0.2.19',
@@ -39,9 +39,9 @@ const REGISTRY: Record<string, string> = {
 };
 
 const RELEASE_NOTES: Record<string, string> = {
-  'soroban-sdk': 'Protocol 22 support, improved storage APIs, and security patches.',
+  'soroban-sdk': 'Protocol 26 support, improved storage APIs, and security patches.',
   'stellar-xdr': 'Updated XDR definitions for Stellar Protocol 22.',
-  'soroban-auth': 'Improved authorization framework compatibility with Protocol 22.',
+  'soroban-auth': 'Improved authorization framework compatibility with Protocol 26.',
   'serde': 'Performance improvements and new derive macro features.',
 };
 

@@ -90,7 +90,7 @@ const PRODUCTION_REQUIRED_VARS: EnvVarConfig[] = [
 /**
  * Optional environment variables with defaults
  */
-const OPTIONAL_VARS: Record<string, { defaultValue: string; description: string }> = {
+const OPTIONAL_VARS: Record<string, { defaultValue: string; description: string; warnOnDefault?: boolean }> = {
   PORT: {
     defaultValue: '8080',
     description: 'Port number for the backend server',
@@ -98,6 +98,7 @@ const OPTIONAL_VARS: Record<string, { defaultValue: string; description: string 
   NODE_ENV: {
     defaultValue: 'development',
     description: 'Application environment (development, production, test)',
+    warnOnDefault: true,
   },
   JWT_EXPIRES_IN: {
     defaultValue: '7d',
@@ -106,14 +107,17 @@ const OPTIONAL_VARS: Record<string, { defaultValue: string; description: string 
   STELLAR_NETWORK: {
     defaultValue: 'testnet',
     description: 'Stellar network to connect to (testnet, mainnet, futurenet)',
+    warnOnDefault: true,
   },
   STELLAR_HORIZON_URL: {
     defaultValue: 'https://horizon-testnet.stellar.org',
     description: 'Stellar Horizon server URL',
+    warnOnDefault: true,
   },
   SOROBAN_RPC_URL: {
     defaultValue: 'https://soroban-testnet.stellar.org',
     description: 'Soroban RPC URL for smart contract interactions',
+    warnOnDefault: true,
   },
   CERTIFICATE_CONTRACT_ID: {
     defaultValue: '',
@@ -138,6 +142,14 @@ const OPTIONAL_VARS: Record<string, { defaultValue: string; description: string 
   SENTRY_RELEASE: {
     defaultValue: 'web3-student-lab@1.0.0',
     description: 'Release tag sent to Sentry for error grouping',
+  },
+  SSL_KEY_PATH: {
+    defaultValue: '',
+    description: 'Path to SSL/TLS private key file for HTTPS',
+  },
+  SSL_CERT_PATH: {
+    defaultValue: '',
+    description: 'Path to SSL/TLS certificate file for HTTPS',
   },
 };
 
@@ -216,12 +228,32 @@ export function validateEnvironment(): void {
       );
     }
 
-    // Set defaults for optional variables
+    // Set defaults for optional variables and warn about fallbacks
     for (const [name, config] of Object.entries(OPTIONAL_VARS)) {
       if (!process.env[name] || process.env[name]!.trim() === '') {
         if (config.defaultValue !== '') {
           process.env[name] = config.defaultValue;
+          if (config.warnOnDefault) {
+            logger.warn(
+              `⚠️  ${name} is not set, defaulting to "${config.defaultValue}". ${config.description}.`
+            );
+          }
+        } else {
+          logger.info(`ℹ️  ${name} is not set (${config.description}).`);
         }
+      }
+    }
+
+    // Warn if HTTPS is not configured (production concern)
+    if (!process.env.SSL_KEY_PATH && !process.env.SSL_CERT_PATH) {
+      if (process.env.NODE_ENV === 'production') {
+        logger.warn(
+          '⚠️  SSL_KEY_PATH and SSL_CERT_PATH are not set. HTTPS is not configured — the server will run in HTTP mode. This is not recommended for production.'
+        );
+      } else {
+        logger.info(
+          'ℹ️  SSL_KEY_PATH and SSL_CERT_PATH are not set. HTTPS is not configured — the server will run in HTTP mode.'
+        );
       }
     }
 
