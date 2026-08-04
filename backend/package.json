@@ -13,6 +13,7 @@
     "test:migrations": "echo 'No migrations tests'",
     "test:migrations": "bash scripts/test-migration-rollback.sh",
     "validate:curriculum": "tsx scripts/validate-curriculum.ts",
+    "refresh:dependency-registry": "tsx scripts/refresh-dependency-registry.ts",
 
     "bench": "tsx benchmarks/runBenchmarks.ts",
     "collaboration": "tsx src/collaborationServer.ts",

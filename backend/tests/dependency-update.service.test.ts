@@ -3,6 +3,8 @@ import {
   parseCargoTomlDependencies,
   checkDependencies,
   updateDependencies,
+  compareVersions,
+  DependencyServiceError,
 } from '../src/services/dependency-update.service.js';
 
 const SAMPLE_TOML = `[package]
@@ -75,6 +77,81 @@ describe('checkDependencies', () => {
     const latest = '[dependencies]\nsoroban-sdk = "26.1.0"\n';
     const result = await checkDependencies(latest);
     expect(result.outdatedCount).toBe(0);
+  });
+});
+
+describe('compareVersions', () => {
+  it('classifies major, minor, and patch updates', () => {
+    expect(compareVersions('21.7.6', '26.1.0')).toBe('major');
+    expect(compareVersions('1.2.0', '1.3.0')).toBe('minor');
+    expect(compareVersions('1.2.3', '1.2.4')).toBe('patch');
+    expect(compareVersions('1.2.3', '1.2.3')).toBe('none');
+  });
+
+  it('returns none when the current version is newer than the registry entry', () => {
+    expect(compareVersions('27.0.0', '26.1.0')).toBe('none');
+    expect(compareVersions('1.3.0', '1.2.9')).toBe('none');
+    expect(compareVersions('1.2.5', '1.2.4')).toBe('none');
+  });
+
+  it('handles prerelease versions safely', () => {
+    expect(compareVersions('1.2.3-beta.1', '1.2.3')).toBe('patch');
+    expect(compareVersions('1.2.3', '1.2.3-beta.1')).toBe('none');
+    expect(compareVersions('1.2.3-alpha', '1.2.3-beta')).toBe('patch');
+    expect(compareVersions('1.2.3-beta.1', '1.2.3-beta.2')).toBe('patch');
+    expect(compareVersions('1.2.3-alpha.1', '1.2.3-alpha')).toBe('none');
+    expect(compareVersions('1.2.3-beta.1', '1.2.3-alpha.1')).toBe('none');
+    expect(compareVersions('1.0.0-alpha', '1.0.0-alpha.1')).toBe('patch');  });
+
+  it('handles build metadata, v prefixes, and short forms', () => {
+    expect(compareVersions('1.2.3+build.5', '1.2.4')).toBe('patch');
+    expect(compareVersions('v1.2.3', '1.2.4')).toBe('patch');
+    expect(compareVersions('v1.2.3', '1.2.3')).toBe('none');
+    expect(compareVersions('1.2', '1.2.0')).toBe('none');
+    expect(compareVersions('1.2', '1.3.0')).toBe('minor');
+    expect(compareVersions('1', '2.0.0')).toBe('major');
+  });
+
+  it('treats malformed input as no update without throwing', () => {
+    expect(compareVersions('', '1.2.3')).toBe('none');
+    expect(compareVersions('abc', '1.2.3')).toBe('none');
+    expect(compareVersions('1.2.3', 'not-a-version')).toBe('none');
+    expect(compareVersions('1..3', '1.2.3')).toBe('none');
+    expect(compareVersions('*', '1.2.3')).toBe('none');
+    expect(compareVersions('1.2.3.4', '1.2.3')).toBe('none');
+    expect(compareVersions('1.2.3', '1.2.3.4')).toBe('none');
+  });
+});
+
+describe('dependency registry provider resilience', () => {
+  it('checkDependencies does not break when the registry provider throws', async () => {
+    const failingRegistry = {
+      getLatestVersion: () => {
+        throw new Error('registry unavailable');
+      },
+      getReleaseNotes: () => {
+        throw new Error('registry unavailable');
+      },
+    };
+    const toml = '[dependencies]\nsoroban-sdk = "21.7.6"\n';
+    const result = await checkDependencies(toml, failingRegistry);
+    expect(result.dependencies).toHaveLength(1);
+    expect(result.dependencies[0]?.isOutdated).toBe(false);
+    expect(result.dependencies[0]?.latestVersion).toBe('21.7.6');
+  });
+
+  it('updateDependencies raises an actionable error when the registry provider throws', async () => {
+    const failingRegistry = {
+      getLatestVersion: () => {
+        throw new Error('registry unavailable');
+      },
+      getReleaseNotes: () => undefined,
+    };
+    const toml = '[dependencies]\nsoroban-sdk = "21.7.6"\n';
+    const error = await updateDependencies(toml, ['soroban-sdk'], failingRegistry).catch((e) => e);
+    expect(error).toBeInstanceOf(DependencyServiceError);
+    expect((error as DependencyServiceError).code).toBe('DEPENDENCY_REGISTRY_UNAVAILABLE');
+    expect((error as Error).message).toContain('soroban-sdk');
   });
 });
 

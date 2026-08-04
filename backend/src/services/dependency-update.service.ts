@@ -1,4 +1,8 @@
 import logger from '../utils/logger.js';
+import {
+  curatedRegistryProvider,
+  type DependencyRegistryProvider,
+} from '../config/dependency-registry.js';
 
 export interface CargoTomlDependency {
   name: string;
@@ -22,35 +26,107 @@ export interface DependencyUpdateResult {
   suggestedCargoToml: string;
 }
 
-// Simulated Soroban/Stellar Rust dependency registry (latest known versions)
-const REGISTRY: Record<string, string> = {
-  'soroban-sdk': '26.1.0',
-  'soroban-auth': '26.1.0',
-  'stellar-xdr': '22.1.0',
-  'num-integer': '0.1.46',
-  'num-traits': '0.2.19',
-  'serde': '1.0.219',
-  'serde_json': '1.0.140',
-  'base64': '0.22.1',
-  'hex': '0.4.3',
-  'sha2': '0.10.9',
-  'hmac': '0.12.1',
-  'ed25519-dalek': '2.1.1',
-};
+export type VersionUpdateType = 'major' | 'minor' | 'patch' | 'none';
 
-const RELEASE_NOTES: Record<string, string> = {
-  'soroban-sdk': 'Protocol 26 support, improved storage APIs, and security patches.',
-  'stellar-xdr': 'Updated XDR definitions for Stellar Protocol 22.',
-  'soroban-auth': 'Improved authorization framework compatibility with Protocol 26.',
-  'serde': 'Performance improvements and new derive macro features.',
-};
+/**
+ * Raised when the dependency registry provider cannot resolve versions for an
+ * update request. Carries a stable `code` so callers can surface an actionable
+ * message instead of a generic failure.
+ */
+export class DependencyServiceError extends Error {
+  constructor(
+    public readonly code: 'DEPENDENCY_REGISTRY_UNAVAILABLE',
+    message: string
+  ) {
+    super(message);
+    this.name = 'DependencyServiceError';
+  }
+}
 
-function compareVersions(a: string, b: string): 'major' | 'minor' | 'patch' | 'none' {
-  const [aMaj = 0, aMin = 0, aPat = 0] = a.split('.').map(Number);
-  const [bMaj = 0, bMin = 0, bPat = 0] = b.split('.').map(Number);
-  if (bMaj > aMaj) return 'major';
-  if (bMin > aMin) return 'minor';
-  if (bPat > aPat) return 'patch';
+interface ParsedSemver {
+  major: number;
+  minor: number;
+  patch: number;
+  prerelease: string[];
+}
+
+/**
+ * Matches `[v]major[.minor[.patch]][-prerelease][+build]`.
+ * Major is required; minor/patch default to 0; prerelease and build metadata
+ * identifiers follow semver's [0-9A-Za-z-] character set.
+ */
+const SEMVER_PATTERN =
+  /^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+function parseSemver(input: string): ParsedSemver | null {
+  if (typeof input !== 'string' || input.trim() === '') return null;
+  const match = input.trim().match(SEMVER_PATTERN);
+  if (!match) return null;
+
+  const major = Number(match[1]);
+  if (!Number.isSafeInteger(major) || major < 0) return null;
+  const minor = match[2] !== undefined ? Number(match[2]) : 0;
+  if (!Number.isSafeInteger(minor) || minor < 0) return null;
+  const patch = match[3] !== undefined ? Number(match[3]) : 0;
+  if (!Number.isSafeInteger(patch) || patch < 0) return null;
+  const prerelease = match[4] !== undefined ? match[4].split('.') : [];
+
+  return { major, minor, patch, prerelease };
+}
+
+/**
+ * Compare two prerelease identifier lists per semver rules:
+ * a list with no prerelease is the full release (sorts after any prerelease);
+ * numeric identifiers sort before alphanumeric ones, numeric identifiers
+ * compare numerically, alphanumeric identifiers compare lexically, and a
+ * shorter list sorts before a longer one when all shared parts are equal.
+ */
+function comparePrerelease(a: string[], b: string[]): number {
+  if (a.length === 0 && b.length === 0) return 0;
+  if (a.length === 0) return 1;
+  if (b.length === 0) return -1;
+
+  const length = Math.max(a.length, b.length);
+  for (let i = 0; i < length; i++) {
+    const aPart = a[i];
+    const bPart = b[i];
+    if (aPart === undefined) return -1;
+    if (bPart === undefined) return 1;
+
+    const aNumeric = /^\d+$/.test(aPart) ? Number(aPart) : null;
+    const bNumeric = /^\d+$/.test(bPart) ? Number(bPart) : null;
+    if (aNumeric !== null && bNumeric !== null) {
+      if (aNumeric !== bNumeric) return aNumeric < bNumeric ? -1 : 1;
+      continue;
+    }
+    if (aNumeric !== null) return -1;
+    if (bNumeric !== null) return 1;
+    if (aPart !== bPart) return aPart < bPart ? -1 : 1;
+  }
+  return 0;
+}
+
+/**
+ * Classify the update level needed to move from `current` to `latest`.
+ *
+ * Handles prerelease suffixes (`1.2.0-beta.1`), build metadata (`1.2.0+build`),
+ * optional `v` prefixes, and short forms such as `1.2`. A prerelease-only
+ * difference is treated as a patch-level change. Malformed or unparseable
+ * input returns `'none'` and never throws, so a bad registry entry cannot
+ * break dependency checks.
+ */
+export function compareVersions(current: string, latest: string): VersionUpdateType {
+  const from = parseSemver(current);
+  const to = parseSemver(latest);
+  if (!from || !to) return 'none';
+
+  if (to.major > from.major) return 'major';
+  if (to.major < from.major) return 'none';
+  if (to.minor > from.minor) return 'minor';
+  if (to.minor < from.minor) return 'none';
+  if (to.patch > from.patch) return 'patch';
+  if (to.patch < from.patch) return 'none';
+  if (comparePrerelease(from.prerelease, to.prerelease) < 0) return 'patch';
   return 'none';
 }
 
@@ -98,14 +174,25 @@ export function parseCargoTomlDependencies(cargoToml: string): Array<{ name: str
   return deps;
 }
 
-export async function checkDependencies(cargoToml: string): Promise<DependencyCheckResult> {
+export async function checkDependencies(
+  cargoToml: string,
+  registry: DependencyRegistryProvider = curatedRegistryProvider
+): Promise<DependencyCheckResult> {
   const parsed = parseCargoTomlDependencies(cargoToml);
   const cargoTomlHash = simpleHash(cargoToml);
 
   const dependencies: CargoTomlDependency[] = parsed.map(({ name, version }) => {
-    const latestVersion = REGISTRY[name] ?? version;
+    let latestVersion: string | undefined;
+    let releaseNotes: string | undefined;
+    try {
+      latestVersion = registry.getLatestVersion(name);
+      releaseNotes = registry.getReleaseNotes(name);
+    } catch (error) {
+      // A failing registry provider must never break dependency checks.
+      logger.warn(`Dependency registry provider failed for crate "${name}"`, error);
+    }
+    latestVersion ??= version;
     const updateType = compareVersions(version, latestVersion);
-    const releaseNotes = RELEASE_NOTES[name];
     return {
       name,
       currentVersion: version,
@@ -134,11 +221,13 @@ export async function checkDependencies(cargoToml: string): Promise<DependencyCh
 
 export async function updateDependencies(
   cargoToml: string,
-  dependenciesToUpdate: string[]
+  dependenciesToUpdate: string[],
+  registry: DependencyRegistryProvider = curatedRegistryProvider
 ): Promise<DependencyUpdateResult> {
   const parsed = parseCargoTomlDependencies(cargoToml);
   const updated: string[] = [];
   const failed: string[] = [];
+  const registryFailures: string[] = [];
   let updatedCargoToml = cargoToml;
 
   for (const depName of dependenciesToUpdate) {
@@ -147,7 +236,14 @@ export async function updateDependencies(
       failed.push(depName);
       continue;
     }
-    const latestVersion = REGISTRY[dep.name];
+    let latestVersion: string | undefined;
+    try {
+      latestVersion = registry.getLatestVersion(dep.name);
+    } catch (error) {
+      registryFailures.push(depName);
+      logger.warn(`Dependency registry provider failed for crate "${depName}"`, error);
+      continue;
+    }
     if (!latestVersion) {
       failed.push(depName);
       continue;
@@ -165,6 +261,14 @@ export async function updateDependencies(
       `$1"${latestVersion}"`
     );
     updated.push(depName);
+  }
+
+  if (registryFailures.length > 0) {
+    throw new DependencyServiceError(
+      'DEPENDENCY_REGISTRY_UNAVAILABLE',
+      `Could not resolve the latest version of: ${registryFailures.join(', ')}. ` +
+        'The dependency registry is temporarily unavailable; please retry the update later.'
+    );
   }
 
   logger.info('Dependency update completed', {
