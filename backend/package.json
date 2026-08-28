@@ -44,7 +44,7 @@
     "ioredis": "^5.10.1",
     "json2csv": "^6.0.0-alpha.2",
     "jsonwebtoken": "^9.0.2",
-    "marked": "^9.1.6",
+    "marked": "^18.0.11",
     "openai": "^6.32.0",
     "pg": "^8.20.0",
     "prisma": "^7.8.0",
