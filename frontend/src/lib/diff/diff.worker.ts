@@ -7,8 +7,9 @@ import type {
   DiffWorkerRequest,
   DiffWorkerResponse,
 } from './diffTypes';
+import { computeDiffHunks, type DiffResult as HunkDiffResult } from './diffUtils';
 
-type WorkerSelf = typeof self & { postMessage(message: DiffWorkerResponse): void };
+type WorkerSelf = typeof self & { postMessage(message: any): void };
 const workerSelf = self as WorkerSelf;
 
 const dmp = new DiffMatchPatch();
@@ -38,12 +39,6 @@ function charSegments(originalText: string, modifiedText: string): DiffSegment[]
 
 /**
  * Compute a line-level chunk model from two code strings.
- *
- * Uses `diff_linesToChars` (O(ND) on lines) so large multi-file comparisons
- * stay fast, then maps the line tokens back to concrete strings. Equal
- * (context) regions advance both line counters; contiguous deletions and
- * insertions between context regions merge into a single `replace` chunk,
- * which is what the "apply chunk" control treats as a unit.
  */
 export function computeDiff(original: string, modified: string): {
   chunks: DiffChunk[];
@@ -90,7 +85,6 @@ export function computeDiff(original: string, modified: string): {
   for (const [op, text] of lineOps) {
     const lines = splitLines(text);
     if (op === 0) {
-      // Context region: flush any pending changes, then advance both counters.
       flush();
       originalLine += lines.length;
       modifiedLine += lines.length;
@@ -113,20 +107,28 @@ export function computeDiff(original: string, modified: string): {
   return { chunks, identical: false };
 }
 
-workerSelf.addEventListener('message', (event: MessageEvent<DiffWorkerRequest>) => {
-  const msg = event.data;
-  if (msg.type !== 'diff') return;
-  const { requestId, original, modified } = msg;
-  try {
-    const result = computeDiff(original, modified);
-    workerSelf.postMessage({ type: 'diff-result', requestId, result });
-  } catch (err) {
-    workerSelf.postMessage({
-      type: 'diff-error',
-      requestId,
-      message: err instanceof Error ? err.message : 'Diff computation failed.',
-    });
+// Handle both InteractiveDiffViewer (type: 'diff') and DiffViewer (id, original, modified)
+self.onmessage = (event: MessageEvent<any>) => {
+  const data = event.data;
+  if (!data) return;
+
+  if (data.type === 'diff') {
+    const { requestId, original, modified } = data;
+    try {
+      const result = computeDiff(original, modified);
+      workerSelf.postMessage({ type: 'diff-result', requestId, result });
+    } catch (err) {
+      workerSelf.postMessage({
+        type: 'diff-error',
+        requestId,
+        message: err instanceof Error ? err.message : 'Diff computation failed.',
+      });
+    }
+  } else if ('id' in data) {
+    const { id, original, modified } = data;
+    const result: HunkDiffResult = computeDiffHunks(original, modified);
+    workerSelf.postMessage({ id, result });
   }
-});
+};
 
 export {};
