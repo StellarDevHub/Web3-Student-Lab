@@ -176,14 +176,9 @@ const releaseDistributedLock = async (
   try {
     if (typeof redis.eval === 'function') {
       await redis.eval(UNLOCK_SCRIPT, 1, lockKey, lockVal);
-    } else {
-      const current = await redis.get(lockKey);
-      if (current === lockVal) {
-        await redis.del(lockKey);
-      }
     }
-  } catch {
-    // Ignore error on lock release
+  } catch (err) {
+    logger.warn('Failed to release distributed lock via Lua script:', err);
   }
 };
 
