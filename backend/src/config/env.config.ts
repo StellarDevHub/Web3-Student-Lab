@@ -34,6 +34,12 @@ export const config = {
   db: {
     url: getEnvVar('DATABASE_URL'),
     readReplicaUrl: getEnvVar('DATABASE_READ_REPLICA_URL', ''),
+    replica: {
+      checkIntervalMs: parseInt(getEnvVar('DB_REPLICA_CHECK_INTERVAL_MS', '10000'), 10),
+      failureThreshold: parseInt(getEnvVar('DB_REPLICA_FAILURE_THRESHOLD', '3'), 10),
+      cooldownMs: parseInt(getEnvVar('DB_REPLICA_COOLDOWN_MS', '30000'), 10),
+      replicationLagWindowMs: parseInt(getEnvVar('DB_REPLICATION_LAG_WINDOW_MS', '1000'), 10),
+    },
   },
   redis: {
     url: getEnvVar('REDIS_URL'), // Required
