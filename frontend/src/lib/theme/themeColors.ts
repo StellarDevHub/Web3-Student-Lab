@@ -86,6 +86,49 @@ export const THEME_COLORS = {
       text: '#ffffff',
     },
   },
+  oled: {
+    // Background colors
+    background: {
+      primary: '#000000',
+      secondary: '#000000',
+      tertiary: '#000000',
+      accent: '#000000',
+    },
+    // Text colors
+    text: {
+      primary: '#ffffff',
+      secondary: '#ffffff',
+      tertiary: '#ffffff',
+      muted: '#cccccc',
+    },
+    // Border colors
+    border: {
+      light: '#555555',
+      medium: '#666666',
+      dark: '#777777',
+    },
+    // Interactive colors
+    interactive: {
+      primary: '#ffaa00',
+      primaryHover: '#ffcc00',
+      secondary: '#333333',
+      secondaryHover: '#444444',
+    },
+    // Status colors
+    status: {
+      success: '#00ff00',
+      error: '#ff0000',
+      warning: '#ffcc00',
+      info: '#00ffff',
+    },
+    // Chart colors
+    chart: {
+      primary: '#ff00ff',
+      accent: '#00ffff',
+      neutral: '#888888',
+      text: '#ffffff',
+    },
+  },
 };
 
 // CSS variable names
@@ -128,17 +171,17 @@ export const CSS_VARIABLES = {
 };
 
 // Helper to apply theme colors
-export function getThemeColors(theme: 'light' | 'dark') {
+export function getThemeColors(theme: 'light' | 'dark' | 'oled') {
   return THEME_COLORS[theme];
 }
 
 // Helper to get chart colors for the current theme
-export function getChartColors(theme: 'light' | 'dark') {
+export function getChartColors(theme: 'light' | 'dark' | 'oled') {
   return THEME_COLORS[theme].chart;
 }
 
 // Generate inline styles for theme
-export function getThemeStyles(theme: 'light' | 'dark') {
+export function getThemeStyles(theme: 'light' | 'dark' | 'oled') {
   const colors = THEME_COLORS[theme];
   const vars: Record<string, string> = {};
 

@@ -8,6 +8,27 @@
 }
 
 :root {
+  --bg: #ffffff;
+  --bg-panel: rgba(240, 240, 240, 0.78);
+  --bg-panel-strong: #e5e5e5;
+  --text-strong: #000000;
+  --text: #1a1a1a;
+  --muted: #666666;
+  --line: rgba(0, 0, 0, 0.11);
+  --brand: #d8481f;
+  --brand-strong: #c2410c;
+  --brand-soft: #ffedd5;
+  --accent: #0f766e;
+  --success: #059669;
+  --warning: #d97706;
+  --body-bg: radial-gradient(circle at top left, rgba(240, 100, 45, 0.05), transparent 28%),
+               radial-gradient(circle at 80% 10%, rgba(37, 181, 164, 0.05), transparent 22%),
+               linear-gradient(180deg, #f8fafc 0%, #ffffff 45%, #f1f5f9 100%);
+  --background: var(--bg);
+  --foreground: var(--text);
+}
+
+.dark {
   --bg: #09111d;
   --bg-panel: rgba(14, 21, 32, 0.78);
   --bg-panel-strong: #121d2b;
@@ -21,6 +42,28 @@
   --accent: #25b5a4;
   --success: #34c789;
   --warning: #f3a63c;
+  --body-bg: radial-gradient(circle at top left, rgba(240, 100, 45, 0.18), transparent 28%),
+               radial-gradient(circle at 80% 10%, rgba(37, 181, 164, 0.12), transparent 22%),
+               linear-gradient(180deg, #07101a 0%, #09111d 45%, #0b1320 100%);
+  --background: var(--bg);
+  --foreground: var(--text);
+}
+
+.oled {
+  --bg: #000000;
+  --bg-panel: #000000;
+  --bg-panel-strong: #000000;
+  --text-strong: #ffffff;
+  --text: #ffffff;
+  --muted: #cccccc;
+  --line: #555555;
+  --brand: #ffaa00;
+  --brand-strong: #ffcc00;
+  --brand-soft: #ff8800;
+  --accent: #00ffff;
+  --success: #00ff00;
+  --warning: #ffcc00;
+  --body-bg: #000000;
   --background: var(--bg);
   --foreground: var(--text);
 }
@@ -62,10 +105,7 @@ html {
 body {
   min-height: 100vh;
   margin: 0;
-  background:
-    radial-gradient(circle at top left, rgba(240, 100, 45, 0.18), transparent 28%),
-    radial-gradient(circle at 80% 10%, rgba(37, 181, 164, 0.12), transparent 22%),
-    linear-gradient(180deg, #07101a 0%, #09111d 45%, #0b1320 100%);
+  background: var(--body-bg);
   color: var(--text);
   font-family: var(--font-sans), sans-serif;
 }

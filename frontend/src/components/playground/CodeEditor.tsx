@@ -7,6 +7,7 @@ import { extendRustLanguage } from '@/lib/editor/SorobanLanguage';
 import type { SorobanLinterInstance } from '@/lib/editor/SorobanLinter';
 import { createSorobanLinter } from '@/lib/editor/SorobanLinter';
 import { THEME_COLORS } from '@/lib/theme/themeColors';
+import { useThemeMode } from '@/hooks/useThemeMode';
 import type { OnMount } from '@monaco-editor/react';
 import { ChevronRight, FileText } from 'lucide-react';
 import type { editor } from 'monaco-editor';
@@ -127,6 +128,55 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   const linterRef = useRef<SorobanLinterInstance | null>(null);
   const compileActionRef = useRef<{ dispose: () => void } | null>(null);
   const prefersReducedMotion = useMemo(() => getPrefersReducedMotion(), []);
+  
+  const { theme, colors } = useThemeMode();
+
+  useEffect(() => {
+    if (!editorInstance) return;
+    const monaco = (window as any).monaco;
+    if (!monaco) return;
+    
+    const baseTheme = theme === 'light' ? 'vs' : 'hc-black';
+    monaco.editor.defineTheme('web3-lab-premium', {
+      base: baseTheme,
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: '636e7b', fontStyle: 'italic' },
+        { token: 'keyword', foreground: 'ff7b72', fontStyle: 'bold' },
+        { token: 'string', foreground: 'a5d6ff' },
+        { token: 'type', foreground: '79c0ff' },
+        { token: 'function', foreground: 'd2a8ff' },
+        {
+          token: 'sorobanMacro',
+          foreground: colors.interactive.primary.replace('#', ''),
+          fontStyle: 'bold',
+        },
+        {
+          token: 'sorobanType',
+          foreground: colors.status.info.replace('#', ''),
+          fontStyle: 'bold',
+        },
+        {
+          token: 'sorobanModule',
+          foreground: colors.status.warning.replace('#', ''),
+        },
+        {
+          token: 'moduleSeparator',
+          foreground: colors.text.muted.replace('#', ''),
+        },
+      ],
+      colors: {
+        'editor.background': colors.background.primary,
+        'editor.lineHighlightBackground': theme === 'light' ? '#00000005' : '#ffffff05',
+        'editorCursor.foreground': colors.status.error,
+        'editor.selectionBackground': `${colors.status.error}22`,
+        'editorLineNumber.foreground': colors.text.muted,
+        'editorLineNumber.activeForeground': colors.text.secondary,
+      },
+    });
+    monaco.editor.setTheme('web3-lab-premium');
+  }, [editorInstance, theme, colors]);
+
 
   const collaboratorLabel = useMemo(() => {
     if (collaborationProvider) {
@@ -168,9 +218,9 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
       registerSorobanCompletion(monaco);
       registerSorobanHover(monaco);
 
-      const colors = THEME_COLORS.dark;
+      const baseTheme = theme === 'light' ? 'vs' : 'hc-black';
       monaco.editor.defineTheme('web3-lab-premium', {
-        base: 'vs-dark',
+        base: baseTheme,
         inherit: true,
         rules: [
           { token: 'comment', foreground: '636e7b', fontStyle: 'italic' },
@@ -199,7 +249,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         ],
         colors: {
           'editor.background': colors.background.primary,
-          'editor.lineHighlightBackground': '#ffffff05',
+          'editor.lineHighlightBackground': theme === 'light' ? '#00000005' : '#ffffff05',
           'editorCursor.foreground': colors.status.error,
           'editor.selectionBackground': `${colors.status.error}22`,
           'editorLineNumber.foreground': colors.text.muted,
@@ -207,6 +257,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         },
       });
       monaco.editor.setTheme('web3-lab-premium');
+
 
       const model = mountedEditor.getModel();
       if (model) {

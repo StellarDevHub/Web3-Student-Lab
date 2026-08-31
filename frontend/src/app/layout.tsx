@@ -9,7 +9,7 @@ import { OfflineSyncHandler } from '@/components/OfflineSyncHandler';
 import { SkipLink } from '@/components/ui/SkipLink';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
-import { ThemeProvider } from '@/contexts/ThemeContext';
+import { Providers as ThemeProvider } from '@/lib/theme/providers';
 import { TutorialProvider } from '@/contexts/TutorialContext';
 import { WalletProvider } from '@/contexts/WalletContext';
 import { Web3OnboardingProvider } from '@/contexts/Web3OnboardingContext';
@@ -42,24 +42,6 @@ export default function RootLayout({
         <link
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;700;900&display=swap"
           rel="stylesheet"
-        />
-        <script
-          suppressHydrationWarning
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  var theme = localStorage.getItem('web3-lab-theme');
-                  var isDark = theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
-                  if (isDark) {
-                    document.documentElement.classList.add('dark');
-                  } else {
-                    document.documentElement.classList.remove('dark');
-                  }
-                } catch (e) {}
-              })();
-            `,
-          }}
         />
       </head>
       <body className="bg-background text-foreground min-h-screen antialiased" suppressHydrationWarning>
