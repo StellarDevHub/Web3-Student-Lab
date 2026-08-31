@@ -162,6 +162,24 @@ describe('Hardened Refresh Token Session Unit & Concurrency Tests', () => {
       const decoded2 = await verifyRefreshToken(family2Token);
       expect(decoded2.userId).toBe(testUserId);
     });
+
+    it('should fail closed during verifyRefreshToken if Redis is unreachable or throws an error', async () => {
+      const token = await generateRefreshToken({ userId: testUserId });
+
+      // Force redis.get to throw a network/connection error
+      jest.spyOn(redis, 'get').mockRejectedValueOnce(new Error('Redis connection lost'));
+
+      await expect(verifyRefreshToken(token)).rejects.toThrow('Refresh token has been reused or revoked');
+    });
+
+    it('should fail closed during rotateRefreshToken if Redis is unreachable or throws an error', async () => {
+      const token = await generateRefreshToken({ userId: testUserId });
+
+      // Force redis.get to throw an error during rotation
+      jest.spyOn(redis, 'get').mockRejectedValueOnce(new Error('Redis cluster down'));
+
+      await expect(rotateRefreshToken(token)).rejects.toThrow('Refresh token has been reused or revoked');
+    });
   });
 
   describe('Concurrent Request Integration Tests', () => {

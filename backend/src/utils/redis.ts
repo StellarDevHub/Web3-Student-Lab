@@ -18,8 +18,11 @@ const createTestRedisClient = () => {
     off: () => undefined,
     get: async (key: string) => memoryStore.get(key) ?? null,
     set: async (key: string, value: string, ...args: any[]) => {
+      const isNx = args.some((arg) => typeof arg === 'string' && arg.toUpperCase() === 'NX');
+      if (isNx && memoryStore.has(key)) {
+        return null;
+      }
       memoryStore.set(key, value);
-      // Handle EX (ttl) option by ignoring it for test purposes
       return 'OK';
     },
     setex: async (key: string, _ttl: number, value: string) => {
