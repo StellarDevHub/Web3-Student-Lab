@@ -338,40 +338,69 @@ export const rotateRefreshToken = async (
 };
 
 export const revokeFamily = async (familyId: string): Promise<void> => {
-  try {
-    const redis = getRedisClient();
-    if (redis && typeof redis.get === 'function' && typeof redis.set === 'function') {
-      const familyKey = `rt:fam:${familyId}`;
-      const familyData = await redis.get(familyKey);
+  const redis = getRedisClient();
+  if (!redis || typeof redis.set !== 'function') {
+    logger.error(`Cannot revoke token family ${familyId}: Redis client unavailable`);
+    throw new Error('Failed to persist token family revocation');
+  }
+
+  const familyKey = `rt:fam:${familyId}`;
+  const ttlSeconds = REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
+  let lastError: any = null;
+
+  // Retry up to 3 times with exponential backoff to ensure the revocation write persists
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      let userId: string | undefined;
+      let family: TokenFamilyState;
+
+      const familyData = typeof redis.get === 'function' ? await redis.get(familyKey) : null;
       if (familyData) {
         try {
-          const family: TokenFamilyState = JSON.parse(familyData);
-          family.status = 'revoked';
-          family.revokedAt = Date.now();
-          const ttlSeconds = REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
-          await redis.set(familyKey, JSON.stringify(family), 'EX', ttlSeconds);
-          if (family.userId && typeof redis.del === 'function') {
-            await redis.del(`rt:u:${family.userId}:${familyId}`);
-          }
+          family = JSON.parse(familyData);
+          userId = family.userId;
         } catch {
-          if (typeof redis.del === 'function') {
-            await redis.del(familyKey);
-          }
+          family = { familyId, userId: '', currentTokenId: '', status: 'revoked' };
         }
       } else {
-        const revokedState: Partial<TokenFamilyState> = {
-          familyId,
-          status: 'revoked',
-          revokedAt: Date.now(),
-        };
-        const ttlSeconds = REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
-        await redis.set(familyKey, JSON.stringify(revokedState), 'EX', ttlSeconds);
+        family = { familyId, userId: '', currentTokenId: '', status: 'revoked' };
+      }
+
+      family.status = 'revoked';
+      family.revokedAt = Date.now();
+
+      await redis.set(familyKey, JSON.stringify(family), 'EX', ttlSeconds);
+
+      if (userId && typeof redis.del === 'function') {
+        try {
+          await redis.del(`rt:u:${userId}:${familyId}`);
+        } catch {
+          // Non-critical user indexing cleanup failure
+        }
+      }
+
+      logger.warn(`Token family revoked: ${familyId}`);
+      return;
+    } catch (err) {
+      lastError = err;
+      logger.warn(`Attempt ${attempt} to revoke token family ${familyId} failed:`, err);
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 25));
       }
     }
-  } catch (err) {
-    logger.error(`Failed to revoke token family ${familyId}:`, err);
   }
-  logger.warn(`Token family revoked: ${familyId}`);
+
+  // Emergency fallback: attempt to delete the key so subsequent requests fail closed
+  if (typeof redis.del === 'function') {
+    try {
+      await redis.del(familyKey);
+    } catch {
+      // ignore
+    }
+  }
+
+  logger.error(`Critical: Failed to revoke token family ${familyId} after retries:`, lastError);
+  throw new Error('Failed to persist token family revocation');
 };
 
 export const revokeAllUserTokens = async (userId: string): Promise<void> => {
@@ -390,7 +419,11 @@ export const revokeAllUserTokens = async (userId: string): Promise<void> => {
       }
 
       for (const familyId of familyIds) {
-        await revokeFamily(familyId);
+        try {
+          await revokeFamily(familyId);
+        } catch (err) {
+          logger.error(`Failed to revoke family ${familyId} during user token revocation:`, err);
+        }
       }
 
       if (userFamilyKeys.length > 0 && typeof redis.del === 'function') {
