@@ -1,0 +1,31 @@
+{
+  "reviews": [
+    {
+      "id": "r1",
+      "submissionId": "s1",
+      "reviewerId": "u1",
+      "score": 85,
+      "comments": "Good work, concise and clear.",
+      "timestamp": "2026-08-01T10:00:00Z",
+      "status": "pending"
+    },
+    {
+      "id": "r2",
+      "submissionId": "s1",
+      "reviewerId": "u2",
+      "score": 30,
+      "comments": "This is terrible, you are an idiot.",
+      "timestamp": "2026-08-02T12:00:00Z",
+      "status": "pending"
+    },
+    {
+      "id": "r3",
+      "submissionId": "s2",
+      "reviewerId": "u3",
+      "score": 72,
+      "comments": "Mostly fine but could improve structure.",
+      "timestamp": "2026-08-03T09:00:00Z",
+      "status": "pending"
+    }
+  ]
+}
