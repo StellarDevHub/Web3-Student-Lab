@@ -1,3 +1,9 @@
+//! Sybil resistance registry.
+//!
+//! Tracks verified human identities so that governance contracts can reject
+//! duplicate / synthetic accounts. Only the admin may verify or revoke a user.
+
+#![no_std]
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String};
 
 #[contracttype]
@@ -37,14 +43,17 @@ impl SybilResistanceContract {
 
     /// Revokes a user's verified status if they are found to be a sybil account.
     pub fn revoke_user(env: Env, user: Address) {
-         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
-         admin.require_auth();
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        admin.require_auth();
 
-         if env.storage().persistent().has(&DataKey::VerifiedUser(user.clone())) {
-             env.storage().persistent().remove(&DataKey::VerifiedUser(user.clone()));
-             env.events().publish((String::from_slice(&env, "user_revoked"),), user);
-         } else {
-             panic!("User is not verified");
-         }
+        if env.storage().persistent().has(&DataKey::VerifiedUser(user.clone())) {
+            env.storage().persistent().remove(&DataKey::VerifiedUser(user.clone()));
+            env.events().publish((String::from_slice(&env, "user_revoked"),), user);
+        } else {
+            panic!("User is not verified");
+        }
     }
 }
+
+#[cfg(test)]
+mod test;

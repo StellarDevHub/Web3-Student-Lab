@@ -31,8 +31,11 @@ members = [
     "pr_simulation",
     "proxy",
     "quadratic_funding",
+    "quadratic_voting",
     "smart_vault",
+    "sybil_resistance",
     "testnet_faucet_integration",
+    "token_migration",
     "zk_proof_verifier",
     "certificate",
 ]

@@ -1,4 +1,11 @@
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String, Symbol, IntoVal};
+//! Quadratic Voting contract with sybil-resistance checks.
+//!
+//! Users vote with quadratic cost logic (cost = votes²) using bounded
+//! voting credits, and can only interact after passing a sybil check.
+
+#![no_std]
+
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, IntoVal, String, Symbol};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -69,19 +76,21 @@ impl QuadraticVotingContract {
             panic!("Must cast at least 1 vote");
         }
 
-        let mut proposal: Proposal = env.storage().persistent().get(&DataKey::Proposal(proposal_id)).expect("Proposal not found");
+        let mut proposal: Proposal =
+            env.storage().persistent().get(&DataKey::Proposal(proposal_id)).expect("Proposal not found");
         if proposal.executed {
             panic!("Proposal already executed");
         }
 
         let default_credits: u32 = env.storage().instance().get(&DataKey::CreditsPerUser).unwrap();
-        let mut current_credits = env.storage().persistent().get(&DataKey::UserCredits(voter.clone())).unwrap_or(default_credits);
+        let mut current_credits =
+            env.storage().persistent().get(&DataKey::UserCredits(voter.clone())).unwrap_or(default_credits);
 
-        let previous_votes: u32 = env.storage().persistent().get(&DataKey::UserVotes(voter.clone(), proposal_id)).unwrap_or(0);
+        let previous_votes: u32 =
+            env.storage().persistent().get(&DataKey::UserVotes(voter.clone(), proposal_id)).unwrap_or(0);
         let new_total_votes = previous_votes + additional_votes;
 
         // Quadratic cost logic: Total cost should be (total_votes)^2.
-        // The incremental cost is (new_total_votes)^2 - (previous_votes)^2.
         let total_cost = new_total_votes.pow(2);
         let previous_cost = previous_votes.pow(2);
         let incremental_cost = total_cost - previous_cost;
@@ -93,31 +102,30 @@ impl QuadraticVotingContract {
         current_credits -= incremental_cost;
         proposal.votes_received += additional_votes;
 
-        // Save state
         env.storage().persistent().set(&DataKey::UserCredits(voter.clone()), &current_credits);
         env.storage().persistent().set(&DataKey::UserVotes(voter.clone(), proposal_id), &new_total_votes);
         env.storage().persistent().set(&DataKey::Proposal(proposal_id), &proposal);
 
-        env.events().publish((Symbol::new(&env, "voted"),), (voter, proposal_id, additional_votes, incremental_cost));
+        env.events()
+            .publish((Symbol::new(&env, "voted"),), (voter, proposal_id, additional_votes, incremental_cost));
     }
 
     /// Executes a proposal after the voting period has concluded.
     pub fn execute_proposal(env: Env, proposal_id: u32) {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
-        admin.require_auth(); // Admin or automation keeper executes
+        admin.require_auth();
 
-        let mut proposal: Proposal = env.storage().persistent().get(&DataKey::Proposal(proposal_id)).expect("Proposal not found");
+        let mut proposal: Proposal =
+            env.storage().persistent().get(&DataKey::Proposal(proposal_id)).expect("Proposal not found");
         if proposal.executed {
             panic!("Already executed");
         }
 
-        // In a real application, you'd add logic here to invoke other contracts
-        // depending on the proposal payload (e.g., transferring funds, changing config).
-
         proposal.executed = true;
         env.storage().persistent().set(&DataKey::Proposal(proposal_id), &proposal);
 
-        env.events().publish((Symbol::new(&env, "proposal_executed"),), (proposal_id, proposal.votes_received));
+        env.events()
+            .publish((Symbol::new(&env, "proposal_executed"),), (proposal_id, proposal.votes_received));
     }
 
     // --- View & Helper Functions ---
@@ -136,10 +144,13 @@ impl QuadraticVotingContract {
         let is_verified: bool = env.invoke_contract(
             &sybil_contract,
             &Symbol::new(env, "is_verified"),
-            soroban_sdk::vec![env, user.into_val(env)]
+            soroban_sdk::vec![env, user.into_val(env)],
         );
         if !is_verified {
             panic!("User not verified for Sybil resistance");
         }
     }
 }
+
+#[cfg(test)]
+mod test;
