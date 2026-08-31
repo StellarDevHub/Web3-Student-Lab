@@ -389,21 +389,6 @@ export const revokeAllUserTokens = async (userId: string): Promise<void> => {
         }
       }
 
-      const allFamilyKeys = await redis.keys('rt:fam:*');
-      for (const famKey of allFamilyKeys) {
-        const data = await redis.get(famKey);
-        if (data) {
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.userId === userId && !familyIds.includes(parsed.familyId)) {
-              familyIds.push(parsed.familyId);
-            }
-          } catch {
-            // ignore
-          }
-        }
-      }
-
       for (const familyId of familyIds) {
         await revokeFamily(familyId);
       }
