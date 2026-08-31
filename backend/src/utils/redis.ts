@@ -33,6 +33,18 @@ const createTestRedisClient = () => {
       keys.forEach((key) => memoryStore.delete(key));
       return keys.length;
     },
+    eval: async (script: string, _numKeys: number, ...args: any[]) => {
+      if (script.includes('get') && script.includes('del')) {
+        const key = args[0];
+        const expectedVal = args[1];
+        if (memoryStore.get(key) === expectedVal) {
+          memoryStore.delete(key);
+          return 1;
+        }
+        return 0;
+      }
+      return 0;
+    },
     lpush: async (_key: string, ...values: string[]) => values.length,
     brpop: async () => null,
     publish: async (_channel: string, _message: string) => 0,

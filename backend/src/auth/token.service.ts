@@ -146,6 +146,14 @@ export const verifyRefreshToken = async (token: string): Promise<TokenPayload> =
   }
 };
 
+const UNLOCK_SCRIPT = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+else
+  return 0
+end
+`;
+
 const acquireDistributedLock = async (
   redis: any,
   lockKey: string,
@@ -166,9 +174,13 @@ const releaseDistributedLock = async (
   lockVal: string
 ): Promise<void> => {
   try {
-    const current = await redis.get(lockKey);
-    if (current === lockVal) {
-      await redis.del(lockKey);
+    if (typeof redis.eval === 'function') {
+      await redis.eval(UNLOCK_SCRIPT, 1, lockKey, lockVal);
+    } else {
+      const current = await redis.get(lockKey);
+      if (current === lockVal) {
+        await redis.del(lockKey);
+      }
     }
   } catch {
     // Ignore error on lock release
@@ -219,6 +231,35 @@ export const rotateRefreshToken = async (
       }
 
       const familyKey = `rt:fam:${decoded.familyId}`;
+      const now = Date.now();
+
+      // If lock was not acquired after all retries, do NOT proceed unlocked!
+      if (!lockAcquired) {
+        // Check if another instance completed rotation and this token is now in grace period
+        const cachedData = await redis.get(familyKey);
+        if (cachedData) {
+          try {
+            const family: TokenFamilyState = JSON.parse(cachedData);
+            if (family.status !== 'revoked' && family.userId === decoded.userId) {
+              if (decoded.tokenId === family.previousTokenId) {
+                const timeSinceRotation = now - (family.rotatedAt || 0);
+                if (timeSinceRotation <= ROTATION_GRACE_PERIOD_MS) {
+                  const accessToken = family.lastAccessToken || generateAccessToken({ userId: family.userId });
+                  const refreshToken = family.lastRefreshToken;
+                  if (refreshToken) {
+                    return { accessToken, refreshToken };
+                  }
+                }
+              }
+            }
+          } catch {
+            // Ignore parse error and fail closed
+          }
+        }
+        // If not in grace window, strictly fail closed — never rotate unlocked
+        throw new Error('Refresh token has been reused or revoked');
+      }
+
       const familyData = await redis.get(familyKey);
 
       if (!familyData) {
@@ -236,7 +277,6 @@ export const rotateRefreshToken = async (
         throw new Error('Refresh token has been reused or revoked');
       }
 
-      const now = Date.now();
       const ttlSeconds = REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
 
       // Case 1: Current active token presented -> Rotate to next token in family
