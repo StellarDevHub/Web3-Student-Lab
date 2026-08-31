@@ -1,4 +1,10 @@
 import { Router, Request, Response } from 'express';
+import { verifyToken } from '../auth/auth.service.js';
+import { sseSessionManager } from '../sse/SseSessionManager.js';
+import {
+  replayMissedEvents,
+  startNotificationStreamBridge,
+} from '../sse/notificationStream.js';
 import {
   getNotifications,
   markAsRead,
@@ -7,6 +13,10 @@ import {
 import { NotificationListResponse } from './notification.types.js';
 
 const router: ReturnType<typeof Router> = Router();
+
+// Ensure the Redis Pub/Sub bridge is forwarding course notifications to SSE
+// clients. Idempotent — safe to call on every request.
+startNotificationStreamBridge();
 
 /** Query string accepted by `GET /api/notifications`. */
 interface ListNotificationsQuery {
@@ -36,6 +46,60 @@ interface MarkAsReadResponse {
 interface MarkAllAsReadResponse extends MarkAsReadResponse {
   updatedCount: number;
 }
+
+/**
+ * GET /api/notifications/stream
+ *
+ * Server-Sent Events stream for real-time course notifications (#1122).
+ *
+ * Auth: `Authorization: Bearer <jwt>` header or `?access_token=` query param.
+ * Headers:
+ *   - `Last-Event-ID` — optional; replays notifications missed since this id.
+ *
+ * Events:
+ *   - `notification`  — a course notification (targeted or broadcast)
+ *   - `: keep-alive`  — heartbeat comment every 25s
+ */
+router.get('/stream', (req, res) => {
+  const authHeader = req.headers.authorization;
+  const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+  const queryToken =
+    typeof req.query.access_token === 'string' ? req.query.access_token : undefined;
+  const token = headerToken || queryToken;
+
+  if (!token) {
+    return res.status(401).json({ error: 'Authorization token required' });
+  }
+
+  let userId: string;
+  try {
+    userId = verifyToken(token).userId;
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (typeof res.flushHeaders === 'function') {
+    res.flushHeaders();
+  }
+
+  // Reconnection recovery (#1122): replay what the client missed.
+  const lastEventId =
+    typeof req.headers['last-event-id'] === 'string'
+      ? req.headers['last-event-id']
+      : null;
+  replayMissedEvents(userId, lastEventId, res);
+
+  res.write('retry: 5000\n\n');
+  const clientId = sseSessionManager.addClient(userId, res);
+
+  req.on('close', () => {
+    sseSessionManager.removeClient(userId, clientId);
+  });
+});
 
 /**
  * GET /api/notifications
