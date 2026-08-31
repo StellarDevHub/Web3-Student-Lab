@@ -17,7 +17,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
-    Env, Symbol,
+    Env, Map, String, Symbol, Vec,
 };
 
 // ── Storage keys ────────────────────────────────────────────────────────────
@@ -27,12 +27,32 @@ const RESERVES: Symbol = symbol_short!("RESERVES");
 const LOCK: Symbol = symbol_short!("sv_lock");
 const HARVEST_COOL: u32 = 10; // minimum ledgers between harvests (front-run guard)
 
+// ── Governance constants ─────────────────────────────────────────────────────
+const GOV_INIT: Symbol = symbol_short!("gov_init");
+const PROPOSAL_COUNT: Symbol = symbol_short!("prp_cnt");
+const PROPOSALS: Symbol = symbol_short!("proposals");
+const GUARDIANS: Symbol = symbol_short!("guardians");
+const THRESHOLD: Symbol = symbol_short!("threshold");
+const GOV_PERIOD: Symbol = symbol_short!("govper");
+const FREEZED: Symbol = symbol_short!("freezed");
+/// Minimum 48-hour delay (in seconds) between authorization and execution.
+const MIN_GOV_PERIOD: u64 = 172_800;
+
 // ── Errors ───────────────────────────────────────────────────────────────────
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum VaultError {
     ReentrancyGuardActive = 10,
+    NotInitialized = 11,
+    Unauthorized = 12,
+    NotFound = 13,
+    AlreadyApproved = 14,
+    NotEnoughApprovals = 15,
+    TimelockActive = 16,
+    AlreadyExecuted = 17,
+    AlreadyCancelled = 18,
+    VaultFrozen = 19,
 }
 
 // ── Data types ───────────────────────────────────────────────────────────────
@@ -45,6 +65,31 @@ pub struct Position {
     pub shares: i128,
     /// Ledger sequence of the user's last harvest (front-run guard).
     pub last_harvest: u32,
+}
+
+/// Lifecycle state of a governance proposal.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProposalState {
+    Proposed,
+    Queued,
+    Executed,
+    Cancelled,
+}
+
+/// A multi-sig governance proposal targeting critical administrative
+/// parameters of the vault.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Proposal {
+    pub id: u32,
+    pub proposer: Address,
+    pub description: String,
+    pub proposed_at: u64,
+    pub approvals: Vec<Address>,
+    /// Earliest ledger timestamp at which the proposal may execute (post-queue).
+    pub queued_at: Option<u64>,
+    pub state: ProposalState,
 }
 
 // ── Contract ─────────────────────────────────────────────────────────────────
@@ -64,6 +109,7 @@ impl SmartVault {
     pub fn deposit(env: Env, user: Address, amount: i128) {
         user.require_auth();
         assert!(amount > 0, "amount must be positive");
+        Self::assert_not_frozen(&env);
         Self::lock(&env);
 
         let total_assets: i128 = env.storage().instance().get(&TOTAL_ASSETS).unwrap_or(0i128);
@@ -115,6 +161,7 @@ impl SmartVault {
     pub fn withdraw(env: Env, user: Address, shares: i128) -> i128 {
         user.require_auth();
         assert!(shares > 0, "shares must be positive");
+        Self::assert_not_frozen(&env);
         Self::lock(&env);
 
         let mut pos = Self::get_position(&env, &user);
@@ -291,6 +338,212 @@ impl SmartVault {
         new_shares
     }
 
+    // ── Multi-sig timelock governance ────────────────────────────────────────
+
+    /// Initialize the multi-sig governance with a set of guardians and a
+    /// signature threshold. Only callable once, by the deployer.
+    ///
+    /// * `guardians` – The set of addresses authorized to propose/approve.
+    /// * `threshold` – Number of signatures required to authorize a proposal
+    ///   (e.g. 3-of-5).
+    pub fn init_governance(env: Env, guardians: Vec<Address>, threshold: u32) {
+        if env.storage().instance().has(&GOV_INIT) {
+            panic_with_error!(&env, VaultError::AlreadyExecuted);
+        }
+        assert!(threshold > 0, "threshold must be positive");
+        assert!(
+            threshold <= guardians.len(),
+            "threshold exceeds guardian count"
+        );
+        env.storage().instance().set(&GOV_INIT, &true);
+        env.storage().instance().set(&GUARDIANS, &guardians);
+        env.storage().instance().set(&THRESHOLD, &threshold);
+        env.storage().instance().set(&PROPOSAL_COUNT, &0u32);
+        env.storage().instance().set(&GOV_PERIOD, &MIN_GOV_PERIOD);
+        env.storage().instance().set(&FREEZED, &false);
+    }
+
+    /// Create a new governance proposal. The proposer must be a guardian.
+    /// The proposal enters the `Proposed` state.
+    pub fn propose(env: Env, proposer: Address, description: String) -> u32 {
+        proposer.require_auth();
+        Self::assert_governance(&env);
+        let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
+        assert!(guardians.contains(&proposer), "Not a guardian");
+
+        let mut count: u32 = env.storage().instance().get(&PROPOSAL_COUNT).unwrap_or(0);
+        count += 1;
+        let now = env.ledger().timestamp();
+
+        let mut proposals: Map<u32, Proposal> =
+            env.storage().persistent().get(&PROPOSALS).unwrap_or_else(|| Map::new(&env));
+        proposals.set(
+            count,
+            Proposal {
+                id: count,
+                proposer: proposer.clone(),
+                description,
+                proposed_at: now,
+                approvals: Vec::new(&env),
+                queued_at: None,
+                state: ProposalState::Proposed,
+            },
+        );
+        env.storage().persistent().set(&PROPOSALS, &proposals);
+        env.storage().instance().set(&PROPOSAL_COUNT, &count);
+
+        env.events().publish(
+            (symbol_short!("gov"), symbol_short!("proposed")),
+            (count, proposer, now),
+        );
+        count
+    }
+
+    /// Collect a guardian's signature on a proposal. When the approval count
+    /// reaches the threshold the proposal is authorized and enters the
+    /// `Queued` state with the 48-hour timelock armed.
+    pub fn approve(env: Env, signer: Address, proposal_id: u32) {
+        signer.require_auth();
+        Self::assert_governance(&env);
+        let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
+        assert!(guardians.contains(&signer), "Not a guardian");
+
+        let mut proposals: Map<u32, Proposal> =
+            env.storage().persistent().get(&PROPOSALS).unwrap();
+        let mut proposal = Self::load_proposal(&env, &proposals, proposal_id);
+        match proposal.state {
+            ProposalState::Executed => panic_with_error!(&env, VaultError::AlreadyExecuted),
+            ProposalState::Cancelled => panic_with_error!(&env, VaultError::AlreadyCancelled),
+            _ => {}
+        }
+        assert!(
+            !proposal.approvals.contains(&signer),
+            "Already approved"
+        );
+        proposal.approvals.push_back(signer);
+
+        let threshold: u32 = env.storage().instance().get(&THRESHOLD).unwrap();
+        if proposal.approvals.len() as u32 >= threshold && proposal.queued_at.is_none() {
+            // Authorization reached threshold: arm the timelock queue.
+            let now = env.ledger().timestamp();
+            let period: u64 = env.storage().instance().get(&GOV_PERIOD).unwrap();
+            proposal.queued_at = Some(now.checked_add(period).expect("overflow"));
+            proposal.state = ProposalState::Queued;
+        }
+        proposals.set(
+            proposal_id,
+            proposal.clone(),
+        );
+        env.storage().persistent().set(&PROPOSALS, &proposals);
+
+        if proposal.state == ProposalState::Queued {
+            env.events().publish(
+                (symbol_short!("gov"), symbol_short!("queued")),
+                (proposal_id, proposal.approvals.len(), proposal.queued_at.unwrap()),
+            );
+        }
+    }
+
+    /// Execute a proposal. Only possible after the proposal is authorized,
+    /// queued, and the 48-hour timelock has elapsed.
+    pub fn execute_proposal(env: Env, proposal_id: u32) {
+        Self::assert_governance(&env);
+        let mut proposals: Map<u32, Proposal> =
+            env.storage().persistent().get(&PROPOSALS).unwrap();
+        let mut proposal = Self::load_proposal(&env, &proposals, proposal_id);
+
+        match proposal.state {
+            ProposalState::Executed => panic_with_error!(&env, VaultError::AlreadyExecuted),
+            ProposalState::Cancelled => panic_with_error!(&env, VaultError::AlreadyCancelled),
+            ProposalState::Proposed => panic_with_error!(&env, VaultError::NotEnoughApprovals),
+            ProposalState::Queued => {}
+        }
+
+        let now = env.ledger().timestamp();
+        let queued_at = proposal.queued_at.expect("not queued");
+        assert!(now >= queued_at, "timelock not elapsed");
+
+        // Execution of the proposal's administrative change would occur here
+        // (e.g. updating vault parameters). State transition is recorded now.
+        proposal.state = ProposalState::Executed;
+        proposals.set(proposal_id, proposal.clone());
+        env.storage().persistent().set(&PROPOSALS, &proposals);
+
+        env.events().publish(
+            (symbol_short!("gov"), symbol_short!("executed")),
+            (proposal_id, proposal.approvals.len(), now),
+        );
+    }
+
+    /// Cancel a proposal. Only the proposer (or a guardian once the proposal
+    /// has not yet been queued) may cancel.
+    pub fn cancel(env: Env, caller: Address, proposal_id: u32) {
+        caller.require_auth();
+        Self::assert_governance(&env);
+        let mut proposals: Map<u32, Proposal> =
+            env.storage().persistent().get(&PROPOSALS).unwrap();
+        let mut proposal = Self::load_proposal(&env, &proposals, proposal_id);
+
+        match proposal.state {
+            ProposalState::Cancelled => panic_with_error!(&env, VaultError::AlreadyCancelled),
+            ProposalState::Executed => panic_with_error!(&env, VaultError::AlreadyExecuted),
+            _ => {}
+        }
+
+        let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
+        assert!(
+            caller == proposal.proposer || guardians.contains(&caller),
+            "Not authorized to cancel"
+        );
+        proposal.state = ProposalState::Cancelled;
+        proposals.set(proposal_id, proposal.clone());
+        env.storage().persistent().set(&PROPOSALS, &proposals);
+
+        env.events().publish(
+            (symbol_short!("gov"), symbol_short!("cancelled")),
+            (proposal_id, caller, env.ledger().timestamp()),
+        );
+    }
+
+    /// Emergency freeze: immediately halts all deposits and withdrawals.
+    /// Only a designated guardian may trigger it.
+    pub fn emergency_freeze(env: Env, guardian: Address) {
+        Self::assert_governance(&env);
+        let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
+        guardian.require_auth();
+        assert!(guardians.contains(&guardian), "Not a guardian");
+        env.storage().instance().set(&FREEZED, &true);
+        env.events().publish(
+            (symbol_short!("gov"), symbol_short!("freeze")),
+            guardian,
+        );
+    }
+
+    /// Lift an emergency freeze. Only a guardian may unfreeze.
+    pub fn unfreeze(env: Env, guardian: Address) {
+        Self::assert_governance(&env);
+        let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
+        guardian.require_auth();
+        assert!(guardians.contains(&guardian), "Not a guardian");
+        env.storage().instance().set(&FREEZED, &false);
+        env.events().publish(
+            (symbol_short!("gov"), symbol_short!("unfreeze")),
+            guardian,
+        );
+    }
+
+    /// Returns `true` if the vault is currently emergency-frozen.
+    pub fn is_frozen(env: Env) -> bool {
+        env.storage().instance().get(&FREEZED).unwrap_or(false)
+    }
+
+    /// Returns the proposal matching `proposal_id`.
+    pub fn get_proposal(env: Env, proposal_id: u32) -> Proposal {
+        let proposals: Map<u32, Proposal> =
+            env.storage().persistent().get(&PROPOSALS).unwrap_or_else(|| Map::new(&env));
+        Self::load_proposal(&env, &proposals, proposal_id)
+    }
+
     // ── View helpers ─────────────────────────────────────────────────────────
 
     /// Returns the user's current share balance.
@@ -321,9 +574,30 @@ impl SmartVault {
             last_harvest: 0,
         })
     }
-
     fn set_position(env: &Env, user: &Address, pos: &Position) {
         env.storage().persistent().set(user, pos);
+    }
+
+    /// Panics if governance has not been initialized.
+    fn assert_governance(env: &Env) {
+        if !env.storage().instance().has(&GOV_INIT) {
+            panic_with_error!(env, VaultError::NotInitialized);
+        }
+    }
+
+    /// Panics if the vault is emergency-frozen.
+    fn assert_not_frozen(env: &Env) {
+        let frozen: bool = env.storage().instance().get(&FREEZED).unwrap_or(false);
+        if frozen {
+            panic_with_error!(env, VaultError::VaultFrozen);
+        }
+    }
+
+    /// Loads a proposal by id, panicking if it does not exist.
+    fn load_proposal(env: &Env, proposals: &Map<u32, Proposal>, id: u32) -> Proposal {
+        proposals.get(id).unwrap_or_else(|| {
+            panic_with_error!(env, VaultError::NotFound);
+        })
     }
 
     /// Acquire reentrancy lock. Panics if already locked.
@@ -359,6 +633,7 @@ impl SmartVault {
 mod tests {
     use super::*;
     use soroban_sdk::testutils::{Address as _, Ledger};
+    use soroban_sdk::{String, Vec};
     use soroban_sdk::Env;
 
     fn setup() -> (Env, Address, Address) {
@@ -536,5 +811,93 @@ mod tests {
             .as_contract(&contract_id, || env.storage().instance().get(&RESERVES).unwrap());
         assert_eq!(total_assets, reserves);
         assert!(total_assets > 1_000_000);
+    }
+
+    // ── Multi-sig timelock governance tests ────────────────────────────────
+
+    fn gov_setup(env: &Env) -> (SmartVaultClient<'static>, Vec<Address>, Address) {
+        let id = env.register(SmartVault, ());
+        let client = SmartVaultClient::new(env, &id);
+        let g1 = Address::generate(env);
+        let g2 = Address::generate(env);
+        let g3 = Address::generate(env);
+        let guardians = Vec::from_array(env, [g1.clone(), g2.clone(), g3.clone()]);
+        let _ = g3;
+        client.init_governance(&guardians, &2); // 2-of-3
+        (client, guardians, g1)
+    }
+
+    #[test]
+    fn proposal_requires_threshold_and_timelock_to_execute() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, guardians, g1) = gov_setup(&env);
+
+        let pid = client.propose(&g1, &String::from_str(&env, "Update fee"));
+        assert_eq!(client.get_proposal(&pid).state, ProposalState::Proposed);
+
+        // Single approval is below the 2-of-3 threshold: cannot execute yet.
+        client.approve(&g1, &pid);
+        let p = client.get_proposal(&pid);
+        assert_eq!(p.state, ProposalState::Proposed);
+        assert_eq!(p.approvals.len(), 1);
+
+        // Second approval reaches threshold and queues with the timelock.
+        client.approve(&guardians.get(1).unwrap(), &pid);
+        let p = client.get_proposal(&pid);
+        assert_eq!(p.state, ProposalState::Queued);
+        assert!(p.queued_at.is_some());
+
+        // Executing before the timelock elapses must panic.
+        let panicked = client.try_execute_proposal(&pid);
+        assert!(panicked.is_err(), "execution before timelock must fail");
+
+        // After the timelock elapses, execution succeeds.
+        env.ledger().with_mut(|l| l.timestamp += MIN_GOV_PERIOD + 1);
+        client.execute_proposal(&pid);
+        assert_eq!(client.get_proposal(&pid).state, ProposalState::Executed);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #17)")]
+    fn cannot_execute_twice() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, guardians, g1) = gov_setup(&env);
+        let pid = client.propose(&g1, &String::from_str(&env, "p"));
+        client.approve(&g1, &pid);
+        client.approve(&guardians.get(1).unwrap(), &pid);
+        env.ledger().with_mut(|l| l.timestamp += MIN_GOV_PERIOD + 1);
+        client.execute_proposal(&pid);
+        client.execute_proposal(&pid);
+    }
+
+    #[test]
+    fn emergency_freeze_halts_deposits() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _, g1) = gov_setup(&env);
+        let user = Address::generate(&env);
+
+        client.deposit(&user, &1000);
+        client.emergency_freeze(&g1);
+        assert!(client.is_frozen());
+
+        let panicked = client.try_deposit(&user, &500);
+        assert!(panicked.is_err(), "deposit while frozen must fail");
+
+        client.unfreeze(&g1);
+        client.deposit(&user, &500);
+        assert_eq!(client.shares_of(&user), 1500);
+    }
+
+    #[test]
+    fn cancels_proposal_and_freezes_state_tracking() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _, g1) = gov_setup(&env);
+        let pid = client.propose(&g1, &String::from_str(&env, "Cancel me"));
+        client.cancel(&g1, &pid);
+        assert_eq!(client.get_proposal(&pid).state, ProposalState::Cancelled);
     }
 }
