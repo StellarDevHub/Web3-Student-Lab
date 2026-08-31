@@ -16,6 +16,7 @@ members = [
     "course_proxy",
     "cross_chain_client",
     "dao_governance",
+    "did_registry",
     "fractional_nft_vault",
     "freelance-platform",
     "hackathon-team-matching",
@@ -37,7 +38,6 @@ members = [
 ]
 # Incomplete or non-crate directories under contracts/ must not be listed as members.
 exclude = [
-    "did_registry",
     "automated_testing_suite",
     "cicd_pipeline",
 ]
