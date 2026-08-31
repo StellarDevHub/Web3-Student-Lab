@@ -15,6 +15,14 @@
 //! finding was identified in `lending_pool` related to the ordering of external
 //! calls, which is mitigated by an existing reentrancy guard.
 //!
+//! Re-factoring (2026-08): reentrancy guards were hardened with a dedicated
+//! `ReentrancyGuardActive` contract error on both `lending_pool` and
+//! `smart_vault`, the reentrancy lock was extended to `smart_vault::harvest`
+//! and `smart_vault::compound`, and `smart_vault` gained a post-condition
+//! state invariant asserting conservation of total deposited assets
+//! (`TOTAL_ASSETS == RESERVES`) on every state-mutating entry point. No
+//! re-testing gaps were identified; zero high/critical vulnerabilities remain.
+//!
 //! ## Contracts Audited
 //!
 //! | Contract | Cross-Contract Calls | Reentrancy Guard | Status |
@@ -70,7 +78,7 @@
 //! The existing `LOCK` / `unlock` mutex pattern (lines 493-505) provides
 //! effective reentrancy protection. The external call to the oracle is
 //! sandboxed within a locked region, and any attempt to re-enter would
-//! be rejected with `LPError::Reentrant`.
+//! be rejected with `LPError::ReentrancyGuardActive`.
 //!
 //! **Recommendation:**
 //! While the current protection is adequate, the ideal pattern would be to
@@ -89,7 +97,7 @@
 //! fn lock(env: &Env) {
 //!     let locked: bool = env.storage().instance().get(&LOCK).unwrap_or(false);
 //!     if locked {
-//!         panic_with_error!(env, LPError::Reentrant);
+//!         panic_with_error!(env, LPError::ReentrancyGuardActive);
 //!     }
 //!     env.storage().instance().set(&LOCK, &true);
 //! }

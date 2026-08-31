@@ -74,7 +74,7 @@ pub enum LPError {
     InsufficientBal = 7,
     PositionHealthy = 8,
     OracleBadPrice = 9,
-    Reentrant = 10,
+    ReentrancyGuardActive = 10,
 }
 
 // ── Contract ──────────────────────────────────────────────────────────────────
@@ -521,7 +521,7 @@ impl LendingPool {
     fn lock(env: &Env) {
         let locked: bool = env.storage().instance().get(&LOCK).unwrap_or(false);
         if locked {
-            panic_with_error!(env, LPError::Reentrant);
+            panic_with_error!(env, LPError::ReentrancyGuardActive);
         }
         env.storage().instance().set(&LOCK, &true);
     }

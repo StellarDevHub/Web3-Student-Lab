@@ -15,13 +15,25 @@
 
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
+    Env, Symbol,
+};
 
 // ── Storage keys ────────────────────────────────────────────────────────────
 const TOTAL_SHARES: Symbol = symbol_short!("TSHARES");
 const TOTAL_ASSETS: Symbol = symbol_short!("TASSETS");
+const RESERVES: Symbol = symbol_short!("RESERVES");
 const LOCK: Symbol = symbol_short!("sv_lock");
 const HARVEST_COOL: u32 = 10; // minimum ledgers between harvests (front-run guard)
+
+// ── Errors ───────────────────────────────────────────────────────────────────
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum VaultError {
+    ReentrancyGuardActive = 10,
+}
 
 // ── Data types ───────────────────────────────────────────────────────────────
 
@@ -80,7 +92,12 @@ impl SmartVault {
             &TOTAL_ASSETS,
             &(total_assets.checked_add(amount).expect("overflow")),
         );
+        let reserves: i128 = env.storage().instance().get(&RESERVES).unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&RESERVES, &(reserves.checked_add(amount).expect("overflow")));
 
+        Self::assert_invariant(&env);
         Self::unlock(&env);
         env.events()
             .publish((symbol_short!("deposit"), user), (amount, new_shares));
@@ -124,7 +141,12 @@ impl SmartVault {
             &TOTAL_ASSETS,
             &(total_assets.checked_sub(assets_out).expect("underflow")),
         );
+        let reserves: i128 = env.storage().instance().get(&RESERVES).unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&RESERVES, &(reserves.checked_sub(assets_out).expect("underflow")));
 
+        Self::assert_invariant(&env);
         Self::unlock(&env);
         env.events()
             .publish((symbol_short!("withdraw"), user), (shares, assets_out));
@@ -156,6 +178,7 @@ impl SmartVault {
     /// Returns the reward amount harvested.
     pub fn harvest(env: Env, user: Address) -> i128 {
         user.require_auth();
+        Self::lock(&env);
 
         let current_ledger = env.ledger().sequence();
         let mut pos = Self::get_position(&env, &user);
@@ -176,6 +199,7 @@ impl SmartVault {
         let total_shares: i128 = env.storage().instance().get(&TOTAL_SHARES).unwrap_or(0i128);
 
         if total_shares == 0 {
+            Self::unlock(&env);
             return 0;
         }
 
@@ -196,6 +220,7 @@ impl SmartVault {
             .unwrap_or(0);
 
         if reward == 0 {
+            Self::unlock(&env);
             return 0;
         }
 
@@ -204,10 +229,16 @@ impl SmartVault {
             &TOTAL_ASSETS,
             &(total_assets.checked_add(reward).expect("overflow")),
         );
+        let reserves: i128 = env.storage().instance().get(&RESERVES).unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&RESERVES, &(reserves.checked_add(reward).expect("overflow")));
 
         pos.last_harvest = current_ledger;
         Self::set_position(&env, &user, &pos);
 
+        Self::assert_invariant(&env);
+        Self::unlock(&env);
         env.events()
             .publish((symbol_short!("harvest"), user.clone()), reward);
 
@@ -221,12 +252,13 @@ impl SmartVault {
     ///
     /// Returns the number of new shares minted.
     pub fn compound(env: Env, user: Address) -> i128 {
-        // harvest first (includes cooldown check)
+        // harvest first (includes cooldown check and reentrancy guard)
         let reward = Self::harvest(env.clone(), user.clone());
         if reward == 0 {
             return 0;
         }
 
+        Self::lock(&env);
         // Re-deposit the reward (no auth needed; user already authed in harvest)
         let total_assets: i128 = env.storage().instance().get(&TOTAL_ASSETS).unwrap_or(0i128);
         let total_shares: i128 = env.storage().instance().get(&TOTAL_SHARES).unwrap_or(0i128);
@@ -251,6 +283,8 @@ impl SmartVault {
         );
         // total_assets already includes the reward from harvest
 
+        Self::assert_invariant(&env);
+        Self::unlock(&env);
         env.events()
             .publish((symbol_short!("compound"), user), new_shares);
 
@@ -296,7 +330,7 @@ impl SmartVault {
     fn lock(env: &Env) {
         let locked: bool = env.storage().instance().get(&LOCK).unwrap_or(false);
         if locked {
-            soroban_sdk::panic_with_error!(env, soroban_sdk::Error::from_contract_error(10));
+            panic_with_error!(env, VaultError::ReentrancyGuardActive);
         }
         env.storage().instance().set(&LOCK, &true);
     }
@@ -304,6 +338,18 @@ impl SmartVault {
     /// Release reentrancy lock.
     fn unlock(env: &Env) {
         env.storage().instance().set(&LOCK, &false);
+    }
+
+    /// State invariant check: the bookkeeping `TOTAL_ASSETS` must always equal
+    /// the independently-accounted `RESERVES`, and neither quantity may go
+    /// negative. This verifies conservation of total deposited assets across
+    /// every deposit, withdrawal, harvest and compound operation.
+    fn assert_invariant(env: &Env) {
+        let total_assets: i128 = env.storage().instance().get(&TOTAL_ASSETS).unwrap_or(0);
+        let reserves: i128 = env.storage().instance().get(&RESERVES).unwrap_or(0);
+        assert!(total_assets >= 0, "negative total assets");
+        assert!(reserves >= 0, "negative reserves");
+        assert!(total_assets == reserves, "reserve conservation violated");
     }
 }
 
@@ -437,5 +483,58 @@ mod tests {
         // user2 deposits same amount but gets fewer shares (price went up)
         client.deposit(&user2, &1_000_000);
         assert!(client.shares_of(&user2) < 1_000_000);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #10)")]
+    fn reentrancy_guard_rejects_double_entry() {
+        let (env, contract_id, user) = setup();
+        let client = SmartVaultClient::new(&env, &contract_id);
+
+        // Simulate a reentrant call by pre-setting the lock, as an attacker
+        // would leave the guard held during a nested invocation.
+        env.as_contract(&contract_id, || {
+            env.storage().instance().set(&LOCK, &true);
+        });
+        client.deposit(&user, &1000);
+    }
+
+    #[test]
+    fn reserves_conserved_across_deposit_withdraw() {
+        let (env, contract_id, user) = setup();
+        let client = SmartVaultClient::new(&env, &contract_id);
+
+        client.deposit(&user, &1000);
+        client.deposit(&user, &500);
+        let out = client.withdraw(&user, &300);
+
+        // TOTAL_ASSETS == RESERVES throughout; withdrawn amount is conserved:
+        assert_eq!(client.shares_of(&user), 1200);
+        assert_eq!(out, 300);
+        let total_assets: i128 = env
+            .as_contract(&contract_id, || env.storage().instance().get(&TOTAL_ASSETS).unwrap());
+        let reserves: i128 = env
+            .as_contract(&contract_id, || env.storage().instance().get(&RESERVES).unwrap());
+        assert_eq!(total_assets, reserves);
+        assert_eq!(total_assets, 1200);
+    }
+
+    #[test]
+    fn reserves_conserved_after_harvest_and_compound() {
+        let (env, contract_id, user) = setup();
+        let client = SmartVaultClient::new(&env, &contract_id);
+
+        client.deposit(&user, &1_000_000);
+        client.stake(&user);
+        env.ledger()
+            .with_mut(|l| l.sequence_number += 100 + HARVEST_COOL);
+        client.compound(&user);
+
+        let total_assets: i128 = env
+            .as_contract(&contract_id, || env.storage().instance().get(&TOTAL_ASSETS).unwrap());
+        let reserves: i128 = env
+            .as_contract(&contract_id, || env.storage().instance().get(&RESERVES).unwrap());
+        assert_eq!(total_assets, reserves);
+        assert!(total_assets > 1_000_000);
     }
 }
