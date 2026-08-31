@@ -612,4 +612,98 @@ router.post(
  */
 router.get('/:id/openbadges', certificateController.exportOpenBadges.bind(certificateController));
 
+/**
+ * @openapi
+ * /api/v1/certificates/{id}/vc:
+ *   get:
+ *     summary: Issue a W3C Verifiable Credential v2.0
+ *     description: Returns a signed W3C VC v2.0 course-completion credential (Ed25519Signature2020).
+ *     tags: [Certificates]
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: W3C Verifiable Credential v2.0 (JSON-LD)
+ *         content:
+ *           application/ld+json:
+ *             schema:
+ *               type: object
+ *       404:
+ *         description: Certificate not found
+ */
+router.get('/:id/vc', certificateController.issueVerifiableCredential.bind(certificateController));
+
+/**
+ * @openapi
+ * /api/v1/certificates/{id}/vc/download:
+ *   get:
+ *     summary: Download a W3C Verifiable Credential v2.0 package
+ *     description: Downloads the signed VC as an attachment for wallet import.
+ *     tags: [Certificates]
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: W3C Verifiable Credential package (attachment)
+ *       404:
+ *         description: Certificate not found
+ */
+router.get(
+  '/:id/vc/download',
+  certificateController.downloadVerifiableCredential.bind(certificateController)
+);
+
+/**
+ * @openapi
+ * /api/v1/certificates/vc/issuer:
+ *   get:
+ *     summary: Issuer DID document
+ *     description: Returns the JSON-LD DID document of the credential issuer with the Ed25519 verification key.
+ *     tags: [Certificates]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Issuer DID document (JSON-LD)
+ */
+router.get('/vc/issuer', certificateController.getVcIssuerDidDocument.bind(certificateController));
+
+/**
+ * @openapi
+ * /api/v1/certificates/vc/verify:
+ *   post:
+ *     summary: Verify a W3C Verifiable Credential
+ *     description: Resolves the issuer DID, verifies the Ed25519Signature2020 proof, and rejects tampered/forged/revoked credentials.
+ *     tags: [Certificates]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [credential]
+ *             properties:
+ *               credential:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: Credential verified
+ *       422:
+ *         description: Verification failed (tampered / forged / revoked)
+ */
+router.post(
+  '/vc/verify',
+  certificateController.verifyVerifiableCredential.bind(certificateController)
+);
+
 export default router;

@@ -8,6 +8,7 @@ import {
   certificateService,
   revocationService,
   verificationService,
+  verifiableCredentialService,
 } from './index.js';
 import { UnauthorizedIssuerError } from './RevocationService.js';
 
@@ -490,6 +491,100 @@ export class CertificateController {
     } catch (error) {
       logger.error(`OpenBadges export error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       res.status(500).json({ error: 'Failed to export OpenBadges package' });
+    }
+  }
+
+  /**
+   * GET /api/certificates/:id/vc
+   * Issue a signed W3C Verifiable Credential v2.0 for a course completion.
+   * Public; returns application/ld+json so wallets can import the package.
+   */
+  async issueVerifiableCredential(req: Request, res: Response): Promise<void> {
+    try {
+      const id = getStringParam(req.params.id);
+      if (!id) {
+        res.status(400).json({ error: 'Certificate ID is required' });
+        return;
+      }
+
+      const credential = await verifiableCredentialService.issueCredential(id);
+      if (!credential) {
+        res.status(404).json({ error: 'Certificate not found' });
+        return;
+      }
+
+      res.set('Content-Type', 'application/ld+json');
+      res.set('Content-Disposition', `inline; filename="vc-${id}.jsonld"`);
+      res.set('Cache-Control', 'public, max-age=86400, immutable');
+      res.status(200).json(credential);
+    } catch (error) {
+      logger.error(`VC issue error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      res.status(500).json({ error: 'Failed to issue Verifiable Credential' });
+    }
+  }
+
+  /**
+   * GET /api/certificates/:id/vc/download
+   * Download the W3C VC v2.0 package as an attachment for wallet import.
+   */
+  async downloadVerifiableCredential(req: Request, res: Response): Promise<void> {
+    try {
+      const id = getStringParam(req.params.id);
+      if (!id) {
+        res.status(400).json({ error: 'Certificate ID is required' });
+        return;
+      }
+
+      const credential = await verifiableCredentialService.issueCredential(id);
+      if (!credential) {
+        res.status(404).json({ error: 'Certificate not found' });
+        return;
+      }
+
+      res.set('Content-Type', 'application/ld+json');
+      res.set('Content-Disposition', `attachment; filename="credential-${id}.jsonld"`);
+      res.status(200).json(credential);
+    } catch (error) {
+      logger.error(`VC download error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      res.status(500).json({ error: 'Failed to download Verifiable Credential' });
+    }
+  }
+
+  /**
+   * POST /api/certificates/vc/verify
+   * Verify a submitted W3C VC: resolves the issuer DID, verifies the
+   * Ed25519Signature2020 proof, and rejects tampered/forged/revoked
+   * credentials.
+   */
+  async verifyVerifiableCredential(req: Request, res: Response): Promise<void> {
+    try {
+      const { credential } = req.body ?? {};
+      if (!credential || typeof credential !== 'object') {
+        res.status(400).json({ valid: false, error: 'credential object is required' });
+        return;
+      }
+
+      const result = await verifiableCredentialService.verifyCredential(credential);
+      res.status(result.valid ? 200 : 422).json(result);
+    } catch (error) {
+      logger.error(`VC verify error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      res.status(500).json({ valid: false, error: 'Failed to verify Verifiable Credential' });
+    }
+  }
+
+  /**
+   * GET /api/certificates/vc/issuer
+   * Return the issuer DID document (JSON-LD) with the Ed25519 verification key.
+   */
+  async getVcIssuerDidDocument(_req: Request, res: Response): Promise<void> {
+    try {
+      const doc = verifiableCredentialService.getIssuerDidDocument();
+      res.set('Content-Type', 'application/ld+json');
+      res.set('Cache-Control', 'public, max-age=3600');
+      res.status(200).json(doc);
+    } catch (error) {
+      logger.error(`VC issuer doc error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      res.status(500).json({ error: 'Failed to fetch issuer DID document' });
     }
   }
 }
