@@ -1,0 +1,91 @@
+name: Gas Benchmarks & Regression Checks
+
+# Automated gas footprint / CPU instruction benchmarking suite.
+#
+# For every pull request touching the contracts workspace we:
+#   1. Measure per-endpoint CPU instruction & memory byte consumption.
+#   2. Compare against the committed baseline snapshot (baselines/…json).
+#   3. Fail the PR if any endpoint regresses by more than 10%.
+#   4. Post a Markdown comparison report as a PR comment.
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths:
+      - 'contracts/**'
+      - 'scripts/run-gas-benchmarks.sh'
+      - '.github/workflows/gas-benchmarks.yml'
+  pull_request:
+    branches: [ "main", "master" ]
+    paths:
+      - 'contracts/**'
+      - 'scripts/run-gas-benchmarks.sh'
+      - '.github/workflows/gas-benchmarks.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: gas-benchmarks-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGRESSION_THRESHOLD: "10"
+
+jobs:
+  benchmark:
+    name: Gas & CPU Benchmarks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Cargo registry & build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts -> target
+
+      - name: Run Gas Benchmark Suite
+        id: bench
+        working-directory: ./scripts
+        env:
+          GAS_BENCH_REPORT: ${{ github.workspace }}/gas_bench_report.json
+        run: |
+          set +e
+          bash run-gas-benchmarks.sh "${{ env.REGRESSION_THRESHOLD }}" \
+            > /tmp/gas_markdown.md
+          ec=$?
+          echo "regression_exit=$ec" >> "$GITHUB_OUTPUT"
+          cat /tmp/gas_markdown.md >> "$GITHUB_STEP_SUMMARY"
+          exit 0   # decided by the gate step below
+          set -e
+
+      - name: Post PR Comment
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.existsSync('/tmp/gas_markdown.md')
+              ? fs.readFileSync('/tmp/gas_markdown.md', 'utf8')
+              : '## Gas & CPU Benchmark Report\n\nThe benchmark suite ran; see `contracts/gas_benchmarks` for details.';
+            const { owner, repo } = context.repo;
+            const prNumber = context.issue.number;
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: prNumber, body,
+            });
+
+      - name: Enforce Regression Gate
+        if: steps.bench.outputs.regression_exit != '0'
+        run: |
+          echo "::error::Gas regression detected: an endpoint exceeded the ${{ env.REGRESSION_THRESHOLD }}% threshold."
+          exit 1

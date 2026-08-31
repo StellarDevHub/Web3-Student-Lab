@@ -1,0 +1,25 @@
+[package]
+name = "gas-benchmarks"
+version = "0.1.0"
+edition = "2021"
+description = "Automated gas footprint & CPU instruction benchmarking suite for Soroban contracts"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+soroban-sdk = { version = "26.1.0", features = ["testutils"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+
+# Contract dependencies for in-memory benchmarking.
+#
+# NOTE: the `certificate` contract is intentionally omitted because it does not
+# currently compile as an rlib dependency outside of its own test module
+# (pre-existing issue unrelated to this suite). It can be added back once that
+# contract builds standalone.
+soroban-hello-world = { path = "../hello_world" }
+certificate-nft = { path = "../certificate_nft" }
+payment-gateway = { path = "../payment_gateway" }
+dao-governance = { path = "../dao_governance" }
+smart-vault = { path = "../smart_vault" }
