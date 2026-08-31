@@ -52,21 +52,10 @@ exclude = [
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-soroban-sdk = "26.1.0"
+soroban-sdk = "27.0.6"
 
 [dev-dependencies]
-soroban-sdk = { version = "22.0.0", features = ["testutils"] }
-
-[profile.release]
-opt-level = "z"
-overflow-checks = true
-debug = 0
-strip = "symbols"
-debug-assertions = false
-panic = "abort"
-codegen-units = 1
-lto = true
-soroban-sdk = { version = "26.1.0", features = ["testutils"] }
-rand = { version = "0.9", features = ["small_rng"] }
+soroban-sdk = { version = "27.0.6", features = ["testutils"] }
+rand = { version = "0.8", features = ["small_rng"] }
 ed25519-dalek = { version = "2", default-features = false, features = ["std", "rand_core"] }
 proptest = "1"
