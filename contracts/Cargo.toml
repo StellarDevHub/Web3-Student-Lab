@@ -34,6 +34,8 @@ members = [
     "testnet_faucet_integration",
     "zk_proof_verifier",
     "certificate",
+    "contract_events",
+    "peer_review",
 ]
 # Incomplete or non-crate directories under contracts/ must not be listed as members.
 exclude = [

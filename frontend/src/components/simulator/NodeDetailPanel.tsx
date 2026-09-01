@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Activity, ExternalLink, Shield, Wallet, X } from 'lucide-react';
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { NetworkNode } from '../../lib/visualization/ForceSimulation';
 
 interface NodeDetailPanelProps {
@@ -8,12 +8,62 @@ interface NodeDetailPanelProps {
   onClose: () => void;
 }
 
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onClose }) => {
   const shouldReduceMotion = useReducedMotion();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Keyboard operability: move focus into the panel on open, trap Tab
+  // inside it, restore focus on close, and let Escape dismiss the dialog.
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const closeButton = panel.querySelector<HTMLButtonElement>('button[aria-label^="Close"]');
+    closeButton?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    panel.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      panel.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, []);
 
   return (
     <AnimatePresence>
       <motion.div
+        ref={panelRef}
         initial={shouldReduceMotion ? { opacity: 0 } : { x: '100%', opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         exit={shouldReduceMotion ? { opacity: 0 } : { x: '100%', opacity: 0 }}

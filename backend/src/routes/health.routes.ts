@@ -1,5 +1,6 @@
 import { Router, type RequestHandler } from 'express';
 import { checkReadiness } from '../db/readinessMonitor.js';
+import { checkDeepReadiness } from '../db/deepReadiness.js';
 import { cbManager } from '../lib/circuit-breaker/CircuitBreakerManager.js';
 import { checkDbHealth } from '../db/healthMonitor.js';
 import logger from '../utils/logger.js';
@@ -193,5 +194,43 @@ export const readinessHandler: RequestHandler = async (_req, res) => {
 };
 
 router.get('/ready', readinessHandler);
+
+/**
+ * @openapi
+ * /api/v1/health/deep:
+ *   get:
+ *     summary: Deep readiness probe (DB, Redis, Soroban/Horizon block height, latency p50/p95/p99, memory)
+ *     description: >
+ *       Probes PostgreSQL, Redis and the Soroban/Horizon block height, and
+ *       returns latency percentiles and process memory usage. Returns 503 when
+ *       any dependency is unavailable. Useful for Kubernetes/Docker readiness
+ *       where a reachable-but-stale RPC should fail the probe.
+ *     tags: [Health]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: All dependencies ready
+ *       503:
+ *         description: One or more dependencies unavailable
+ */
+const deepReadinessHandler: RequestHandler = async (_req, res) => {
+  try {
+    const result = await checkDeepReadiness();
+    res.status(result.status === 'ready' ? 200 : 503).json(result);
+  } catch (error) {
+    logger.error('Deep readiness probe failed unexpectedly', error);
+    res.status(503).json({
+      status: 'not_ready',
+      checks: {
+        database: { status: 'unavailable', latencyMs: 0, error: 'database unavailable' },
+        redis: { status: 'unavailable', latencyMs: 0, error: 'redis unavailable' },
+        sorobanRpc: { status: 'unavailable', latencyMs: 0, error: 'soroban rpc unavailable' },
+      },
+      checkedAt: new Date().toISOString(),
+    });
+  }
+};
+
+router.get('/deep', deepReadinessHandler);
 
 export default router;

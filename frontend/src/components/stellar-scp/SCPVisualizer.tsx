@@ -366,11 +366,28 @@ export const SCPVisualizer: React.FC = () => {
     scpState.nodes.filter((n) => !n.failed).length <
     Math.ceil(scpState.nodes.length * 0.66);
 
+  const handleToggleNodeFailureKey = (
+    event: React.KeyboardEvent<HTMLDivElement>,
+    nodeId: string
+  ) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleToggleNodeFailure(nodeId);
+    }
+  };
+
   return (
     <div
       ref={containerRef}
       className="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 p-6 min-h-screen"
     >
+      {/* Screen reader announcements for simulation state changes */}
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {`${scpState.phase} phase, round ${scpState.round}, step ${scpState.step}.`}
+        {consensusReached ? ' Consensus reached.' : ''}
+        {consensusFailed ? ' Consensus failed.' : ''}
+      </div>
+
       {/* Header */}
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-blue-400">
@@ -456,10 +473,14 @@ export const SCPVisualizer: React.FC = () => {
 
           {/* Speed Control */}
           <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+            <label
+              htmlFor="scp-speed"
+              className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3"
+            >
               Speed
             </label>
             <input
+              id="scp-speed"
               type="range"
               min="200"
               max="2000"
@@ -468,7 +489,9 @@ export const SCPVisualizer: React.FC = () => {
               onChange={handleSpeedChange}
               className="w-full"
             />
-            <div className="text-xs text-slate-500 mt-2">{(3000 - scpState.speed) / 500}x</div>
+            <div className="text-xs text-slate-500 mt-2" aria-live="polite">
+              {(3000 - scpState.speed) / 500}x
+            </div>
           </div>
 
           {/* Node Status */}
@@ -480,8 +503,13 @@ export const SCPVisualizer: React.FC = () => {
               {scpState.nodes.map((node) => (
                 <div
                   key={node.id}
-                  className="flex items-center gap-2 p-2 bg-slate-700 rounded cursor-pointer hover:bg-slate-600 transition-colors text-xs"
+                  role="button"
+                  tabIndex={0}
+                  className="flex items-center gap-2 p-2 bg-slate-700 rounded cursor-pointer hover:bg-slate-600 transition-colors text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
                   onClick={() => handleToggleNodeFailure(node.id)}
+                  onKeyDown={(event) => handleToggleNodeFailureKey(event, node.id)}
+                  aria-pressed={node.failed}
+                  aria-label={`${node.label}. Currently ${node.failed ? 'failed' : node.state}. Activate to toggle failure state.`}
                   title={`Click to toggle failure state. Currently: ${node.failed ? 'FAILED' : node.state.toUpperCase()}`}
                 >
                   <div

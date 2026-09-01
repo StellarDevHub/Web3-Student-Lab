@@ -2,9 +2,7 @@
 import dotenv from 'dotenv';
 import express, { Request, Response } from 'express';
 import { createCorsMiddleware } from './config/cors.config.js';
-import { jsonBodySizeLimit } from './middleware/bodySizeLimit.js';
-import { dbRoutingMiddleware } from './middleware/dbRouting.js';
-import routes from './routes/index.js';
+import swaggerDocsRouter from './config/swagger.serve.js';
 import logger from './utils/logger.js';
 import { getSentryErrorHandler, getSentryRequestHandler, initializeSentry } from './utils/sentry.js';
 
@@ -41,6 +39,9 @@ app.post('/api/security/csp-report', express.json(), (req: Request, res: Respons
   });
   res.status(204).end();
 });
+
+// Mount OpenAPI 3.1 interactive docs (Swagger UI) + JSON/YAML spec export.
+app.use('/api/docs', swaggerDocsRouter);
 
 // Mount main API v1 router
 app.use('/api/v1', routes);
