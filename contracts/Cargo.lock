@@ -194,13 +194,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
-name = "automated-testing-suite"
-version = "0.1.0"
-dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
 name = "base16ct"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -301,6 +294,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "certificate"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
+name = "certificate-nft"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -330,13 +337,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cicd-pipeline"
-version = "0.1.0"
-dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
 name = "commit-reveal-rng"
 version = "0.1.0"
 dependencies = [
@@ -358,6 +358,15 @@ dependencies = [
 
 [[package]]
 name = "continuous-bonding-curve"
+version = "0.1.0"
+dependencies = [
+ "contract-events",
+ "proptest",
+ "soroban-sdk",
+]
+
+[[package]]
+name = "contract-events"
 version = "0.1.0"
 dependencies = [
  "soroban-sdk",
@@ -614,13 +623,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "did_registry"
-version = "0.0.0"
-dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -835,6 +837,8 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 name = "fractional-nft-vault"
 version = "0.1.0"
 dependencies = [
+ "contract-events",
+ "proptest",
  "soroban-sdk",
 ]
 
@@ -1276,6 +1280,15 @@ dependencies = [
 name = "payment-streaming"
 version = "0.1.0"
 dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
+name = "peer-review"
+version = "0.1.0"
+dependencies = [
+ "contract-events",
+ "proptest",
  "soroban-sdk",
 ]
 

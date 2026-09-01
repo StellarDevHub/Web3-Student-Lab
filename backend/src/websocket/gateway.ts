@@ -1,11 +1,21 @@
 import { Server, Socket } from 'socket.io';
 import { verifyToken } from '../auth/auth.service.js';
+import { registerWebSocketTerminator } from '../auth/sessionMonitor.js';
 import redisClient from '../cache/RedisClient.js';
 import { sseSessionManager } from '../sse/SseSessionManager.js';
 import logger from '../utils/logger.js';
 
 export const initWebSocketGateway = (io: Server) => {
   logger.info('Initializing WebSocket Gateway...');
+
+  // Extended-idle sessions (30m) have their WebSocket channels terminated by
+  // the session monitor (#1116) — drop every socket belonging to the user.
+  registerWebSocketTerminator(async (userId: string) => {
+    const sockets = await io.in(`user:${userId}`).fetchSockets();
+    for (const socket of sockets) {
+      socket.disconnect(true);
+    }
+  });
 
   // JWT Authentication Middleware
   io.use((socket, next) => {

@@ -84,6 +84,23 @@ export default function QuizEngine() {
     event.preventDefault();
   };
 
+  const handleReorderKey = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    index: number
+  ) => {
+    const { dragOrder } = current.context;
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+
+    const targetIndex =
+      event.key === 'ArrowUp' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= dragOrder.length) return;
+
+    event.preventDefault();
+    const nextOrder = [...dragOrder];
+    [nextOrder[index], nextOrder[targetIndex]] = [nextOrder[targetIndex], nextOrder[index]];
+    send({ type: 'UPDATE_ORDER', order: nextOrder });
+  };
+
   return (
     <div className="min-h-screen bg-[#050505] px-4 py-16 text-white sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-10">
@@ -213,7 +230,9 @@ export default function QuizEngine() {
                             onDragStart={(event) => handleDragStart(event, index)}
                             onDragOver={handleDragOver}
                             onDrop={(event) => handleDrop(event, index)}
-                            className="rounded-3xl border border-white/10 bg-white/5 px-5 py-4 text-left text-base text-gray-200 transition hover:border-red-500/40 hover:bg-white/10"
+                            onKeyDown={(event) => handleReorderKey(event, index)}
+                            aria-label={`${segment}. Step ${index + 1} of ${current.context.dragOrder.length}. Use Arrow Up or Arrow Down to reorder.`}
+                            className="rounded-3xl border border-white/10 bg-white/5 px-5 py-4 text-left text-base text-gray-200 transition hover:border-red-500/40 hover:bg-white/10 focus:border-red-500 focus:outline-none"
                           >
                             <span className="text-xs tracking-[0.25em] text-red-500 uppercase">
                               Step {index + 1}
@@ -316,13 +335,26 @@ export default function QuizEngine() {
                     <p className="text-sm tracking-[0.35em] text-gray-400 uppercase">
                       Time Remaining
                     </p>
-                    <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className="mt-3 h-3 overflow-hidden rounded-full bg-white/10"
+                      role="progressbar"
+                      aria-valuenow={Math.round(percentage)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label="Time remaining"
+                    >
                       <div
                         className="h-full rounded-full bg-red-500 transition-all duration-500"
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
-                    <p className="mt-2 text-3xl font-black text-white">{timeLeft}s</p>
+                    <p
+                      className="mt-2 text-3xl font-black text-white"
+                      role="timer"
+                      aria-label={`${timeLeft} seconds remaining`}
+                    >
+                      {timeLeft}s
+                    </p>
                   </div>
 
                   <div className="rounded-3xl border border-white/10 bg-white/5 p-5">

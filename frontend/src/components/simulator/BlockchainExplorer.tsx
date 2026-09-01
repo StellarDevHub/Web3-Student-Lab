@@ -52,13 +52,22 @@ function ConnectionDot({ status }: { status: string }) {
 function TxRow({ tx }: { tx: ExplorerTransaction }) {
   const [expanded, setExpanded] = useState(false);
 
+  const toggleExpanded = () => setExpanded((v) => !v);
+
   return (
     <>
       <tr
         className="cursor-pointer border-b border-white/5 transition-colors hover:bg-white/5"
-        onClick={() => setExpanded((v) => !v)}
+        onClick={toggleExpanded}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleExpanded();
+          }
+        }}
+        tabIndex={0}
         aria-expanded={expanded}
-        aria-label={`Transaction ${tx.hash}, status ${tx.status}`}
+        aria-label={`Transaction ${tx.hash}, status ${tx.status}. Activate to ${expanded ? 'collapse' : 'expand'} details.`}
       >
         <td className="py-3 pr-4 font-mono text-[11px] font-bold text-red-400">{tx.hash.slice(0, 8)}…</td>
         <td className="py-3 pr-4 text-[11px] text-gray-300">{tx.operation}</td>

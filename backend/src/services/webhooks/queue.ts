@@ -5,11 +5,23 @@ import type { WebhookDeliveryJobData } from './types.js';
 export const WEBHOOK_DELIVERY_QUEUE_NAME = 'webhook-delivery-queue';
 export const WEBHOOK_DEAD_LETTER_QUEUE_NAME = 'webhook-dead-letter-queue';
 
+/**
+ * Jittered exponential backoff (Issue #1129): BullMQ's built-in exponential
+ * strategy with a 50% jitter factor so concurrent retries to the same
+ * destination don't stampede in lockstep. `delay` is the base delay in ms.
+ */
+export const WEBHOOK_BACKOFF_DELAY_MS = Number(process.env.WEBHOOK_BACKOFF_DELAY_MS || '1000');
+
+export const WEBHOOK_MAX_ATTEMPTS = Number(process.env.WEBHOOK_MAX_ATTEMPTS || '5');
+
+export const WEBHOOK_BACKOFF_JITTER = 0.5;
+
 const createDefaultJobOptions = () => ({
-  attempts: Number(process.env.WEBHOOK_MAX_ATTEMPTS || '5'),
+  attempts: WEBHOOK_MAX_ATTEMPTS,
   backoff: {
     type: 'exponential' as const,
-    delay: Number(process.env.WEBHOOK_BACKOFF_DELAY_MS || '1000'),
+    delay: WEBHOOK_BACKOFF_DELAY_MS,
+    jitter: WEBHOOK_BACKOFF_JITTER,
   },
   removeOnComplete: {
     age: 24 * 60 * 60,

@@ -1,6 +1,13 @@
 import { Request, Response, Router } from 'express';
 import { authenticate } from '../../auth/auth.middleware.js';
 import { getProfileStatusByWallet, login, register } from '../../auth/auth.service.js';
+import {
+  getSessionStatus,
+  lockSession,
+  purgeSession,
+  touchSession,
+  unlockSession,
+} from '../../auth/sessionMonitor.js';
 import { blacklistAccessToken, rotateRefreshToken, revokeAllUserTokens, verifyRefreshToken } from '../../auth/token.service.js';
 import { LoginRequest } from '../../auth/types.js';
 import { loginSchema, registerSchema, web3VerifySchema } from '../../auth/validation.schemas.js';
@@ -575,6 +582,118 @@ router.post(
     console.error('Signature verification error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+/**
+ * @openapi
+ * /api/v1/auth/session/activity:
+ *   post:
+ *     summary: Record session activity (mouse/keyboard/touch) and reset idle
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Activity recorded }
+ *       401: { description: Unauthorized }
+ */
+router.post('/session/activity', authenticate, async (req: Request, res: Response) => {
+  const userId = (req as unknown as { user?: { id: string } }).user?.id;
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  await touchSession(userId);
+  res.json({ ok: true });
+});
+
+/**
+ * @openapi
+ * /api/v1/auth/session/status:
+ *   get:
+ *     summary: Get session idle/lock status
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: SessionStatus }
+ *       401: { description: Unauthorized }
+ */
+router.get('/session/status', authenticate, async (req: Request, res: Response) => {
+  const userId = (req as unknown as { user?: { id: string } }).user?.id;
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  const status = await getSessionStatus(userId);
+  res.json(status);
+});
+
+/**
+ * @openapi
+ * /api/v1/auth/session/lock:
+ *   post:
+ *     summary: Lock the session (blur UI, require re-auth)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Session locked }
+ *       401: { description: Unauthorized }
+ */
+router.post('/session/lock', authenticate, async (req: Request, res: Response) => {
+  const userId = (req as unknown as { user?: { id: string } }).user?.id;
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  await lockSession(userId);
+  res.json({ ok: true });
+});
+
+/**
+ * @openapi
+ * /api/v1/auth/session/unlock:
+ *   post:
+ *     summary: Unlock after re-authentication challenge
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Session unlocked }
+ *       401: { description: Unauthorized }
+ *       423: { description: Session purged by extended idle; full login required }
+ */
+router.post('/session/unlock', authenticate, async (req: Request, res: Response) => {
+  const userId = (req as unknown as { user?: { id: string } }).user?.id;
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  const unlocked = await unlockSession(userId);
+  if (!unlocked) {
+    res.status(423).json({
+      error: 'Session expired from extended inactivity; please sign in again',
+    });
+    return;
+  }
+  res.json({ ok: true });
+});
+
+/**
+ * @openapi
+ * /api/v1/auth/session/purge:
+ *   post:
+ *     summary: Purge extended-idle session (revoke tokens, terminate WebSockets)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Session purged }
+ *       401: { description: Unauthorized }
+ */
+router.post('/session/purge', authenticate, async (req: Request, res: Response) => {
+  const userId = (req as unknown as { user?: { id: string } }).user?.id;
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  await purgeSession(userId);
+  res.json({ ok: true });
 });
 
 export default router;

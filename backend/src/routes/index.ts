@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { optionalWorkspaceMiddleware } from '../middleware/WorkspaceContext.js';
+import { validateWorkspaceMembership } from '../middleware/workspaceMembership.js';
 import dashboardRoutes from '../dashboard/dashboard.routes.js';
 import activityLogRouter from '../dashboard/activityLog.routes.js';
 import feedbackRouter from '../feedback/feedback.routes.js';
@@ -48,17 +50,30 @@ import storageRouter from './storage.routes.js';
 
 const router: ReturnType<typeof Router> = Router();
 
+// Populate the AsyncLocalStorage workspace context from the `x-workspace-id`
+// header (or `workspaceId` query param) so the Prisma workspace-isolation
+// extension filters every query automatically (#1119). Optional: requests
+// without a workspace header pass through unscoped.
+router.use(optionalWorkspaceMiddleware);
+
 router.use('/health', healthRouter);
 router.use('/analytics', analyticsRouter);
 router.use('/students', studentsRouter);
-router.use('/certificates', certificatesRouter);
-router.use('/courses', coursesRouter);
-router.use('/enrollments', enrollmentsRouter);
+
+// Cross-tenant data lives in courses, submissions (enrollments), certificates
+// and learning progress — enforce workspace membership on those groups
+// (#1119). Runs after the workspace context is populated above; requests
+// without an authenticated user or workspace header pass through, while
+// the Prisma extension still applies per-query tenant filtering.
+router.use('/certificates', validateWorkspaceMembership, certificatesRouter);
+router.use('/courses', validateWorkspaceMembership, coursesRouter);
+router.use('/enrollments', validateWorkspaceMembership, enrollmentsRouter);
+router.use('/feedback', validateWorkspaceMembership, feedbackRouter);
+router.use('/learning', validateWorkspaceMembership, learningRoutes);
+
 router.use('/dashboard', dashboardRoutes);
 router.use('/dashboard/activity-log', activityLogRouter);
-router.use('/feedback', feedbackRouter);
 router.use('/auth', authRoutes);
-router.use('/learning', learningRoutes);
 router.use('/search', curriculumSearchRouter);
 router.use('/contracts', contractRouter);
 router.use('/notifications', notificationRouter);

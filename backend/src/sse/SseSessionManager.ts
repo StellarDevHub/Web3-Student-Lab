@@ -49,13 +49,13 @@ export class SseSessionManager {
     }
   }
 
-  emitToUser(userId: string, event: string, payload: unknown): void {
+  emitToUser(userId: string, event: string, payload: unknown, eventId?: string): void {
     const clients = this.sessions.get(userId);
     if (!clients || clients.size === 0) {
       return;
     }
 
-    const message = this.formatEvent(event, payload);
+    const message = this.formatEvent(event, payload, eventId);
 
     for (const [clientId, client] of clients.entries()) {
       const success = this.writeRaw(client.res, message);
@@ -65,8 +65,26 @@ export class SseSessionManager {
     }
   }
 
-  private formatEvent(event: string, payload: unknown): string {
-    return `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
+  /**
+   * Broadcast an event to every connected client (all sessions).
+   * Used for broadcast (non-targeted) notifications (#1122).
+   */
+  emitToAll(event: string, payload: unknown, eventId?: string): void {
+    const message = this.formatEvent(event, payload, eventId);
+    for (const [sessionId, clients] of this.sessions.entries()) {
+      for (const [clientId, client] of clients.entries()) {
+        const success = this.writeRaw(client.res, message);
+        if (!success) {
+          this.removeClient(sessionId, clientId);
+        }
+      }
+    }
+  }
+
+  private formatEvent(event: string, payload: unknown, eventId?: string): string {
+    // `id:` enables Last-Event-ID reconnection recovery (#1122).
+    const idLine = eventId ? `id: ${eventId}\n` : '';
+    return `${idLine}event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
   }
 
   private writeRaw(res: Response, chunk: string): boolean {

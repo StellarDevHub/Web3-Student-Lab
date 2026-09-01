@@ -1,5 +1,6 @@
 import logger from '../utils/logger.js';
 import redisClient from './RedisClient.js';
+import { encodePayload, decodePayload, toStorageString, COMPRESSION_MIN_BYTES } from './PayloadCodec.js';
 
 export const CACHE_KEYS = {
   user: {
@@ -40,10 +41,10 @@ class CacheService {
     const client = redisClient.getClient();
 
     try {
-      const data = client ? await client.get(key) : (redisClient.getMemoryStore().get(key) ?? null);
-      if (data) {
+      const raw = client ? await client.getBuffer(key) : (redisClient.getMemoryStore().get(key) ?? null);
+      if (raw) {
         this.metrics.hits++;
-        return JSON.parse(data) as T;
+        return decodePayload(raw as string | Buffer) as T;
       }
       this.metrics.misses++;
       return null;
@@ -58,10 +59,12 @@ class CacheService {
     const client = redisClient.getClient();
 
     try {
+      const encoded = encodePayload(value);
       if (client) {
-        await client.setex(key, ttl, JSON.stringify(value));
+        // ioredis accepts both strings and Buffers for setex.
+        await client.setex(key, ttl, encoded as string);
       } else {
-        redisClient.getMemoryStore().set(key, JSON.stringify(value));
+        redisClient.getMemoryStore().set(key, toStorageString(encoded));
       }
     } catch (error) {
       logger.error(`Cache set error for key ${key}:`, error);
@@ -111,6 +114,7 @@ class CacheService {
       hits: this.metrics.hits,
       misses: this.metrics.misses,
       hitRate: hitRate.toFixed(2) + '%',
+      compressionMinBytes: COMPRESSION_MIN_BYTES,
     };
   }
 
