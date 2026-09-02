@@ -55,7 +55,7 @@
     "react-is": "^19.2.7",
     "react-joyride": "^3.1.0",
     "react-loading-skeleton": "^3.5.0",
-    "react-window": "^2.2.7",
+    "react-window": "^2.3.0",
     "reactflow": "^11.11.4",
     "recharts": "^3.8.1",
     "socket.io-client": "^4.8.3",
