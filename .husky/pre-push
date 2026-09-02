@@ -1,0 +1,30 @@
+#!/bin/sh
+echo "🔍 Running pre-push compiler & typecheck validation..."
+
+echo "⚡ Checking Frontend TypeScript..."
+(cd frontend && npx tsc --noEmit) || {
+  echo ""
+  echo "❌ Frontend TypeScript compiler check failed!"
+  echo "💡 Emergency hotfix bypass: git push --no-verify"
+  exit 1
+}
+
+echo "⚡ Checking Backend TypeScript..."
+(cd backend && npx tsc --noEmit) || {
+  echo ""
+  echo "❌ Backend TypeScript compiler check failed!"
+  echo "💡 Emergency hotfix bypass: git push --no-verify"
+  exit 1
+}
+
+if command -v cargo >/dev/null 2>&1; then
+  echo "⚡ Checking Rust Contracts (cargo check)..."
+  (cd contracts && cargo check) || {
+    echo ""
+    echo "❌ Cargo check failed!"
+    echo "💡 Emergency hotfix bypass: git push --no-verify"
+    exit 1
+  }
+fi
+
+echo "✅ All pre-push compiler checks passed successfully!"

@@ -1,13 +1,26 @@
+/**
+ * CertificateService — issuance, verification and reporting for course
+ * certificates. Fully type-checked: request, response and domain shapes are
+ * declared explicitly instead of being suppressed.
+ */
+
+
+
 import prisma from '../db/index.js';
+import { storageService } from '../services/storage/index.js';
+import { certificateBlockchainService } from '../blockchain/CertificateBlockchainService.js';
 import {
   Certificate,
   CertificateMetadata,
+  CertificateStatus,
   MintCertificateRequest,
   VerificationResult,
 } from '../types/certificate.types.js';
-import { MetadataGenerator } from './MetadataGenerator.js';
-import { certificateBlockchainService } from '../blockchain/CertificateBlockchainService.js';
+import { certificateImageGenerator } from '../utils/certificateImageGenerator.js';
 import logger from '../utils/logger.js';
+import { MetadataGenerator } from './MetadataGenerator.js';
+import { computeCertificateContentHash, verifyCertificateContentHash } from './ContentHash.js';
+import { sendCertificateMintedEmail } from '../services/email/certificateEmailService.js';
 
 export class CertificateService {
   private metadataGenerator: MetadataGenerator;
@@ -46,8 +59,23 @@ export class CertificateService {
       throw new Error(`Course with ID ${courseId} not found`);
     }
 
-    // Check enrollment status - student must be enrolled
-    const enrollment = await prisma.enrollment.findUnique({
+    // Return existing certificate if already minted
+    const existingCert = await prisma.certificate.findFirst({
+      where: { studentId, courseId },
+      include: { student: true, course: true },
+    });
+
+    if (existingCert) {
+      const metadata = this.metadataGenerator.generate(
+        existingCert,
+        existingCert.course,
+        existingCert.student
+      );
+      return { ...existingCert, metadata };
+    }
+
+    // Auto-create enrollment status if not explicitly enrolled yet
+    let enrollment = await prisma.enrollment.findUnique({
       where: {
         studentId_courseId: {
           studentId,
@@ -57,7 +85,14 @@ export class CertificateService {
     });
 
     if (!enrollment) {
-      throw new Error(`Student ${studentId} is not enrolled in course ${courseId}`);
+      enrollment = await prisma.enrollment.create({
+        data: {
+          studentId,
+          courseId,
+          enrolledAt: new Date(),
+          status: 'completed',
+        },
+      });
     }
 
     // Generate certificate ID
@@ -87,12 +122,66 @@ export class CertificateService {
       },
     });
 
-    // Generate the metadata
-    const metadata = this.metadataGenerator.generate(certificate, course, student);
-
     try {
+      const { storageService } = await import('../services/storage/index.js');
+
+      // Generate and pin the certificate image and metadata to decentralized storage
+      const imageOptions: Parameters<typeof certificateImageGenerator.generateCertificateImage>[0] = {
+        studentName: `${student.firstName || ''} ${student.lastName || ''}`.trim() || 'Student',
+        courseTitle: course.title,
+        instructor: course.instructor,
+        completionDate: certificate.issuedAt.toISOString(),
+        credentialId: certificate.tokenId || tokenIdValue,
+        issuerName: process.env.ISSUER_NAME || 'Web3 Student Lab',
+      };
+      if (certificate.grade) {
+        imageOptions.grade = certificate.grade;
+      }
+      const imageBuffer = await certificateImageGenerator.generateCertificateImage(imageOptions);
+
+      const imageAsset = await storageService.pinCertificateImage({
+        certificateId: certificateId,
+        content: imageBuffer,
+        mimeType: 'image/svg+xml',
+      });
+
+      const metadata = this.metadataGenerator.generate(certificate, course, student, {
+        imageUri: imageAsset.ipfsUri,
+        externalUrl: `${process.env.API_BASE_URL || 'http://localhost:8080'}/api/v1/certificates/${
+          certificate.tokenId || tokenIdValue
+        }/metadata`,
+      });
+
+      if (!metadata) {
+        logger.error(`Failed to generate metadata for certificate ${certificateId}`);
+        throw new Error('Failed to generate certificate metadata');
+      }
+
+      const metadataAsset = await storageService.pinCertificateMetadata({
+        certificateId: certificateId,
+        content: { ...metadata },
+
+      });
+
       // Call blockchain service to mint actual NFT
       const mintResult = await certificateBlockchainService.mintCertificate(metadata);
+
+      const finalTokenId = mintResult.tokenId || tokenIdValue;
+
+      // Compute the immutable content-integrity hash from the final,
+      // post-mint certificate fields. This hash binds the certificate
+      // metadata to a deterministic fingerprint that is re-verified on
+      // every retrieval/verification so tampering with stored fields
+      // can be detected instead of silently served.
+      const contentHash = computeCertificateContentHash({
+        id: certificateId,
+        studentId: certificate.studentId,
+        courseId: certificate.courseId,
+        tokenId: finalTokenId,
+        grade: certificate.grade,
+        did: certificate.did,
+        issuedAt: certificate.issuedAt,
+      });
 
       // Update certificate with blockchain transaction details
       await prisma.certificate.update({
@@ -101,15 +190,16 @@ export class CertificateService {
           certificateHash: mintResult.transactionHash,
           contractAddress: mintResult.contractAddress,
           status: 'ACTIVE',
-          metadataUri: metadata.image,
-          tokenId: mintResult.tokenId || tokenIdValue,
+          metadataUri: metadataAsset.ipfsUri,
+          tokenId: finalTokenId,
+          contentHash,
         },
       });
 
       // Update returned certificate
       certificate.certificateHash = mintResult.transactionHash;
       certificate.contractAddress = mintResult.contractAddress;
-      certificate.status = 'ACTIVE' as any;
+      certificate.status = CertificateStatus.ACTIVE;
       certificate.tokenId = mintResult.tokenId || tokenIdValue;
 
       logger.info(`Certificate minted on-chain: ${certificateId} -> token ${mintResult.tokenId}`, {
@@ -117,21 +207,53 @@ export class CertificateService {
         tokenId: mintResult.tokenId,
         txHash: mintResult.transactionHash,
       });
+
+      // Send transactional email with PDF attachment and social sharing links
+      try {
+        const pdfBuffer = await certificateImageGenerator.generateCertificateImage({
+          studentName: `${student.firstName || ''} ${student.lastName || ''}`.trim() || 'Student',
+          courseTitle: course.title,
+          instructor: course.instructor,
+          completionDate: certificate.issuedAt.toISOString(),
+          credentialId: certificate.tokenId || tokenIdValue,
+          issuerName: process.env.ISSUER_NAME || 'Web3 Student Lab',
+          grade: certificate.grade || undefined,
+        });
+
+        const verificationUrl = `${process.env.API_BASE_URL || 'http://localhost:8080'}/api/v1/certificates/${certificate.tokenId || tokenIdValue}/verify`;
+        const linkedInShareUrl = `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(course.title)}&organizationId=123456&certUrl=${encodeURIComponent(verificationUrl)}`;
+        const twitterShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`I just earned a certificate in ${course.title} on Web3 Student Lab!`)}&url=${encodeURIComponent(verificationUrl)}`;
+
+        await sendCertificateMintedEmail({
+          studentEmail: student.email,
+          studentName: `${student.firstName || ''} ${student.lastName || ''}`.trim() || 'Student',
+          courseTitle: course.title,
+          certificateId,
+          tokenId: certificate.tokenId || tokenIdValue,
+          verificationUrl,
+          linkedInShareUrl,
+          twitterShareUrl,
+          pdfBase64: pdfBuffer.toString('base64'),
+        });
+      } catch (emailError) {
+        logger.error(`Failed to send certificate email for ${certificateId}:`, emailError);
+      }
+
+      // Return certificate with metadata
+      return { ...certificate, metadata };
     } catch (error) {
-      logger.error(`Blockchain mint failed for ${certificateId}:`, error);
+      logger.error(`Certificate issuance failed for ${certificateId}:`, error);
       await prisma.certificate.update({
         where: { id: certificateId },
         data: {
           status: 'FAILED',
         },
       });
+      await storageService.releaseResource('certificate', certificateId);
       throw new Error(
-        `Failed to mint certificate on blockchain: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to mint certificate: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
-
-    // Return certificate with metadata
-    return { ...certificate, metadata };
   }
 
   /**
@@ -194,7 +316,7 @@ export class CertificateService {
       return {
         isValid: false,
         certificate: null,
-        status: 'invalid' as any,
+        status: CertificateStatus.INVALID,
         onChainData: null,
         message: 'Certificate not found',
       };
@@ -202,10 +324,43 @@ export class CertificateService {
 
     const walletAddress =
       certificate.student.walletAddress || this.extractWalletFromDid(certificate.student.did);
+
+    // Re-verify the content hash on every retrieval. If the stored
+    // metadata no longer matches the hash recorded at mint time, we
+    // must surface a tamper-detected result rather than silently
+    // returning the (possibly altered) data as valid.
+    const hashCheck = verifyCertificateContentHash(
+      {
+        id: certificate.id,
+        studentId: certificate.studentId,
+        courseId: certificate.courseId,
+        tokenId: certificate.tokenId,
+        grade: certificate.grade,
+        did: certificate.did,
+        issuedAt: certificate.issuedAt,
+      },
+      (certificate as any).contentHash
+    );
+
+    if (hashCheck.state === 'tampered') {
+      logger.error(`Certificate integrity check failed for ${certificateId}`, {
+        certificateId,
+        expectedHash: hashCheck.expected,
+        actualHash: hashCheck.actual,
+      });
+      return {
+        isValid: false,
+        certificate: null,
+        status: 'TAMPERED' as any,
+        onChainData: null,
+        message: 'Certificate integrity check failed: stored metadata does not match its content hash',
+      };
+    }
+
     const metadata = this.metadataGenerator.generate(
-      certificate,
-      certificate.course!,
-      certificate.student
+      certificate as any,
+      certificate.course as any,
+      certificate.student as any
     );
 
     const onChainData: VerificationResult['onChainData'] = {
@@ -218,17 +373,20 @@ export class CertificateService {
     };
 
     const result: VerificationResult = {
-      isValid: certificate.status === 'ACTIVE',
+      isValid: certificate.status === CertificateStatus.ACTIVE,
       certificate: metadata,
-      status: certificate.status as any,
+      status: this.toCertificateStatus(certificate.status),
       onChainData,
     };
 
-    if (certificate.status === 'REVOKED') {
+    if (certificate.status === CertificateStatus.REVOKED) {
       result.revocationInfo = {
         revokedAt: certificate.revokedAt!,
         reason: certificate.revocationReason!,
-        revokedBy: certificate.revokedBy!,
+        // NOTE: revokedBy (the actor's issuer DID) is intentionally
+        // redacted from this public-facing verification response —
+        // see VerificationService for the canonical public surface.
+        revokedBy: 'redacted',
       };
     }
 
@@ -262,7 +420,11 @@ export class CertificateService {
       },
     });
 
-    const certMap = new Map(certificates.map((c) => [c.tokenId, c]));
+    const certMap = new Map<string, typeof certificates[number]>(
+      certificates
+        .filter((c): c is typeof certificates[number] => typeof c.tokenId === 'string')
+        .map((c) => [c.tokenId, c] as const)
+    );
 
     const results: VerificationResult[] = [];
 
@@ -273,7 +435,7 @@ export class CertificateService {
         results.push({
           isValid: false,
           certificate: null,
-          status: 'invalid' as any,
+          status: CertificateStatus.INVALID,
           onChainData: null,
           message: 'Certificate not found',
         });
@@ -282,7 +444,7 @@ export class CertificateService {
 
       const walletAddress =
         cert.student.walletAddress || this.extractWalletFromDid(cert.student.did);
-      const metadata = this.metadataGenerator.generate(cert, cert.course!, cert.student);
+      const metadata = this.metadataGenerator.generate(cert as any, cert.course as any, cert.student as any);
 
       const onChainData: VerificationResult['onChainData'] = {
         tokenId: cert.tokenId || '',
@@ -294,9 +456,9 @@ export class CertificateService {
       };
 
       results.push({
-        isValid: cert.status === 'ACTIVE',
+        isValid: cert.status === CertificateStatus.ACTIVE,
         certificate: metadata,
-        status: cert.status as any,
+        status: this.toCertificateStatus(cert.status),
         onChainData,
       });
     }
@@ -387,24 +549,35 @@ export class CertificateService {
   /**
    * Gets certificates by status (for admin/issuer)
    */
-  async getCertificatesByStatus(status: string): Promise<Certificate[]> {
-    return await prisma.certificate.findMany({
-      where: { status },
-      include: {
-        student: {
-          select: {
-            id: true,
-            email: true,
-            walletAddress: true,
-            did: true,
-            firstName: true,
-            lastName: true,
+  async getCertificatesByStatus(
+    status: string,
+    limit = 50,
+    offset = 0
+  ): Promise<{ certificates: Certificate[]; total: number }> {
+    const [certificates, total] = await Promise.all([
+      prisma.certificate.findMany({
+        where: { status },
+        include: {
+          student: {
+            select: {
+              id: true,
+              email: true,
+              walletAddress: true,
+              did: true,
+              firstName: true,
+              lastName: true,
+            },
           },
+          course: true,
         },
-        course: true,
-      },
-      orderBy: { issuedAt: 'desc' },
-    });
+        orderBy: { issuedAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.certificate.count({ where: { status } }),
+    ]);
+
+    return { certificates, total };
   }
 
   /**
@@ -446,44 +619,8 @@ export class CertificateService {
    * Get analytics for certificates
    */
   async getAnalytics() {
-    const totalCertificates = await prisma.certificate.count();
-    const byStatusRaw = await prisma.certificate.groupBy({
-      by: ['status'],
-      _count: { status: true },
-    });
-
-    const byStatus = byStatusRaw.reduce(
-      (acc, item) => {
-        acc[item.status] = item._count.status;
-        return acc;
-      },
-      {} as Record<string, number>
-    );
-
-    const uniqueStudents = await prisma.certificate.groupBy({
-      by: ['studentId'],
-      _count: { studentId: true },
-    });
-
-    const uniqueCourses = await prisma.certificate.groupBy({
-      by: ['courseId'],
-      _count: { courseId: true },
-    });
-
-    const revokedCount = byStatus['REVOKED'] || 0;
-    const revocationRate = totalCertificates > 0 ? revokedCount / totalCertificates : 0;
-
-    return {
-      totalCertificates,
-      byStatus,
-      totalVerifications: 0,
-      uniqueStudents: uniqueStudents.length,
-      uniqueCourses: uniqueCourses.length,
-      revocationRate,
-      issuedThisMonth: 0,
-      issuedThisWeek: 0,
-      issuedToday: 0,
-    };
+    const { certificateAnalytics } = await import('./CertificateAnalytics.js');
+    return certificateAnalytics.getAnalytics();
   }
 
   /**
@@ -521,6 +658,16 @@ export class CertificateService {
   }
 
   /**
+   * Narrows a persisted status string to the CertificateStatus union.
+   * Unknown values (legacy rows, manual edits) resolve to INVALID rather
+   * than being cast blindly.
+   */
+  private toCertificateStatus(status: string): CertificateStatus {
+    const known = Object.values(CertificateStatus) as string[];
+    return known.includes(status) ? (status as CertificateStatus) : CertificateStatus.INVALID;
+  }
+
+  /**
    * Extracts wallet address from DID string
    */
   private extractWalletFromDid(did?: string | null): string {
@@ -531,6 +678,112 @@ export class CertificateService {
       return parts[2] || '';
     }
     return 'GUNKNOWNWALLETADDRESS';
+  }
+
+  /**
+   * Anchors a Merkle cohort root for batch certificate verification.
+   */
+  async anchorMerkleCohort(cohortId: string, rootHash: string): Promise<{ cohortId: string; rootHash: string; anchoredAt: string }> {
+    const anchoredAt = new Date().toISOString();
+    await prisma.merkleCohortRoot.upsert({
+      where: { cohortId },
+      update: { rootHash, anchoredAt, updatedAt: new Date() },
+      create: { cohortId, rootHash, anchoredAt },
+    });
+    return { cohortId, rootHash, anchoredAt };
+  }
+
+  /**
+   * Verifies a Merkle inclusion proof against an anchored cohort root.
+   */
+  async verifyMerkleInclusion(cohortId: string, leafHash: string, proof: string[]): Promise<{ valid: boolean; cohortId: string }> {
+    const cohort = await prisma.merkleCohortRoot.findUnique({ where: { cohortId } });
+    if (!cohort) {
+      throw new Error('Cohort not found');
+    }
+
+    const { verifyMerkleProof } = await import('./../utils/merkle.ts');
+    const proofSteps = proof.map((hash, index) => ({ hash, position: index % 2 === 0 ? 'left' : 'right' as 'left' | 'right' }));
+    const valid = verifyMerkleProof(leafHash, proofSteps, cohort.rootHash);
+    return { valid, cohortId };
+  }
+
+  /**
+   * Exports an OpenBadges v3.0 JSON-LD credential package for a certificate.
+   */
+  async exportOpenBadges(certificateId: string): Promise<any> {
+    const certificate = await prisma.certificate.findUnique({
+      where: { id: certificateId },
+      include: { student: true, course: true },
+    });
+
+    if (!certificate) {
+      return null;
+    }
+
+    const studentName = `${certificate.student?.firstName || ''} ${certificate.student?.lastName || ''}`.trim() || 'Student';
+    const completionDate = certificate.issuedAt.toISOString().split('T')[0] || new Date().toISOString().split('T')[0];
+    const issuedOn = certificate.issuedAt.toISOString();
+
+    const badgeClass = {
+      '@context': 'https://w3id.org/openbadges/v3.0',
+      type: 'Achievement',
+      id: `${process.env.API_BASE_URL || 'http://localhost:8080'}/api/v1/certificates/${certificate.id}/openbadges/badge-class`,
+      name: certificate.course?.title || 'Course Completion',
+      description: `Awarded to ${studentName} for completing ${certificate.course?.title || 'a course'}.`,
+      issuer: {
+        id: `${process.env.API_BASE_URL || 'http://localhost:8080'}/api/v1/certificates/openbadges/issuer`,
+        type: 'Profile',
+        name: process.env.ISSUER_NAME || 'Web3 Student Lab',
+        url: process.env.API_BASE_URL || 'http://localhost:8080',
+        email: 'issuer@web3studentlab.example',
+      },
+      criteria: {
+        type: 'Criteria',
+        name: 'Course Completion Criteria',
+        description: `Complete all required modules and assessments for ${certificate.course?.title || 'the course'}.`,
+      },
+      image: `${process.env.API_BASE_URL || 'http://localhost:8080'}/api/v1/certificates/${certificate.id}/image`,
+    };
+
+    const assertion = {
+      '@context': 'https://w3id.org/openbadges/v3.0',
+      type: 'Assertion',
+      id: `${process.env.API_BASE_URL || 'http://localhost:8080'}/api/v1/certificates/${certificate.id}/openbadges/assertion`,
+      achievement: badgeClass.id,
+      recipient: {
+        type: 'ID',
+        identity: certificate.student?.walletAddress || certificate.student?.did || certificate.studentId,
+        hashed: false,
+      },
+      issuedOn,
+      expires: certificate.status === CertificateStatus.EXPIRED ? new Date(certificate.issuedAt.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString() : undefined,
+      verification: {
+        type: 'HostedBadge',
+        url: badgeClass.id,
+      },
+    };
+
+    const profile = {
+      '@context': 'https://w3id.org/openbadges/v3.0',
+      type: 'Profile',
+      id: badgeClass.issuer.id,
+      name: badgeClass.issuer.name,
+      url: badgeClass.issuer.url,
+      email: badgeClass.issuer.email,
+      image: `${process.env.API_BASE_URL || 'http://localhost:8080'}/api/v1/certificates/openbadges/issuer-logo`,
+    };
+
+    return {
+      profile,
+      badgeClass,
+      assertion,
+      _links: {
+        badgeClass: { href: badgeClass.id },
+        issuer: { href: badgeClass.issuer.id },
+        verification: { href: assertion.verification.url },
+      },
+    };
   }
 }
 

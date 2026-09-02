@@ -69,6 +69,19 @@ npm run test:coverage
 Coverage reports will be available in the `coverage/` directory. Open
 `coverage/lcov-report/index.html` in your browser to view the HTML report.
 
+## DID Validation Notes
+
+- Supported student identity formats are `did:soroban:<network>:<identifier>` and
+  `did:stellar:<stellarPublicKey>`.
+- Supported Soroban DID networks are `testnet`, `mainnet`, and `futurenet`. The active API
+  boundary expects Soroban DIDs to match `STELLAR_NETWORK` and normalizes aliases such as
+  `public` to `mainnet`.
+- Linked student DIDs are normalized before persistence, and enrollment creation now rejects
+  students whose linked DID is malformed, on the wrong network, or incompatible with the linked
+  Stellar wallet address.
+- No database migration is required for this change. Existing malformed rows should be corrected
+  before re-running enrollment flows that depend on identity validation.
+
 ### Test Structure
 
 Tests are located in the `tests/` directory:
@@ -319,6 +332,11 @@ The database includes the following models:
 - **Course**: Course details (id, title, description, instructor, credits)
 - **Certificate**: Certificates issued to students (id, studentId, courseId, certificateHash,
   status)
+- **CertificateVerificationEvent**: Privacy-minimal verification analytics events. Each event stores
+  the workspace, certificate id when found, public token id, and timestamp. It intentionally does not
+  store requester IP addresses, user agents, names, emails, wallet addresses, or other verifier
+  personal data. These events are retained for aggregate analytics and can be pruned by timestamp if
+  a deployment adopts a shorter retention policy.
 - **Enrollment**: Student course enrollments (id, studentId, courseId, status)
 
 ## Troubleshooting

@@ -1,0 +1,22 @@
+// @ts-ignore
+import * as Sentry from '@sentry/nextjs';
+
+const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN;
+
+Sentry.init({
+  dsn: SENTRY_DSN,
+  environment: process.env.NODE_ENV || 'development',
+  release: process.env.NEXT_PUBLIC_SENTRY_RELEASE || 'web3-student-lab-frontend@1.0.0',
+  tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+  
+  // Enable distributed tracing headers propagation from frontend to backend API services
+  tracePropagationTargets: [
+    'localhost',
+    /^\/api/,
+    /^https:\/\/.*\/api/,
+  ],
+
+  // Capture unhandled errors and console errors in client session
+  attachStacktrace: true,
+  debug: false,
+});

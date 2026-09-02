@@ -17,7 +17,7 @@ export interface BlockHeader {
 export class BlockHeaderListener extends EventEmitter {
   private isListening = false;
   private lastBlockHeight = 0;
-  private pollingInterval: NodeJS.Timer | null = null;
+  private pollingInterval: NodeJS.Timeout | null = null;
   private readonly POLL_INTERVAL = parseInt(process.env.BLOCK_POLL_INTERVAL || '10000', 10); // 10 seconds default
 
   /**
@@ -51,7 +51,7 @@ export class BlockHeaderListener extends EventEmitter {
    */
   stop(): void {
     if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
+      clearInterval(this.pollingInterval as any);
       this.pollingInterval = null;
     }
     this.isListening = false;

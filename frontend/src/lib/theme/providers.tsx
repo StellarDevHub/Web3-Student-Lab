@@ -22,6 +22,7 @@ export function Providers({ children }: { children: ReactNode }) {
       enableSystem
       disableTransitionOnChange={false}
       storageKey="web3-lab-theme"
+      themes={['light', 'dark', 'oled']}
     >
       {children}
     </ThemeProvider>

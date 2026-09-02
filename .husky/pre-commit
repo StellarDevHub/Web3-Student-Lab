@@ -1,0 +1,11 @@
+#!/bin/sh
+echo "🔍 Running pre-commit hooks (ESLint & Prettier auto-formatting)..."
+
+npx lint-staged || {
+  echo ""
+  echo "❌ Pre-commit lint/format check failed!"
+  echo "💡 Emergency hotfix bypass: git commit --no-verify"
+  exit 1
+}
+
+echo "✅ Pre-commit checks passed successfully."

@@ -1,20 +1,28 @@
 import type { NextConfig } from 'next';
 import path from 'path';
 
+const withBundleAnalyzer = process.env.ANALYZE === 'true'
+  ? require('@next/bundle-analyzer')({ enabled: true })
+  : (config: NextConfig) => config;
+
 const nextConfig: NextConfig = {
-  outputFileTracingRoot: path.resolve(__dirname, '.'),
+  outputFileTracingRoot: path.join(__dirname),
   reactCompiler: true,
-  // Disable Turbopack and use Webpack (required for custom webpack config)
-  // turbopack: {}, // Uncomment this line if you want to use Turbopack instead
+  transpilePackages: ['recharts'],
 
-  // Bundle optimization and tree-shaking configuration
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
-    // Tree-shaking for Stellar SDK
-    config.resolve.alias = {
-      ...config.resolve.alias,
-    };
+    config.resolve.modules = [
+      path.join(__dirname, 'node_modules'),
+      ...(Array.isArray(config.resolve.modules) ? config.resolve.modules : ['node_modules']),
+    ];
 
-    // Split chunks for better caching
+    if (config.output) {
+      config.output.environment = {
+        ...config.output.environment,
+        asyncFunction: true,
+      };
+    }
+
     if (!config.optimization.splitChunks) {
       config.optimization.splitChunks = {};
     }
@@ -51,20 +59,17 @@ const nextConfig: NextConfig = {
 
     return config;
   },
-  // Enable compression
   compress: true,
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Optimize images
   images: {
     formats: ['image/webp', 'image/avif'],
-    minimumCacheTTL: 60 * 60 * 24 * 30, // 30 days
+    minimumCacheTTL: 60 * 60 * 24 * 30,
   },
-  // Experimental features for better performance
   experimental: {
     optimizePackageImports: ['@stellar/stellar-sdk', 'd3', 'lucide-react'],
   },
 };
 
-export default nextConfig;
+export default withBundleAnalyzer(nextConfig);

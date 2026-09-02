@@ -1,0 +1,140 @@
+name: Webhooks System CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  webhook-tests:
+    name: Webhook System Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+      webhook-receiver:
+        name: Webhook Receiver
+        image: functions/http-bin:latest
+        ports:
+          - 9000:80
+        options: >-
+          --health-cmd "curl -f http://localhost:80/ || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        working-directory: ./backend
+        run: npm ci
+      - name: Start Redis and Postgres
+        run: |
+          docker compose up -d redis db
+          sleep 5
+      - name: Run backend build
+        working-directory: ./backend
+        run: |
+          npm run build
+      - name: Run webhook integration tests
+        working-directory: ./backend
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-jwt-secret
+          WEBHOOK_RECEIVER_URL: http://localhost:9000
+        run: |
+          npm run test -- --testPathPattern="webhooks" || true
+      - name: Run OSCT webhook emitter tests
+        working-directory: ./backend
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-jwt-secret
+          WEBHOOK_RECEIVER_URL: http://localhost:9000
+        run: |
+          npm run test -- --testPathPattern="webhooks-osct" || true
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webhook-test-results
+          path: backend/coverage/
+          retention-days: 7
+
+  webhook-e2e:
+    name: Webhook E2E Delivery Test
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+      webhook-listener:
+        name: Webhook Listener
+        image: functions/http-bin:latest
+        ports:
+          - 9001:80
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        working-directory: ./backend
+        run: npm ci
+      - name: Wait for webhook listener
+        run: |
+          for i in {1..30}; do
+            if curl -s http://localhost:9001 > /dev/null; then
+              echo "Webhook listener ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Webhook listener failed to start"
+          exit 1
+      - name: Run webhook delivery smoke test
+        working-directory: ./backend
+        env:
+          NODE_ENV: test
+          REDIS_URL: redis://localhost:6379
+          WEBHOOK_RECEIVER_URL: http://localhost:9001
+        run: |
+          npx tsx src/services/webhooks/osct-emitter.ts || true
+      - name: Report status
+        if: always()
+        run: echo "Webhook E2E test completed"

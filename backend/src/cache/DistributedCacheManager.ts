@@ -1,4 +1,5 @@
 import logger from '../utils/logger.js';
+import { redisConnection } from '../utils/redis.js';
 import cacheService from './CacheService.js';
 import redisClient from './RedisClient.js';
 
@@ -134,18 +135,20 @@ export class DistributedCacheManager {
       let memoryUsage = 'N/A';
 
       lines.forEach((line) => {
-        if (line.includes('keyspace_hits')) hits = parseInt(line.split(':')[1]);
-        if (line.includes('keyspace_misses')) misses = parseInt(line.split(':')[1]);
-        if (line.includes('evicted_keys')) evictions = parseInt(line.split(':')[1]);
+        if (line.includes('keyspace_hits')) hits = parseInt(line.split(':')[1] ?? '0', 10);
+        if (line.includes('keyspace_misses')) misses = parseInt(line.split(':')[1] ?? '0', 10);
+        if (line.includes('evicted_keys')) evictions = parseInt(line.split(':')[1] ?? '0', 10);
       });
 
       memoryLines.forEach((line) => {
-        if (line.includes('used_memory_human')) memoryUsage = line.split(':')[1];
+        if (line.includes('used_memory_human')) memoryUsage = line.split(':')[1] ?? 'N/A';
+
       });
 
       const keyspaceInfo = await client.info('keyspace');
       const dbMatch = keyspaceInfo.match(/keys=(\d+)/);
-      if (dbMatch) keyspace = parseInt(dbMatch[1]);
+      if (dbMatch) keyspace = parseInt(dbMatch[1] ?? '0', 10);
+
 
       const hitRate = hits + misses > 0 ? (hits / (hits + misses)) * 100 : 0;
 

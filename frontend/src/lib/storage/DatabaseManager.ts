@@ -14,10 +14,17 @@ export interface StoredMetadataRecord {
   updatedAt: number;
 }
 
+export interface RoadmapNodeRecord {
+  id: number;
+  status: string;
+  updatedAt: number;
+}
+
 const DB_NAME = 'web3-student-lab';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Incremented version for new store
 const FILES_STORE = 'files';
 const METADATA_STORE = 'metadata';
+const ROADMAP_STORE = 'roadmap_nodes';
 
 export class DatabaseManager {
   private dbPromise: Promise<IDBDatabase> | null = null;
@@ -46,6 +53,11 @@ export class DatabaseManager {
         }
         if (!db.objectStoreNames.contains(METADATA_STORE)) {
           db.createObjectStore(METADATA_STORE, { keyPath: 'key' });
+        }
+        if (!db.objectStoreNames.contains(ROADMAP_STORE)) {
+          const roadmapStore = db.createObjectStore(ROADMAP_STORE, { keyPath: 'id' });
+          roadmapStore.createIndex('status', 'status', { unique: false });
+          roadmapStore.createIndex('updatedAt', 'updatedAt', { unique: false });
         }
       };
 
@@ -107,5 +119,34 @@ export class DatabaseManager {
       request.onerror = () => reject(request.error ?? new Error('Failed to read metadata'));
     });
     return record ?? null;
+  }
+
+  async upsertRoadmapNode(record: RoadmapNodeRecord) {
+    const db = await this.openDb();
+    const tx = db.transaction(ROADMAP_STORE, 'readwrite');
+    tx.objectStore(ROADMAP_STORE).put(record);
+    await this.awaitTransaction(tx);
+  }
+
+  async getRoadmapNode(id: number): Promise<RoadmapNodeRecord | null> {
+    const db = await this.openDb();
+    const tx = db.transaction(ROADMAP_STORE, 'readonly');
+    const record = await new Promise<RoadmapNodeRecord | undefined>((resolve, reject) => {
+      const request = tx.objectStore(ROADMAP_STORE).get(id);
+      request.onsuccess = () => resolve(request.result as RoadmapNodeRecord | undefined);
+      request.onerror = () => reject(request.error ?? new Error('Failed to read roadmap node'));
+    });
+    return record ?? null;
+  }
+
+  async listRoadmapNodes(): Promise<RoadmapNodeRecord[]> {
+    const db = await this.openDb();
+    const tx = db.transaction(ROADMAP_STORE, 'readonly');
+    const store = tx.objectStore(ROADMAP_STORE);
+    return new Promise((resolve, reject) => {
+      const request = store.getAll();
+      request.onsuccess = () => resolve((request.result as RoadmapNodeRecord[]) ?? []);
+      request.onerror = () => reject(request.error ?? new Error('Failed to list roadmap nodes'));
+    });
   }
 }

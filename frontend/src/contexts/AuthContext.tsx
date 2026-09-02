@@ -32,7 +32,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const PROFILE_STATUS_COOLDOWN_MS = 15_000;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { publicKey } = useWallet();
+  const { publicKey, disconnect } = useWallet();
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -70,8 +70,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        setUser((currentUser) => currentUser ?? result.user);
-        markWalletProfileComplete(publicKey, result.user.email);
+        const profileUser = result.user;
+        setUser((currentUser) => {
+          const resolved = currentUser ?? profileUser;
+          if (resolved) {
+            try {
+              localStorage.setItem('user', JSON.stringify(resolved));
+            } catch {}
+          }
+          return resolved;
+        });
+        markWalletProfileComplete(publicKey, profileUser.email);
         setError((currentError) =>
           currentError === 'Profile status check is temporarily rate limited. Please wait a moment.'
             ? null
@@ -100,65 +109,101 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Initialize auth state from localStorage on mount
   useEffect(() => {
+    let isMounted = true;
     const initAuth = async () => {
       const storedToken = localStorage.getItem('token');
       const storedUser = localStorage.getItem('user');
 
-      if (storedToken && storedUser) {
+      if (storedToken || storedUser) {
         try {
-          setToken(storedToken);
-          setUser(JSON.parse(storedUser));
-
-          // Verify token is still valid
-          const currentUser = await authAPI.getCurrentUser();
-          if (!currentUser) {
-            // Token invalid, clear storage
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            setUser(null);
-            setToken(null);
+          if (isMounted) {
+            if (storedToken) setToken(storedToken);
+            if (storedUser) setUser(JSON.parse(storedUser));
           }
-        } catch (err) {
-          console.error('Failed to restore session:', err);
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
+        } catch (e) {
+          console.error('Failed to parse stored session user:', e);
+        }
+
+        if (storedToken) {
+          try {
+            const currentUser = await authAPI.getCurrentUser();
+            if (currentUser && isMounted) {
+              setUser(currentUser);
+              localStorage.setItem('user', JSON.stringify(currentUser));
+            }
+          } catch (err) {
+            if (axios.isAxiosError(err) && err.response?.status === 401) {
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+              if (isMounted) {
+                setUser(null);
+                setToken(null);
+              }
+            }
+          }
         }
       }
 
-      if (!storedUser && publicKey) {
-        await refreshProfileStatus();
+      if (isMounted) {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     initAuth();
-  }, [publicKey, refreshProfileStatus]);
 
-  const login = async (email: string, password: string) => {
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Handle wallet connection checks separately
+  useEffect(() => {
+    if (user && publicKey) {
+      markWalletProfileComplete(publicKey, user.email);
+    }
+    const storedUser = localStorage.getItem('user');
+    if (!storedUser && publicKey) {
+      refreshProfileStatus();
+    }
+  }, [user, publicKey, refreshProfileStatus]);
+
+  const login = async (email: string, password: string, turnstileToken?: string) => {
     try {
       setError(null);
-      const response = await authAPI.login({ email, password });
+      const response = await authAPI.login({ email, password, turnstileToken });
 
-      setUser(response.user);
-      setToken(response.token);
+      const userObj = response?.user || (response as any)?.data?.user;
+      const tokenObj = response?.token || response?.accessToken || (response as any)?.data?.token || (response as any)?.data?.accessToken;
 
-      localStorage.setItem('token', response.token);
-      localStorage.setItem('user', JSON.stringify(response.user));
-      if (publicKey) {
-        markWalletProfileComplete(publicKey, response.user.email);
+      if (userObj && tokenObj) {
+        setUser(userObj);
+        setToken(tokenObj);
+        localStorage.setItem('token', tokenObj);
+        localStorage.setItem('user', JSON.stringify(userObj));
+        if (publicKey && userObj.email) {
+          markWalletProfileComplete(publicKey, userObj.email);
+        }
+        return response;
       }
+
+      const serverError = (response as any)?.error || (response as any)?.message;
+      if (serverError) {
+        throw new Error(serverError);
+      }
+
+      throw new Error('Login failed: Invalid response from server');
     } catch (err: unknown) {
       const message = axios.isAxiosError(err)
-        ? err.response?.data?.error || err.message || 'Login failed'
+        ? err.response?.data?.error || err.response?.data?.message || err.message || 'Login failed'
         : err instanceof Error
           ? err.message
           : 'Login failed';
       setError(message);
-      throw err;
+      throw new Error(message);
     }
   };
 
-  const register = async (email: string, password: string, firstName: string, lastName: string) => {
+  const register = async (email: string, password: string, firstName: string, lastName: string, turnstileToken?: string) => {
     try {
       setError(null);
       const response = await authAPI.register({
@@ -167,24 +212,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         firstName,
         lastName,
         walletAddress: publicKey || undefined,
+        turnstileToken,
       });
 
-      setUser(response.user);
-      setToken(response.token);
+      const userObj = response?.user || (response as any)?.data?.user;
+      const tokenObj = response?.token || response?.accessToken || (response as any)?.data?.token || (response as any)?.data?.accessToken;
 
-      localStorage.setItem('token', response.token);
-      localStorage.setItem('user', JSON.stringify(response.user));
-      if (publicKey) {
-        markWalletProfileComplete(publicKey, response.user.email);
+      if (userObj && tokenObj) {
+        setUser(userObj);
+        setToken(tokenObj);
+        localStorage.setItem('token', tokenObj);
+        localStorage.setItem('user', JSON.stringify(userObj));
+        if (publicKey && userObj.email) {
+          markWalletProfileComplete(publicKey, userObj.email);
+        }
+        return response;
       }
+
+      const serverError = (response as any)?.error || (response as any)?.message;
+      if (serverError) {
+        throw new Error(serverError);
+      }
+
+      throw new Error('Registration failed: Invalid response from server');
     } catch (err: unknown) {
-      const message = axios.isAxiosError(err)
-        ? err.response?.data?.error || err.message || 'Registration failed'
-        : err instanceof Error
-          ? err.message
-          : 'Registration failed';
+      const detailsMsg = axios.isAxiosError(err) && Array.isArray(err.response?.data?.details)
+        ? err.response.data.details.map((d: any) => d.message).join(', ')
+        : null;
+      const message = detailsMsg
+        || (axios.isAxiosError(err) ? (err.response?.data?.error || err.response?.data?.message || err.message) : null)
+        || (err instanceof Error ? err.message : null)
+        || 'Registration failed';
       setError(message);
-      throw err;
+      throw new Error(message);
     }
   };
 
@@ -193,6 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    disconnect();
     window.location.href = '/auth/login';
   };
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
+import apiClient from '@/lib/api-client';
 interface CircuitBreakerStatus {
   state: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
   failures: number;
@@ -16,10 +16,8 @@ export default function ResiliencyBanner() {
   useEffect(() => {
     const checkHealth = async () => {
       try {
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/v1/health/circuit-breakers`
-        );
-        const result = await response.json();
+        const response = await apiClient.get('/health/circuit-breakers');
+        const result = response.data;
 
         if (result.status === 'success') {
           setBreakers(result.data);

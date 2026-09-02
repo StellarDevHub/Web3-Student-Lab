@@ -1,7 +1,2 @@
-'use client';
-
-import { AirdropDashboard } from '@/components/airdrop/AirdropDashboard';
-
-export default function AirdropPage() {
-  return <AirdropDashboard />;
-}
+export const dynamic = 'force-dynamic';
+export { default } from './AirdropClient';

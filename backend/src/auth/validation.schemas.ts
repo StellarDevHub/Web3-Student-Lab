@@ -28,8 +28,9 @@ export const registerSchema = z.object({
     ),
   walletAddress: z
     .string()
-    .regex(/^G[A-Z2-7]{55}$/, 'Invalid Stellar wallet address format')
-    .optional(),
+    .regex(/^[GCMa-zA-Z0-9]{55,56}$/, 'Invalid Stellar wallet address format')
+    .optional()
+    .or(z.literal('')),
 });
 
 /**
@@ -49,7 +50,7 @@ export const web3NonceSchema = z.object({
   walletAddress: z
     .string()
     .min(1, 'Wallet address is required')
-    .regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum wallet address format'),
+    .regex(/^[GCMa-zA-Z0-9]{55,56}$/, 'Invalid Stellar wallet address format'),
 });
 
 /**
@@ -60,12 +61,28 @@ export const web3VerifySchema = z.object({
   walletAddress: z
     .string()
     .min(1, 'Wallet address is required')
-    .regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum wallet address format'),
+    .regex(/^G[A-Z2-7]{55}$/, 'Invalid Stellar wallet address format'),
   signature: z
     .string()
-    .min(1, 'Signature is required')
-    .regex(/^0x[a-fA-F0-9]{130,132}$/, 'Invalid signature format'),
-  nonce: z.string().min(1, 'Nonce is required').min(32, 'Invalid nonce length'),
+    .min(1, 'Signature is required'),
+  nonce: z.string().min(1, 'Nonce is required'),
+});
+
+/**
+ * GitHub OAuth Callback Schema
+ * Validates the request body for GitHub OAuth callback
+ */
+export const githubOAuthCallbackSchema = z.object({
+  code: z.string().min(1, 'Authorization code is required'),
+  state: z.string().min(1, 'State parameter is required'),
+});
+
+/**
+ * GitHub OAuth Link Schema
+ * Validates the request body for linking a GitHub account
+ */
+export const githubOAuthLinkSchema = z.object({
+  code: z.string().min(1, 'Authorization code is required'),
 });
 
 /**
@@ -75,3 +92,5 @@ export type RegisterRequest = z.infer<typeof registerSchema>;
 export type LoginRequest = z.infer<typeof loginSchema>;
 export type Web3NonceRequest = z.infer<typeof web3NonceSchema>;
 export type Web3VerifyRequest = z.infer<typeof web3VerifySchema>;
+export type GitHubOAuthCallbackRequest = z.infer<typeof githubOAuthCallbackSchema>;
+export type GitHubOAuthLinkRequest = z.infer<typeof githubOAuthLinkSchema>;

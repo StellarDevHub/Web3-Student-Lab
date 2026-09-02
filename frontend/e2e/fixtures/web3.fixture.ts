@@ -1,4 +1,4 @@
-import { test as base, expect, type BrowserContext } from '@playwright/test';
+import { test as base, expect, type BrowserContext, type Page } from '@playwright/test';
 
 const STELLAR_TESTNET_PASSPHRASE = 'Test SDF Network ; September 2015';
 const MOCK_STELLAR_ADDRESS = 'GCMOCKWALLETADDRESS000000000000000000000000000000000000000000000';
@@ -22,8 +22,8 @@ export const test = base.extend<Web3Mocks>({
   signedTransactionXdr: async ({}, use) => {
     await use('AAAAAgAAAAA-web3-student-lab-signed-xdr');
   },
-  installWalletMocks: async ({ context, stellarAddress, ethereumAddress, signedTransactionXdr }, use) => {
-    await installWalletMocks(context, {
+  installWalletMocks: async ({ page, context, stellarAddress, ethereumAddress, signedTransactionXdr }, use) => {
+    await installWalletMocks(context, page, {
       stellarAddress,
       ethereumAddress,
       signedTransactionXdr,
@@ -36,87 +36,115 @@ export const test = base.extend<Web3Mocks>({
   },
 });
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem('render_warning_seen', 'true');
+    // Only clear localStorage on the first navigation of each fresh page.
+    // Playwright reuses the same browser context across tests in a worker,
+    // so localStorage otherwise leaks between tests. But a naive clear here
+    // runs on *every* navigation (including in-test reloads), which silently
+    // wipes state that login/logout journeys rely on. A sessionStorage flag
+    // (fresh per page) scopes the clear to once per test.
+    if (!window.sessionStorage.getItem('local_storage_cleared')) {
+      window.sessionStorage.setItem('local_storage_cleared', 'true');
+      window.localStorage.clear();
+    }
+  });
+});
+
 export { expect };
 
 async function installWalletMocks(
   context: BrowserContext,
+  page: Page,
   options: {
     stellarAddress: string;
     ethereumAddress: string;
     signedTransactionXdr: string;
   }
 ) {
-  await context.addInitScript(
-    ({ stellarAddress, ethereumAddress, signedTransactionXdr, networkPassphrase }) => {
-      const freighterApi = {
-        isConnected: async () => ({ isConnected: true }),
-        requestAccess: async () => ({ address: stellarAddress }),
-        getAddress: async () => ({ address: stellarAddress }),
-        getNetwork: async () => ({ network: 'TESTNET', networkPassphrase }),
-        getNetworkDetails: async () => ({
-          network: 'TESTNET',
-          networkUrl: 'https://horizon-testnet.stellar.org',
-          networkPassphrase,
-          sorobanRpcUrl: 'https://soroban-testnet.stellar.org',
-        }),
-        signTransaction: async (xdr: string) => ({
-          signedTxXdr: `${signedTransactionXdr}:${xdr.length}`,
-          signerAddress: stellarAddress,
-        }),
-      };
+  const script = ({ stellarAddress, ethereumAddress, signedTransactionXdr, networkPassphrase }: {
+    stellarAddress: string;
+    ethereumAddress: string;
+    signedTransactionXdr: string;
+    networkPassphrase: string;
+  }) => {
+    const freighterApi = {
+      isConnected: async () => ({ isConnected: true }),
+      requestAccess: async () => ({ address: stellarAddress }),
+      getAddress: async () => ({ address: stellarAddress }),
+      getNetwork: async () => ({ network: 'TESTNET', networkPassphrase }),
+      getNetworkDetails: async () => ({
+        network: 'TESTNET',
+        networkUrl: 'https://horizon-testnet.stellar.org',
+        networkPassphrase,
+        sorobanRpcUrl: 'https://soroban-testnet.stellar.org',
+      }),
+      signTransaction: async (xdr: string) => ({
+        signedTxXdr: `${signedTransactionXdr}:${xdr.length}`,
+        signerAddress: stellarAddress,
+      }),
+    };
 
-      Object.defineProperty(window, 'freighterApi', {
-        configurable: true,
-        value: freighterApi,
-      });
-      Object.defineProperty(window, 'freighter', {
-        configurable: true,
-        value: freighterApi,
-      });
-      Object.defineProperty(window, 'stellar', {
-        configurable: true,
-        value: { freighter: freighterApi },
-      });
+    Object.defineProperty(window, 'freighterApi', {
+      configurable: true,
+      value: freighterApi,
+    });
+    Object.defineProperty(window, 'freighter', {
+      configurable: true,
+      value: freighterApi,
+    });
+    Object.defineProperty(window, 'stellar', {
+      configurable: true,
+      value: { freighter: freighterApi },
+    });
 
-      Object.defineProperty(window, 'ethereum', {
-        configurable: true,
-        value: {
-          isMetaMask: true,
-          selectedAddress: ethereumAddress,
-          request: async ({ method }: { method: string; params?: unknown[] }) => {
-            if (method === 'eth_requestAccounts' || method === 'eth_accounts') {
-              return [ethereumAddress];
-            }
-            if (method === 'personal_sign') {
-              return '0xmocked_personal_signature';
-            }
-            if (method === 'eth_chainId') {
-              return '0xaa36a7';
-            }
-            return null;
-          },
-          on: () => undefined,
-          removeListener: () => undefined,
+    Object.defineProperty(window, 'ethereum', {
+      configurable: true,
+      value: {
+        isMetaMask: true,
+        selectedAddress: ethereumAddress,
+        request: async ({ method }: { method: string; params?: unknown[] }) => {
+          if (method === 'eth_requestAccounts' || method === 'eth_accounts') {
+            return [ethereumAddress];
+          }
+          if (method === 'personal_sign') {
+            return '0xmocked_personal_signature';
+          }
+          if (method === 'eth_chainId') {
+            return '0xaa36a7';
+          }
+          return null;
         },
-      });
+        on: () => undefined,
+        removeListener: () => undefined,
+      },
+    });
 
-      Object.defineProperty(window, 'albedo', {
-        configurable: true,
-        value: {
-          publicKey: async () => ({ pubkey: stellarAddress }),
-          tx: async ({ xdr }: { xdr: string; network: string }) => ({
-            signed_envelope_xdr: `${signedTransactionXdr}:albedo:${xdr.length}`,
-          }),
-        },
-      });
-    },
-    {
-      stellarAddress: options.stellarAddress,
-      ethereumAddress: options.ethereumAddress,
-      signedTransactionXdr: options.signedTransactionXdr,
-      networkPassphrase: STELLAR_TESTNET_PASSPHRASE,
-    }
-  );
+    Object.defineProperty(window, 'albedo', {
+      configurable: true,
+      value: {
+        publicKey: async () => ({ pubkey: stellarAddress }),
+        tx: async ({ xdr }: { xdr: string; network: string }) => ({
+          signed_envelope_xdr: `${signedTransactionXdr}:albedo:${xdr.length}`,
+        }),
+      },
+    });
+  };
+
+  await context.addInitScript(script, {
+    stellarAddress: options.stellarAddress,
+    ethereumAddress: options.ethereumAddress,
+    signedTransactionXdr: options.signedTransactionXdr,
+    networkPassphrase: STELLAR_TESTNET_PASSPHRASE,
+  });
+
+  await page.addInitScript(script, {
+    stellarAddress: options.stellarAddress,
+    ethereumAddress: options.ethereumAddress,
+    signedTransactionXdr: options.signedTransactionXdr,
+    networkPassphrase: STELLAR_TESTNET_PASSPHRASE,
+  });
 }
 
 async function installWebSocketMock(context: BrowserContext) {

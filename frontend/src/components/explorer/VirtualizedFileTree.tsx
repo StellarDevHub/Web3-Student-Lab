@@ -42,6 +42,22 @@ function flattenTree(nodes: FileTreeNode[], manager: FilePresenceManager, depth 
   return flat;
 }
 
+function getFolders(nodes: FileTreeNode[]): { name: string; path: string }[] {
+  const folders: { name: string; path: string }[] = [];
+  const traverse = (items: FileTreeNode[]) => {
+    items.forEach((item) => {
+      if (item.type === 'folder') {
+        folders.push({ name: item.name, path: item.path });
+        if (item.children) {
+          traverse(item.children);
+        }
+      }
+    });
+  };
+  traverse(nodes);
+  return folders;
+}
+
 interface FileTreeRowCustomProps {
   flatNodes: FlatNode[];
   activeFilePath?: string;
@@ -49,6 +65,7 @@ interface FileTreeRowCustomProps {
   onSelectFile: (filePath: string) => void;
   onMoveFile?: (sourcePath: string, targetFolderPath: string) => void;
   onToggleFolder: (path: string) => void;
+  folders: { name: string; path: string }[];
 }
 
 interface FileTreeRowProps extends FileTreeRowCustomProps {
@@ -65,6 +82,7 @@ function FileTreeRow({
   onSelectFile,
   onMoveFile,
   onToggleFolder,
+  folders,
 }: FileTreeRowProps) {
   const item = flatNodes[index];
   if (!item) return null;
@@ -101,14 +119,14 @@ function FileTreeRow({
       <div style={{ marginLeft: depth * INDENT_PX }} className="flex w-full items-center gap-2">
         {node.type === 'folder' ? (
           <button
-            className="font-semibold tracking-wide text-zinc-200 uppercase"
+            className="font-semibold tracking-wide text-zinc-200 uppercase min-h-[44px] md:min-h-0 flex items-center"
             onClick={() => onToggleFolder(node.path)}
           >
             {filePresenceManager.isFolderExpanded(node.path) ? '▾' : '▸'} {node.name}
           </button>
         ) : (
           <button
-            className="flex items-center text-left text-zinc-300"
+            className="flex items-center text-left text-zinc-300 min-h-[44px] md:min-h-0 py-2 md:py-0"
             onClick={() => onSelectFile(node.path)}
           >
             <span className="mr-1.5 text-zinc-500">•</span>
@@ -116,6 +134,24 @@ function FileTreeRow({
           </button>
         )}
         {node.type === 'file' && <PresenceIndicator users={users} />}
+        {node.type === 'file' && onMoveFile && (
+          <select
+            aria-label={`Move ${node.name} to folder`}
+            className="ml-auto rounded border border-white/15 bg-zinc-950 px-2 py-1 text-[10px] md:text-[9px] text-zinc-400 focus:outline-none focus:ring-1 focus:ring-red-500 min-h-[44px] md:min-h-0"
+            value=""
+            onChange={(e) => {
+              const targetFolder = e.target.value;
+              if (targetFolder) {
+                onMoveFile(node.path, targetFolder);
+              }
+            }}
+          >
+            <option value="" disabled>Move</option>
+            {folders.filter(f => !node.path.startsWith(f.path + '/')).map(f => (
+              <option key={f.path} value={f.path}>to {f.name}/</option>
+            ))}
+          </select>
+        )}
       </div>
     </div>
   );
@@ -136,6 +172,8 @@ export function VirtualizedFileTree({
     () => flattenTree(nodes, filePresenceManager),
     [nodes, filePresenceManager, tick]
   );
+
+  const folders = useMemo(() => getFolders(nodes), [nodes]);
 
   useEffect(() => {
     const awareness = filePresenceManager.getAwareness();
@@ -184,6 +222,7 @@ export function VirtualizedFileTree({
           onSelectFile,
           onMoveFile,
           onToggleFolder: handleToggleFolder,
+          folders,
         }}
       />
     </div>

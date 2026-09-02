@@ -1,9 +1,16 @@
-'use client';
+"use client";
 
-import { useState, useMemo } from 'react';
-import { Clock, ArrowLeft, ArrowRight, RotateCcw, GitBranch, FileText } from 'lucide-react';
-import { VersionControl, type Version, type DocumentEntry } from '@/lib/version-control/engine';
-import { formatDistanceToNow } from '@/lib/utils';
+import { useState, useMemo } from "react";
+import {
+  Clock,
+  ArrowLeft,
+  ArrowRight,
+  RotateCcw,
+  GitBranch,
+  FileText,
+} from "lucide-react";
+import { VersionControl, type Version } from "@/lib/version-control/engine";
+import { formatDistanceToNow } from "@/lib/utils";
 
 interface VersionHistoryProps {
   documentId: string;
@@ -11,25 +18,41 @@ interface VersionHistoryProps {
   onClose?: () => void;
 }
 
-export function VersionHistory({ documentId, onRollback, onClose }: VersionHistoryProps) {
-  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+export function VersionHistory({
+  documentId,
+  onRollback,
+  onClose,
+}: VersionHistoryProps) {
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
+    null,
+  );
   const [compareVersionId, setCompareVersionId] = useState<string | null>(null);
   const [showDiff, setShowDiff] = useState(false);
 
-  const doc = useMemo(() => VersionControl.getDocument(documentId), [documentId]);
+  const doc = useMemo(
+    () => VersionControl.getDocument(documentId),
+    [documentId],
+  );
   const versions = useMemo(
     () => (doc ? VersionControl.getVersionHistory(documentId) : []),
-    [documentId, doc]
+    [documentId, doc],
   );
 
   const selectedVersion = useMemo(
-    () => (selectedVersionId && doc ? VersionControl.getVersion(documentId, selectedVersionId) : null),
-    [documentId, selectedVersionId, doc]
+    () =>
+      selectedVersionId && doc
+        ? VersionControl.getVersion(documentId, selectedVersionId)
+        : null,
+    [documentId, selectedVersionId, doc],
   );
 
   const diffLines = useMemo(() => {
     if (!showDiff || !selectedVersionId || !compareVersionId) return null;
-    return VersionControl.compareVersions(documentId, selectedVersionId, compareVersionId);
+    return VersionControl.compareVersions(
+      documentId,
+      selectedVersionId,
+      compareVersionId,
+    );
   }, [documentId, selectedVersionId, compareVersionId, showDiff]);
 
   if (!doc) {
@@ -65,11 +88,11 @@ export function VersionHistory({ documentId, onRollback, onClose }: VersionHisto
             onClick={() => setShowDiff(!showDiff)}
             className={`rounded-xl border px-3.5 py-2 text-xs font-medium transition-colors ${
               showDiff
-                ? 'border-[var(--brand-strong)]/40 bg-[var(--brand-strong)]/10 text-[var(--brand-strong)]'
-                : 'border-white/8 bg-white/4 text-[var(--muted)] hover:text-[var(--text-strong)]'
+                ? "border-[var(--brand-strong)]/40 bg-[var(--brand-strong)]/10 text-[var(--brand-strong)]"
+                : "border-white/8 bg-white/4 text-[var(--muted)] hover:text-[var(--text-strong)]"
             }`}
           >
-            {showDiff ? 'Exit diff' : 'Compare versions'}
+            {showDiff ? "Exit diff" : "Compare versions"}
           </button>
         )}
       </div>
@@ -78,7 +101,7 @@ export function VersionHistory({ documentId, onRollback, onClose }: VersionHisto
         <div className="border-b border-white/8 px-6 py-4">
           <div className="flex items-center gap-3">
             <select
-              value={selectedVersionId || ''}
+              value={selectedVersionId || ""}
               onChange={(e) => setSelectedVersionId(e.target.value || null)}
               className="flex-1 rounded-xl border border-white/8 bg-white/4 px-3 py-2 text-sm text-[var(--text-strong)] outline-none"
             >
@@ -91,7 +114,7 @@ export function VersionHistory({ documentId, onRollback, onClose }: VersionHisto
             </select>
             <ArrowRight className="h-4 w-4 text-[var(--muted)]" />
             <select
-              value={compareVersionId || ''}
+              value={compareVersionId || ""}
               onChange={(e) => setCompareVersionId(e.target.value || null)}
               className="flex-1 rounded-xl border border-white/8 bg-white/4 px-3 py-2 text-sm text-[var(--text-strong)] outline-none"
             >
@@ -110,18 +133,22 @@ export function VersionHistory({ documentId, onRollback, onClose }: VersionHisto
                 <div
                   key={idx}
                   className={`flex px-4 py-1 ${
-                    line.type === 'added'
-                      ? 'bg-green-500/10 text-green-400'
-                      : line.type === 'removed'
-                        ? 'bg-red-500/10 text-red-400'
-                        : 'text-[var(--muted)]'
+                    line.type === "added"
+                      ? "bg-green-500/10 text-green-400"
+                      : line.type === "removed"
+                        ? "bg-red-500/10 text-red-400"
+                        : "text-[var(--muted)]"
                   }`}
                 >
                   <span className="mr-4 w-8 shrink-0 text-right opacity-50">
                     {line.lineNumber}
                   </span>
                   <span className="mr-2 w-4 shrink-0">
-                    {line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '}
+                    {line.type === "added"
+                      ? "+"
+                      : line.type === "removed"
+                        ? "-"
+                        : " "}
                   </span>
                   <span className="break-all">{line.content}</span>
                 </div>
@@ -140,7 +167,7 @@ export function VersionHistory({ documentId, onRollback, onClose }: VersionHisto
             isSelected={selectedVersionId === version.id}
             onSelect={() =>
               setSelectedVersionId(
-                selectedVersionId === version.id ? null : version.id
+                selectedVersionId === version.id ? null : version.id,
               )
             }
             onRollback={() => onRollback?.(version)}
@@ -178,17 +205,21 @@ function VersionRow({
   return (
     <div
       className={`flex items-start gap-4 px-6 py-4 transition-colors ${
-        isSelected ? 'bg-white/5' : ''
+        isSelected ? "bg-white/5" : ""
       }`}
     >
       <div
         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
           isLatest
-            ? 'bg-[var(--brand-strong)]/10 text-[var(--brand-strong)]'
-            : 'bg-white/5 text-[var(--muted)]'
+            ? "bg-[var(--brand-strong)]/10 text-[var(--brand-strong)]"
+            : "bg-white/5 text-[var(--muted)]"
         }`}
       >
-        {isLatest ? <GitBranch className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+        {isLatest ? (
+          <GitBranch className="h-4 w-4" />
+        ) : (
+          <FileText className="h-4 w-4" />
+        )}
       </div>
 
       <div className="min-w-0 flex-1">
@@ -212,7 +243,8 @@ function VersionRow({
           </span>
           <span>by {version.author}</span>
         </div>
-        {version.tags && version.tags.length > 0 && (
+        {(version.tags && version.tags.length > 0) ||
+        version.metadata.verifiedIdentity ? (
           <div className="mt-1 flex flex-wrap gap-1">
             {version.tags.map((tag) => (
               <span
@@ -222,8 +254,13 @@ function VersionRow({
                 {tag}
               </span>
             ))}
+            {version.metadata.verifiedIdentity && (
+              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">
+                {version.metadata.verifiedIdentity.did}
+              </span>
+            )}
           </div>
-        )}
+        ) : null}
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
@@ -231,8 +268,8 @@ function VersionRow({
           onClick={onSelect}
           className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors ${
             isSelected
-              ? 'border-[var(--brand-strong)]/40 bg-[var(--brand-strong)]/10 text-[var(--brand-strong)]'
-              : 'border-white/8 bg-white/4 text-[var(--muted)] hover:text-[var(--text-strong)]'
+              ? "border-[var(--brand-strong)]/40 bg-[var(--brand-strong)]/10 text-[var(--brand-strong)]"
+              : "border-white/8 bg-white/4 text-[var(--muted)] hover:text-[var(--text-strong)]"
           }`}
         >
           View

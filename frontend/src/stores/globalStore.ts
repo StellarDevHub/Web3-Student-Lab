@@ -55,7 +55,7 @@ export interface GlobalActions {
 export type GlobalStore = GlobalState & GlobalActions;
 
 const initialState: GlobalState = {
-  isOnline: navigator.onLine,
+  isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
   appVersion: process.env.NEXT_PUBLIC_APP_VERSION ?? '1.0.0',
   buildNumber: process.env.NEXT_PUBLIC_BUILD_NUMBER ?? 'dev',
   environment: (process.env.NODE_ENV as 'development' | 'staging' | 'production') || 'development',

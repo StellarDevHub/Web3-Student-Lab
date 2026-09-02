@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { generatorAPI, ProjectIdea } from '@/lib/api';
+import { ErrorBoundary, IdeasPageSkeleton } from '@/components/ui';
 
 const IDEAS: ProjectIdea[] = [
   {
@@ -35,7 +36,8 @@ export default function IdeasPage() {
   };
 
   return (
-    <div className="relative min-h-[calc(100vh-80px)] overflow-hidden bg-black p-6 font-mono text-white md:p-12">
+    <ErrorBoundary>
+    <div className="relative min-h-[calc(100vh-80px)] overflow-hidden bg-black p-6 font-mono text-white md:p-12" aria-busy={isGenerating}>
       <div className="mx-auto flex h-full max-w-7xl flex-col items-center">
         <div className="relative mb-16 w-full border-b border-white/10 pb-12 text-center">
           <div className="absolute top-0 left-1/2 h-1 w-32 -translate-x-1/2 bg-red-600"></div>
@@ -126,5 +128,6 @@ export default function IdeasPage() {
         </div>
       </div>
     </div>
+    </ErrorBoundary>
   );
 }

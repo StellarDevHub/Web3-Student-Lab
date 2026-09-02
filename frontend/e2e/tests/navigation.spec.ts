@@ -4,8 +4,19 @@ test.describe('critical learning journeys', () => {
   test('opens the simulator and playground with mocked realtime transport', async ({
     page,
     installWebSocketMock,
+    stellarAddress,
   }) => {
     await installWebSocketMock();
+
+    await page.addInitScript(
+      (address) => {
+        window.localStorage.setItem(
+          'stellar_wallet',
+          JSON.stringify({ wallet: 'Dev Mock Wallet', pk: address })
+        );
+      },
+      { address: stellarAddress }
+    );
 
     await page.goto('/simulator', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: /Network Simulator/i })).toBeVisible();

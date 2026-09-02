@@ -32,14 +32,44 @@ export const config = {
     logLevel: getEnvVar('LOG_LEVEL', 'info'),
   },
   db: {
-    url: getEnvVar('DATABASE_URL'), // Required
+    url: getEnvVar('DATABASE_URL'),
+    readReplicaUrl: getEnvVar('DATABASE_READ_REPLICA_URL', ''),
   },
   redis: {
-    url: getEnvVar('REDIS_URL', 'redis://localhost:6379'),
+    url: getEnvVar('REDIS_URL'), // Required
   },
   security: {
     jwtSecret: getEnvVar('JWT_SECRET'), // Required
     jwtExpiresIn: getEnvVar('JWT_EXPIRES_IN', '7d'),
+  },
+
+  /**
+   * Payload encryption key rotation configuration.
+   *
+   * Keys are loaded dynamically from PAYLOAD_ENCRYPTION_KEY_v<N> env vars by
+   * EncryptionKeyManager rather than being read here, so this section only
+   * holds rotation-related tunables that benefit from centralised config access.
+   */
+  encryption: {
+    /**
+     * Comma-separated list of field paths that are encrypted at rest.
+     * Informational — used by the rotation CLI / admin endpoint to know
+     * which Prisma fields to iterate when migrating ciphertexts.
+     * Example: "Student.githubAccessToken,WebhookSubscription.secret"
+     */
+    encryptedFields: process.env.ENCRYPTED_FIELDS || '',
+
+    /**
+     * Maximum number of rows to re-encrypt per rotation batch request.
+     * Prevents a single HTTP call from running for too long.
+     */
+    rotationBatchSize: parseInt(process.env.ENCRYPTION_ROTATION_BATCH_SIZE || '100', 10),
+
+    /**
+     * If true, the GET /api/v1/security/key-versions endpoint is enabled.
+     * Keep disabled in production unless accessed through an admin-only gateway.
+     */
+    exposeKeyVersionEndpoint: process.env.ENCRYPTION_EXPOSE_KEY_VERSIONS !== 'false',
   },
   stellar: {
     network: getEnvVar('STELLAR_NETWORK', 'testnet'),
@@ -55,13 +85,46 @@ export const config = {
   openai: {
     apiKey: process.env.OPENAI_API_KEY || '',
   },
-  
+  rateLimiting: {
+    enabled: process.env.RATE_LIMIT_ENABLED !== 'false',
+    defaultBurstMax: parseInt(getEnvVar('RATE_LIMIT_BURST_MAX', '20'), 10),
+    defaultBurstWindowMs: parseInt(getEnvVar('RATE_LIMIT_BURST_WINDOW_MS', '1000'), 10),
+    defaultSustainedMax: parseInt(getEnvVar('RATE_LIMIT_SUSTAINED_MAX', '200'), 10),
+    defaultSustainedWindowMs: parseInt(getEnvVar('RATE_LIMIT_SUSTAINED_WINDOW_MS', '60000'), 10),
+    authBurstMax: parseInt(getEnvVar('RATE_LIMIT_AUTH_BURST_MAX', '80'), 10),
+    authSustainedMax: parseInt(getEnvVar('RATE_LIMIT_AUTH_SUSTAINED_MAX', '600'), 10),
+    adminBurstMax: parseInt(getEnvVar('RATE_LIMIT_ADMIN_BURST_MAX', '200'), 10),
+    adminSustainedMax: parseInt(getEnvVar('RATE_LIMIT_ADMIN_SUSTAINED_MAX', '2000'), 10),
+    loginBurstMax: parseInt(getEnvVar('RATE_LIMIT_LOGIN_BURST_MAX', '5'), 10),
+    registerBurstMax: parseInt(getEnvVar('RATE_LIMIT_REGISTER_BURST_MAX', '3'), 10),
+    quizSubmissionBurstMax: parseInt(getEnvVar('RATE_LIMIT_QUIZ_BURST_MAX', '10'), 10),
+    playgroundCompileBurstMax: parseInt(getEnvVar('RATE_LIMIT_PLAYGROUND_BURST_MAX', '5'), 10),
+  },
+  backup: {
+    s3: {
+      region: getEnvVar('BACKUP_S3_REGION', 'us-east-1'),
+      bucket: getEnvVar('BACKUP_S3_BUCKET', ''),
+      accessKeyId: process.env.BACKUP_S3_ACCESS_KEY_ID || '',
+      secretAccessKey: process.env.BACKUP_S3_SECRET_ACCESS_KEY || '',
+      endpoint: process.env.BACKUP_S3_ENDPOINT || '',
+    },
+    cronSchedule: getEnvVar('BACKUP_CRON_SCHEDULE', '0 2 * * *'),
+    retentionDays: parseInt(getEnvVar('BACKUP_RETENTION_DAYS', '30'), 10),
+    compress: process.env.BACKUP_COMPRESS !== 'false',
+    tempDir: getEnvVar('BACKUP_TEMP_DIR', '/tmp/backups'),
+  },
+  graphql: {
+    maxDepth: parseInt(getEnvVar('GRAPHQL_MAX_DEPTH', '10'), 10),
+    maxComplexity: parseInt(getEnvVar('GRAPHQL_MAX_COMPLEXITY', '100'), 10),
+  },
+
   /**
    * Helper to safely log configuration without exposing secrets
    */
   getSafeConfig() {
     return {
       app: this.app,
+      graphql: this.graphql,
       redis: { url: this.maskSecret(this.redis.url) },
       db: { url: this.maskSecret(this.db.url) },
       security: {
@@ -74,7 +137,26 @@ export const config = {
       },
       openai: {
         apiKey: this.openai.apiKey ? '***REDACTED***' : '',
-      }
+      },
+      encryption: {
+        encryptedFields: this.encryption.encryptedFields,
+        rotationBatchSize: this.encryption.rotationBatchSize,
+        exposeKeyVersionEndpoint: this.encryption.exposeKeyVersionEndpoint,
+        // Key material is never stored in config — it lives in PAYLOAD_ENCRYPTION_KEY_v<N> env vars
+      },
+      backup: {
+        s3: {
+          region: this.backup.s3.region,
+          bucket: this.maskSecret(this.backup.s3.bucket),
+          accessKeyId: this.backup.s3.accessKeyId ? '***REDACTED***' : '',
+          secretAccessKey: this.backup.s3.secretAccessKey ? '***REDACTED***' : '',
+          endpoint: this.backup.s3.endpoint || '',
+        },
+        cronSchedule: this.backup.cronSchedule,
+        retentionDays: this.backup.retentionDays,
+        compress: this.backup.compress,
+        tempDir: this.backup.tempDir,
+      },
     };
   },
 

@@ -1,6 +1,6 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Activity, ExternalLink, Shield, Wallet, X } from 'lucide-react';
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { NetworkNode } from '../../lib/visualization/ForceSimulation';
 
 interface NodeDetailPanelProps {
@@ -8,14 +8,67 @@ interface NodeDetailPanelProps {
   onClose: () => void;
 }
 
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onClose }) => {
+  const shouldReduceMotion = useReducedMotion();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Keyboard operability: move focus into the panel on open, trap Tab
+  // inside it, restore focus on close, and let Escape dismiss the dialog.
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const closeButton = panel.querySelector<HTMLButtonElement>('button[aria-label^="Close"]');
+    closeButton?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    panel.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      panel.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, []);
+
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ x: 300, opacity: 0 }}
+        ref={panelRef}
+        initial={shouldReduceMotion ? { opacity: 0 } : { x: '100%', opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
-        exit={{ x: 300, opacity: 0 }}
-        className="absolute top-0 right-0 z-30 flex h-full w-80 flex-col gap-6 border-l border-white/10 bg-black/80 p-6 backdrop-blur-xl"
+        exit={shouldReduceMotion ? { opacity: 0 } : { x: '100%', opacity: 0 }}
+        transition={shouldReduceMotion ? { duration: 0 } : undefined}
+        className="absolute top-0 right-0 z-30 flex h-full w-full sm:w-80 flex-col gap-6 border-l border-white/10 bg-black/95 p-6 backdrop-blur-xl"
         role="dialog"
         aria-modal="true"
         aria-label={`Account details for ${node.label || node.id}`}
@@ -29,10 +82,10 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onClose 
           </h3>
           <button
             onClick={onClose}
-            className="rounded p-1 hover:bg-white/10"
+            className="flex h-11 w-11 md:h-8 md:w-8 items-center justify-center rounded hover:bg-white/10"
             aria-label="Close account details panel"
           >
-            <X size={16} aria-hidden="true" />
+            <X className="h-5 w-5 md:h-4 md:w-4" aria-hidden="true" />
           </button>
         </div>
 
@@ -44,7 +97,7 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onClose 
             Public Key
           </span>
           <div
-            className="group flex items-center justify-between rounded border border-white/5 bg-zinc-900 p-3 font-mono text-[10px] break-all text-gray-300"
+            className="group flex min-h-[44px] items-center justify-between rounded border border-white/5 bg-zinc-900 p-3 font-mono text-[10px] break-all text-gray-300"
             aria-labelledby="public-key-label"
           >
             <span>{node.id}</span>
@@ -96,7 +149,7 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onClose 
 
         <div className="mt-auto">
           <button
-            className="w-full rounded bg-red-600 py-3 text-[10px] font-black tracking-widest text-white uppercase transition-colors hover:bg-red-700"
+            className="w-full rounded bg-red-600 py-3.5 text-[10px] font-black tracking-widest text-white uppercase transition-colors hover:bg-red-700 min-h-[44px] flex items-center justify-center"
             aria-label={`View account ${node.label || node.id} on Stellar Explorer`}
           >
             View on Explorer

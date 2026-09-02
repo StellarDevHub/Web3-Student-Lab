@@ -1,9 +1,21 @@
 'use client';
 
 import { useTheme } from '@/contexts/ThemeContext';
+import { useEffect } from 'react';
 
 export function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
+
+  useEffect(() => {
+    const handleThemeToggleEvent = () => {
+      toggleTheme();
+    };
+
+    document.addEventListener('theme-toggle', handleThemeToggleEvent);
+    return () => {
+      document.removeEventListener('theme-toggle', handleThemeToggleEvent);
+    };
+  }, [toggleTheme]);
 
   return (
     <button

@@ -173,6 +173,80 @@ export function analyzeSorobanSource(source: string) {
   return diagnostics;
 }
 
+export const SOROBAN_TOKEN_TYPES = {
+  SOROBAN_MACRO: 'sorobanMacro',
+  SOROBAN_TYPE: 'sorobanType',
+  SOROBAN_MODULE: 'sorobanModule',
+  MODULE_SEPARATOR: 'moduleSeparator',
+} as const;
+
+const rustKeywords = [
+  'as', 'async', 'await', 'break', 'const', 'continue', 'crate', 'else',
+  'enum', 'extern', 'false', 'fn', 'for', 'if', 'impl', 'in', 'let',
+  'loop', 'match', 'mod', 'move', 'mut', 'pub', 'ref', 'return', 'self',
+  'Self', 'static', 'struct', 'super', 'trait', 'true', 'type', 'unsafe',
+  'use', 'where', 'while', 'yield',
+];
+
+const rustPrimitiveTypes = [
+  'bool', 'char', 'f32', 'f64', 'i8', 'i16', 'i32', 'i64', 'i128',
+  'isize', 'str', 'u8', 'u16', 'u32', 'u64', 'u128', 'usize',
+  'Option', 'Result', 'String', 'Vec', 'Box',
+];
+
+function buildRustMonarchTokenizer() {
+  return {
+    defaultToken: '',
+    tokenPostfix: '.rust',
+    keywords: rustKeywords,
+    primitiveTypes: rustPrimitiveTypes,
+    sorobanMacros: sorobanMacros,
+    sorobanTypesList: sorobanTypes,
+    tokenizer: {
+      root: [
+        [/\/\/.*$/, 'comment'],
+        [/\/\*/, 'comment', '@comment'],
+        [/#\[\s*(contract|contractimpl|contracttype|contractevent|contracterror)\b[^\]]*\]/, SOROBAN_TOKEN_TYPES.SOROBAN_MACRO],
+        [/#!?\[.*?\]/, 'attribute'],
+        [/\b(?:contractimport!|symbol!|vec!|map!|log!)(?=\s*\()/, SOROBAN_TOKEN_TYPES.SOROBAN_MACRO],
+        [/\b0x[0-9a-fA-F_]+\b/, 'number.hex'],
+        [/\b\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?\b/, 'number'],
+        [/".*?"/, 'string'],
+        [/'(\\.|[^'])'/, 'string'],
+        [new RegExp(`\\b(?:${rustKeywords.join('|')})\\b`), 'keyword'],
+        [new RegExp(`\\b(?:${rustPrimitiveTypes.join('|')})\\b`), 'type'],
+        [new RegExp(`\\b(?:${sorobanTypes.join('|')})\\b`), SOROBAN_TOKEN_TYPES.SOROBAN_TYPE],
+        [/\b[a-z_][A-Za-z0-9_]*!(?=\s*\()/, 'macro'],
+        [/\b[a-z_][A-Za-z0-9_]*(?=\s*\()/, 'function'],
+        [/\b[A-Z][A-Za-z0-9_]*\b/, 'type.identifier'],
+        [/::/, SOROBAN_TOKEN_TYPES.MODULE_SEPARATOR],
+        [/\bsoroban_sdk\b/, SOROBAN_TOKEN_TYPES.SOROBAN_MODULE],
+        [/[{}()\[\]]/, '@brackets'],
+        [/[;,.:]/, 'delimiter'],
+        [/[+\-*/%=!&|^~?:<>@]+/, 'operator'],
+        [/[a-zA-Z_][A-Za-z0-9_]*/, 'identifier'],
+        [/\s+/, 'white'],
+      ],
+      comment: [
+        [/[^/*]+/, 'comment'],
+        [/\*\//, 'comment', '@pop'],
+        [/./, 'comment'],
+      ],
+    },
+  };
+}
+
+export function extendRustLanguage(monacoApi: typeof monaco) {
+  const languages = monacoApi.languages.getLanguages();
+  const rustExists = languages.some((lang) => lang.id === 'rust');
+
+  if (!rustExists) {
+    monacoApi.languages.register({ id: 'rust' });
+  }
+
+  monacoApi.languages.setMonarchTokensProvider('rust', buildRustMonarchTokenizer());
+}
+
 export function registerSorobanLanguage(monacoApi: typeof monaco) {
   if (languageRegistered) {
     return;

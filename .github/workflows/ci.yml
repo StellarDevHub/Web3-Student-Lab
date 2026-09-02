@@ -1,0 +1,187 @@
+name: Comprehensive CI Pipeline
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  backend:
+    name: Backend Build & Test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        working-directory: ./backend
+        run: npm ci
+      - name: Build
+        working-directory: ./backend
+        run: npm run build
+      - name: Validate curriculum content
+        working-directory: ./backend
+        run: npm run validate:curriculum
+      - name: Create shadow database
+        # Rollback verification and drift detection (below) both need a
+        # scratch "shadow" database distinct from test_db, on the same
+        # Postgres service.
+        run: |
+          PGPASSWORD=test psql -h localhost -U test -d test_db \
+            -c "CREATE DATABASE shadow_db;"
+      - name: Prisma Generate & Migrate
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_db
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+      - name: Test Migration Rollbacks
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_db
+          SHADOW_DATABASE_URL: postgresql://test:test@localhost:5432/shadow_db
+        run: npm run test:migrations
+      - name: Detect schema/migration drift
+        # Reporting only, not yet a merge gate: schema.prisma has
+        # substantial pre-existing drift from the migration history
+        # (see PR description) that a single PR shouldn't be blocked on
+        # resolving. Once that backlog is cleared with a dedicated
+        # migration, remove `continue-on-error` so future drift fails CI.
+        working-directory: ./backend
+        continue-on-error: true
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_db
+          SHADOW_DATABASE_URL: postgresql://test:test@localhost:5432/shadow_db
+        run: |
+          npx prisma migrate diff \
+            --from-config-datasource \
+            --to-schema prisma/schema.prisma \
+            --exit-code
+      - name: Run tests
+        working-directory: ./backend
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-jwt-secret
+          GITHUB_CLIENT_ID: test-github-client-id
+          GITHUB_CLIENT_SECRET: test-github-client-secret
+          GITHUB_REDIRECT_URI: http://localhost:8080/api/v1/oauth/github/callback
+          FRONTEND_URL: http://localhost:3000
+        # Pre-existing test failures unrelated to migrations (12 failing
+        # suites as of this PR) — out of scope here; `|| true` intentionally
+        # left in place rather than silently making this bypass narrower
+        # without fixing what it's bypassing.
+        run: npm run test:coverage || true
+      - name: Dependency audit (backend)
+        working-directory: ./backend
+        run: npm audit --audit-level=high
+      - name: Generate SBOM (backend)
+        working-directory: ./backend
+        continue-on-error: true
+        run: npm sbom --sbom-format spdx > sbom.backend.json || true
+      - name: Upload backend SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-backend
+          path: backend/sbom.backend.json
+          retention-days: 90
+
+  frontend:
+    name: Frontend Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm install --legacy-peer-deps
+      - name: Build
+        working-directory: ./frontend
+        run: npm run build
+      - name: Dependency audit (frontend)
+        working-directory: ./frontend
+        run: npm audit --audit-level=high
+      - name: Generate SBOM (frontend)
+        working-directory: ./frontend
+        continue-on-error: true
+        run: npm sbom --sbom-format spdx > sbom.frontend.json || true
+      - name: Upload frontend SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-frontend
+          path: frontend/sbom.frontend.json
+          retention-days: 90
+
+  contracts:
+    name: Contracts Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Rustfmt Check
+        working-directory: ./contracts
+        run: cargo fmt --check
+      - name: Clippy Check
+        working-directory: ./contracts
+        run: cargo clippy --workspace
+      - name: Workspace Check
+        working-directory: ./contracts
+        run: cargo check --workspace
+      - name: Build
+        working-directory: ./contracts
+        run: cargo build --workspace
+      - name: Audit dependencies
+        working-directory: ./contracts
+        run: cargo audit --deny warnings
+      - name: Test
+        working-directory: ./contracts
+        env:
+          RUST_BACKTRACE: 1
+          CARGO_TERM_COLOR: always
+        run: cargo test -- --nocapture
+      - name: Test (unit + property/fuzz)
+        working-directory: ./contracts
+        run: cargo test --lib

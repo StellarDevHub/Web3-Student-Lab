@@ -5,6 +5,7 @@
 - Docker and Docker Compose installed
 - Node.js 18+ and npm/pnpm
 - Basic understanding of Redis and Docker networking
+- **Note**: Redis version >= 6.2 is strictly recommended for full compatibility with the backend caching infrastructure.
 
 ## 🚀 Quick Start (Development)
 
@@ -37,8 +38,14 @@ NODE_ENV=development
 ### 3. Start Services
 
 ```bash
-# From project root
-docker-compose up -d
+# From project root — recommended for development (Postgres + standalone Redis only)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+# Full stack including Sentinel + Cluster (production-like)
+docker compose -f docker-compose.yml up -d
+
+# HA testing with Sentinel/Cluster-oriented backend config
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 # Verify services are running
 docker ps

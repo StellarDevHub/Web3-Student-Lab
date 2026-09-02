@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ProgressChart from './ProgressChart';
 import SkillRadar from './SkillRadar';
 import CompletionPie from './CompletionPie';
@@ -9,9 +9,16 @@ import StudyHeatmap from './StudyHeatmap';
 import TrendChart from './TrendChart';
 import TimeDistributionChart from './TimeDistributionChart';
 import { DataProcessor } from '@/lib/analytics/DataProcessor';
+import { ErrorBoundary, AnalyticsDashboardSkeleton, WithSkeleton } from '@/components/ui';
 
 export default function Dashboard() {
   const [dateRange, setDateRange] = useState('30');
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   const progressData = DataProcessor.generateMockProgressData(parseInt(dateRange));
   const skillData = DataProcessor.generateMockSkillData();
@@ -35,7 +42,9 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-8">
+    <ErrorBoundary>
+    <WithSkeleton isLoading={isLoading} skeleton={<AnalyticsDashboardSkeleton />}>
+    <div className="space-y-8" aria-busy={isLoading}>
       {/* Header with filters and export */}
       <div className="bg-bg-secondary border-border-theme flex flex-col items-start justify-between gap-4 rounded-2xl border p-6 md:flex-row md:items-center">
         <div>
@@ -161,5 +170,7 @@ export default function Dashboard() {
         </div>
       </div>
     </div>
+    </WithSkeleton>
+    </ErrorBoundary>
   );
 }

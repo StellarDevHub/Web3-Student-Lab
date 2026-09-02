@@ -1,0 +1,57 @@
+name: Playwright E2E Tests
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/playwright.yml'
+  pull_request:
+    branches: [ "main", "master" ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/playwright.yml'
+
+jobs:
+  e2e-testing:
+    name: Playwright E2E Learner Journey Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10.33.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Install Playwright Browsers with Dependencies
+        working-directory: ./frontend
+        run: npx playwright install --with-deps
+
+      - name: Run Playwright E2E Tests
+        working-directory: ./frontend
+        env:
+          CI: 'true'
+        run: pnpm test:e2e
+
+      - name: Upload Playwright Report & Trace Artifacts on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-e2e-artifacts
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 30

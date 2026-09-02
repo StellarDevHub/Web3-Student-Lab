@@ -158,6 +158,13 @@ import { verifyCertificateOnChain } from "@/lib/soroban";
 const cert = await verifyCertificateOnChain("CERTIFICATE_SYMBOL");
 ```
 
+**Offline Mode**
+
+- The frontend now supports offline mode for learning content and core navigation.
+- A Service Worker is registered from `public/sw.js` to cache the app shell and navigation assets.
+- API responses for learning data are persisted in `localStorage` so previously viewed content loads when offline.
+- Offline write requests are queued in IndexedDB and automatically synchronized when connectivity returns.
+
 **Note**: Full blockchain integration requires:
 
 1. Deployed Soroban contract on Stellar network

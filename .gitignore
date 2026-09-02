@@ -1,49 +1,255 @@
+# Temporary script artifacts
+scripts/*.tmp
+*.payload.tmp
+scripts/.cache/
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Dependencies
+# ──────────────────────────────────────────────────────────────────────────────
 node_modules/
 .pnp
 .pnp.js
+.pnp.cjs
+.pnpm-store/
+.kilo/
+.kiro/
 
-# Build outputs
+# ──────────────────────────────────────────────────────────────────────────────
+# Build artifacts — TypeScript / JavaScript
+# ──────────────────────────────────────────────────────────────────────────────
 dist/
 build/
-.next/
 out/
+backend/dist/
+*.js
+*.js.map
+*.d.ts
+*.d.ts.map
+# Preserve config files that must remain as .js/.ts
+!jest.config.js
+!next.config.ts
+!postcss.config.mjs
+!eslint.config.mjs
+!tailwind.config.js
+!tailwind.config.ts
 
-# Testing
+# ──────────────────────────────────────────────────────────────────────────────
+# Build artifacts — Rust / Soroban
+# ──────────────────────────────────────────────────────────────────────────────
+target/
+contracts/target/
+# Cargo.lock should be committed in binary crates; excluded here per project choice
+Cargo.lock
+
+# Orphan root lockfile causes Next/webpack SyntaxError when present without package.json
+/package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# testing
 coverage/
 
-# Environment files
+# ──────────────────────────────────────────────────────────────────────────────
+# Next.js
+# ──────────────────────────────────────────────────────────────────────────────
+.next/
+.next-*
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Test snapshots & coverage
+# ──────────────────────────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+# Jest / Vitest snapshots
+**/__snapshots__/
+**/*.snap
+# Playwright
+playwright-report/
+test-results/
+# E2E output
+frontend/e2e/results/
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Generated docs / summaries (do not commit generated docs)
+# ──────────────────────────────────────────────────────────────────────────────
+CHANGELOG.md
+CONTRIBUTING.md
+SECURITY.md
+README.md
+TODO.md
+IMPLEMENTATION_SUMMARY.md
+FEATURE_IMPLEMENTATION.md
+DELIVERABLES.txt
+CODE_AUDIT.md
+TEST_STRATEGY.md
+IMPLEMENTATION_PLAN.md
+IMPLEMENTATION_CHECKLIST.md
+IMPLEMENTATION_COMPLETE.md
+GOVERNANCE_FEATURES_INDEX.md
+SENIOR_DEV_SUMMARY.md
+INTEGRATION_GUIDE.md
+brainstorm_plan.md
+00_START_HERE.md
+ACCESSIBILITY_IMPLEMENTATION.md
+DARK_MODE_AUDIT.md
+PUSH_SUCCESS.md
+STAGING.md
+TRANSACTION_HISTORY_FEATURE.md
+TRANSACTION_INTEGRATION_GUIDE.md
+PR_DESCRIPTIONS.md
+ALLOWED_ORIGINS/
+REDIS_IMPLEMENTATION_SUMMARY.md
+SMART_WALLET_IMPLEMENTATION.md
+CARBON_CREDIT_PLATFORM_DOCUMENTATION.md
+ISSUE_582_RESOLUTION_CHECKLIST.md
+
+# Generated directories
+grafana/
+observability/
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Logs — backend
+# ──────────────────────────────────────────────────────────────────────────────
+backend/logs/
+backend/*.log
+backend/build*.log
+backend/debug-*.log
+backend/test_output.log
+backend/ts_errors.txt
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Logs — frontend
+# ──────────────────────────────────────────────────────────────────────────────
+frontend/ts_errors.txt
+frontend/tsc_errors.log
+frontend/tsc_errors_new.log
+frontend/tsc_errors_new2.log
+frontend/build_output.txt
+frontend/output.txt
+frontend/out.txt
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Logs — contracts
+# ──────────────────────────────────────────────────────────────────────────────
+contracts/test_output.txt
+contracts/test_output_activity.txt
+contracts/check_output*.json
+contracts/check_errors.txt
+contracts/errors*.json
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Logs — root
+# ──────────────────────────────────────────────────────────────────────────────
+*.log
+build.log
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Environment / secrets
+# ──────────────────────────────────────────────────────────────────────────────
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+*.pem
+*.key
+*.p12
+*.pfx
 
-# Debug logs
+# ──────────────────────────────────────────────────────────────────────────────
+# Database files
+# ──────────────────────────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+backend/prisma/*.db
+backend/prisma/*.db-journal
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Runtime / PID files
+# ──────────────────────────────────────────────────────────────────────────────
+*.pid
+backend/*.pid
+
+# ──────────────────────────────────────────────────────────────────────────────
+# OS / editor artefacts
+# ──────────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+# Keep .vscode/settings committed (shared dev config)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Debug / misc
+# ──────────────────────────────────────────────────────────────────────────────
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
+# ──────────────────────────────────────────────────────────────────────────────
+# Deployment
+# ──────────────────────────────────────────────────────────────────────────────
+.vercel
 
-# OS
-.DS_Store
-Thumbs.db
+# ──────────────────────────────────────────────────────────────────────────────
+# Benchmarks / large generated output
+# ──────────────────────────────────────────────────────────────────────────────
+backend/benchmarks/results/
 
-# TypeScript
-*.tsbuildinfo
+# ──────────────────────────────────────────────────────────────────────────────
+# Certificates & Identity — generated outputs (issues #1176-#1179)
+# ──────────────────────────────────────────────────────────────────────────────
+# Generated PDF certificates (never commit user data)
+backend/generated-pdfs/
+# IPFS gateway service cache dumps
+backend/ipfs-cache/
 
-# Rust/Soroban
-contracts/target/
-contracts/Cargo.lock
+# Generated issue payloads and scaffolding artifacts
+# ──────────────────────────────────────────────────────────────────────────────
+70_new_issues.md
+contract_issues_batch1.json
+github_issues_payload.json
+github_issues_payload_fixed.json
+ISSUE_*_RESOLUTION_CHECKLIST.md
+legacy_deprecation.rs
+MigrationDashboard.tsx
+QuadraticVoting.tsx
+quadratic_voting.rs
+sybil_resistance.rs
+token_migration.rs
+redis-sentinel.conf
+REDIS_IMPLEMENTATION_SUMMARY.md
+SMART_WALLET_IMPLEMENTATION.md
+.codex
+.cache
 
-# Redis
-dump.rdb
+# build artifacts
+dist/
+backend/dist/
+*.js
+*.js.map
+*.d.ts
+!jest.config.js
+!next.config.ts
+!postcss.config.mjs
+!eslint.config.mjs
 
-# Misc
+
+# temp error logs
+frontend/ts_errors.txt
+frontend/tsc_errors.log
+frontend/tsc_errors_new.log
+frontend/tsc_errors_new2.log
+contracts/test_output_activity.txt
+
+# build / compiler scratch output (do not commit)
 *.log
-*.tmp
+backend/ts_errors.txt
+contracts/check_output*.json
+contracts/errors*.json
+contracts/test_output*.txt
+contracts/check_errors.txt
+

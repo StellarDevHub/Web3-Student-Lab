@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import React from 'react';
 import { NetworkNode } from '../../lib/visualization/ForceSimulation';
 
@@ -9,12 +9,13 @@ interface GraphNodeProps {
 
 export const GraphNode: React.FC<GraphNodeProps> = ({ node, onClick }) => {
   const color = node.type === 'account' ? '#ef4444' : node.type === 'asset' ? '#3b82f6' : '#10b981';
+  const shouldReduceMotion = useReducedMotion();
 
   return (
     <motion.g
-      initial={{ scale: 0 }}
+      initial={shouldReduceMotion ? { scale: 1, x: node.x, y: node.y } : { scale: 0 }}
       animate={{ scale: 1, x: node.x, y: node.y }}
-      transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+      transition={shouldReduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 260, damping: 20 }}
       onClick={() => onClick(node)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') onClick(node);
@@ -32,15 +33,17 @@ export const GraphNode: React.FC<GraphNodeProps> = ({ node, onClick }) => {
         className="drop-shadow-lg"
         aria-hidden="true"
       />
-      <motion.circle
-        r={12}
-        fill="transparent"
-        stroke={color}
-        strokeWidth={2}
-        animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
-        transition={{ duration: 2, repeat: Infinity }}
-        aria-hidden="true"
-      />
+      {!shouldReduceMotion && (
+        <motion.circle
+          r={12}
+          fill="transparent"
+          stroke={color}
+          strokeWidth={2}
+          animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
+          transition={{ duration: 2, repeat: Infinity }}
+          aria-hidden="true"
+        />
+      )}
       <text
         dy={25}
         textAnchor="middle"

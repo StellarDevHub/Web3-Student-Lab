@@ -3,11 +3,13 @@ process.env.DATABASE_URL = 'postgres://dummy:dummy@localhost:5432/dummy';
 import { Request } from 'express';
 
 const mockPrismaCreate = jest.fn().mockResolvedValue({} as never);
+const mockPrismaFindFirst = jest.fn().mockResolvedValue({ hash: 'previous-hash-value' } as never);
 const mockAuditLoggerInfo = jest.fn().mockReturnValue({} as never);
 
 jest.unstable_mockModule('../src/db/index.js', () => ({
   default: {
     auditLog: {
+      findFirst: mockPrismaFindFirst,
       create: mockPrismaCreate,
     },
   },
@@ -21,11 +23,18 @@ jest.unstable_mockModule('../src/utils/logger.js', () => ({
     error: jest.fn(),
     info: jest.fn(),
   },
+  getCorrelationId: jest.fn().mockReturnValue('test-id'),
 }));
 
-const { logAudit, logRequestAudit } = await import('../src/utils/audit.js');
+let logAudit: any;
+let logRequestAudit: any;
 
 describe('Audit Logging System', () => {
+  beforeAll(async () => {
+    const auditModule = await import('../src/utils/audit.js');
+    logAudit = auditModule.logAudit;
+    logRequestAudit = auditModule.logRequestAudit;
+  });
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -45,10 +54,12 @@ describe('Audit Logging System', () => {
 
       await logAudit(data);
 
+      expect(mockPrismaFindFirst).toHaveBeenCalledTimes(1);
       expect(mockPrismaCreate).toHaveBeenCalledTimes(1);
       const prismaCall = mockPrismaCreate.mock.calls[0][0];
       
       expect(prismaCall.data.action).toBe('TEST_ACTION');
+      expect(prismaCall.data.prevHash).toBe('previous-hash-value');
       expect(prismaCall.data.details._hash).toBeDefined();
 
       expect(mockAuditLoggerInfo).toHaveBeenCalledTimes(1);

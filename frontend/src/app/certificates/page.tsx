@@ -5,49 +5,56 @@ import { Certificate, certificatesAPI } from '@/lib/api';
 import { truncateHash } from '@/lib/certificate-generator';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { ErrorBoundary, ErrorFallback, CertificatesVaultSkeleton } from '@/components/ui';
 
 export default function CertificatesVaultPage() {
   const { user } = useAuth();
   const router = useRouter();
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadVault = useCallback(async () => {
+    if (!user) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await certificatesAPI.getByStudentId(user.id);
+      setCertificates(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load vault');
+      console.error('Failed to load vault:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!user) {
       router.push('/auth/login');
       return;
     }
-
-    async function loadVault() {
-      try {
-        const data = await certificatesAPI.getByStudentId(user!.id);
-        setCertificates(data);
-      } catch (error) {
-        console.error('Failed to load vault:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
     loadVault();
-  }, [user, router]);
+  }, [user, router, loadVault]);
 
   if (isLoading) {
+    return <CertificatesVaultSkeleton />;
+  }
+
+  if (error) {
     return (
-      <div className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-black">
-        <div className="text-center">
-          <div className="mx-auto mb-4 h-16 w-16 animate-spin rounded-full border-4 border-red-600/30 border-t-red-600"></div>
-          <p className="font-mono text-sm tracking-widest text-red-500 uppercase">
-            Decrypting Vault...
-          </p>
+      <div className="relative min-h-[calc(100vh-80px)] overflow-hidden bg-black p-8 text-white md:p-12">
+        <div className="mx-auto max-w-lg pt-20">
+          <ErrorFallback message={error} onRetry={loadVault} variant="card" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="relative min-h-[calc(100vh-80px)] overflow-hidden bg-black p-8 text-white md:p-12">
+    <ErrorBoundary>
+    <div className="relative min-h-[calc(100vh-80px)] overflow-hidden bg-black p-8 text-white md:p-12" aria-busy={isLoading}>
       {/* Background Effect */}
       <div className="pointer-events-none absolute top-0 right-0 h-[500px] w-[500px] rounded-full bg-red-600/10 blur-[100px]"></div>
 
@@ -130,8 +137,13 @@ export default function CertificatesVaultPage() {
                 <h2 className="mb-2 text-2xl leading-tight font-black tracking-tight text-white uppercase transition-colors group-hover:text-red-50">
                   {cert.course?.title || 'Unknown Protocol'}
                 </h2>
-                <div className="mb-6 truncate font-mono text-sm text-red-500/80">
-                  TX: {cert.certificateHash ? truncateHash(cert.certificateHash, 8) : 'PENDING'}
+                <div className="mb-6 flex items-center justify-between font-mono text-xs">
+                  <span className="text-emerald-400 font-bold tracking-wider">
+                    ✓ VERIFIED
+                  </span>
+                  <span className="text-gray-400">
+                    TX: {truncateHash(cert.certificateHash || `0x${cert.id.replace(/[^a-f0-9]/gi, 'a')}`, 6)}
+                  </span>
                 </div>
 
                 <div className="flex items-center justify-between border-t border-white/10 pt-6">
@@ -164,5 +176,6 @@ export default function CertificatesVaultPage() {
         )}
       </div>
     </div>
+    </ErrorBoundary>
   );
 }

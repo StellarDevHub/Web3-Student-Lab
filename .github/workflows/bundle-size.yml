@@ -1,0 +1,63 @@
+name: Bundle Size Analysis & Performance Budget
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/bundle-size.yml'
+
+jobs:
+  analyze-bundle:
+    name: Analyze Bundle Size & Check Budgets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - name: Install Frontend Dependencies
+        run: pnpm --filter frontend install --no-frozen-lockfile
+
+      - name: Build Next.js with Bundle Analyzer
+        run: |
+          cd frontend
+          ANALYZE=true pnpm build
+
+      - name: Check 150KB Initial JS Budget
+        run: |
+          cd frontend
+          node scripts/check-bundle-size.js
+
+      - name: Post PR Bundle Analysis Report
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            const message = `### 📦 Bundle Size & Budget Report
+
+            - **Landing Route (\`/\`)**: Checked initial JS payload against 150KB threshold.
+            - **Dashboard Route (\`/dashboard\`)**: Checked initial JS payload against 150KB threshold.
+            - **Bundle Analyzer Output**: Next.js bundle stats generated successfully.
+
+            > ⚠️ **Alert Rule**: Any page bundle increasing by > 5% will trigger a performance warning.`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });

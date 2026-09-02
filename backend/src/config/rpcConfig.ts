@@ -70,3 +70,22 @@ export const ISSUER_DID: string =
  * Issuer name shown on certificates
  */
 export const ISSUER_NAME: string = process.env.ISSUER_NAME ?? 'Web3 Student Lab';
+
+const WEBRTC_STUN_DEFAULTS = ['stun:stun.l.google.com:19302'];
+const WEBRTC_TURN_DEFAULTS: string[] = [];
+
+const parseIceServers = (value: string) =>
+  value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((url) => (url.startsWith('stun:') || url.startsWith('turn:') ? url : `stun:${url}`));
+
+export const WEBRTC_ICE_SERVERS = [
+  ...parseIceServers(process.env.WEBRTC_STUN_SERVERS ?? WEBRTC_STUN_DEFAULTS.join(',')).map((url) => ({ urls: url })),
+  ...parseIceServers(process.env.WEBRTC_TURN_SERVERS ?? WEBRTC_TURN_DEFAULTS.join(',')).map((url) => ({
+    urls: url,
+    username: process.env.WEBRTC_TURN_USERNAME,
+    credential: process.env.WEBRTC_TURN_PASSWORD,
+  })),
+];

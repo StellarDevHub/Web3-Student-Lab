@@ -2,7 +2,14 @@
 
 import React, { createContext, useCallback, useContext, useReducer, useRef } from 'react';
 
-export type NotificationType = 'signature' | 'enrollment' | 'certificate' | 'system' | 'error';
+/**
+ * Supported notification types.
+ *
+ * - `course_update`  – a course was created, updated, or removed
+ * - `announcement`   – community / platform-wide announcements
+ * - `learning_opportunity` – suggested courses, events, or workshops
+ */
+export type NotificationType = 'signature' | 'enrollment' | 'certificate' | 'system' | 'error' | 'course_update' | 'announcement' | 'learning_opportunity';
 
 export interface AppNotification {
   id: string;
@@ -99,6 +106,9 @@ function typeLabel(type: NotificationType): string {
     certificate: 'Certificates',
     system: 'System',
     error: 'Errors',
+    course_update: 'Course Updates',
+    announcement: 'Announcements',
+    learning_opportunity: 'Learning Opportunities',
   };
   return labels[type];
 }

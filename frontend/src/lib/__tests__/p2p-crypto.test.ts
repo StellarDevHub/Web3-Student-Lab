@@ -26,11 +26,14 @@ describe('p2p-crypto', () => {
 
   it('rejects tampered public identities before deriving a conversation key', async () => {
     const identity = await getOrCreateP2PIdentity();
+    const originalX = identity.publicKeyJwk.x ?? '';
+    const lastChar = originalX.slice(-1);
+    const differentChar = lastChar === 'A' ? 'B' : 'A';
     const tampered = {
       ...identity,
       publicKeyJwk: {
         ...identity.publicKeyJwk,
-        x: `${identity.publicKeyJwk.x?.slice(0, -1)}A`,
+        x: `${originalX.slice(0, -1)}${differentChar}`,
       },
     };
 

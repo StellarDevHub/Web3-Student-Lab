@@ -12,7 +12,15 @@ export const requireWorkspaceMiddleware = (
   res: Response,
   next: NextFunction
 ): void => {
-  const workspaceId = req.headers['x-workspace-id'] as string;
+  let workspaceId = (req.headers['x-workspace-id'] || req.query.workspaceId) as string;
+
+  // Extract workspaceId from OAuth state parameter if present
+  if (!workspaceId && req.query.state && typeof req.query.state === 'string') {
+    const parts = req.query.state.split('__');
+    if (parts.length === 2) {
+      workspaceId = parts[0] as string;
+    }
+  }
 
   if (!workspaceId) {
     if (process.env.NODE_ENV === 'test' && req.headers['x-test-bypass-workspace'] !== 'false') {
@@ -35,7 +43,15 @@ export const optionalWorkspaceMiddleware = (
   res: Response,
   next: NextFunction
 ): void => {
-  const workspaceId = req.headers['x-workspace-id'] as string;
+  let workspaceId = (req.headers['x-workspace-id'] || req.query.workspaceId) as string;
+
+  // Extract workspaceId from OAuth state parameter if present
+  if (!workspaceId && req.query.state && typeof req.query.state === 'string') {
+    const parts = req.query.state.split('__');
+    if (parts.length === 2) {
+      workspaceId = parts[0] as string;
+    }
+  }
 
   if (workspaceId) {
     workspaceContextStorage.run(workspaceId, () => {

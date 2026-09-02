@@ -1,8 +1,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, Address, Bytes, BytesN,
-    Env,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, xdr::ToXdr, Address,
+    Bytes, BytesN, Env,
 };
 
 #[contracttype]
@@ -72,7 +72,7 @@ impl ZkProofVerifierContract {
         }
 
         let expected = expected_proof_hash(&env, &student, &public_input_hash, &nullifier);
-        let provided = env.crypto().sha256(&proof);
+        let provided: BytesN<32> = env.crypto().sha256(&proof).into();
 
         if provided != expected {
             panic_with_error!(&env, VerifierError::InvalidProof);
@@ -126,9 +126,19 @@ fn expected_proof_hash(
     payload.append(&Bytes::from_array(env, &vk_hash.to_array()));
     payload.append(&Bytes::from_array(env, &public_input_hash.to_array()));
     payload.append(&Bytes::from_array(env, &nullifier.to_array()));
-    payload.append(&student.serialize(env));
+    payload.append(&student.clone().to_xdr(env));
 
     env.crypto().sha256(&payload).into()
+}
+
+/// Deterministic byte encoding of an `Address`, used as part of the proof
+/// binding pre-image (`Address` has no direct byte serialization method).
+fn address_bytes(env: &Env, address: &Address) -> Bytes {
+    let s = address.to_string();
+    let len = s.len() as usize;
+    let mut buf = [0u8; 64];
+    s.copy_into_slice(&mut buf[..len]);
+    Bytes::from_slice(env, &buf[..len])
 }
 
 #[cfg(test)]
@@ -147,13 +157,16 @@ mod tests {
         payload.append(&Bytes::from_array(env, &vk_hash.to_array()));
         payload.append(&Bytes::from_array(env, &public_input_hash.to_array()));
         payload.append(&Bytes::from_array(env, &nullifier.to_array()));
-        payload.append(&student.serialize(env));
+        payload.append(&student.clone().to_xdr(env));
+
         payload
     }
 
     #[test]
     fn verifies_valid_proof_once() {
         let env = Env::default();
+        let contract_id = env.register(ZkProofVerifierContract, ());
+        let client = ZkProofVerifierContractClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
         let student = Address::generate(&env);
 
@@ -162,26 +175,22 @@ mod tests {
         let nullifier = BytesN::from_array(&env, &[3; 32]);
 
         env.mock_all_auths();
-        ZkProofVerifierContract::initialize(env.clone(), admin, vk_hash.clone());
+        client.initialize(&admin, &vk_hash);
 
         let proof = make_valid_proof(&env, &vk_hash, &student, &public_input_hash, &nullifier);
 
-        let ok = ZkProofVerifierContract::verify_lab_completion(
-            env.clone(),
-            student.clone(),
-            public_input_hash,
-            proof,
-            nullifier.clone(),
-        );
+        let ok = client.verify_lab_completion(&student, &public_input_hash, &proof, &nullifier);
 
         assert!(ok);
-        assert!(ZkProofVerifierContract::is_nullifier_used(env.clone(), nullifier));
+        assert!(client.is_nullifier_used(&nullifier));
     }
 
     #[test]
     #[should_panic(expected = "Error(Contract, #3)")]
     fn rejects_invalid_proof() {
         let env = Env::default();
+        let contract_id = env.register(ZkProofVerifierContract, ());
+        let client = ZkProofVerifierContractClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
         let student = Address::generate(&env);
 
@@ -190,22 +199,18 @@ mod tests {
         let nullifier = BytesN::from_array(&env, &[12; 32]);
 
         env.mock_all_auths();
-        ZkProofVerifierContract::initialize(env.clone(), admin, vk_hash);
+        client.initialize(&admin, &vk_hash);
 
         let fake_proof = Bytes::from_array(&env, &[9, 9, 9, 9]);
-        let _ = ZkProofVerifierContract::verify_lab_completion(
-            env.clone(),
-            student,
-            public_input_hash,
-            fake_proof,
-            nullifier,
-        );
+        let _ = client.verify_lab_completion(&student, &public_input_hash, &fake_proof, &nullifier);
     }
 
     #[test]
     #[should_panic(expected = "Error(Contract, #4)")]
     fn rejects_replay_with_same_nullifier() {
         let env = Env::default();
+        let contract_id = env.register(ZkProofVerifierContract, ());
+        let client = ZkProofVerifierContractClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
         let student = Address::generate(&env);
 
@@ -214,24 +219,12 @@ mod tests {
         let nullifier = BytesN::from_array(&env, &[6; 32]);
 
         env.mock_all_auths();
-        ZkProofVerifierContract::initialize(env.clone(), admin, vk_hash.clone());
+        client.initialize(&admin, &vk_hash);
 
         let proof = make_valid_proof(&env, &vk_hash, &student, &public_input_hash, &nullifier);
 
-        let _ = ZkProofVerifierContract::verify_lab_completion(
-            env.clone(),
-            student.clone(),
-            public_input_hash.clone(),
-            proof.clone(),
-            nullifier.clone(),
-        );
+        let _ = client.verify_lab_completion(&student, &public_input_hash, &proof, &nullifier);
 
-        let _ = ZkProofVerifierContract::verify_lab_completion(
-            env.clone(),
-            student,
-            public_input_hash,
-            proof,
-            nullifier,
-        );
+        let _ = client.verify_lab_completion(&student, &public_input_hash, &proof, &nullifier);
     }
 }

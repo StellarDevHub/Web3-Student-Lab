@@ -1,7 +1,11 @@
 /** @type {import('ts-jest').JestConfigWithTsJest} */
+process.env.NODE_ENV = 'test';
+
 export default {
-  setupFiles: ['dotenv/config'],
-  setupFiles: ['<rootDir>/jest.setup.js'],
+  setupFiles: [
+    'dotenv/config',
+    '<rootDir>/tests/jest.setup.ts',
+  ],
   preset: 'ts-jest',
   testEnvironment: 'node',
   extensionsToTreatAsEsm: ['.ts'],
@@ -17,6 +21,9 @@ export default {
       },
     ],
   },
+  transformIgnorePatterns: [
+    'node_modules/(?!(sanitize-html|htmlparser2|marked|uuid|@sentry|ioredis)/)',
+  ],
   testMatch: ['**/tests/**/*.test.ts'],
   collectCoverageFrom: ['src/**/*.ts', '!src/**/*.d.ts'],
   coverageDirectory: 'coverage',

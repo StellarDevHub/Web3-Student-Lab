@@ -1,7 +1,7 @@
 import { Request } from 'express';
-import crypto from 'crypto';
+import { createHash } from 'crypto';
 import prisma from '../db/index.js';
-import logger, { auditLogger } from './logger.js';
+import logger, { auditLogger, getCorrelationId } from './logger.js';
 
 export interface AuditLogData {
   userId?: string | null;
@@ -14,33 +14,77 @@ export interface AuditLogData {
   userAgent?: string | null;
 }
 
+/** Shape written into the DB `details` JSON column */
+interface AuditDetailsRecord {
+  _hash: string;
+  correlationId: string | undefined;
+  [key: string]: unknown;
+}
+
+function buildChainInput(
+  prevHash: string | undefined,
+  timestamp: string,
+  userId: string | null | undefined,
+  action: string,
+  payload: Record<string, unknown>
+): string {
+  return [
+    prevHash ?? '',
+    timestamp,
+    userId ?? '',
+    action,
+    JSON.stringify(payload),
+  ].join('\x00');
+}
+
 /**
- * Logs an administrative or sensitive action to the database and immutable file storage
+ * Logs an administrative or sensitive action to the database and immutable
+ * file storage.  Sensitive fields must be stripped by the caller before
+ * passing `details`.
  */
 export async function logAudit(data: AuditLogData): Promise<void> {
   try {
-    // 1. Prepare log payload
     const timestamp = new Date().toISOString();
+    const correlationId = getCorrelationId();
+
+    const previousLog = await prisma.auditLog.findFirst({
+      orderBy: { createdAt: 'desc' },
+      select: { hash: true },
+    });
+
+    const prevHash = previousLog?.hash ?? undefined;
+
     const payload = {
-      ...data,
-      timestamp,
+      userEmail: data.userEmail,
+      entity: data.entity,
+      entityId: data.entityId,
+      details: data.details,
+      ipAddress: data.ipAddress,
+      userAgent: data.userAgent,
+      correlationId,
     };
 
-    // 2. Generate a cryptographic hash of the payload for verification (Immutability proof)
-    const hash = crypto
-      .createHash('sha256')
-      .update(JSON.stringify(payload))
-      .digest('hex');
+    const chainInput = buildChainInput(prevHash, timestamp, data.userId, data.action, payload);
+    const hash = createHash('sha256').update(chainInput, 'utf8').digest('hex');
 
     const logEntry = {
-      ...payload,
+      ...data,
+      timestamp,
+      correlationId,
       hash,
     };
 
-    // 3. Write to immutable append-only file (Winston file transport)
     auditLogger.info(logEntry);
 
-    // 4. Write to database for querying and UI display
+    const detailsRecord: AuditDetailsRecord = {
+      _hash: hash,
+      correlationId,
+    };
+
+    if (typeof data.details === 'object' && data.details !== null) {
+      Object.assign(detailsRecord, data.details as Record<string, unknown>);
+    }
+
     await prisma.auditLog.create({
       data: {
         userId: data.userId ?? null,
@@ -48,23 +92,44 @@ export async function logAudit(data: AuditLogData): Promise<void> {
         action: data.action,
         entity: data.entity ?? null,
         entityId: data.entityId ?? null,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        details: typeof data.details === 'object' && data.details !== null ? { ...(data.details as any), _hash: hash } : { _hash: hash },
+        details: detailsRecord as any,
         ipAddress: data.ipAddress ?? null,
         userAgent: data.userAgent ?? null,
+        prevHash: prevHash ?? null,
       },
     });
 
-    // 5. Standard logging
-    logger.info(`Audit Log: ${data.action} by ${data.userEmail || data.userId || 'unknown'}`);
+    logger.info(
+      `Audit Log: ${data.action} by ${data.userEmail ?? data.userId ?? 'unknown'}`,
+      {
+        correlationId,
+        action: data.action,
+        entity: data.entity,
+      }
+    );
   } catch (error) {
-    logger.error('Failed to create audit log:', error);
-    // We don't want to fail the main action if logging fails, but we should know about it
+    logger.error('Failed to create audit log:', {
+      error,
+      correlationId: getCorrelationId(),
+    });
   }
 }
 
+/** Shape of `req.user` as set by auth middleware on authenticated routes */
+interface AuthenticatedUser {
+  id?: string;
+  email?: string;
+}
+
+/** Body shapes that may carry a top-level `email` field (login / register) */
+interface BodyWithOptionalEmail {
+  email?: string;
+}
+
 /**
- * Helper to log an audit entry from an Express request
+ * Helper to log an audit entry from an Express request.
+ * Extracts user identity from `req.user` (authenticated routes) or falls back
+ * to `req.body.email` for login / register flows.
  */
 export async function logRequestAudit(
   req: Request,
@@ -73,11 +138,10 @@ export async function logRequestAudit(
   entityId?: string,
   details?: unknown
 ): Promise<void> {
-  // Try to get user from req.user (authenticated routes)
-  const user = req.user as { id?: string; email?: string } | undefined;
-  
-  // Try to get email from body if it's a login/register request without req.user
-  const fallbackEmail = req.body?.email || null;
+  const user = req.user as AuthenticatedUser | undefined;
+
+  const body = req.body as BodyWithOptionalEmail | undefined;
+  const fallbackEmail: string | null = body?.email ?? null;
 
   return logAudit({
     userId: user?.id ?? null,
@@ -86,7 +150,8 @@ export async function logRequestAudit(
     entity: entity ?? null,
     entityId: entityId ?? null,
     details: details ?? null,
-    ipAddress: (req.ip || req.socket?.remoteAddress) ?? null,
-    userAgent: (req.headers['user-agent'] as string) ?? null,
+    ipAddress: (req.ip ?? req.socket?.remoteAddress) ?? null,
+    userAgent: (req.headers['user-agent'] as string | undefined) ?? null,
   });
 }
+

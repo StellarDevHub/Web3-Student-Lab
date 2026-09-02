@@ -1,5 +1,48 @@
-node_modules
-# Keep environment variables out of version control
-.env
+# Dependencies
+node_modules/
 
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Build output
+dist/
+build/
+
+# Source map files
+*.js.map
+*.d.ts.map
+
+# Logs
+*.log
+build.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Process ID files
+*.pid
+*.pid.lock
+
+# Generated files
 /src/generated/prismalogs/
+.prisma/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# test snapshots and coverage output
+**/__snapshots__/
+*.snap
+coverage/
+
+# generated build artifacts committed by mistake
+*.js.map
+*.d.ts.map

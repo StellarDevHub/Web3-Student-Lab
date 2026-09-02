@@ -1,5 +1,6 @@
 'use client';
 
+import { CelebrationOverlay } from '@/app/components/CompletionCelebration';
 import quizMachine from '@/lib/quizMachine';
 import { quizQuestions } from '@/lib/quizQuestions';
 import { Player } from '@lottiefiles/react-lottie-player';
@@ -19,6 +20,11 @@ const getDisplayLabel = (question: any) => {
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+const getCorrectAnswers = (question: typeof quizQuestions[number]) => {
+  if (question.type !== 'multiple-choice') return [];
+  return Array.isArray(question.answer) ? question.answer : [question.answer];
+};
 
 export default function QuizEngine() {
   const [current, send] = useMachine(quizMachine);
@@ -76,6 +82,23 @@ export default function QuizEngine() {
 
   const handleDragOver = (event: React.DragEvent<HTMLButtonElement>) => {
     event.preventDefault();
+  };
+
+  const handleReorderKey = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    index: number
+  ) => {
+    const { dragOrder } = current.context;
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+
+    const targetIndex =
+      event.key === 'ArrowUp' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= dragOrder.length) return;
+
+    event.preventDefault();
+    const nextOrder = [...dragOrder];
+    [nextOrder[index], nextOrder[targetIndex]] = [nextOrder[targetIndex], nextOrder[index]];
+    send({ type: 'UPDATE_ORDER', order: nextOrder });
   };
 
   return (
@@ -159,18 +182,36 @@ export default function QuizEngine() {
                   {question.type === 'multiple-choice' && (
                     <div className="grid gap-4">
                       {current.context.visibleChoices.map((choice) => {
-                        const active = choice === current.context.selectedOption;
+                        const active = question.allowMultiple
+                          ? current.context.selectedOptions.includes(choice)
+                          : choice === current.context.selectedOption;
                         return (
                           <button
                             key={choice}
-                            onClick={() => send({ type: 'SELECT_OPTION', choice })}
-                            className={`rounded-3xl border px-5 py-4 text-left text-base font-medium transition-all ${
+                            type="button"
+                            onClick={() =>
+                              send({
+                                type: question.allowMultiple ? 'TOGGLE_OPTION' : 'SELECT_OPTION',
+                                choice,
+                              })
+                            }
+                            className={`flex items-start gap-4 rounded-3xl border px-5 py-4 text-left text-base font-medium transition-all ${
                               active
                                 ? 'border-red-500 bg-red-500/15 text-white shadow-[0_0_20px_rgba(220,38,38,0.15)]'
                                 : 'border-white/10 bg-white/5 text-gray-200 hover:border-red-500/30 hover:bg-white/10'
                             }`}
                           >
-                            {choice}
+                            <span
+                              className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+                                active
+                                  ? 'border-red-400 bg-red-500 text-white'
+                                  : 'border-white/20 bg-black/40'
+                              }`}
+                              aria-hidden="true"
+                            >
+                              {active ? '✓' : ''}
+                            </span>
+                            <span>{choice}</span>
                           </button>
                         );
                       })}
@@ -189,7 +230,9 @@ export default function QuizEngine() {
                             onDragStart={(event) => handleDragStart(event, index)}
                             onDragOver={handleDragOver}
                             onDrop={(event) => handleDrop(event, index)}
-                            className="rounded-3xl border border-white/10 bg-white/5 px-5 py-4 text-left text-base text-gray-200 transition hover:border-red-500/40 hover:bg-white/10"
+                            onKeyDown={(event) => handleReorderKey(event, index)}
+                            aria-label={`${segment}. Step ${index + 1} of ${current.context.dragOrder.length}. Use Arrow Up or Arrow Down to reorder.`}
+                            className="rounded-3xl border border-white/10 bg-white/5 px-5 py-4 text-left text-base text-gray-200 transition hover:border-red-500/40 hover:bg-white/10 focus:border-red-500 focus:outline-none"
                           >
                             <span className="text-xs tracking-[0.25em] text-red-500 uppercase">
                               Step {index + 1}
@@ -266,9 +309,11 @@ export default function QuizEngine() {
                     onClick={() => send({ type: 'SUBMIT' })}
                     disabled={
                       !current.matches('question') ||
-                      (!current.context.selectedOption &&
-                        question.type !== 'drag-order' &&
-                        question.type !== 'code-fill')
+                      (question.type === 'multiple-choice' &&
+                        (question.allowMultiple
+                          ? current.context.selectedOptions.length === 0
+                          : !current.context.selectedOption)) ||
+                      (question.type === 'code-fill' && !current.context.snippetSelection)
                     }
                     className="rounded-full bg-red-600 px-6 py-3 text-sm font-black tracking-[0.25em] text-white uppercase transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
                   >
@@ -290,13 +335,26 @@ export default function QuizEngine() {
                     <p className="text-sm tracking-[0.35em] text-gray-400 uppercase">
                       Time Remaining
                     </p>
-                    <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className="mt-3 h-3 overflow-hidden rounded-full bg-white/10"
+                      role="progressbar"
+                      aria-valuenow={Math.round(percentage)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label="Time remaining"
+                    >
                       <div
                         className="h-full rounded-full bg-red-500 transition-all duration-500"
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
-                    <p className="mt-2 text-3xl font-black text-white">{timeLeft}s</p>
+                    <p
+                      className="mt-2 text-3xl font-black text-white"
+                      role="timer"
+                      aria-label={`${timeLeft} seconds remaining`}
+                    >
+                      {timeLeft}s
+                    </p>
                   </div>
 
                   <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
@@ -353,6 +411,31 @@ export default function QuizEngine() {
                       {current.context.correctAnswer}
                     </p>
                   </div>
+                  {question.type === 'multiple-choice' && (
+                    <div className="grid gap-3">
+                      {question.options.map((choice) => {
+                        const correct = getCorrectAnswers(question).includes(choice);
+                        const selected = current.context.selectedOptions.includes(choice);
+                        return (
+                          <div
+                            key={choice}
+                            className={`rounded-2xl border px-4 py-3 text-sm ${
+                              correct
+                                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
+                                : selected
+                                  ? 'border-red-500/40 bg-red-500/10 text-red-100'
+                                  : 'border-white/10 bg-white/5 text-gray-400'
+                            }`}
+                          >
+                            <span className="font-semibold">
+                              {correct ? 'Correct' : selected ? 'Incorrect' : 'Not selected'}:
+                            </span>{' '}
+                            {choice}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                   <button
                     onClick={() => send({ type: 'NEXT' })}
                     className="rounded-full bg-red-600 px-8 py-4 font-bold tracking-[0.25em] text-white uppercase transition hover:bg-red-700"
@@ -383,14 +466,16 @@ export default function QuizEngine() {
           )}
 
           {isCompleteState && (
-            <motion.section
-              key="complete"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.35 }}
-              className="rounded-[40px] border border-white/10 bg-[#111111]/90 p-10 shadow-[0_0_40px_rgba(0,0,0,0.28)]"
-            >
+            <>
+              <CelebrationOverlay />
+              <motion.section
+                key="complete"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.35 }}
+                className="rounded-[40px] border border-white/10 bg-[#111111]/90 p-10 shadow-[0_0_40px_rgba(0,0,0,0.28)]"
+              >
               <div className="space-y-8 text-center">
                 <p className="text-sm tracking-[0.35em] text-red-500 uppercase">Quiz Complete</p>
                 <h2 className="text-5xl font-black text-white">Final Score</h2>
@@ -416,6 +501,7 @@ export default function QuizEngine() {
                 </div>
               </div>
             </motion.section>
+            </>
           )}
         </AnimatePresence>
       </div>

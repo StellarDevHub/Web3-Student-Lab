@@ -1,24 +1,88 @@
 import { Request, Response, Router } from 'express';
 import { authenticate } from '../../auth/auth.middleware.js';
 import { getProfileStatusByWallet, login, register } from '../../auth/auth.service.js';
-import { blacklistAccessToken, rotateRefreshToken } from '../../auth/token.service.js';
+import {
+  getSessionStatus,
+  lockSession,
+  purgeSession,
+  touchSession,
+  unlockSession,
+} from '../../auth/sessionMonitor.js';
+import { blacklistAccessToken, rotateRefreshToken, revokeAllUserTokens, verifyRefreshToken } from '../../auth/token.service.js';
 import { LoginRequest } from '../../auth/types.js';
 import { loginSchema, registerSchema, web3VerifySchema } from '../../auth/validation.schemas.js';
 import { createNonce, verifySignature } from '../../auth/web3.service.js';
 import { slidingWindowRateLimiter } from '../../middleware/rateLimiter.js';
 import { validateRequest } from '../../utils/validation.js';
 import { auditAction } from '../../middleware/audit.js';
+import { clearRefreshTokenCookie, getRefreshTokenFromReq, setRefreshTokenCookie } from '../../utils/cookie.js';
+import { requireTurnstile } from '../../middleware/turnstile.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
- * @route   POST /api/auth/register
- * @desc    Register a new student
- * @access  Public
+ * @openapi
+ * /api/v1/auth/register:
+ *   post:
+ *     summary: Register a new student
+ *     description: Creates a new student account with email, password, and optional Stellar wallet address.
+ *     tags: [Auth]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password, firstName, lastName]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: student@web3studentlab.com
+ *               password:
+ *                 type: string
+ *                 minLength: 6
+ *                 example: SecureP@ss123
+ *               firstName:
+ *                 type: string
+ *                 example: Jane
+ *               lastName:
+ *                 type: string
+ *                 example: Doe
+ *               walletAddress:
+ *                 type: string
+ *                 description: Stellar wallet public key (G...)
+ *                 example: GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVWXYZ
+ *     responses:
+ *       201:
+ *         description: Student registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *                 token:
+ *                   type: string
+ *       409:
+ *         description: Email or wallet already exists
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post(
   '/register',
   validateRequest(registerSchema),
+  requireTurnstile(),
   auditAction('USER_REGISTER', 'User'),
   async (req: Request, res: Response) => {
   try {
@@ -34,8 +98,10 @@ router.post(
       walletAddress,
     });
 
+    setRefreshTokenCookie(res, authResponse.refreshToken);
     res.status(201).json(authResponse);
   } catch (_error) {
+    console.error('Registration handler error:', _error);
     if (_error instanceof Error && _error.message === 'Student with this email already exists') {
       res.status(409).json({ error: _error.message });
       return;
@@ -47,10 +113,53 @@ router.post(
       res.status(409).json({ error: _error.message });
       return;
     }
-    res.status(500).json({ error: 'Internal server error' });
+    const message = _error instanceof Error ? _error.message : 'Internal server error';
+    res.status(500).json({ error: message });
   }
 });
 
+/**
+ * @openapi
+ * /api/v1/auth/profile-status:
+ *   get:
+ *     summary: Check profile status by wallet address
+ *     description: Returns whether a Stellar wallet address has a linked profile.
+ *     tags: [Auth]
+ *     security: []
+ *     parameters:
+ *       - in: query
+ *         name: walletAddress
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Stellar wallet public key (G...)
+ *         example: GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVWXYZ
+ *     responses:
+ *       200:
+ *         description: Profile status retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 hasProfile:
+ *                   type: boolean
+ *                 profile:
+ *                   type: object
+ *                   nullable: true
+ *       400:
+ *         description: Missing wallet address
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/profile-status', async (req: Request, res: Response) => {
   try {
     const walletAddress =
@@ -64,18 +173,63 @@ router.get('/profile-status', async (req: Request, res: Response) => {
     const result = await getProfileStatusByWallet(walletAddress);
     res.json(result);
   } catch (_error) {
+    console.error("PROFILE STATUS ERROR:", _error);
     res.status(500).json({ error: 'Failed to fetch profile status' });
   }
 });
 
 /**
- * @route   POST /api/auth/login
- * @desc    Login student
- * @access  Public
+ * @openapi
+ * /api/v1/auth/login:
+ *   post:
+ *     summary: Login with email and password
+ *     description: Authenticates a student using email/password and returns a JWT access token.
+ *     tags: [Auth]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: student@web3studentlab.com
+ *               password:
+ *                 type: string
+ *                 example: SecureP@ss123
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *                 token:
+ *                   type: string
+ *       401:
+ *         description: Invalid credentials
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post(
   '/login',
   validateRequest(loginSchema),
+  requireTurnstile(),
   auditAction('USER_LOGIN', 'User'),
   async (req: Request, res: Response) => {
   const { email, password }: LoginRequest = req.body;
@@ -84,6 +238,7 @@ router.post(
     // Login the student
     const authResponse = await login({ email, password });
 
+    setRefreshTokenCookie(res, authResponse.refreshToken);
     res.json(authResponse);
   } catch (_error) {
     if (_error instanceof Error && _error.message === 'Invalid credentials') {
@@ -111,9 +266,30 @@ router.post(
 });
 
 /**
- * @route   GET /api/auth/me
- * @desc    Get current authenticated student
- * @access  Private
+ * @openapi
+ * /api/v1/auth/me:
+ *   get:
+ *     summary: Get current authenticated user
+ *     description: Returns the profile of the currently authenticated student.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Current user profile
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Missing or invalid authentication token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get('/me', authenticate, (req: Request, res: Response) => {
   // User is attached to request by authenticate middleware
@@ -121,12 +297,51 @@ router.get('/me', authenticate, (req: Request, res: Response) => {
 });
 
 /**
- * @route   POST /api/auth/refresh
- * @desc    Rotate refresh token
- * @access  Public
+ * @openapi
+ * /api/v1/auth/refresh:
+ *   post:
+ *     summary: Rotate refresh token
+ *     description: Issues a new access/refresh token pair using a valid refresh token.
+ *     tags: [Auth]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [refreshToken]
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *                 description: A valid refresh token
+ *     responses:
+ *       200:
+ *         description: New token pair issued
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 accessToken:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
+ *       400:
+ *         description: Refresh token is required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Invalid or expired refresh token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post('/refresh', async (req: Request, res: Response) => {
-  const { refreshToken } = req.body;
+  const refreshToken = getRefreshTokenFromReq(req);
 
   if (!refreshToken) {
     res.status(400).json({ error: 'Refresh token is required' });
@@ -135,16 +350,40 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
   try {
     const tokens = await rotateRefreshToken(refreshToken);
-    res.json(tokens);
+    setRefreshTokenCookie(res, tokens.refreshToken);
+    res.json({ accessToken: tokens.accessToken });
   } catch (_error) {
+    clearRefreshTokenCookie(res);
     res.status(401).json({ error: 'Invalid or expired refresh token' });
   }
 });
 
 /**
- * @route   POST /api/auth/logout
- * @desc    Logout student and blacklist current access token
- * @access  Private
+ * @openapi
+ * /api/v1/auth/logout:
+ *   post:
+ *     summary: Logout and blacklist current access token
+ *     description: Invalidates the current JWT access token by adding it to a blacklist.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Logged out successfully
+ *       401:
+ *         description: Missing or invalid authentication token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post(
   '/logout',
@@ -159,13 +398,71 @@ router.post(
     await blacklistAccessToken(token, 15 * 60);
   }
 
+  const refreshToken = getRefreshTokenFromReq(req);
+  if (refreshToken) {
+    try {
+      const payload = await verifyRefreshToken(refreshToken);
+      await revokeAllUserTokens(payload.userId);
+    } catch (_e) {
+      // Token already invalid/revoked
+    }
+  } else if (req.user?.id) {
+    await revokeAllUserTokens(req.user.id);
+  }
+
+  clearRefreshTokenCookie(res);
   res.json({ message: 'Logged out successfully' });
 });
 
 /**
- * @route   GET /api/auth/nonce
- * @desc    Generate a cryptographic nonce for Web3 wallet authentication
- * @access  Public
+ * @openapi
+ * /api/v1/auth/nonce:
+ *   get:
+ *     summary: Generate a nonce for Web3 wallet authentication
+ *     description: Creates a cryptographic nonce that must be signed by the wallet owner to authenticate via Stellar.
+ *     tags: [Auth]
+ *     security: []
+ *     parameters:
+ *       - in: query
+ *         name: walletAddress
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Stellar wallet public key (G...)
+ *         example: GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVWXYZ
+ *     responses:
+ *       200:
+ *         description: Nonce generated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 nonce:
+ *                   type: string
+ *                   description: Cryptographic nonce to sign
+ *                 expiresAt:
+ *                   type: string
+ *                   format: date-time
+ *                   description: ISO 8601 expiration timestamp (5 minutes)
+ *       400:
+ *         description: Missing or invalid wallet address
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       429:
+ *         description: Rate limit exceeded (10 requests/minute)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get(
   '/nonce',
@@ -184,7 +481,7 @@ router.get(
       }
 
       // Validate wallet address format
-      if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+      if (!/^G[A-Z2-7]{55}$/.test(walletAddress)) {
         res.status(400).json({ error: 'Invalid wallet address format' });
         return;
       }
@@ -204,9 +501,57 @@ router.get(
 );
 
 /**
- * @route   POST /api/auth/verify
- * @desc    Verify Web3 wallet signature and authenticate user
- * @access  Public
+ * @openapi
+ * /api/v1/auth/verify:
+ *   post:
+ *     summary: Verify Web3 wallet signature and authenticate
+ *     description: Verifies a Stellar wallet signature against a previously issued nonce and returns JWT tokens.
+ *     tags: [Auth]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [walletAddress, signature, nonce]
+ *             properties:
+ *               walletAddress:
+ *                 type: string
+ *                 description: Stellar wallet public key (G...)
+ *                 example: GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVWXYZ
+ *               signature:
+ *                 type: string
+ *                 description: Cryptographic signature of the nonce
+ *               nonce:
+ *                 type: string
+ *                 description: The nonce previously obtained from GET /nonce
+ *     responses:
+ *       200:
+ *         description: Signature verified, tokens issued
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *                 accessToken:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
+ *       401:
+ *         description: Invalid or expired nonce, or invalid signature
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post(
   '/verify',
@@ -217,7 +562,7 @@ router.post(
     const { walletAddress, signature, nonce } = req.body;
 
     const authResponse = await verifySignature(walletAddress, signature, nonce);
-
+    setRefreshTokenCookie(res, authResponse.refreshToken);
     res.json(authResponse);
   } catch (error) {
     if (error instanceof Error) {
@@ -237,6 +582,118 @@ router.post(
     console.error('Signature verification error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+/**
+ * @openapi
+ * /api/v1/auth/session/activity:
+ *   post:
+ *     summary: Record session activity (mouse/keyboard/touch) and reset idle
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Activity recorded }
+ *       401: { description: Unauthorized }
+ */
+router.post('/session/activity', authenticate, async (req: Request, res: Response) => {
+  const userId = (req as unknown as { user?: { id: string } }).user?.id;
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  await touchSession(userId);
+  res.json({ ok: true });
+});
+
+/**
+ * @openapi
+ * /api/v1/auth/session/status:
+ *   get:
+ *     summary: Get session idle/lock status
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: SessionStatus }
+ *       401: { description: Unauthorized }
+ */
+router.get('/session/status', authenticate, async (req: Request, res: Response) => {
+  const userId = (req as unknown as { user?: { id: string } }).user?.id;
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  const status = await getSessionStatus(userId);
+  res.json(status);
+});
+
+/**
+ * @openapi
+ * /api/v1/auth/session/lock:
+ *   post:
+ *     summary: Lock the session (blur UI, require re-auth)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Session locked }
+ *       401: { description: Unauthorized }
+ */
+router.post('/session/lock', authenticate, async (req: Request, res: Response) => {
+  const userId = (req as unknown as { user?: { id: string } }).user?.id;
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  await lockSession(userId);
+  res.json({ ok: true });
+});
+
+/**
+ * @openapi
+ * /api/v1/auth/session/unlock:
+ *   post:
+ *     summary: Unlock after re-authentication challenge
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Session unlocked }
+ *       401: { description: Unauthorized }
+ *       423: { description: Session purged by extended idle; full login required }
+ */
+router.post('/session/unlock', authenticate, async (req: Request, res: Response) => {
+  const userId = (req as unknown as { user?: { id: string } }).user?.id;
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  const unlocked = await unlockSession(userId);
+  if (!unlocked) {
+    res.status(423).json({
+      error: 'Session expired from extended inactivity; please sign in again',
+    });
+    return;
+  }
+  res.json({ ok: true });
+});
+
+/**
+ * @openapi
+ * /api/v1/auth/session/purge:
+ *   post:
+ *     summary: Purge extended-idle session (revoke tokens, terminate WebSockets)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Session purged }
+ *       401: { description: Unauthorized }
+ */
+router.post('/session/purge', authenticate, async (req: Request, res: Response) => {
+  const userId = (req as unknown as { user?: { id: string } }).user?.id;
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  await purgeSession(userId);
+  res.json({ ok: true });
 });
 
 export default router;

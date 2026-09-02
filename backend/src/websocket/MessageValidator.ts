@@ -1,11 +1,12 @@
 import { z } from 'zod';
 
 export const webSocketMessageSchema = z.object({
-  type: z.enum(['message', 'event', 'command']),
+  type: z.string(),
   room: z.string().optional(),
-  payload: z.any(),
-  timestamp: z.number(),
-  senderId: z.string(),
+  targetClientId: z.string().optional(),
+  data: z.any().optional(),
+  timestamp: z.number().optional(),
+  senderId: z.string().optional(),
 });
 
 export type WebSocketMessage = z.infer<typeof webSocketMessageSchema>;

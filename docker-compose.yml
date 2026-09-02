@@ -4,13 +4,31 @@ services:
     container_name: web3-student-lab-db
     restart: always
     environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: web3-student-lab
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db-read-replica:
+    image: postgres:15-alpine
+    container_name: web3-student-lab-db-replica
+    restart: always
+    environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: web3-student-lab
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_replica_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -57,6 +75,24 @@ services:
     restart: always
     ports:
       - "26380:26379"
+    command: redis-sentinel /etc/sentinel.conf --port 26379
+    volumes:
+      - ./redis-sentinel.conf:/etc/sentinel.conf:ro
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Sentinel 3
+  redis-sentinel-3:
+    image: redis:7-alpine
+    container_name: web3-student-lab-sentinel-3
+    restart: always
+    ports:
+      - "26381:26379"
     command: redis-sentinel /etc/sentinel.conf --port 26379
     volumes:
       - ./redis-sentinel.conf:/etc/sentinel.conf:ro
@@ -132,9 +168,16 @@ services:
     ports:
       - "8080:8080"
     environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/web3-student-lab?schema=public
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/web3-student-lab?schema=public
+      - DB_READ_REPLICA_URL=postgresql://postgres:postgres@db-read-replica:5432/web3-student-lab?schema=public
       - NODE_ENV=development
-      - JWT_SECRET=your-secret-key-change-in-production
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      # GitHub OAuth Configuration
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-your-github-client-id}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-your-github-client-secret}
+      - GITHUB_REDIRECT_URI=${BACKEND_URL:-http://localhost:8080}/api/v1/oauth/github/callback
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
       # Redis Configuration - Choose one of: standalone, sentinel, cluster
       - REDIS_MODE=standalone
       # Standalone Redis
@@ -152,8 +195,84 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      db-read-replica:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    # Liveness probe — lightweight, no dependency calls
+    # In Kubernetes, use separate livenessProbe (on /health/live) and
+    # readinessProbe (on /health/ready)
+    healthcheck:
+      # Readiness probe: container is healthy only when the API is running
+      # AND database + Redis are available.
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/health/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - web3-network
+
+  # Soroban / Stellar event indexer. Polls the Soroban RPC, persists events
+  # into a SQLite file (mounted as a Docker volume) and exposes a WebSocket /
+  # SSE fan-out on :3001 that the frontend can subscribe to for live event
+  # updates. Uses the same Docker network as the backend so it can also reach
+  # Postgres when DATABASE_URL is overridden.
+  indexer:
+    build:
+      context: ./indexer
+      dockerfile: Dockerfile
+    image: web3-student-lab-indexer:latest
+    container_name: web3-student-lab-indexer
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      # Default to local SQLite. To use Postgres instead uncomment the line
+      # below and remove the DATABASE_URL — the service auto-detects the
+      # scheme.
+      - DATABASE_URL=sqlite:///data/indexer.db?mode=rwc
+      # - DATABASE_URL=postgresql://postgres:postgres@db:5432/web3-student-lab
+      - SOROBAN_RPC_URL=${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
+      - POLL_INTERVAL_MS=${INDEXER_POLL_INTERVAL_MS:-5000}
+      - BATCH_SIZE=${INDEXER_BATCH_SIZE:-100}
+      - RUST_LOG=${RUST_LOG:-info,indexer=debug}
+    volumes:
+      - indexer_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/soroban-indexer", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - web3-network
+
+  frontend:
+    build:
+      context: ./
+      dockerfile: frontend/Dockerfile
+    container_name: web3-student-lab-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', (r) => {process.exit(r.statusCode === 200 ? 0 : 0)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - web3-network
 
@@ -163,7 +282,9 @@ networks:
 
 volumes:
   postgres_data:
+  postgres_replica_data:
   redis_data:
   redis_cluster_1_data:
   redis_cluster_2_data:
   redis_cluster_3_data:
+  indexer_data:

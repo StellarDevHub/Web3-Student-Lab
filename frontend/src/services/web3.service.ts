@@ -9,7 +9,7 @@ export interface Web3AuthResponse {
     did?: string | null;
   };
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string;
 }
 
 export interface NonceResponse {
@@ -26,6 +26,11 @@ export class Web3AuthService {
    */
   async initialize(): Promise<boolean> {
     try {
+      // Clean up legacy refresh token from localStorage if present
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('refreshToken');
+      }
+
       const ethereumProvider = await detectEthereumProvider();
 
       if (!ethereumProvider) {
@@ -134,6 +139,7 @@ export class Web3AuthService {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           walletAddress,
           signature,
@@ -148,9 +154,9 @@ export class Web3AuthService {
 
       const authResponse = await response.json();
 
-      // Store tokens in localStorage
+      // Store access token and user in localStorage; refresh token is in HttpOnly cookie
       localStorage.setItem('accessToken', authResponse.accessToken);
-      localStorage.setItem('refreshToken', authResponse.refreshToken);
+      localStorage.removeItem('refreshToken');
       localStorage.setItem('user', JSON.stringify(authResponse.user));
 
       return authResponse;
@@ -196,10 +202,10 @@ export class Web3AuthService {
   }
 
   /**
-   * Get stored refresh token
+   * Get stored refresh token (Deprecated: refresh token is stored in HttpOnly cookie)
    */
   getStoredRefreshToken(): string | null {
-    return localStorage.getItem('refreshToken');
+    return null;
   }
 }
 

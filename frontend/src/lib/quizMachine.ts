@@ -5,6 +5,7 @@ export interface QuizContext {
   currentIndex: number;
   score: number;
   selectedOption: string | null;
+  selectedOptions: string[];
   dragOrder: string[];
   snippetSelection: string | null;
   visibleChoices: string[];
@@ -18,6 +19,7 @@ export interface QuizContext {
 export type QuizEvent =
   | { type: 'START' }
   | { type: 'SELECT_OPTION'; choice: string }
+  | { type: 'TOGGLE_OPTION'; choice: string }
   | { type: 'UPDATE_ORDER'; order: string[] }
   | { type: 'UPDATE_SNIPPET'; choice: string }
   | { type: 'USE_HINT' }
@@ -31,6 +33,7 @@ const initialContext: QuizContext = {
   currentIndex: 0,
   score: 0,
   selectedOption: null,
+  selectedOptions: [],
   dragOrder: [],
   snippetSelection: null,
   visibleChoices: [],
@@ -54,6 +57,7 @@ const buildQuestionContext = (index: number) => {
 
   return {
     selectedOption: null,
+    selectedOptions: [],
     dragOrder: question.type === 'drag-order' ? question.segments : [],
     snippetSelection: null,
     visibleChoices: randomize(choicePool),
@@ -61,7 +65,9 @@ const buildQuestionContext = (index: number) => {
     timedOut: false,
     correctAnswer:
       question.type === 'multiple-choice'
-        ? question.answer
+        ? Array.isArray(question.answer)
+          ? question.answer.join(', ')
+          : question.answer
         : question.type === 'code-fill'
           ? question.answer
           : null,
@@ -73,6 +79,12 @@ const isCorrect = (context: QuizContext) => {
   const question = getQuestion(context);
 
   if (question.type === 'multiple-choice') {
+    if (question.allowMultiple && Array.isArray(question.answer)) {
+      return (
+        question.answer.length === context.selectedOptions.length &&
+        question.answer.every((answer) => context.selectedOptions.includes(answer))
+      );
+    }
     return context.selectedOption === question.answer;
   }
 
@@ -105,6 +117,18 @@ export const quizMachine = setup({
       return {
         ...context,
         selectedOption: event.choice,
+        selectedOptions: [event.choice],
+      };
+    }),
+    toggleSelectedOption: assign(({ context, event }) => {
+      if (event.type !== 'TOGGLE_OPTION') return context;
+      const selectedOptions = context.selectedOptions.includes(event.choice)
+        ? context.selectedOptions.filter((choice) => choice !== event.choice)
+        : [...context.selectedOptions, event.choice];
+      return {
+        ...context,
+        selectedOption: selectedOptions[0] ?? null,
+        selectedOptions,
       };
     }),
     setDragOrder: assign(({ context, event }) => {
@@ -129,13 +153,14 @@ export const quizMachine = setup({
       const question = getQuestion(context);
       if (question.type === 'multiple-choice' || question.type === 'code-fill') {
         const answer = question.answer;
+        const answers = Array.isArray(answer) ? answer : [answer];
         const incorrectOptions =
           'choices' in question && question.choices
-            ? question.choices.filter((choice) => choice !== answer)
+            ? question.choices.filter((choice) => !answers.includes(choice))
             : 'options' in question && question.options
-              ? question.options.filter((choice) => choice !== answer)
+              ? question.options.filter((choice) => !answers.includes(choice))
               : [];
-        const reduced = [answer, incorrectOptions[0]].sort();
+        const reduced = [...answers, incorrectOptions[0]].filter(Boolean).sort();
         return {
           ...context,
           visibleChoices: reduced,
@@ -168,7 +193,9 @@ export const quizMachine = setup({
           ? 'Complete order matches the correct lifecycle.'
           : question.type === 'code-fill'
             ? question.answer
-            : question.answer;
+            : Array.isArray(question.answer)
+              ? question.answer.join(', ')
+              : question.answer;
       return {
         ...context,
         correctAnswer: answer,
@@ -187,7 +214,9 @@ export const quizMachine = setup({
     canSubmit: ({ context }) => {
       const question = getQuestion(context);
       if (question.type === 'multiple-choice') {
-        return Boolean(context.selectedOption);
+        return question.allowMultiple
+          ? context.selectedOptions.length > 0
+          : Boolean(context.selectedOption);
       }
       if (question.type === 'drag-order') {
         return context.dragOrder.length > 0;
@@ -217,6 +246,9 @@ export const quizMachine = setup({
       on: {
         SELECT_OPTION: {
           actions: { type: 'setSelectedOption' },
+        },
+        TOGGLE_OPTION: {
+          actions: { type: 'toggleSelectedOption' },
         },
         UPDATE_ORDER: {
           actions: { type: 'setDragOrder' },

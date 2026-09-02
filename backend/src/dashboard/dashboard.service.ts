@@ -72,11 +72,12 @@ export const getStudentDashboard = async (studentId: string): Promise<StudentDas
 
   // Unified Student Profile View across modules
   const enrolledCourseId = student.enrollments[0]?.courseId ?? 'course-1';
-  const [learningProgress, blockchainAchievements, tokenWallet] = await Promise.all([
+  const [learningProgressResult, blockchainAchievements, tokenWallet] = await Promise.all([
     getStudentProgress(studentId, enrolledCourseId),
     getStudentAchievements(studentId),
     getTokenBalance(studentId),
   ]);
+  const learningProgress = learningProgressResult.data;
 
   // Transform data for the Unified 'Student Profile' view
   const certificates: Achievement[] = blockchainAchievements.map((achievement) => ({

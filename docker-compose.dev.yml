@@ -1,0 +1,28 @@
+# Development override — PostgreSQL + standalone Redis only.
+# Usage (from repo root):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# This disables the read replica, Redis Sentinels, Redis Cluster nodes,
+# and the backend container so local development stays lightweight.
+
+services:
+  db-read-replica:
+    profiles: ["disabled"]
+
+  redis-sentinel-1:
+    profiles: ["disabled"]
+
+  redis-sentinel-2:
+    profiles: ["disabled"]
+
+  redis-cluster-1:
+    profiles: ["disabled"]
+
+  redis-cluster-2:
+    profiles: ["disabled"]
+
+  redis-cluster-3:
+    profiles: ["disabled"]
+
+  backend:
+    profiles: ["disabled"]

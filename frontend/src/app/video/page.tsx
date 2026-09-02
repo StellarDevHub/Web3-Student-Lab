@@ -29,7 +29,7 @@ export default function VideoPlayerPage() {
   const togglePlay = () => {
     if (videoRef.current) {
       if (isPlaying) {
-        videoRef.current.pause()an;
+        videoRef.current.pause();
       } else {
         videoRef.current.play().catch(e => console.error('Error playing video:', e));
       }

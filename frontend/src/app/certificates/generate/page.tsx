@@ -6,8 +6,8 @@ import { Certificate, certificatesAPI } from '@/lib/api';
 import {
   buildLinkedInShareUrl,
   CertificateData,
-  downloadCertificateAsPdf,
-  downloadCertificateAsPng,
+  downloadEngineCertificatePdf,
+  downloadEngineCertificatePng,
 } from '@/lib/certificate-generator';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -72,9 +72,9 @@ function CertificateGeneratorInner() {
     try {
       const filename = `certificate-${formData.recipientName.replace(/\s+/g, '-').toLowerCase()}`;
       if (downloadFormat === 'pdf') {
-        await downloadCertificateAsPdf('certificate-template', filename);
+        await downloadEngineCertificatePdf(formData, filename);
       } else {
-        await downloadCertificateAsPng('certificate-template', filename);
+        await downloadEngineCertificatePng(formData, filename);
       }
     } catch (err) {
       console.error('Download failed:', err);

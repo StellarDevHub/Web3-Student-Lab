@@ -142,7 +142,7 @@ export function getCourseContent(course: Course): CourseContent {
     return COURSE_CONTENT[course.id];
   }
 
-  const title = course.title.toLowerCase();
+  const title = course.title?.toLowerCase() || '';
 
   if (title.includes('soroban')) {
     return COURSE_CONTENT['cm1yxxxx-soroban'];
@@ -159,5 +159,46 @@ export function getCourseContent(course: Course): CourseContent {
   return {
     ...DEFAULT_CONTENT,
     summary: course.description || DEFAULT_CONTENT.summary,
+  };
+}
+
+function resolveCourseContentKey(course: Course): string {
+  if (COURSE_CONTENT[course.id]) return course.id;
+  const title = course.title?.toLowerCase() || '';
+  if (title.includes('soroban')) return 'cm1yxxxx-soroban';
+  if (title.includes('stellar') || title.includes('web3')) return 'cm1yxxxx-intro';
+  if (title.includes('defi')) return 'cm1yxxxx-defi';
+  return 'default';
+}
+
+interface ModuleTranslation {
+  title: string;
+  description: string;
+}
+
+export function getTranslatedCourseContent(
+  course: Course,
+  tn: <T>(key: string) => T | undefined
+): CourseContent {
+  const base = getCourseContent(course);
+  const key = resolveCourseContentKey(course);
+  const prefix = `course.${key}`;
+
+  const translatedLevel = tn<string>(`${prefix}.level`);
+  const translatedDuration = tn<string>(`${prefix}.duration`);
+  const translatedSummary = tn<string>(`${prefix}.summary`);
+  const translatedOutcomes = tn<string[]>(`${prefix}.outcomes`);
+  const translatedModules = tn<ModuleTranslation[]>(`${prefix}.modules`);
+  const translatedDeliverables = tn<string[]>(`${prefix}.deliverables`);
+  const translatedTools = tn<string[]>(`${prefix}.tools`);
+
+  return {
+    level: translatedLevel ?? base.level,
+    duration: translatedDuration ?? base.duration,
+    summary: translatedSummary ?? base.summary,
+    outcomes: translatedOutcomes ?? base.outcomes,
+    modules: translatedModules ?? base.modules,
+    deliverables: translatedDeliverables ?? base.deliverables,
+    tools: translatedTools ?? base.tools,
   };
 }

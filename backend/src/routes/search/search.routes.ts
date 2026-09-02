@@ -2,7 +2,7 @@ import { Router } from 'express';
 import prisma from '../../db/index.js';
 import { SearchController } from './search.controller.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 const searchController = new SearchController(prisma);
 
 // Search endpoints

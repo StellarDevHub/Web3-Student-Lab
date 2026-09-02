@@ -1,9 +1,11 @@
 import axios from 'axios';
 import { API_BASE_URL, getWorkspaceId } from './api-config';
+import { queueOfflineRequest } from './offline-sync';
 
 // Create axios instance
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -13,6 +15,37 @@ import { encryptPayload } from './encryption';
 
 // Add token to requests if available
 apiClient.interceptors.request.use(async (config) => {
+  const isBrowser = typeof window !== 'undefined';
+  const method = config.method?.toLowerCase();
+
+  if (
+    isBrowser &&
+    !navigator.onLine &&
+    method &&
+    ['post', 'put', 'patch', 'delete'].includes(method) &&
+    config.url
+  ) {
+    const url = config.baseURL
+      ? new URL(config.url, config.baseURL).toString()
+      : config.url;
+
+    await queueOfflineRequest({
+      url,
+      method: method.toUpperCase() as 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+      headers: { ...(config.headers as Record<string, string>) },
+      body:
+        typeof config.data === 'string'
+          ? config.data
+          : config.data !== undefined
+          ? JSON.stringify(config.data)
+          : undefined,
+    });
+
+    return Promise.reject(
+      new Error('Offline: request queued for later synchronization.')
+    );
+  }
+
   const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -40,12 +73,78 @@ apiClient.interceptors.request.use(async (config) => {
 // Handle response errors
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const isBrowser = typeof window !== 'undefined';
+    const originalRequest = error.config;
+
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/auth/refresh') &&
+      !originalRequest.url?.includes('/auth/login')
+    ) {
+      originalRequest._retry = true;
+      try {
+        const refreshRes = await axios.post(
+          `${API_BASE_URL}/auth/refresh`,
+          {},
+          { withCredentials: true }
+        );
+        const newAccessToken = refreshRes.data?.accessToken;
+        if (newAccessToken) {
+          localStorage.setItem('token', newAccessToken);
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+          return apiClient(originalRequest);
+        }
+      } catch (_refreshErr) {
+        // Refresh failed, fall through to logout cleanup
+      }
+    }
+
     if (error.response?.status === 401) {
       // Token expired or invalid
       localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
-      window.location.href = '/auth/login';
+      if (isBrowser) {
+        const publicPaths = ['/auth/login', '/auth/register', '/roadmap', '/courses'];
+        const isPublicPath = publicPaths.some(p => window.location.pathname.startsWith(p));
+        if (!isPublicPath) {
+          window.location.href = '/auth/login';
+        }
+      }
+    }
+
+    const config = error.config;
+    const method = config?.method?.toLowerCase();
+    const shouldQueue =
+      isBrowser &&
+      !navigator.onLine &&
+      method &&
+      ['post', 'put', 'patch', 'delete'].includes(method) &&
+      config?.url;
+
+    if (shouldQueue) {
+      const url = config.baseURL
+        ? new URL(config.url, config.baseURL).toString()
+        : config.url;
+
+      await queueOfflineRequest({
+        url,
+        method: method.toUpperCase() as 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+        headers: { ...(config.headers as Record<string, string>) },
+        body:
+          typeof config.data === 'string'
+            ? config.data
+            : config.data !== undefined
+            ? JSON.stringify(config.data)
+            : undefined,
+      });
+
+      return Promise.reject(
+        new Error('Offline: request queued for later synchronization.')
+      );
     }
 
     if (error.response?.data?.error && !error.message) {

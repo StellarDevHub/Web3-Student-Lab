@@ -1,0 +1,67 @@
+name: Soroban Smart Contracts CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths:
+      - 'contracts/**'
+      - '.github/workflows/soroban-contracts.yml'
+  pull_request:
+    branches: [ "main", "master" ]
+    paths:
+      - 'contracts/**'
+      - '.github/workflows/soroban-contracts.yml'
+
+jobs:
+  test-and-build:
+    name: Soroban Contract Verification & WASM Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy, rustfmt
+
+      - name: Cache Cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts -> target
+
+      - name: Code Formatting Check
+        working-directory: ./contracts
+        run: cargo fmt --check
+
+      - name: Clippy Linter Check
+        working-directory: ./contracts
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Workspace Compilation Check
+        working-directory: ./contracts
+        run: cargo check --workspace --all-targets
+
+      - name: Unit & Integration Test Suite
+        working-directory: ./contracts
+        env:
+          RUST_BACKTRACE: 1
+          CARGO_TERM_COLOR: always
+        run: cargo test --workspace -- --nocapture
+
+      - name: Property & Fuzzing Tests
+        working-directory: ./contracts
+        run: cargo test --lib
+
+      - name: Compile Release WASM Bytecodes
+        working-directory: ./contracts
+        run: cargo build --workspace --target wasm32-unknown-unknown --release
+
+      - name: Upload Compiled WASM Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: soroban-wasm-binaries
+          path: contracts/target/wasm32-unknown-unknown/release/*.wasm
+          retention-days: 30

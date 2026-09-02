@@ -3,11 +3,52 @@ name = "soroban-certificate-contract"
 version = "0.1.0"
 edition = "2021"
 
+# Workspace root for all buildable Soroban contract crates under contracts/.
+# See docs/contracts/WORKSPACE.md for membership criteria and contributor guidance.
+[workspace]
+members = [
+    ".",
+    "auth_checker",
+    "certificate_nft",
+    "commit_reveal_rng",
+    "content_management_system",
+    "continuous_bonding_curve",
+    "course_proxy",
+    "cross_chain_client",
+    "dao_governance",
+    "fractional_nft_vault",
+    "freelance-platform",
+    "hackathon-team-matching",
+    "hello_world",
+    "implementation_v1",
+    "implementation_v2",
+    "lending_pool",
+    "multisig_wallet_timelock",
+    "parametric_insurance",
+    "payment_gateway",
+    "payment_streaming",
+    "pr_simulation",
+    "proxy",
+    "quadratic_funding",
+    "smart_vault",
+    "testnet_faucet_integration",
+    "zk_proof_verifier",
+    "certificate",
+    "contract_events",
+    "peer_review",
+]
+# Incomplete or non-crate directories under contracts/ must not be listed as members.
+exclude = [
+    "did_registry",
+    "automated_testing_suite",
+    "cicd_pipeline",
+]
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-soroban-sdk = "22.0.0"
+soroban-sdk = "26.1.0"
 
 [dev-dependencies]
 soroban-sdk = { version = "22.0.0", features = ["testutils"] }
@@ -21,3 +62,7 @@ debug-assertions = false
 panic = "abort"
 codegen-units = 1
 lto = true
+soroban-sdk = { version = "26.1.0", features = ["testutils"] }
+rand = { version = "0.8", features = ["small_rng"] }
+ed25519-dalek = { version = "2", default-features = false, features = ["std", "rand_core"] }
+proptest = "1"

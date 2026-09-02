@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import InlineComment, { CommentThread } from '../InlineComment';
 
@@ -72,8 +72,10 @@ describe('InlineComment', () => {
       />
     );
 
-    const editButton = screen.getByTitle('Edit comment');
-    expect(editButton).toBeInTheDocument();
+    // Component renders the edit button when currentUser matches comment.author
+    const editButtons = screen.getAllByTitle('Edit comment');
+    expect(editButtons.length).toBeGreaterThan(0);
+    expect(editButtons[0]).toBeInTheDocument();
   });
 
   it('hides edit button for other users comment', () => {
@@ -91,6 +93,7 @@ describe('InlineComment', () => {
       />
     );
 
+    // Edit button should not exist when user is not the author
     const editButton = screen.queryByTitle('Edit comment');
     expect(editButton).not.toBeInTheDocument();
   });
@@ -108,8 +111,8 @@ describe('InlineComment', () => {
       />
     );
 
-    const editButton = screen.getByTitle('Edit comment');
-    fireEvent.click(editButton);
+    const editButtons = screen.getAllByTitle('Edit comment');
+    fireEvent.click(editButtons[0]);
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('This is a test comment')).toBeInTheDocument();
@@ -131,8 +134,8 @@ describe('InlineComment', () => {
       />
     );
 
-    const editButton = screen.getByTitle('Edit comment');
-    fireEvent.click(editButton);
+    const editButtons = screen.getAllByTitle('Edit comment');
+    fireEvent.click(editButtons[0]);
 
     const textarea = screen.getByDisplayValue('This is a test comment');
     fireEvent.change(textarea, { target: { value: 'Updated comment content' } });
@@ -234,7 +237,7 @@ describe('InlineComment', () => {
     const replyTextarea = screen.getByPlaceholderText('Write a reply...');
     fireEvent.change(replyTextarea, { target: { value: 'This is my reply' } });
 
-    const sendButton = screen.getByTitle('Post Rebuttal');
+    const sendButton = screen.getByTitle('Post reply');
     fireEvent.click(sendButton);
 
     await waitFor(() => {
@@ -303,8 +306,9 @@ describe('InlineComment', () => {
       />
     );
 
-    const indicator = screen.getByRole('generic'); // The color indicator
-    expect(indicator).toHaveClass('bg-green-500');
+    // The color indicator is a div with a specific class
+    const indicator = document.querySelector('.bg-green-500.rounded-full');
+    expect(indicator).not.toBeNull();
   });
 
   it('shows pending indicator for unresolved comments', () => {
@@ -320,7 +324,8 @@ describe('InlineComment', () => {
       />
     );
 
-    const indicator = screen.getByRole('generic'); // The color indicator
-    expect(indicator).toHaveClass('bg-yellow-500');
+    // The color indicator is a div with a specific class
+    const indicator = document.querySelector('.bg-yellow-500.rounded-full');
+    expect(indicator).not.toBeNull();
   });
 });

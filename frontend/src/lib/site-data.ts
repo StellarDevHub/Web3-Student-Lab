@@ -3,8 +3,10 @@ import {
   BrainCircuit,
   CheckCircle2,
   Compass,
+  Fuel,
   LayoutDashboard,
   Rocket,
+  Calculator,
 } from 'lucide-react';
 
 export type NavItem = {
@@ -20,6 +22,16 @@ export const primaryNav: NavItem[] = [
     description: 'Browse guided learning modules and beginner tracks.',
   },
   {
+    label: 'Dashboard',
+    href: '/dashboard',
+    description: 'Track progress, enrollments, and issued credentials.',
+  },
+  {
+    label: 'Collaborative Lab',
+    href: '/collaborative-lab',
+    description: 'Work on hackathons, design architecture, and build your decentralized reputation.',
+  },
+  {
     label: 'Roadmap',
     href: '/roadmap',
     description: 'See the step-by-step path from beginner to builder.',
@@ -30,9 +42,19 @@ export const primaryNav: NavItem[] = [
     description: 'Check certificate records and public credential status.',
   },
   {
-    label: 'Dashboard',
-    href: '/dashboard',
-    description: 'Track progress, enrollments, and issued credentials.',
+    label: 'Calculator',
+    href: '/yield-calculator',
+    description: 'Estimate compounding yield returns based on APY, frequency, and lock-up terms.',
+  },
+  {
+    label: 'Gas Auction',
+    href: '/mempool-auction',
+    description: 'Simulate a mempool fee market where the highest bidders are mined first.',
+  },
+  {
+    label: 'Admin',
+    href: '/admin/content',
+    description: 'Create and manage courses, curriculum, and learning modules.',
   },
 ];
 
@@ -48,6 +70,18 @@ export const spotlightTools = [
     href: '/roadmap',
     summary: 'A clearer path from fundamentals to hackathon-ready project work.',
     icon: Compass,
+  },
+  {
+    title: 'Yield Calculator',
+    href: '/yield-calculator',
+    summary: 'Estimate compounding yield returns based on APY, frequency, and lock-up terms.',
+    icon: Calculator,
+  },
+  {
+    title: 'Gas Fee Auction',
+    href: '/mempool-auction',
+    summary: 'Watch a live mempool sort by fee bids and mine the highest bidders into blocks.',
+    icon: Fuel,
   },
   {
     title: 'Verification Center',

@@ -13,10 +13,10 @@ export default function NotificationBell() {
       <button
         onClick={() => setOpen(true)}
         aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
-        className="group relative flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-zinc-900 transition-colors hover:border-red-500/50"
+        className="group relative flex h-10 w-10 items-center justify-center rounded-full transition-colors bg-transparent hover:bg-white/5"
       >
         <svg
-          className="h-5 w-5 text-gray-500 transition-colors group-hover:text-white"
+          className="h-5 w-5 text-gray-400 transition-colors group-hover:text-white"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"

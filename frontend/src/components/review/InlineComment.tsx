@@ -259,6 +259,7 @@ export default function InlineComment({
                     <button
                       onClick={handleReply}
                       disabled={!replyContent.trim()}
+                      title="Post reply"
                       className="rounded bg-red-600 px-2 py-1 text-xs text-white transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Send className="h-3 w-3" />

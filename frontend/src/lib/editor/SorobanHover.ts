@@ -162,14 +162,8 @@ function hoverMarkdown(
   };
 }
 
-export function registerSorobanHover(monacoApi: typeof monaco) {
-  if (hoverRegistered) {
-    return;
-  }
-
-  hoverRegistered = true;
-
-  monacoApi.languages.registerHoverProvider(SOROBAN_LANGUAGE_ID, {
+function registerHoverProvider(monacoApi: typeof monaco, languageId: string) {
+  monacoApi.languages.registerHoverProvider(languageId, {
     provideHover(model, position) {
       const word = model.getWordAtPosition(position);
       const line = model.getLineContent(position.lineNumber);
@@ -204,4 +198,15 @@ export function registerSorobanHover(monacoApi: typeof monaco) {
       };
     },
   });
+}
+
+export function registerSorobanHover(monacoApi: typeof monaco) {
+  if (hoverRegistered) {
+    return;
+  }
+
+  hoverRegistered = true;
+
+  registerHoverProvider(monacoApi, SOROBAN_LANGUAGE_ID);
+  registerHoverProvider(monacoApi, 'rust');
 }

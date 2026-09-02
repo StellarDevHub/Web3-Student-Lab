@@ -16,12 +16,12 @@ export const searchQuerySchema = z.object({
   sort: z.string().optional(),
 });
 
-export const searchFiltersSchema = z.record(z.any());
+export const searchFiltersSchema = z.record(z.string(), z.any());
 
 export const searchParamsSchema = z
   .object({
     query: z.string().optional(),
-    filters: z.record(z.any()).optional(),
+    filters: z.record(z.string(), z.any()).optional(),
     sort: z.string().optional(),
     page: z.number().int().min(1).optional(),
     limit: z.number().int().min(1).max(100).optional(),

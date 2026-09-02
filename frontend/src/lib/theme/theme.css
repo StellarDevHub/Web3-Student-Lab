@@ -76,6 +76,45 @@
   --color-chart-text: #ffffff;
 }
 
+/* Theme CSS Variables for OLED Mode */
+[data-theme='oled'],
+.oled {
+  /* Background Colors - Pure Pitch Black */
+  --color-bg-primary: #000000;
+  --color-bg-secondary: #000000;
+  --color-bg-tertiary: #000000;
+  --color-bg-accent: #000000;
+
+  /* Text Colors - High Contrast White */
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #f0f0f0;
+  --color-text-tertiary: #d4d4d4;
+  --color-text-muted: #888888;
+
+  /* Border Colors - High Contrast */
+  --color-border-light: #1c1c1c;
+  --color-border-medium: #333333;
+  --color-border-dark: #555555;
+
+  /* Interactive Colors */
+  --color-interactive-primary: #7c3aed;
+  --color-interactive-primary-hover: #c084fc;
+  --color-interactive-secondary: #121212;
+  --color-interactive-secondary-hover: #1f1f1f;
+
+  /* Status Colors */
+  --color-status-success: #10b981;
+  --color-status-error: #ef4444;
+  --color-status-warning: #f59e0b;
+  --color-status-info: #3b82f6;
+
+  /* Chart Colors */
+  --color-chart-primary: #a78bfa;
+  --color-chart-accent: #c084fc;
+  --color-chart-neutral: #374151;
+  --color-chart-text: #ffffff;
+}
+
 /* Ensure theme transitions are smooth */
 html {
   transition:
@@ -83,13 +122,14 @@ html {
     color 0.3s ease;
 }
 
-html.dark {
+html.dark,
+html.oled {
   color-scheme: dark;
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
 }
 
-html:not(.dark) {
+html:not(.dark):not(.oled) {
   color-scheme: light;
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);

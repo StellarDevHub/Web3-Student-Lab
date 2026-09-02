@@ -1,173 +1,70 @@
 'use client';
 
-import { analyticsAPI } from '@/lib/api';
-import { learnerPillars, spotlightTools } from '@/lib/site-data';
-import { ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { ArrowRight, BookOpen, Code, Users } from 'lucide-react';
+import { useI18n } from '@/i18n';
 
-type LandingStats = {
-  courses: number;
-  students: number;
-  credentials: number;
-};
-
-const defaultStats: LandingStats = {
-  courses: 12,
-  students: 1250,
-  credentials: 450,
-};
-
-export default function HomePage() {
-  const [stats, setStats] = useState<LandingStats>(defaultStats);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function load() {
-      try {
-        const data = (await analyticsAPI.getGlobalStats()) as any;
-        const summary = data?.summary || [];
-        const studentStat = summary.find((item: any) => item.metricType === 'USER_STAT');
-        const enrollmentStat = summary.find((item: any) => item.metricType === 'ENROLLMENT_STAT');
-        const courseStat = summary.find((item: any) => item.metricType === 'COURSE_STAT');
-
-        if (!mounted) return;
-        setStats({
-          courses: courseStat?._count?._all || defaultStats.courses,
-          students: studentStat?._count?._all || defaultStats.students,
-          credentials: enrollmentStat?._count?._all || defaultStats.credentials,
-        });
-      } catch {
-        if (mounted) setStats(defaultStats);
-      }
-    }
-
-    load();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+export default function Home() {
+  const { t } = useI18n();
 
   return (
-    <div className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
-      <section className="grid gap-12 py-14 lg:grid-cols-[1.15fr_0.85fr] lg:py-20">
-        <div className="space-y-8">
-          <span className="eyebrow">Open-source blockchain education</span>
-          <div className="space-y-5">
-            <h1 className="max-w-4xl text-5xl font-semibold tracking-tight text-[var(--text-strong)] sm:text-6xl lg:text-7xl">
-              Learn blockchain, smart contracts, and hackathon building in one place.
-            </h1>
-            <p className="max-w-2xl text-lg leading-8 text-[var(--muted)] sm:text-xl">
-              Web3 Student Lab helps beginners and university students move from curiosity to
-              shipped projects with guided modules, practical tools, and verifiable outcomes.
-            </p>
-          </div>
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center relative overflow-hidden">
+      <div className="pointer-events-none absolute top-0 right-0 h-[800px] w-[800px] rounded-full bg-red-600/5 blur-[150px]"></div>
+      <div className="pointer-events-none absolute bottom-0 left-0 h-[600px] w-[600px] rounded-full bg-red-600/5 blur-[120px]"></div>
 
-          <div className="flex flex-col gap-4 sm:flex-row">
-            <Link
-              href="/courses"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--brand)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_20px_40px_rgba(216,72,31,0.22)] transition hover:translate-y-[-1px] hover:bg-[var(--brand-strong)]"
-            >
-              Explore learning modules
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href="/verify"
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-white/12 px-6 py-3.5 text-sm font-semibold text-[var(--text-strong)] transition hover:bg-white/5"
-            >
-              Verify credentials
-              <CheckCircle2 className="h-4 w-4" />
-            </Link>
-          </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 flex flex-col items-center text-center">
+        <h1 className="text-5xl md:text-7xl font-black tracking-tighter uppercase mb-6">
+          {t('home.title')}
+          <span className="text-red-500">{t('home.title_accent')}</span>
+        </h1>
+        <p className="text-xl md:text-2xl text-text-secondary max-w-3xl mb-12 font-light">
+          {t('home.subtitle')}
+        </p>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            {[
-              { label: 'Modules', value: stats.courses },
-              { label: 'Learners', value: stats.students },
-              { label: 'Credential records', value: stats.credentials },
-            ].map((item) => (
-              <div key={item.label} className="surface-card p-5">
-                <p className="text-3xl font-semibold text-[var(--text-strong)]">{item.value}</p>
-                <p className="mt-1 text-sm text-[var(--muted)]">{item.label}</p>
-              </div>
-            ))}
+        <div className="flex flex-col sm:flex-row gap-4 mb-20">
+          <Link
+            href="/dashboard"
+            className="px-8 py-4 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(220,38,38,0.3)] hover:shadow-[0_0_30px_rgba(220,38,38,0.5)] flex items-center justify-center gap-2"
+          >
+            {t('home.launch_app')} <ArrowRight className="h-5 w-5" />
+          </Link>
+          <Link
+            href="https://github.com/StellarDevHub/Web3-Student-Lab"
+            target="_blank"
+            className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold uppercase tracking-widest transition-all flex items-center justify-center"
+          >
+            {t('home.view_source')}
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl">
+          <div className="bg-bg-secondary/50 border border-border-theme p-8 rounded-2xl backdrop-blur-sm text-left transition-all hover:-translate-y-2 hover:border-red-500/50">
+            <BookOpen className="h-10 w-10 text-red-400 mb-4" />
+            <h3 className="text-xl font-bold mb-2">{t('home.feature_curriculum_title')}</h3>
+            <p className="text-text-secondary">{t('home.feature_curriculum_desc')}</p>
+          </div>
+          <div className="bg-bg-secondary/50 border border-border-theme p-8 rounded-2xl backdrop-blur-sm text-left transition-all hover:-translate-y-2 hover:border-red-500/50">
+            <Code className="h-10 w-10 text-red-400 mb-4" />
+            <h3 className="text-xl font-bold mb-2">{t('home.feature_ide_title')}</h3>
+            <p className="text-text-secondary">{t('home.feature_ide_desc')}</p>
+          </div>
+          <div className="bg-bg-secondary/50 border border-border-theme p-8 rounded-2xl backdrop-blur-sm text-left transition-all hover:-translate-y-2 hover:border-red-500/50">
+            <Users className="h-10 w-10 text-red-400 mb-4" />
+            <h3 className="text-xl font-bold mb-2">{t('home.feature_collab_title')}</h3>
+            <p className="text-text-secondary">{t('home.feature_collab_desc')}</p>
           </div>
         </div>
 
-        <div className="surface-card relative overflow-hidden p-8 lg:p-10">
-          <div className="absolute right-0 top-0 h-40 w-40 rounded-bl-[3rem] bg-[radial-gradient(circle,rgba(240,100,45,0.25),transparent_72%)]" />
-          <div className="relative space-y-8">
-            <div className="flex items-center gap-3 text-sm font-medium text-[var(--text-strong)]">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/7">
-                <Sparkles className="h-5 w-5 text-[var(--brand-strong)]" />
-              </div>
-              <div>
-                <p>What makes this platform useful</p>
-                <p className="text-xs text-[var(--muted)]">
-                  A tighter path from learning to building.
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-5">
-              {learnerPillars.map((pillar) => (
-                <div
-                  key={pillar.title}
-                  className="rounded-2xl border border-white/8 bg-white/4 p-5"
-                >
-                  <h2 className="text-lg font-semibold text-[var(--text-strong)]">
-                    {pillar.title}
-                  </h2>
-                  <p className="mt-2 text-sm leading-7 text-[var(--muted)]">{pillar.body}</p>
-                </div>
-              ))}
-            </div>
+        <div className="mt-24 max-w-3xl bg-yellow-500/10 border border-yellow-500/20 p-6 rounded-2xl flex flex-col sm:flex-row items-center gap-6">
+          <div className="bg-yellow-500/20 p-4 rounded-full shrink-0">
+            <span className="text-3xl">🌱</span>
+          </div>
+          <div className="text-left">
+            <h4 className="text-lg font-bold text-yellow-500 mb-1">{t('home.grant_title')}</h4>
+            <p className="text-yellow-200/80 text-sm">{t('home.grant_desc')}</p>
           </div>
         </div>
-      </section>
-
-      <section className="space-y-6 py-10">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <span className="eyebrow">Core experiences</span>
-            <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[var(--text-strong)]">
-              The pages learners should actually use
-            </h2>
-          </div>
-          <p className="max-w-xl text-sm leading-7 text-[var(--muted)]">
-            This rebuild trims the clutter and puts the highest-value tools first so students can
-            navigate the platform without hunting through half-working links.
-          </p>
-        </div>
-
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {spotlightTools.map((tool) => {
-            const Icon = tool.icon;
-            return (
-              <Link
-                key={tool.href}
-                href={tool.href}
-                className="surface-card group flex h-full flex-col justify-between p-6 transition hover:translate-y-[-2px] hover:border-[rgba(240,100,45,0.35)]"
-              >
-                <div>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/6 text-[var(--brand-strong)]">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <h3 className="mt-5 text-xl font-semibold text-[var(--text-strong)]">
-                    {tool.title}
-                  </h3>
-                  <p className="mt-3 text-sm leading-7 text-[var(--muted)]">{tool.summary}</p>
-                </div>
-                <div className="mt-8 inline-flex items-center gap-2 text-sm font-medium text-[var(--text-strong)]">
-                  Open page
-                  <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
+      </div>
     </div>
   );
 }

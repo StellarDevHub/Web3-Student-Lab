@@ -4,22 +4,33 @@ import * as Y from 'yjs';
 import { useCanvasCollaboration, useSharedCanvas, useAwareness } from '../useCanvasCollaboration';
 
 vi.mock('y-websocket', () => {
+  class MockWebsocketProvider {
+    doc: any;
+    roomName: string;
+    wsUrl: string;
+    options: any;
+    awareness = {
+      setLocalState: vi.fn(),
+      on: vi.fn(),
+      off: vi.fn(),
+      getStates: vi.fn().mockReturnValue(new Map()),
+      clientID: 1,
+    };
+    on = vi.fn((event: string, cb: any) => {
+      if (event === 'status') {
+        setTimeout(() => cb({ status: 'connected' }), 10);
+      }
+    });
+    disconnect = vi.fn();
+    constructor(wsUrl: string, roomName: string, doc: any, options?: any) {
+      this.wsUrl = wsUrl;
+      this.roomName = roomName;
+      this.doc = doc;
+      this.options = options;
+    }
+  }
   return {
-    WebsocketProvider: vi.fn().mockImplementation(() => ({
-      awareness: {
-        setLocalState: vi.fn(),
-        on: vi.fn(),
-        off: vi.fn(),
-        getStates: vi.fn().mockReturnValue(new Map()),
-        clientID: 1,
-      },
-      on: vi.fn((event, cb) => {
-        if (event === 'status') {
-          setTimeout(() => cb({ status: 'connected' }), 10);
-        }
-      }),
-      disconnect: vi.fn(),
-    })),
+    WebsocketProvider: MockWebsocketProvider,
   };
 });
 

@@ -4,6 +4,7 @@ export interface User {
   name: string;
   did?: string | null;
   walletAddress?: string | null;
+  role?: string; // Added for admin authorization
 }
 
 export interface LoginRequest {

@@ -4,7 +4,6 @@ import { Parser } from 'json2csv';
 import path from 'path';
 import prisma from '../db/index.js';
 import logger from '../utils/logger.js';
-import { redisConnection } from '../utils/redis.js';
 import { broadcastEvent } from '../websocket/gateway.js';
 
 const EXPORTS_DIR = path.join(process.cwd(), 'exports');
@@ -106,7 +105,18 @@ const worker = new Worker(
     return result;
   },
   {
-    connection: redisConnection,
+    connection: {
+      host: new URL(process.env.REDIS_URL || (() => {
+        throw new Error('REDIS_URL environment variable is required');
+      })()).hostname,
+      port: Number(new URL(process.env.REDIS_URL || (() => {
+        throw new Error('REDIS_URL environment variable is required');
+      })()).port) || 6379,
+      password: new URL(process.env.REDIS_URL || (() => {
+        throw new Error('REDIS_URL environment variable is required');
+      })()).password || undefined,
+      maxRetriesPerRequest: null,
+    },
   }
 );
 
@@ -129,11 +139,37 @@ const _cleanupWorker = new Worker(
       }
     }
   },
-  { connection: redisConnection }
+  {
+    connection: {
+      host: new URL(process.env.REDIS_URL || (() => {
+        throw new Error('REDIS_URL environment variable is required');
+      })()).hostname,
+      port: Number(new URL(process.env.REDIS_URL || (() => {
+        throw new Error('REDIS_URL environment variable is required');
+      })()).port) || 6379,
+      password: new URL(process.env.REDIS_URL || (() => {
+        throw new Error('REDIS_URL environment variable is required');
+      })()).password || undefined,
+      maxRetriesPerRequest: null,
+    },
+  }
 );
 
 import { Queue } from 'bullmq';
-const cleanupQueue = new Queue(CLEANUP_QUEUE_NAME, { connection: redisConnection });
+const cleanupQueue = new Queue(CLEANUP_QUEUE_NAME, {
+  connection: {
+    host: new URL(process.env.REDIS_URL || (() => {
+      throw new Error('REDIS_URL environment variable is required');
+    })()).hostname,
+    port: Number(new URL(process.env.REDIS_URL || (() => {
+      throw new Error('REDIS_URL environment variable is required');
+    })()).port) || 6379,
+    password: new URL(process.env.REDIS_URL || (() => {
+      throw new Error('REDIS_URL environment variable is required');
+    })()).password || undefined,
+    maxRetriesPerRequest: null,
+  }
+});
 await cleanupQueue.add(
   'cleanup',
   {},

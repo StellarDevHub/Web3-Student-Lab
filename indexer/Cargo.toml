@@ -1,0 +1,50 @@
+[package]
+name = "soroban-indexer"
+version = "0.1.0"
+edition = "2021"
+description = "Off-chain event indexer for Soroban/Stellar smart contracts. Polls Soroban RPC, persists events to SQLite/Postgres, and exposes a WebSocket fanout."
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "soroban-indexer"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime / utilities
+tokio = { version = "1.37", features = ["full"] }
+futures = "0.3"
+async-stream = "0.3"
+
+# Web server + WebSocket fanout
+axum = { version = "0.7.5", features = ["ws", "macros"] }
+
+# Persistence
+sqlx = { version = "0.7.4", default-features = false, features = [
+    "runtime-tokio",
+    "sqlite",
+    "postgres",
+    "tls-rustls",
+    "macros",
+    "json",
+] }
+
+# HTTP RPC client
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# Serialisation
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Misc
+anyhow = "1.0"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+opt-level = 3

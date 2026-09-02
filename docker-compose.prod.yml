@@ -1,0 +1,34 @@
+# Production-like / high-availability override — Sentinel + Cluster enabled.
+# Usage (from repo root):
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Use this when you need to exercise Redis Sentinel failover or Cluster
+# topology alongside PostgreSQL. The base docker-compose.yml already
+# defines these services; this file wires the backend to HA Redis modes.
+
+services:
+  backend:
+    environment:
+      # Switch to sentinel or cluster as needed for HA testing:
+      #   REDIS_MODE=sentinel  |  REDIS_MODE=cluster  |  REDIS_MODE=standalone
+      - REDIS_MODE=${REDIS_MODE:-sentinel}
+      - REDIS_SENTINELS=redis-sentinel-1:26379,redis-sentinel-2:26380,redis-sentinel-3:26381
+      - REDIS_SENTINEL_NAME=mymaster
+      - REDIS_CLUSTER_NODES=redis-cluster-1:6381,redis-cluster-2:6382,redis-cluster-3:6383
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redis-sentinel-1:
+        condition: service_healthy
+      redis-sentinel-2:
+        condition: service_healthy
+      redis-sentinel-3:
+        condition: service_healthy
+      redis-cluster-1:
+        condition: service_healthy
+      redis-cluster-2:
+        condition: service_healthy
+      redis-cluster-3:
+        condition: service_healthy

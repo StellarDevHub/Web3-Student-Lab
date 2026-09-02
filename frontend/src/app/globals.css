@@ -1,6 +1,12 @@
 @import 'tailwindcss';
 @source '../**/*.{ts,tsx}';
 
+/* react-loading-skeleton overrides */
+.react-loading-skeleton {
+  --base-color: rgba(255, 255, 255, 0.05) !important;
+  --highlight-color: rgba(255, 255, 255, 0.1) !important;
+}
+
 :root {
   --bg: #09111d;
   --bg-panel: rgba(14, 21, 32, 0.78);
@@ -20,11 +26,30 @@
 }
 
 @theme inline {
-  --font-sans: "Sora", "Segoe UI", sans-serif;
+  --font-sans: "Outfit", "Inter", "Sora", "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "SFMono-Regular", monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 }
+
+/* Aspect Ratio Containers for ZERO Layout Shift */
+.aspect-chart {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  min-height: 250px;
+}
+
+.aspect-badge {
+  aspect-ratio: 1 / 1;
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.aspect-skeleton {
+  aspect-ratio: 4 / 1;
+  width: 100%;
+}
+
 
 * {
   box-sizing: border-box;
@@ -126,4 +151,216 @@ textarea {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+.skip-link {
+  position: fixed;
+  top: -100%;
+  left: 0;
+  z-index: 9999;
+  padding: 0.75rem 1rem;
+  border-bottom-right-radius: 0.75rem;
+  background: white;
+  color: #111827;
+  font-weight: 600;
+  font-size: 0.875rem;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  transition: top 0.1s ease-in-out;
+}
+
+.skip-link:focus {
+  top: 0;
+  outline: 2px solid var(--brand-strong);
+  outline-offset: 2px;
+}
+
+.skip-link-group .skip-link:not(:first-child) {
+  left: 14rem;
+}
+
+.skip-link-group .skip-link:nth-child(3) {
+  left: 28rem;
+}
+
+[data-focus-visible-added]:focus-visible {
+  outline: 2px solid var(--brand-strong);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+[role="tab"]:focus-visible,
+[role="menuitem"]:focus-visible,
+[role="option"]:focus-visible,
+[role="radio"]:focus-visible,
+[role="switch"]:focus-visible {
+  outline: 2px solid var(--brand-strong);
+  outline-offset: 2px;
+}
+
+[aria-current="page"] {
+  font-weight: 600;
+}
+
+@media (forced-colors: active) {
+  .skip-link:focus {
+    outline: 3px solid ButtonText;
+  }
+  :focus-visible {
+    outline: 3px solid ButtonText;
+  }
+}
+
+/* ─── Issue #711: Lesson Viewer – Dark Mode Code Block Overrides ───────────
+ *
+ * Scope Prism.js / Shiki CSS custom properties to the lesson viewer so that
+ * switching the site theme seamlessly swaps code highlight backgrounds and
+ * token colours without touching the global stylesheet or third-party bundles.
+ *
+ * Strategy:
+ *  - `.lesson-viewer` wraps all markdown-rendered lesson content.
+ *  - The `dark` selector matches Tailwind's dark-mode class strategy
+ *    (`class` strategy on <html>).
+ *  - Custom properties override Prism / Shiki tokens at the component scope.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* Light-mode defaults (already in effect unless .dark is present) */
+.lesson-viewer pre,
+.lesson-viewer code {
+  --code-bg: #f4f6fa;
+  --code-fg: #1e2430;
+  --code-border: rgba(0, 0, 0, 0.08);
+  --code-selection: rgba(37, 181, 164, 0.25);
+
+  /* Prism token overrides */
+  --prism-bg: var(--code-bg);
+  --prism-default: var(--code-fg);
+  --prism-comment: #6b7280;
+  --prism-keyword: #7c3aed;
+  --prism-string: #059669;
+  --prism-number: #d97706;
+  --prism-function: #2563eb;
+  --prism-operator: #db2777;
+  --prism-punctuation: #6b7280;
+
+  /* Shiki CSS variable tokens */
+  --shiki-color-background: var(--code-bg);
+  --shiki-color-text: var(--code-fg);
+  --shiki-token-comment: var(--prism-comment);
+  --shiki-token-keyword: var(--prism-keyword);
+  --shiki-token-string: var(--prism-string);
+  --shiki-token-number: var(--prism-number);
+  --shiki-token-function: var(--prism-function);
+  --shiki-token-operator: var(--prism-operator);
+  --shiki-token-punctuation: var(--prism-punctuation);
+}
+
+/* Dark-mode overrides – activated by Tailwind's html.dark class */
+.dark .lesson-viewer pre,
+.dark .lesson-viewer code {
+  --code-bg: #0d1520;
+  --code-fg: #cdd6f4;
+  --code-border: rgba(255, 255, 255, 0.08);
+  --code-selection: rgba(37, 181, 164, 0.20);
+
+  --prism-bg: var(--code-bg);
+  --prism-default: var(--code-fg);
+  --prism-comment: #6c7a8e;
+  --prism-keyword: #cba6f7;
+  --prism-string: #a6e3a1;
+  --prism-number: #fab387;
+  --prism-function: #89b4fa;
+  --prism-operator: #f38ba8;
+  --prism-punctuation: #7f849c;
+
+  --shiki-color-background: var(--code-bg);
+  --shiki-color-text: var(--code-fg);
+  --shiki-token-comment: var(--prism-comment);
+  --shiki-token-keyword: var(--prism-keyword);
+  --shiki-token-string: var(--prism-string);
+  --shiki-token-number: var(--prism-number);
+  --shiki-token-function: var(--prism-function);
+  --shiki-token-operator: var(--prism-operator);
+  --shiki-token-punctuation: var(--prism-punctuation);
+}
+
+/* Apply the resolved custom properties to actual elements */
+.lesson-viewer pre {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  overflow-x: auto;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.lesson-viewer code {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  font-family: var(--font-mono, 'JetBrains Mono', 'SFMono-Regular', monospace);
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+
+/* Inline code inside prose */
+.lesson-viewer p code,
+.lesson-viewer li code {
+  padding: 0.15em 0.4em;
+  border-radius: 0.3rem;
+  border: 1px solid var(--code-border);
+}
+
+/* Selection highlight */
+.lesson-viewer pre ::selection,
+.lesson-viewer code ::selection {
+  background: var(--code-selection);
+}
+
+/* Prism.js token colour bindings */
+.lesson-viewer .token.comment,
+.lesson-viewer .token.block-comment,
+.lesson-viewer .token.prolog,
+.lesson-viewer .token.doctype,
+.lesson-viewer .token.cdata { color: var(--prism-comment); }
+
+.lesson-viewer .token.keyword,
+.lesson-viewer .token.important,
+.lesson-viewer .token.atrule,
+.lesson-viewer .token.builtin { color: var(--prism-keyword); }
+
+.lesson-viewer .token.string,
+.lesson-viewer .token.char,
+.lesson-viewer .token.attr-value { color: var(--prism-string); }
+
+.lesson-viewer .token.number,
+.lesson-viewer .token.boolean { color: var(--prism-number); }
+
+.lesson-viewer .token.function,
+.lesson-viewer .token.function-name { color: var(--prism-function); }
+
+.lesson-viewer .token.operator,
+.lesson-viewer .token.entity,
+.lesson-viewer .token.url { color: var(--prism-operator); }
+
+.lesson-viewer .token.punctuation { color: var(--prism-punctuation); }
+
+/* ─── Playground execution status bar ─────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+/* Thin themed scrollbar shared by simulator-style panels */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #ef4444;
 }

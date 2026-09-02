@@ -12,8 +12,9 @@ import {
   AuthRequiredFlag,
   AuthClawbackEnabledFlag,
 } from '@stellar/stellar-sdk';
+import { getPublicEnv } from './env';
 
-const HORIZON_URL = process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon-testnet.stellar.org';
+const HORIZON_URL = getPublicEnv().horizonUrl;
 const server = new Server(HORIZON_URL);
 
 export interface StellarAssetInfo {

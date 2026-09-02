@@ -1,6 +1,6 @@
+import { apiRequestCache } from './api-cache';
 import apiClient from './api-client';
 import { API_BASE_URL } from './api-config';
-import { apiRequestCache } from './api-cache';
 
 export interface User {
   id: string;
@@ -8,6 +8,9 @@ export interface User {
   name: string;
   address?: string;
   walletAddress?: string | null;
+  role?: 'student' | 'administrator' | 'instructor';
+  roles?: Array<'student' | 'administrator' | 'instructor'>;
+  permissions?: string[];
 }
 
 export interface AuthResponse {
@@ -18,6 +21,7 @@ export interface AuthResponse {
 export interface LoginRequest {
   email: string;
   password: string;
+  turnstileToken?: string;
 }
 
 export interface RegisterRequest {
@@ -26,6 +30,7 @@ export interface RegisterRequest {
   firstName: string;
   lastName: string;
   walletAddress?: string;
+  turnstileToken?: string;
 }
 
 export interface Course {
@@ -117,11 +122,13 @@ function normalizeCertificateListResponse(data: unknown): Certificate[] {
 // Authentication APIs
 export const authAPI = {
   register: async (data: RegisterRequest): Promise<AuthResponse> => {
-    const response = await apiClient.post('/auth/register', data, { encrypt: true } as any);
+    apiRequestCache.invalidatePrefix('auth:profile-status');
+    const response = await apiClient.post('/auth/register', data);
     return response.data;
   },
 
   login: async (data: LoginRequest): Promise<AuthResponse> => {
+    apiRequestCache.invalidatePrefix('auth:profile-status');
     const response = await apiClient.post('/auth/login', data);
     return response.data;
   },
@@ -140,41 +147,121 @@ export const authAPI = {
   getProfileStatus: async (
     walletAddress: string
   ): Promise<{ completed: boolean; user: User | null }> => {
-    return apiRequestCache.fetch(
-      `auth:profile-status:${walletAddress}`,
-      async () => {
-        const response = await apiClient.get('/auth/profile-status', {
-          params: { walletAddress },
-        });
-        return response.data;
-      },
-      { ttlMs: DEFAULT_CACHE_TTL_MS }
-    );
+    const response = await apiClient.get('/auth/profile-status', {
+      params: { walletAddress },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get the GitHub OAuth authorization URL to redirect the user
+   */
+  getGitHubOAuthUrl: (): string => {
+    return `${API_BASE_URL}/oauth/github`;
+  },
+
+  /**
+   * Check if the current user has a linked GitHub account
+   */
+  getGitHubStatus: async (): Promise<{
+    linked: boolean;
+    githubId?: number;
+    githubUsername?: string;
+    githubAvatarUrl?: string | null;
+  }> => {
+    const response = await apiClient.get('/oauth/github/status');
+    return response.data;
+  },
+
+  /**
+   * Link a GitHub account to the current user
+   */
+  linkGitHubAccount: async (code: string): Promise<AuthResponse> => {
+    const response = await apiClient.post('/oauth/github/link', { code });
+    return response.data;
   },
 };
 
+// A course list/detail response is either backed by the live database
+// ("live") or, when the backend cannot reach the database, an
+// explicitly labeled demo/fallback dataset ("demo"). See #911 — the
+// backend never silently serves demo data as if it were live.
+export type CourseDataSource = 'live' | 'demo';
+
+export interface CoursesListResult {
+  courses: Course[];
+  dataSource: CourseDataSource;
+  message?: string;
+}
+
+export interface CourseDetailResult {
+  course: Course;
+  dataSource: CourseDataSource;
+  message?: string;
+}
+
+function normalizeCoursesResponse(data: unknown): CoursesListResult {
+  if (data && typeof data === 'object' && 'courses' in (data as Record<string, unknown>)) {
+    const d = data as { courses: Course[]; dataSource?: CourseDataSource; message?: string };
+    return {
+      courses: Array.isArray(d.courses) ? d.courses : [],
+      dataSource: d.dataSource ?? 'live',
+      message: d.message,
+    };
+  }
+  // Backward-compatible shape (plain array) in case of stale caches.
+  return { courses: Array.isArray(data) ? (data as Course[]) : [], dataSource: 'live' };
+}
+
+function normalizeCourseResponse(data: unknown): CourseDetailResult {
+  if (data && typeof data === 'object' && 'course' in (data as Record<string, unknown>)) {
+    const d = data as { course: Course; dataSource?: CourseDataSource; message?: string };
+    return {
+      course: d.course,
+      dataSource: d.dataSource ?? 'live',
+      message: d.message,
+    };
+  }
+  return { course: data as Course, dataSource: 'live' };
+}
+
 // Courses APIs
 export const coursesAPI = {
-  getAll: async (): Promise<Course[]> => {
+  /**
+   * Returns the course list along with an explicit `dataSource` flag
+   * so callers can distinguish live data from the demo fallback shown
+   * when the backend database is unreachable (#911).
+   */
+  getAllWithSource: async (): Promise<CoursesListResult> => {
     return apiRequestCache.fetch(
       'courses:list',
       async () => {
         const response = await apiClient.get('/courses');
-        return response.data;
+        return normalizeCoursesResponse(response.data);
+      },
+      { ttlMs: DEFAULT_CACHE_TTL_MS }
+    );
+  },
+
+  getAll: async (): Promise<Course[]> => {
+    const result = await coursesAPI.getAllWithSource();
+    return result.courses;
+  },
+
+  getByIdWithSource: async (id: string): Promise<CourseDetailResult> => {
+    return apiRequestCache.fetch(
+      `courses:detail:${id}`,
+      async () => {
+        const response = await apiClient.get(`/courses/${id}`);
+        return normalizeCourseResponse(response.data);
       },
       { ttlMs: DEFAULT_CACHE_TTL_MS }
     );
   },
 
   getById: async (id: string): Promise<Course> => {
-    return apiRequestCache.fetch(
-      `courses:detail:${id}`,
-      async () => {
-        const response = await apiClient.get(`/courses/${id}`);
-        return response.data;
-      },
-      { ttlMs: DEFAULT_CACHE_TTL_MS }
-    );
+    const result = await coursesAPI.getByIdWithSource(id);
+    return result.course;
   },
 
   create: async (data: Partial<Course>): Promise<Course> => {
@@ -405,6 +492,16 @@ export interface ProjectIdea {
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
 }
 
+export interface GeneratedIdeaResult {
+  idea: ProjectIdea;
+  /** True when the backend substituted a safe fallback idea instead of a live AI-generated one (#908). */
+  fromMock: boolean;
+  /** Machine-readable reason for the fallback, e.g. 'ai_service_unavailable' | 'generated_idea_rejected'. */
+  fallbackReason?: string;
+  /** Human-readable, actionable explanation suitable for display. */
+  message?: string;
+}
+
 export const generatorAPI = {
   generateIdea: async (params: {
     theme: string;
@@ -412,7 +509,35 @@ export const generatorAPI = {
     difficulty: string;
   }): Promise<ProjectIdea> => {
     const response = await apiClient.post('/generator/generate', params);
-    return response.data;
+    return response.data.projectIdea;
+  },
+
+  /**
+   * Same endpoint as {@link generateIdea}, but surfaces whether the
+   * backend had to fall back to a safe mock idea (AI unavailable, or
+   * generated output rejected by server-side validation/safety
+   * checks) so the UI can show an actionable message instead of
+   * silently presenting a substituted idea as if it were freshly
+   * generated (#908).
+   */
+  generateIdeaWithStatus: async (params: {
+    theme: string;
+    techStack: string[];
+    difficulty: string;
+  }): Promise<GeneratedIdeaResult> => {
+    const response = await apiClient.post('/generator/generate', params);
+    const data = response.data as {
+      projectIdea: ProjectIdea;
+      fromMock?: boolean;
+      fallbackReason?: string;
+      message?: string;
+    };
+    return {
+      idea: data.projectIdea,
+      fromMock: Boolean(data.fromMock),
+      fallbackReason: data.fallbackReason,
+      message: data.message,
+    };
   },
 };
 
@@ -456,5 +581,98 @@ export const activityAPI = {
   getStudentActivity: async (userId: string): Promise<ActivityEntry[]> => {
     const response = await apiClient.get(`/activity/user/${userId}`);
     return response.data;
+  },
+};
+
+export interface VestingSchedule {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  tokenName: string;
+  tokenSymbol: string;
+  amount: number;
+  cliffMonths: number;
+  durationMonths: number;
+  beneficiary: string;
+  claimedAmount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const vestingAPI = {
+  create: async (data: Omit<VestingSchedule, 'id' | 'workspaceId' | 'claimedAmount' | 'createdAt' | 'updatedAt'>): Promise<VestingSchedule> => {
+    try {
+      const response = await apiClient.post('/generator/vesting', data);
+      return response.data;
+    } catch (err) {
+      const schedule: VestingSchedule = {
+        ...data,
+        id: `local-${Math.random().toString(36).substring(2, 9)}`,
+        workspaceId: 'local',
+        claimedAmount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`vesting_schedule_${data.projectId}`, JSON.stringify(schedule));
+      }
+      return schedule;
+    }
+  },
+
+  getByProjectId: async (projectId: string): Promise<VestingSchedule> => {
+    try {
+      const response = await apiClient.get(`/generator/vesting/${projectId}`);
+      return response.data;
+    } catch (err: any) {
+      if (typeof window !== 'undefined') {
+        const local = localStorage.getItem(`vesting_schedule_${projectId}`);
+        if (local) {
+          return JSON.parse(local);
+        }
+      }
+      throw err;
+    }
+  },
+
+  list: async (): Promise<VestingSchedule[]> => {
+    try {
+      const response = await apiClient.get('/generator/vesting');
+      return response.data;
+    } catch (err) {
+      const list: VestingSchedule[] = [];
+      if (typeof window !== 'undefined') {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('vesting_schedule_')) {
+            const item = localStorage.getItem(key);
+            if (item) list.push(JSON.parse(item));
+          }
+        }
+      }
+      return list;
+    }
+  },
+
+  claim: async (projectId: string, amount: number, simulatedMonthsElapsed?: number): Promise<VestingSchedule> => {
+    try {
+      const response = await apiClient.post(`/generator/vesting/${projectId}/claim`, {
+        amount,
+        simulatedMonthsElapsed,
+      });
+      return response.data;
+    } catch (err: any) {
+      if (typeof window !== 'undefined') {
+        const local = localStorage.getItem(`vesting_schedule_${projectId}`);
+        if (local) {
+          const schedule: VestingSchedule = JSON.parse(local);
+          schedule.claimedAmount = (schedule.claimedAmount || 0) + amount;
+          schedule.updatedAt = new Date().toISOString();
+          localStorage.setItem(`vesting_schedule_${projectId}`, JSON.stringify(schedule));
+          return schedule;
+        }
+      }
+      throw err;
+    }
   },
 };

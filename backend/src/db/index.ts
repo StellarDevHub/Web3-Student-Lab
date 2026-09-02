@@ -1,30 +1,55 @@
 import { PrismaClient } from '@prisma/client';
+import config from '../config/env.config.js';
 import { getWorkspaceId } from '../middleware/WorkspaceContext.js';
+import { getDatabaseRoleForOperation } from './requestContext.js';
+import logger from '../utils/logger.js';
+import { encryptionMiddleware } from '../middleware/prismaEncryption.js';
+import { workspaceModels } from './workspaceModels.js';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
+  readPrisma: PrismaClient | undefined;
 };
 
-const workspaceModels = new Set([
-  'Student',
-  'Course',
-  'Certificate',
-  'Enrollment',
-  'Feedback',
-  'LearningProgress',
-  'AuditLog',
-  'Canvas',
-]);
+import { PrismaPg } from '@prisma/adapter-pg';
+// @ts-ignore
+import pkg from 'pg';
+const { Pool } = pkg;
 
-const basePrisma = globalForPrisma.prisma ?? new PrismaClient({
-  accelerateUrl: process.env.DATABASE_URL || 'prisma://dummy:dummy@localhost:5432/dummy'
-});
+const createPool = (connectionString: string) => {
+  const useSSL =
+    process.env.NODE_ENV !== 'test' &&
+    !connectionString.includes('sslmode=disable') &&
+    !connectionString.includes('localhost') &&
+    !connectionString.includes('127.0.0.1');
 
-const prisma = basePrisma.$extends({
+  const normalizedConnectionString = useSSL
+    ? connectionString.replace(/sslmode=[^&]+/, 'sslmode=no-verify')
+    : connectionString;
+
+  return new Pool({
+    connectionString: normalizedConnectionString,
+    ssl: useSSL ? { rejectUnauthorized: false } : false
+  });
+};
+
+const primaryConnectionString = `${process.env.DATABASE_URL}`;
+const readReplicaConnectionString = config.db.readReplicaUrl || primaryConnectionString;
+
+const primaryPool = createPool(primaryConnectionString);
+const readPool = createPool(readReplicaConnectionString);
+
+const primaryAdapter = new PrismaPg(primaryPool);
+const readAdapter = new PrismaPg(readPool);
+
+const basePrisma = globalForPrisma.prisma ?? new PrismaClient({ adapter: primaryAdapter });
+const baseReadPrisma = globalForPrisma.readPrisma ?? new PrismaClient({ adapter: readAdapter });
+
+const workspaceExtension = {
   name: 'workspace-isolation',
   query: {
     $allModels: {
-      async $allOperations({ model, operation, args, query }) {
+      async $allOperations({ model, operation, args, query }: { model?: string; operation?: string; args?: any; query: (args: any) => Promise<any> }) {
         if (!model || !workspaceModels.has(model)) {
           return query(args);
         }
@@ -48,7 +73,7 @@ const prisma = basePrisma.$extends({
             'updateMany',
             'delete',
             'deleteMany',
-          ].includes(operation)
+          ].includes(operation!)
         ) {
           mutableArgs.where = { ...(mutableArgs.where ?? {}), workspaceId };
           return query(mutableArgs);
@@ -87,11 +112,61 @@ const prisma = basePrisma.$extends({
       },
     },
   },
+};
+
+const prisma = basePrisma.$extends(workspaceExtension);
+const readPrisma = baseReadPrisma.$extends(workspaceExtension);
+
+const routingExtension = {
+  name: 'read-replica-routing',
+  query: {
+    $allModels: {
+      async $allOperations({ model, operation, args, query }: { model?: string; operation?: string; args?: any; query: (args: any) => Promise<any> }) {
+          const dbRole = getDatabaseRoleForOperation(operation!);
+
+        if (dbRole === 'read') {
+          const modelClient = readPrisma[model as keyof typeof readPrisma];
+          if (modelClient && typeof modelClient[operation as keyof typeof modelClient] === 'function') {
+            try {
+              return (modelClient[operation as keyof typeof modelClient] as any)(args);
+            } catch (error) {
+              logger.warn(
+                `Read replica query failed for ${model}.${operation}, falling back to primary:`,
+                error
+              );
+            }
+          }
+        }
+
+        const modelClient = prisma[model as keyof typeof prisma];
+        if (modelClient && typeof modelClient[operation as keyof typeof modelClient] === 'function') {
+          return (modelClient[operation as keyof typeof modelClient] as any)(args);
+        }
+
+        return query(args);
+      },
+    },
+  },
+};
+
+const encryptionExt = encryptionMiddleware();
+
+const routedPrisma = prisma.$extends(routingExtension).$extends(encryptionExt);
+
+routedPrisma.$use(async (params, next) => {
+  if (
+    params.model === 'AuditLog' &&
+    ['update', 'delete', 'updateMany', 'deleteMany'].includes(params.action)
+  ) {
+    throw new Error('AuditLog records are immutable and cannot be modified or deleted');
+  }
+  return next(params);
 });
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = basePrisma;
+  globalForPrisma.readPrisma = baseReadPrisma;
 }
 
-export { prisma };
-export default prisma as PrismaClient;
+export { prisma, readPrisma };
+export default routedPrisma as PrismaClient;

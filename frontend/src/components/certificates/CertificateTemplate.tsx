@@ -4,9 +4,11 @@ import {
   CertificateData,
   buildExplorerUrl,
   drawCryptoStamp,
+  renderVerificationQr,
+  seedFromString,
   truncateHash,
 } from '@/lib/certificate-generator';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, forwardRef } from 'react';
 
 interface Props {
   data: CertificateData;
@@ -14,8 +16,37 @@ interface Props {
   forExport?: boolean;
 }
 
-export default function CertificateTemplate({ data, forExport = false }: Props) {
+// Lightweight deterministic guilloche SVG frame (no per-frame randomness → no lag).
+function GuillocheFrame({ seed }: { seed: number }) {
+  const rings = Array.from({ length: 5 }, (_, r) => {
+    const radius = 40 + r * 7;
+    const petals = 7 + (r % 3);
+    const pts: string[] = [];
+    for (let t = 0; t <= 360; t += 6) {
+      const rad = (t * Math.PI) / 180;
+      const rr = radius * (1 + 0.06 * Math.sin(petals * rad + seed));
+      pts.push(`${50 + rr * Math.cos(rad)},${50 + rr * Math.sin(rad)}`);
+    }
+    return pts.join(' ');
+  });
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.12]"
+      aria-hidden="true"
+    >
+      {rings.map((points, i) => (
+        <polygon key={i} points={points} fill="none" stroke="rgba(220,38,38,0.6)" strokeWidth={0.3} />
+      ))}
+    </svg>
+  );
+}
+
+// Forward ref so parent can capture the container for downloading
+const CertificateTemplate = forwardRef<HTMLDivElement, Props>(function CertificateTemplate({ data, forExport = false }, ref) {
   const stampRef = useRef<HTMLCanvasElement>(null);
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
 
   // Draw the crypto stamp on the canvas overlay
   useEffect(() => {
@@ -25,6 +56,21 @@ export default function CertificateTemplate({ data, forExport = false }: Props) 
     canvas.height = 140;
     drawCryptoStamp(canvas, data.transactionHash, 70, 70, 60);
   }, [data.transactionHash]);
+
+  // Render the verification QR code pointing at /verify/[id]
+  useEffect(() => {
+    let cancelled = false;
+    renderVerificationQr(data.certificateId || 'pending')
+      .then((url) => {
+        if (!cancelled) setQrUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setQrUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [data.certificateId]);
 
   const formattedDate = data.issueDate
     ? new Date(data.issueDate).toLocaleDateString('en-US', {
@@ -39,6 +85,7 @@ export default function CertificateTemplate({ data, forExport = false }: Props) 
   return (
     <div
       id="certificate-template"
+      ref={ref}
       className={`relative overflow-hidden bg-zinc-950 select-none ${
         forExport ? 'h-[848px] w-[1200px]' : 'aspect-[1200/848] w-full'
       }`}
@@ -48,6 +95,9 @@ export default function CertificateTemplate({ data, forExport = false }: Props) 
       <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-black to-zinc-950" />
       <div className="absolute top-0 left-0 h-[600px] w-[600px] rounded-full bg-red-900/10 blur-[120px]" />
       <div className="absolute right-0 bottom-0 h-[400px] w-[400px] rounded-full bg-red-800/8 blur-[100px]" />
+
+      {/* Deterministic guilloche anti-counterfeit border */}
+      <GuillocheFrame seed={seedFromString(data.certificateId || data.recipientName || 'cert')} />
 
       {/* Outer border frame */}
       <div className="pointer-events-none absolute inset-4 rounded-xl border border-red-600/30" />
@@ -65,21 +115,15 @@ export default function CertificateTemplate({ data, forExport = false }: Props) 
         <div className="text-center">
           <div className="mb-2 flex items-center justify-center gap-3">
             <div className="h-px w-8 bg-red-600/60" />
-            <span className="font-mono text-xs tracking-[0.3em] text-red-500 uppercase">
-              Web3 Student Lab
-            </span>
+            <span className="font-mono text-xs tracking-[0.3em] text-red-500 uppercase">Web3 Student Lab</span>
             <div className="h-px w-8 bg-red-600/60" />
           </div>
-          <p className="font-mono text-[10px] tracking-[0.4em] text-gray-500 uppercase">
-            Blockchain-Verified Certificate of Completion
-          </p>
+          <p className="font-mono text-[10px] tracking-[0.4em] text-gray-500 uppercase">Blockchain-Verified Certificate of Completion</p>
         </div>
 
         {/* Main body */}
         <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
-          <p className="font-sans text-sm tracking-[0.25em] text-gray-400 uppercase">
-            This certifies that
-          </p>
+          <p className="font-sans text-sm tracking-[0.25em] text-gray-400 uppercase">This certifies that</p>
 
           {/* Recipient name */}
           <div className="relative">
@@ -92,9 +136,7 @@ export default function CertificateTemplate({ data, forExport = false }: Props) 
             <div className="mt-2 h-px bg-gradient-to-r from-transparent via-red-600/60 to-transparent" />
           </div>
 
-          <p className="font-sans text-sm tracking-[0.25em] text-gray-400 uppercase">
-            has successfully completed
-          </p>
+          <p className="font-sans text-sm tracking-[0.25em] text-gray-400 uppercase">has successfully completed</p>
 
           {/* Course name */}
           <h2
@@ -105,9 +147,7 @@ export default function CertificateTemplate({ data, forExport = false }: Props) 
           </h2>
 
           {/* Issue date */}
-          <p className="mt-2 font-mono text-sm tracking-widest text-gray-500">
-            Issued on {formattedDate}
-          </p>
+          <p className="mt-2 font-mono text-sm tracking-widest text-gray-500">Issued on {formattedDate}</p>
         </div>
 
         {/* Footer row */}
@@ -115,17 +155,20 @@ export default function CertificateTemplate({ data, forExport = false }: Props) 
           {/* Instructor signature */}
           <div className="min-w-[180px] text-center">
             <div className="mb-2 h-px bg-white/20" />
-            <p className="text-sm font-bold tracking-wider text-white">
-              {data.instructorName || 'Instructor'}
-            </p>
-            <p className="font-mono text-[10px] tracking-widest text-gray-500 uppercase">
-              Course Instructor
-            </p>
+            <p className="text-sm font-bold tracking-wider text-white">{data.instructorName || 'Instructor'}</p>
+            <p className="font-mono text-[10px] tracking-widest text-gray-500 uppercase">Course Instructor</p>
           </div>
 
-          {/* Crypto stamp canvas */}
+          {/* Crypto stamp canvas + verification QR */}
           <div className="flex flex-col items-center gap-1">
             <canvas ref={stampRef} className="h-[70px] w-[70px]" />
+            {qrUrl && (
+              <img
+                src={qrUrl}
+                alt={`Verification QR for certificate ${data.certificateId}`}
+                className="h-[64px] w-[64px] rounded-sm"
+              />
+            )}
             <a
               href={explorerUrl}
               target="_blank"
@@ -143,15 +186,13 @@ export default function CertificateTemplate({ data, forExport = false }: Props) 
             <p className="font-mono text-sm font-bold tracking-wider text-white">
               {data.certificateId ? data.certificateId.slice(0, 12).toUpperCase() : '—'}
             </p>
-            <p className="font-mono text-[10px] tracking-widest text-gray-500 uppercase">
-              Certificate ID
-            </p>
+            <p className="font-mono text-[10px] tracking-widest text-gray-500 uppercase">Certificate ID</p>
           </div>
         </div>
       </div>
     </div>
   );
-}
+});
 
 function CornerOrnament({
   position,
@@ -175,3 +216,5 @@ function CornerOrnament({
     </div>
   );
 }
+
+export default CertificateTemplate;

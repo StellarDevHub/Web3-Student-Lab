@@ -138,9 +138,11 @@ export class SearchQueryBuilder {
       return [{ createdAt: 'desc' }];
     }
 
-    const [field, direction] = sort.split(':');
+    const parts = sort.split(':');
+    const field = parts[0] || 'createdAt';
+    const direction = parts[1];
     const dir = direction === 'desc' ? 'desc' : 'asc';
 
-    return [{ [field]: dir }];
+    return [{ [field as string]: dir }];
   }
 }

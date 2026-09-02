@@ -8,6 +8,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { markWalletProfileComplete, useWalletProfileCompletion } from '@/lib/profile-completion';
 import { WalletConnectCard } from '@/components/wallet/WalletConnectCard';
+import { PasswordStrengthMeter } from '@/components/auth/PasswordStrengthMeter';
+import { calculatePasswordStrength } from '@/utils/passwordStrength';
+import { checkPasswordBreached } from '@/utils/pwnedPasswordCheck';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -24,6 +27,8 @@ export default function RegisterPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && user) {
@@ -32,10 +37,33 @@ export default function RegisterPage() {
   }, [isLoading, router, user]);
 
   useEffect(() => {
-    if (!isLoading && !user && profileCompleted) {
-      router.replace('/auth/login');
+    const script = document.createElement('script');
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+    script.async = true;
+    script.defer = true;
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!turnstileToken && typeof window !== 'undefined' && (window as any).turnstile) {
+      try {
+        (window as any).turnstile.render('#turnstile-container', {
+          sitekey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '',
+          callback: onTurnstileSuccess,
+        });
+      } catch (error) {
+        console.error('Failed to render Turnstile widget:', error);
+      }
     }
-  }, [isLoading, profileCompleted, router, user]);
+  }, [turnstileToken]);
+
+  const onTurnstileSuccess = (token: string) => {
+    setTurnstileToken(token);
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -44,12 +72,14 @@ export default function RegisterPage() {
     });
     if (error) clearError();
     if (localError) setLocalError(null);
+    if (successMessage) setSuccessMessage(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setLocalError(null);
+    setSuccessMessage(null);
 
     // Validation
     if (formData.password !== formData.confirmPassword) {
@@ -58,24 +88,38 @@ export default function RegisterPage() {
       return;
     }
 
-    if (formData.password.length < 6) {
-      setLocalError('Password must be at least 6 characters');
+    const strength = calculatePasswordStrength(formData.password);
+    if (!strength.isValid) {
+      setLocalError('Passphrase strength score must be at least 3 (Good). Please choose a stronger passphrase.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    const pwned = await checkPasswordBreached(formData.password);
+    if (pwned.isBreached) {
+      setLocalError(`This passphrase has been compromised in public data breaches (${pwned.count.toLocaleString()} times). Please choose a unique passphrase.`);
       setIsSubmitting(false);
       return;
     }
 
     try {
-      await register(formData.email, formData.password, formData.firstName, formData.lastName);
+      await register(formData.email, formData.password, formData.firstName, formData.lastName, turnstileToken || undefined);
       if (publicKey) {
         markWalletProfileComplete(publicKey, formData.email);
       }
-      router.push('/dashboard');
+      setSuccessMessage('Profile setup successful! Redirecting to your dashboard...');
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 1500);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Registration failed. Please try again.';
-      if (publicKey && message.toLowerCase().includes('already exists')) {
+      if (publicKey && (message.toLowerCase().includes('already exists') || message.toLowerCase().includes('duplicate'))) {
         markWalletProfileComplete(publicKey, formData.email);
         await refreshProfileStatus();
-        router.push('/dashboard');
+        setSuccessMessage('Profile linked successfully! Redirecting to your dashboard...');
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 1500);
         return;
       }
       setLocalError(message);
@@ -85,7 +129,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="relative flex min-h-[calc(100vh-80px)] items-center justify-center overflow-hidden bg-black px-4 py-12">
+    <div className="relative flex min-h-[calc(100vh-80px)] justify-center bg-black px-4 py-12">
       <div className="pointer-events-none absolute top-1/2 left-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-600/10 blur-[100px]"></div>
 
       <div className="relative z-10 w-full max-w-5xl">
@@ -134,7 +178,15 @@ export default function RegisterPage() {
           )}
 
           <form onSubmit={handleSubmit} className={`space-y-5 ${!publicKey ? 'opacity-60' : ''}`}>
-            {(error || localError) && (
+            {successMessage && (
+              <div className="rounded-lg border border-emerald-500/50 bg-emerald-500/10 p-4 animate-pulse">
+                <p className="text-center text-sm font-bold text-emerald-400">
+                  ✓ {successMessage}
+                </p>
+              </div>
+            )}
+
+            {(error || localError) && !successMessage && (
               <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-4">
                 <p className="text-center text-sm font-bold text-red-500">{error || localError}</p>
               </div>
@@ -219,6 +271,7 @@ export default function RegisterPage() {
                 className="w-full rounded-lg border border-white/20 bg-black px-4 py-3 text-white placeholder-gray-600 transition-colors focus:border-red-500 focus:ring-1 focus:ring-red-500"
                 placeholder="••••••••"
               />
+              <PasswordStrengthMeter password={formData.password} />
             </div>
 
             <div>
@@ -238,6 +291,13 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 className="w-full rounded-lg border border-white/20 bg-black px-4 py-3 text-white placeholder-gray-600 transition-colors focus:border-red-500 focus:ring-1 focus:ring-red-500"
                 placeholder="••••••••"
+              />
+            </div>
+
+            <div className="flex justify-center">
+              <div
+                id="turnstile-container"
+                className="flex justify-center"
               />
             </div>
 

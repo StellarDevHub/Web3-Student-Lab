@@ -3,7 +3,7 @@ import { SOROBAN_LANGUAGE_ID, detectSorobanContext } from './SorobanLanguage';
 
 let completionRegistered = false;
 
-type CompletionKindName = 'Method' | 'Keyword' | 'Struct';
+type CompletionKindName = 'Method' | 'Keyword' | 'Struct' | 'Snippet';
 
 interface CompletionTemplate {
   label: string;
@@ -42,6 +42,14 @@ const envCompletions: CompletionTemplate[] = [
     insertText: 'current_contract_address()',
     detail: 'Get the current contract address',
     documentation: 'Returns the address of the active contract invocation.',
+    kind: 'Method',
+  },
+  {
+    label: 'invoke_contract()',
+    insertText: 'invoke_contract(${1:address}, ${2:func_name}, ${3:args})',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    detail: 'Call another contract',
+    documentation: 'Invokes a function on another Soroban contract by address.',
     kind: 'Method',
   },
 ];
@@ -145,6 +153,78 @@ const sorobanCompletions: CompletionTemplate[] = [
     documentation: 'A compact symbolic key commonly used for storage and dispatch.',
     kind: 'Struct',
   },
+  {
+    label: 'Vec',
+    insertText: 'Vec',
+    detail: 'Soroban vector type',
+    documentation: 'A vector type from the Soroban SDK for ordered collections.',
+    kind: 'Struct',
+  },
+  {
+    label: 'Map',
+    insertText: 'Map',
+    detail: 'Soroban map type',
+    documentation: 'A map type from the Soroban SDK for key-value storage.',
+    kind: 'Struct',
+  },
+];
+
+const snippetCompletions: CompletionTemplate[] = [
+  {
+    label: 'contract struct',
+    insertText: '#[contract]\npub struct ${1:ContractName};',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    detail: 'Contract struct boilerplate',
+    documentation: 'Creates a Soroban contract struct with the #[contract] attribute.',
+    kind: 'Snippet',
+  },
+  {
+    label: 'contractimpl impl',
+    insertText: '#[contractimpl]\nimpl ${1:ContractName} {\n\t$0\n}',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    detail: 'Impl block boilerplate',
+    documentation: 'Creates a #[contractimpl] impl block for a Soroban contract.',
+    kind: 'Snippet',
+  },
+  {
+    label: 'soroban_sdk import',
+    insertText: 'use soroban_sdk::{contract, contractimpl, Env, Address, Symbol, Vec, Map};',
+    detail: 'Common Soroban imports',
+    documentation: 'Imports common Soroban SDK types and macros.',
+    kind: 'Snippet',
+  },
+  {
+    label: 'log!',
+    insertText: 'log!(&${1:env}, "${2:message}")',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    detail: 'Log helper macro',
+    documentation: 'Logs a message using the Soroban environment logger.',
+    kind: 'Snippet',
+  },
+  {
+    label: 'storage chain',
+    insertText: 'env.storage().instance().get(${1:key})',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    detail: 'Storage access chain',
+    documentation: 'Access instance storage from env and read a value.',
+    kind: 'Snippet',
+  },
+  {
+    label: 'storage set chain',
+    insertText: 'env.storage().instance().set(${1:key}, ${2:value})',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    detail: 'Storage write chain',
+    documentation: 'Access instance storage from env and write a value.',
+    kind: 'Snippet',
+  },
+  {
+    label: 'storage has chain',
+    insertText: 'env.storage().instance().has(${1:key})',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    detail: 'Storage existence check',
+    documentation: 'Check if a key exists in instance storage.',
+    kind: 'Snippet',
+  },
 ];
 
 function createCompletionItem(
@@ -164,6 +244,75 @@ function createCompletionItem(
   };
 }
 
+function registerProvider(monacoApi: typeof monaco, languageId: string) {
+  monacoApi.languages.registerCompletionItemProvider(languageId, {
+    triggerCharacters: ['.', ':'],
+    provideCompletionItems(model, position) {
+      try {
+        const wordUntil = model.getWordUntilPosition(position);
+        const linePrefix = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
+        const source = model.getValue();
+        const context = detectSorobanContext(source);
+        const suggestions: monaco.languages.CompletionItem[] = [];
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: wordUntil.startColumn,
+          endColumn: wordUntil.endColumn,
+        };
+
+        if (/env\.$/.test(linePrefix)) {
+          suggestions.push(
+            ...envCompletions.map((item) => createCompletionItem(monacoApi, item, range))
+          );
+        }
+
+        if (/env\.storage\(\)\.$/.test(linePrefix) || /storage\(\)\.$/.test(linePrefix)) {
+          suggestions.push(
+            ...storageCompletions.map((item) => createCompletionItem(monacoApi, item, range))
+          );
+        }
+
+        if (
+          /use\s+soroban_sdk::/.test(source) ||
+          /soroban_sdk::/.test(linePrefix) ||
+          context.looksLikeContract
+        ) {
+          suggestions.push(
+            ...sorobanCompletions.map((item) => createCompletionItem(monacoApi, item, range))
+          );
+        }
+
+        if (context.looksLikeContract) {
+          suggestions.push(
+            ...snippetCompletions.map((item) => createCompletionItem(monacoApi, item, range))
+          );
+        }
+
+        if (suggestions.length === 0) {
+          suggestions.push(
+            createCompletionItem(
+              monacoApi,
+              {
+                label: 'storage()',
+                insertText: 'storage()',
+                detail: 'Access contract storage',
+                documentation: 'Suggested when working with `env.` in Soroban contracts.',
+                kind: 'Method',
+              },
+              range
+            )
+          );
+        }
+
+        return { suggestions };
+      } catch {
+        return { suggestions: [] };
+      }
+    },
+  });
+}
+
 export function registerSorobanCompletion(monacoApi: typeof monaco) {
   if (completionRegistered) {
     return;
@@ -171,62 +320,6 @@ export function registerSorobanCompletion(monacoApi: typeof monaco) {
 
   completionRegistered = true;
 
-  monacoApi.languages.registerCompletionItemProvider(SOROBAN_LANGUAGE_ID, {
-    triggerCharacters: ['.', ':'],
-    provideCompletionItems(model, position) {
-      const wordUntil = model.getWordUntilPosition(position);
-      const linePrefix = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
-      const source = model.getValue();
-      const context = detectSorobanContext(source);
-      const suggestions: monaco.languages.CompletionItem[] = [];
-      const range = {
-        startLineNumber: position.lineNumber,
-        endLineNumber: position.lineNumber,
-        startColumn: wordUntil.startColumn,
-        endColumn: wordUntil.endColumn,
-      };
-
-      if (/env\.$/.test(linePrefix)) {
-        suggestions.push(
-          ...envCompletions.map((item) => createCompletionItem(monacoApi, item, range))
-        );
-      }
-
-      if (/env\.storage\(\)\.$/.test(linePrefix) || /storage\(\)\.$/.test(linePrefix)) {
-        suggestions.push(
-          ...storageCompletions.map((item) => createCompletionItem(monacoApi, item, range))
-        );
-      }
-
-      if (
-        /use\s+soroban_sdk::/.test(source) ||
-        /soroban_sdk::/.test(linePrefix) ||
-        context.looksLikeContract
-      ) {
-        suggestions.push(
-          ...sorobanCompletions.map((item) => createCompletionItem(monacoApi, item, range))
-        );
-      }
-
-      if (suggestions.length === 0) {
-        suggestions.push(
-          createCompletionItem(
-            monacoApi,
-            {
-              label: 'storage()',
-              insertText: 'storage()',
-              detail: 'Access contract storage',
-              documentation: 'Suggested when working with `env.` in Soroban contracts.',
-              kind: 'Method',
-            },
-            range
-          )
-        );
-      }
-
-      return {
-        suggestions,
-      };
-    },
-  });
+  registerProvider(monacoApi, SOROBAN_LANGUAGE_ID);
+  registerProvider(monacoApi, 'rust');
 }

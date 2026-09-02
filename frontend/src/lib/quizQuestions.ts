@@ -10,7 +10,8 @@ export interface BaseQuizQuestion {
 export interface MultipleChoiceQuestion extends BaseQuizQuestion {
   type: 'multiple-choice';
   options: string[];
-  answer: string;
+  answer: string | string[];
+  allowMultiple?: boolean;
 }
 
 export interface DragOrderQuestion extends BaseQuizQuestion {
@@ -42,6 +43,25 @@ export const quizQuestions: QuizQuestion[] = [
       'IPFS off-chain storage',
     ],
     answer: 'Ledger entries and contract storage',
+  },
+  {
+    id: 'q1b',
+    type: 'multiple-choice',
+    prompt: 'Which checkpoints should pass before shipping a Stellar lesson project?',
+    hint: 'A solid checkpoint proves both the code path and the learner-facing explanation.',
+    time: 30,
+    allowMultiple: true,
+    options: [
+      'The contract compiles without errors',
+      'The lesson explains why the contract behavior matters',
+      'The UI stores private keys in localStorage',
+      'The learner can verify expected output',
+    ],
+    answer: [
+      'The contract compiles without errors',
+      'The lesson explains why the contract behavior matters',
+      'The learner can verify expected output',
+    ],
   },
   {
     id: 'q2',

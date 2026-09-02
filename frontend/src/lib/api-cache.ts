@@ -10,6 +10,37 @@ interface CachedFetchOptions {
   allowStaleOnRateLimit?: boolean;
 }
 
+const PERSIST_PREFIX = 'web3-student-lab-api-cache:';
+
+function persistCacheEntry<T>(key: string, entry: CacheEntry<T>) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    localStorage.setItem(`${PERSIST_PREFIX}${key}`, JSON.stringify(entry));
+  } catch {
+    // Ignore storage errors. Offline fallback should not break the app.
+  }
+}
+
+function loadPersistedCacheEntry<T>(key: string): CacheEntry<T> | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const stored = localStorage.getItem(`${PERSIST_PREFIX}${key}`);
+  if (!stored) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(stored) as CacheEntry<T>;
+  } catch {
+    return null;
+  }
+}
+
 class ApiRequestCache {
   private cache = new Map<string, CacheEntry<unknown>>();
   private inFlight = new Map<string, Promise<unknown>>();
@@ -22,6 +53,8 @@ class ApiRequestCache {
     const { ttlMs = 15_000, allowStaleOnRateLimit = true } = options;
     const now = Date.now();
     const cached = this.cache.get(key) as CacheEntry<T> | undefined;
+    const persisted = loadPersistedCacheEntry<T>(key);
+    const isOffline = typeof window !== 'undefined' && !navigator.onLine;
 
     if (cached && cached.expiresAt > now) {
       return cached.data;
@@ -35,16 +68,26 @@ class ApiRequestCache {
     const request = (async () => {
       try {
         const data = await fetcher();
-        this.cache.set(key, {
+        const entry: CacheEntry<T> = {
           data,
           expiresAt: Date.now() + ttlMs,
-        });
+        };
+        this.cache.set(key, entry);
+        persistCacheEntry(key, entry);
         return data;
       } catch (error) {
         if (allowStaleOnRateLimit && cached && axios.isAxiosError(error)) {
           if (error.response?.status === 429) {
             return cached.data;
           }
+        }
+
+        if (isOffline && persisted) {
+          return persisted.data;
+        }
+
+        if (persisted && persisted.expiresAt > now) {
+          return persisted.data;
         }
 
         throw error;
@@ -60,6 +103,9 @@ class ApiRequestCache {
   invalidate(key: string) {
     this.cache.delete(key);
     this.inFlight.delete(key);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(`${PERSIST_PREFIX}${key}`);
+    }
   }
 
   invalidatePrefix(prefix: string) {
@@ -72,6 +118,15 @@ class ApiRequestCache {
     for (const key of this.inFlight.keys()) {
       if (key.startsWith(prefix)) {
         this.inFlight.delete(key);
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const storageKey = localStorage.key(i);
+        if (storageKey?.startsWith(PERSIST_PREFIX + prefix)) {
+          localStorage.removeItem(storageKey);
+        }
       }
     }
   }

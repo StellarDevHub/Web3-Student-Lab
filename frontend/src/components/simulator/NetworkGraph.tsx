@@ -63,31 +63,31 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({ transactions }) => {
         >
           <button
             onClick={() => setZoom((z) => Math.min(z + 0.1, 2))}
-            className="rounded p-2 transition-colors hover:bg-white/10"
+            className="flex h-11 w-11 md:h-8 md:w-8 items-center justify-center rounded transition-colors hover:bg-white/10"
             aria-label="Zoom in"
           >
-            <ZoomIn size={16} aria-hidden="true" />
+            <ZoomIn className="h-5 w-5 md:h-4 md:w-4" aria-hidden="true" />
           </button>
           <button
             onClick={() => setZoom((z) => Math.max(z - 0.1, 0.5))}
-            className="rounded p-2 transition-colors hover:bg-white/10"
+            className="flex h-11 w-11 md:h-8 md:w-8 items-center justify-center rounded transition-colors hover:bg-white/10"
             aria-label="Zoom out"
           >
-            <ZoomOut size={16} aria-hidden="true" />
+            <ZoomOut className="h-5 w-5 md:h-4 md:w-4" aria-hidden="true" />
           </button>
           <button
             onClick={() => setZoom(1)}
-            className="rounded p-2 transition-colors hover:bg-white/10"
+            className="flex h-11 w-11 md:h-8 md:w-8 items-center justify-center rounded transition-colors hover:bg-white/10"
             aria-label="Reset zoom to 100%"
           >
-            <Maximize size={16} aria-hidden="true" />
+            <Maximize className="h-5 w-5 md:h-4 md:w-4" aria-hidden="true" />
           </button>
         </div>
       </div>
 
-      <div className="absolute top-4 right-4 z-20">
-        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 backdrop-blur-md">
-          <Search size={14} className="text-gray-500" aria-hidden="true" />
+      <div className="absolute bottom-4 right-4 z-20 md:top-4 md:bottom-auto">
+        <div className="flex h-11 md:h-auto items-center gap-2 rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 backdrop-blur-md">
+          <Search className="h-4 w-4 text-gray-500" aria-hidden="true" />
           <label htmlFor="graph-search" className="sr-only">
             Search account in graph
           </label>
@@ -95,7 +95,7 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({ transactions }) => {
             id="graph-search"
             type="text"
             placeholder="Search Account..."
-            className="w-32 border-none bg-transparent font-mono text-xs outline-none"
+            className="w-24 sm:w-32 border-none bg-transparent font-mono text-[16px] md:text-xs outline-none"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search account in graph"

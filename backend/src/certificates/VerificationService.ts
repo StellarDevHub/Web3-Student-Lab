@@ -4,16 +4,14 @@ import {
   CertificateMetadata,
   CertificateStatus,
 } from '../types/certificate.types.js';
-import { CertificateService } from './CertificateService.js';
 import { MetadataGenerator } from './MetadataGenerator.js';
 import logger from '../utils/logger.js';
+import { verifyCertificateContentHash } from './ContentHash.js';
 
 export class VerificationService {
-  private certificateService: CertificateService;
   private metadataGenerator: MetadataGenerator;
 
   constructor() {
-    this.certificateService = new CertificateService();
     this.metadataGenerator = new MetadataGenerator();
   }
 
@@ -23,9 +21,14 @@ export class VerificationService {
    */
   async verifyByTokenId(tokenId: string): Promise<VerificationResult> {
     try {
-      // Find certificate
+      // Find certificate by either tokenId or id
       const certificate = await prisma.certificate.findFirst({
-        where: { tokenId },
+        where: {
+          OR: [
+            { tokenId: tokenId },
+            { id: tokenId }
+          ]
+        },
         include: {
           student: {
             select: {
@@ -46,6 +49,39 @@ export class VerificationService {
           status: 'invalid' as CertificateStatus,
           onChainData: null,
           message: 'Certificate not found',
+        };
+      }
+
+      // Re-verify the content hash before serving any data. A mismatch
+      // means the stored metadata has diverged from what was hashed at
+      // mint time — surface tamper detection instead of silently
+      // returning the mismatched record.
+      const hashCheck = verifyCertificateContentHash(
+        {
+          id: certificate.id,
+          studentId: certificate.studentId,
+          courseId: certificate.courseId,
+          tokenId: certificate.tokenId,
+          grade: certificate.grade,
+          did: certificate.did,
+          issuedAt: certificate.issuedAt,
+        },
+        (certificate as any).contentHash
+      );
+
+      if (hashCheck.state === 'tampered') {
+        logger.error(`Certificate integrity check failed for token ${tokenId}`, {
+          tokenId,
+          certificateId: certificate.id,
+          expectedHash: hashCheck.expected,
+          actualHash: hashCheck.actual,
+        });
+        return {
+          isValid: false,
+          certificate: null,
+          status: 'TAMPERED' as CertificateStatus,
+          onChainData: null,
+          message: 'Certificate integrity check failed: stored metadata does not match its content hash',
         };
       }
 
@@ -78,12 +114,13 @@ export class VerificationService {
       throw new Error('Maximum 100 certificates allowed per batch verification');
     }
 
-    // Fetch all certificates in a single query
+    // Fetch all certificates in a single query by either tokenId or id
     const certificates = await prisma.certificate.findMany({
       where: {
-        tokenId: {
-          in: tokenIds,
-        },
+        OR: [
+          { tokenId: { in: tokenIds } },
+          { id: { in: tokenIds } }
+        ]
       },
       include: {
         student: {
@@ -98,8 +135,12 @@ export class VerificationService {
       },
     });
 
-    // Create a map for O(1) lookup
-    const certMap = new Map(certificates.map((c) => [c.tokenId, c]));
+    // Create a map for O(1) lookup by both id and tokenId
+    const certMap = new Map();
+    certificates.forEach((c) => {
+      if (c.tokenId) certMap.set(c.tokenId, c);
+      if (c.id) certMap.set(c.id, c);
+    });
 
     const results: VerificationResult[] = [];
 
@@ -113,6 +154,36 @@ export class VerificationService {
           status: 'invalid' as CertificateStatus,
           onChainData: null,
           message: 'Certificate not found',
+        });
+        continue;
+      }
+
+      const hashCheck = verifyCertificateContentHash(
+        {
+          id: cert.id,
+          studentId: cert.studentId,
+          courseId: cert.courseId,
+          tokenId: cert.tokenId,
+          grade: cert.grade,
+          did: cert.did,
+          issuedAt: cert.issuedAt,
+        },
+        (cert as any).contentHash
+      );
+
+      if (hashCheck.state === 'tampered') {
+        logger.error(`Certificate integrity check failed for token ${tokenId} (batch)`, {
+          tokenId,
+          certificateId: cert.id,
+          expectedHash: hashCheck.expected,
+          actualHash: hashCheck.actual,
+        });
+        results.push({
+          isValid: false,
+          certificate: null,
+          status: 'TAMPERED' as CertificateStatus,
+          onChainData: null,
+          message: 'Certificate integrity check failed: stored metadata does not match its content hash',
         });
         continue;
       }
@@ -162,15 +233,34 @@ export class VerificationService {
    * Gets certificate metadata
    */
   async getMetadata(tokenId: string): Promise<CertificateMetadata | null> {
-    return this.certificateService.getMetadata(tokenId);
+    const { certificateService } = await import('./CertificateService.js');
+    return certificateService.getMetadata(tokenId);
   }
 
   /**
    * Records a verification event for analytics
    */
   async recordVerification(tokenId: string): Promise<void> {
-    // In a full implementation, log to analytics table
-    logger.debug(`Certificate verified: ${tokenId}`);
+    const certificate = await prisma.certificate.findFirst({
+      where: {
+        OR: [{ tokenId }, { id: tokenId }],
+      },
+      select: {
+        id: true,
+        tokenId: true,
+        workspaceId: true,
+      },
+    });
+
+    await prisma.certificateVerificationEvent.create({
+      data: {
+        workspaceId: certificate?.workspaceId || 'default',
+        certificateId: certificate?.id || null,
+        tokenId: certificate?.tokenId || tokenId,
+      },
+    });
+
+    logger.debug(`Certificate verification event recorded: ${tokenId}`);
   }
 
   /**
@@ -231,7 +321,9 @@ export class VerificationService {
       revocationInfo: {
         revokedAt: certificate.revokedAt!,
         reason: certificate.revocationReason!,
-        revokedBy: certificate.revokedBy!,
+        // The revoking actor's issuer DID is an internal identity detail
+        // and is redacted from this public verification response.
+        revokedBy: 'redacted',
       },
       message: 'This certificate has been revoked',
     };

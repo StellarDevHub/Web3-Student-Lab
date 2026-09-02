@@ -103,6 +103,16 @@ export const SnippetEditor: React.FC<SnippetEditorProps> = ({ snippetId, onBack,
     setShowDiff(false);
   };
 
+  const handleVisibilityToggle = () => {
+    if (!snippet.isPublic) {
+      const confirmed = window.confirm(
+        'Sharing this snippet makes it visible to the community. Continue?'
+      );
+      if (!confirmed) return;
+    }
+    setSnippet({ ...snippet, isPublic: !snippet.isPublic });
+  };
+
   const languages = [
     'typescript',
     'javascript',
@@ -139,7 +149,7 @@ export const SnippetEditor: React.FC<SnippetEditorProps> = ({ snippetId, onBack,
             variant="outline"
             size="sm"
             className="gap-2"
-            onClick={() => setSnippet({ ...snippet, isPublic: !snippet.isPublic })}
+            onClick={handleVisibilityToggle}
           >
             {snippet.isPublic ? (
               <Unlock className="h-4 w-4 text-green-500" />

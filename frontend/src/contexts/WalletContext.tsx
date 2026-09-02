@@ -130,33 +130,15 @@ const freighterAdapter: WalletProvider = {
     typeof window !== 'undefined' &&
     (!!window.freighter || !!window.freighterApi || !!window.stellar?.freighter),
   connect: async () => {
-    const injected = resolveInjectedFreighter();
-    if (!injected) {
-      throw new Error(
-        'Freighter is not available to this page yet. Refresh the page and make sure the extension is enabled for this site.'
-      );
+    let access;
+    try {
+      access = await requestFreighterAccess();
+    } catch (e) {
+      throw new Error('Failed to request access from Freighter. Make sure the extension is unlocked and enabled for this site.');
     }
-    const connection = normalizeConnection(
-      injected.isConnected ? await injected.isConnected() : await isFreighterConnected()
-    );
-    if (connection.error) {
-      throw new Error(connection.error);
-    }
-
-    if (!connection.isConnected) {
-      throw new Error(
-        'Freighter is not available to this page yet. Refresh the page and make sure the extension is enabled for this site.'
-      );
-    }
-
-    const injectedAddress = await getInjectedFreighterAddress();
-    if (injectedAddress) {
-      return injectedAddress;
-    }
-
-    const access = await requestFreighterAccess();
-    if (access.error || !access.address) {
-      throw new Error(access.error || 'Freighter did not return an address');
+    
+    if (!access || access.error || !access.address) {
+      throw new Error(access?.error || 'Freighter did not return an address. Please unlock your wallet and try again.');
     }
 
     return access.address;
@@ -246,7 +228,9 @@ const rabetAdapter: WalletProvider = {
   },
 };
 
-export const WALLET_PROVIDERS: WalletProvider[] = [freighterAdapter, albedoAdapter, rabetAdapter];
+const mockAdapter: WalletProvider = { name: "Dev Mock Wallet", icon: "🛠️", isInstalled: () => true, connect: async () => "GBRPYHIL2CI3FYQMWVUGE62KMGOBQKLCYJ3HLKBUBIW5VZH4S4MNOWT", disconnect: async () => {}, getPublicKey: async () => "GBRPYHIL2CI3FYQMWVUGE62KMGOBQKLCYJ3HLKBUBIW5VZH4S4MNOWT", signTransaction: async (xdr) => xdr };
+
+export const WALLET_PROVIDERS: WalletProvider[] = [freighterAdapter, albedoAdapter, rabetAdapter, mockAdapter];
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 

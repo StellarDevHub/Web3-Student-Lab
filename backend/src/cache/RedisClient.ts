@@ -1,12 +1,14 @@
-import Redis, { Cluster } from 'ioredis';
+import Ioredis, { Cluster } from 'ioredis';
 import { REDIS_MODE, redisClusterConfig, redisConfig, redisSentinelConfig } from '../config/redis.config.js';
 import logger from '../utils/logger.js';
 
-type RedisClientType = Redis | Cluster;
+type RedisClientType = InstanceType<typeof Ioredis.default> | InstanceType<typeof Cluster>;
 
 class RedisClient {
   private static instance: RedisClient;
   private client: RedisClientType | null = null;
+  private pubClient: RedisClientType | null = null;
+  private subClient: RedisClientType | null = null;
   private memoryStore = new Map<string, string>();
   private isConnected = false;
   private mode: 'standalone' | 'cluster' | 'sentinel' = 'standalone';
@@ -29,40 +31,70 @@ class RedisClient {
       switch (this.mode) {
         case 'cluster':
           this.client = new Cluster(redisClusterConfig.nodes, redisClusterConfig.options as any);
+          // For cluster mode, pub/sub clients use the same cluster instance
+          this.pubClient = this.client;
+          this.subClient = this.client;
           logger.info('Connecting to Redis Cluster...');
           break;
         case 'sentinel':
-          this.client = new Redis(redisSentinelConfig as any);
+          this.client = new (Ioredis as any)(redisSentinelConfig as any);
+          // Create separate pub/sub clients for sentinel mode
+          this.pubClient = new (Ioredis as any)(redisSentinelConfig as any);
+          this.subClient = new (Ioredis as any)(redisSentinelConfig as any);
           logger.info('Connecting to Redis Sentinel...');
           break;
         default:
-          this.client = new Redis(redisConfig);
+          if (process.env.REDIS_URL) {
+            this.client = new (Ioredis as any)(process.env.REDIS_URL, redisConfig);
+          } else {
+            this.client = new (Ioredis as any)(redisConfig);
+          }
+          // For standalone mode, create separate pub/sub clients for BullMQ/WebSocket
+          if (process.env.REDIS_URL) {
+            this.pubClient = new (Ioredis as any)(process.env.REDIS_URL, redisConfig);
+            this.subClient = new (Ioredis as any)(process.env.REDIS_URL, redisConfig);
+          } else {
+            this.pubClient = new (Ioredis as any)(redisConfig);
+            this.subClient = new (Ioredis as any)(redisConfig);
+          }
           logger.info('Connecting to standalone Redis...');
       }
 
-      this.client.on('connect', () => {
+      this.client!.on('connect', () => {
         this.isConnected = true;
         logger.info(`Redis (${this.mode}) connected successfully`);
       });
 
-      this.client.on('ready', () => {
+      this.client!.on('ready', () => {
         this.isConnected = true;
         logger.info(`Redis (${this.mode}) ready`);
       });
 
-      this.client.on('error', (err) => {
+      this.client!.on('error', (err: Error) => {
         logger.error(`Redis (${this.mode}) connection error:`, err);
         this.isConnected = false;
       });
 
-      this.client.on('close', () => {
+      this.client!.on('close', () => {
         this.isConnected = false;
         logger.warn(`Redis (${this.mode}) connection closed`);
       });
 
-      this.client.on('reconnecting', (time: number) => {
+      this.client!.on('reconnecting', (time: number) => {
         logger.warn(`Redis (${this.mode}) reconnecting after ${time}ms`);
       });
+
+      // Setup pub/sub client error handlers
+      if (this.pubClient && this.pubClient !== this.client) {
+        this.pubClient!.on('error', (err: Error) => {
+          logger.error('Redis pubClient error:', err);
+        });
+      }
+      if (this.subClient && this.subClient !== this.client) {
+        this.subClient!.on('error', (err: Error) => {
+          logger.error('Redis subClient error:', err);
+        });
+      }
 
       // For cluster mode, listen to cluster events
       if (this.mode === 'cluster' && this.client instanceof Cluster) {
@@ -80,6 +112,8 @@ class RedisClient {
     } catch (error) {
       logger.error(`Failed to initialize Redis client (${this.mode}):`, error);
       this.client = null;
+      this.pubClient = null;
+      this.subClient = null;
       this.isConnected = false;
     }
   }
@@ -99,6 +133,14 @@ class RedisClient {
 
   getClient(): RedisClientType | null {
     return this.isConnected ? this.client : null;
+  }
+
+  getClientOrThrow(): RedisClientType {
+    const client = this.getClient();
+    if (!client) {
+      throw new Error('Redis client is not initialized or is disconnected');
+    }
+    return client;
   }
 
   getMemoryStore(): Map<string, string> {
@@ -124,7 +166,25 @@ class RedisClient {
       }
     }
 
+    if (this.pubClient && this.pubClient !== this.client) {
+      try {
+        await this.pubClient.quit();
+      } catch (error) {
+        logger.warn('Error during Redis pubClient disconnect:', error);
+      }
+    }
+
+    if (this.subClient && this.subClient !== this.client) {
+      try {
+        await this.subClient.quit();
+      } catch (error) {
+        logger.warn('Error during Redis subClient disconnect:', error);
+      }
+    }
+
     this.client = null;
+    this.pubClient = null;
+    this.subClient = null;
     this.isConnected = false;
     this.memoryStore.clear();
   }
@@ -151,6 +211,24 @@ class RedisClient {
         error: String(error),
       };
     }
+  }
+
+  /**
+   * Get pub/sub clients for BullMQ and WebSocket
+   */
+  getPubClient(): RedisClientType | null {
+    return this.pubClient || this.client;
+  }
+
+  getSubClient(): RedisClientType | null {
+    return this.subClient || this.client;
+  }
+
+  /**
+   * Get a client compatible with BullMQ (alias for main client)
+   */
+  getBullMQClient(): RedisClientType | null {
+    return this.client;
   }
 }
 

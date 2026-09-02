@@ -1,9 +1,15 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { Request, Response, Router } from 'express';
 import { authenticate } from '../auth/auth.middleware.js';
+import { getQueryString } from '../utils/queryParams.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 const prisma = new PrismaClient();
+
+function asStringArray(value: Prisma.JsonValue | null | undefined): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string');
+}
 
 // Apply auth middleware to all canvas routes
 router.use(authenticate);
@@ -17,9 +23,6 @@ router.get('/', async (req: Request, res: Response) => {
     }
 
     const canvases = await prisma.canvas.findMany({
-      where: {
-        OR: [{ studentId: userId }, { collaborators: { has: userId } }],
-      },
       orderBy: { updatedAt: 'desc' },
       select: {
         id: true,
@@ -30,6 +33,8 @@ router.get('/', async (req: Request, res: Response) => {
         createdAt: true,
         updatedAt: true,
         lastModifiedBy: true,
+        studentId: true,
+        collaborators: true,
         student: {
           select: {
             id: true,
@@ -40,7 +45,14 @@ router.get('/', async (req: Request, res: Response) => {
       },
     });
 
-    res.json(canvases);
+    const accessible = canvases
+      .filter(
+        (canvas) =>
+          canvas.studentId === userId || asStringArray(canvas.collaborators).includes(userId)
+      )
+      .map(({ studentId: _studentId, collaborators: _collaborators, ...rest }) => rest);
+
+    res.json(accessible);
   } catch (error) {
     console.error('Error fetching canvases:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -78,6 +90,7 @@ router.post('/', async (req: Request, res: Response) => {
         isPublic: isPublic || false,
         studentId: userId,
         data: {},
+        collaborators: [],
       },
     });
 
@@ -92,7 +105,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.get('/room/:roomId', async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { roomId } = req.params;
+    const roomId = getQueryString(req.params.roomId);
 
     const canvas = await prisma.canvas.findUnique({
       where: { roomId },
@@ -113,7 +126,9 @@ router.get('/room/:roomId', async (req: Request, res: Response) => {
     }
 
     const hasAccess =
-      canvas.studentId === userId || canvas.collaborators.includes(userId || '') || canvas.isPublic;
+      canvas.studentId === userId ||
+      asStringArray(canvas.collaborators).includes(userId || '') ||
+      canvas.isPublic;
 
     if (!hasAccess) {
       return res.status(403).json({ error: 'Access denied' });
@@ -130,7 +145,7 @@ router.get('/room/:roomId', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getQueryString(req.params.id);
 
     const canvas = await prisma.canvas.findUnique({
       where: { id },
@@ -152,7 +167,9 @@ router.get('/:id', async (req: Request, res: Response) => {
 
     // Check access: owner or collaborator or public
     const hasAccess =
-      canvas.studentId === userId || canvas.collaborators.includes(userId || '') || canvas.isPublic;
+      canvas.studentId === userId ||
+      asStringArray(canvas.collaborators).includes(userId || '') ||
+      canvas.isPublic;
 
     if (!hasAccess) {
       return res.status(403).json({ error: 'Access denied' });
@@ -169,7 +186,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getQueryString(req.params.id);
     const { title, description, data, isPublic } = req.body;
 
     const canvas = await prisma.canvas.findUnique({
@@ -208,7 +225,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getQueryString(req.params.id);
 
     const canvas = await prisma.canvas.findUnique({
       where: { id },
@@ -238,7 +255,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 router.post('/:id/collaborators', async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getQueryString(req.params.id);
     const { collaboratorId } = req.body;
 
     if (!collaboratorId) {
@@ -259,7 +276,7 @@ router.post('/:id/collaborators', async (req: Request, res: Response) => {
     }
 
     // Add collaborator if not already present
-    const collaborators = canvas.collaborators || [];
+    const collaborators = asStringArray(canvas.collaborators);
     if (!collaborators.includes(collaboratorId)) {
       collaborators.push(collaboratorId);
     }
@@ -282,7 +299,8 @@ router.post('/:id/collaborators', async (req: Request, res: Response) => {
 router.delete('/:id/collaborators/:collaboratorId', async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id, collaboratorId } = req.params;
+    const id = getQueryString(req.params.id);
+    const collaboratorId = getQueryString(req.params.collaboratorId);
 
     const canvas = await prisma.canvas.findUnique({
       where: { id },
@@ -297,7 +315,7 @@ router.delete('/:id/collaborators/:collaboratorId', async (req: Request, res: Re
       return res.status(403).json({ error: 'Only owner can remove collaborators' });
     }
 
-    const collaborators = (canvas.collaborators || []).filter(
+    const collaborators = asStringArray(canvas.collaborators).filter(
       (collab) => collab !== collaboratorId
     );
 
@@ -319,10 +337,20 @@ router.delete('/:id/collaborators/:collaboratorId', async (req: Request, res: Re
 router.post('/:id/export', async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getQueryString(req.params.id);
 
     const canvas = await prisma.canvas.findUnique({
       where: { id },
+      include: {
+        student: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
     });
 
     if (!canvas) {
@@ -331,7 +359,9 @@ router.post('/:id/export', async (req: Request, res: Response) => {
 
     // Check access: owner or collaborator or public
     const hasAccess =
-      canvas.studentId === userId || canvas.collaborators.includes(userId || '') || canvas.isPublic;
+      canvas.studentId === userId ||
+      asStringArray(canvas.collaborators).includes(userId || '') ||
+      canvas.isPublic;
 
     if (!hasAccess) {
       return res.status(403).json({ error: 'Access denied' });

@@ -1,8 +1,8 @@
 import { rpc, scValToNative, xdr, Contract, Address } from '@stellar/stellar-sdk';
+import { getPublicEnv } from './env';
 
-const SOROBAN_RPC_URL =
-  process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
-const CONTRACT_ID = process.env.NEXT_PUBLIC_CERTIFICATE_CONTRACT_ID || '';
+const SOROBAN_RPC_URL = getPublicEnv().sorobanRpcUrl;
+const CONTRACT_ID = getPublicEnv().certificateContractId ?? '';
 
 export interface TimestampedProof {
   timestamp: bigint;
