@@ -22,6 +22,9 @@ for beginners and university students.
    technology and sector preferences.
 5. **Open Source Contribution Trainer**: Get hands-on with Git, simulated GitHub issues, and PR
    exercises to confidently contribute to open source.
+6. **Passkey WebAuthn Wallet**: Passwordless, seedless Web3 onboarding using biometric passkeys
+   (TouchID, FaceID) with on-chain verification via Soroban smart contracts and social guardian
+   recovery for account restoration.
 
 ## 🛠 Technology Stack
 
@@ -30,32 +33,41 @@ for beginners and university students.
 - React / Next.js
 - Tailwind CSS
 - Monaco Editor
+- WebAuthn API (Passkeys)
 
 **Backend**
 
 - Node.js / Express
 - PostgreSQL
+- Redis (Challenge Storage)
 
 **Blockchain Integration**
 
 - Stellar SDK
 - Soroban Smart Contracts
+- P-256 / secp256r1 Cryptography
 
 ## 📁 Repository Structure
 
 ```text
 web3-student-lab/
 ├── contracts/            # Platform smart contracts (e.g., on-chain certificates)
+│   └── src/passkey_wallet.rs  # WebAuthn verification contract
 ├── frontend/             # Next.js/React frontend application
 │   ├── simulator/        # Visual blockchain tools
 │   ├── playground/       # In-browser smart contract editor
 │   ├── roadmap/          # Learning progress tracking and paths
-│   └── ideas/            # Hackathon project generator UI
+│   ├── ideas/            # Hackathon project generator UI
+│   ├── app/passkey/      # Passkey wallet page
+│   ├── components/passkey/  # Passkey UI components
+│   └── lib/passkey.ts    # WebAuthn client utilities
 ├── backend/              # Node.js backend application
 │   ├── blockchain/       # Interaction with Stellar/Soroban
 │   ├── contracts/        # Compilation and execution engine for student code
 │   ├── learning/         # Curriculum and progress APIs
-│   └── generator/        # Prompt/AI layer for hackathon ideas
+│   ├── generator/        # Prompt/AI layer for hackathon ideas
+│   ├── routes/passkey.routes.ts  # WebAuthn API routes
+│   └── services/passkey.service.ts  # WebAuthn service
 └── docs/                 # Documentation and learning materials
 ```
 

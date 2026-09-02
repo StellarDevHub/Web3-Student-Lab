@@ -1,54 +1,22 @@
 {
-  // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
-    // File Layout
-    "rootDir": "./",
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
     "outDir": "./dist",
-
-    // Environment Settings
-    // See also https://aka.ms/tsconfig/module
-    "module": "ESNext",
-    "target": "ES2022",
-    "moduleResolution": "bundler",
+    "rootDir": "./src",
+    "strict": true,
     "esModuleInterop": true,
+    "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "lib": ["ES2022"],
-    "types": ["node", "jest"],
-
-    // Other Outputs
-    "sourceMap": true,
+    "resolveJsonModule": true,
     "declaration": true,
     "declarationMap": true,
-
-    // Stricter Typechecking Options
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": false,
-
-    // Style Options
-    // "noImplicitReturns": true,
-    // "noImplicitOverride": true,
-    // "noUnusedLocals": true,
-    // "noUnusedParameters": true,
-    // "noFallthroughCasesInSwitch": true,
-    // "noPropertyAccessFromIndexSignature": true,
-
-    // Recommended Options
-    "strict": true,
-    "skipLibCheck": true
+    "sourceMap": true,
+    "moduleResolution": "node",
+    "typeRoots": ["./node_modules/@types"],
+    "types": ["node", "jest"]
   },
-  "include": ["src/**/*", "src/generated/**/*"],
-  "exclude": [
-    "node_modules",
-    "src/controllers/subscription.controller.ts",
-    "src/routes/subscriptions.routes.ts",
-    "src/services/subscription.service.ts",
-    "src/middleware/auth.ts",
-    "src/routes/canvas.routes.ts",
-    "src/routes/courses.ts",
-    "src/routes/freelance.ts",
-    "src/routes/subscriptions.ts",
-    "src/routes/search/**/*",
-    "src/search/**/*",
-    "src/services/bff.service.ts"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

@@ -1,53 +1,49 @@
+# Dependencies
 node_modules/
 .pnp
 .pnp.js
-target/
-contracts/target/
 
-# testing
-coverage/
-
-# next.js
+# Build outputs
+dist/
+build/
 .next/
 out/
-build/
 
-# misc
-.DS_Store
-*.pem
+# Testing
+coverage/
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# env
+# Environment files
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
-# vercel
-.vercel
-target
-Cargo.lock
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# build artifacts
-dist/
-backend/dist/
-*.js
-*.js.map
-*.d.ts
-!jest.config.js
-!next.config.ts
-!postcss.config.mjs
-!eslint.config.mjs
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
+# OS
+.DS_Store
+Thumbs.db
 
-# temp error logs
-frontend/ts_errors.txt
-frontend/tsc_errors.log
-frontend/tsc_errors_new.log
-frontend/tsc_errors_new2.log
-contracts/test_output_activity.txt
+# TypeScript
+*.tsbuildinfo
+
+# Rust/Soroban
+contracts/target/
+contracts/Cargo.lock
+
+# Redis
+dump.rdb
+
+# Misc
+*.log
+*.tmp
