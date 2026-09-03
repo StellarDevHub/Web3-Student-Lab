@@ -114,14 +114,14 @@ importers:
         specifier: ^8.20.0
         version: 8.21.0
       y-websocket:
-        specifier: ^3.1.0
-        version: 3.1.0(yjs@13.6.31)
+        specifier: ^3.0.0
+        version: 3.0.0(yjs@13.6.32)
       yaml:
         specifier: ^2.0.0
         version: 2.9.0
       yjs:
-        specifier: ^13.6.30
-        version: 13.6.31
+        specifier: ^13.6.32
+        version: 13.6.32
       zod:
         specifier: ^4.3.6
         version: 4.4.3
@@ -4648,8 +4648,8 @@ packages:
     resolution: {integrity: sha512-7dSzzRQ++CKnNI/krKnYRV7JKKPUXMEh61soaHKg9mrWEhzFWhFnxPxGl+69cD1Ou63C13NUPCnmIcrvqCuM6w==}
     engines: {node: '>=12'}
 
-  yjs@13.6.31:
-    resolution: {integrity: sha512-Eq+5BRfbeGyqGVrTJL3bEcr8gKkxPuyuoHmAwpk52fDb8kOVMrfVSTRPd6yiGgX5Fskb96qCRjzjbRjrL4YEnw==}
+  yjs@13.6.32:
+    resolution: {integrity: sha512-lfiJIIC4Xayt5ItynE407ehlE03pCjeOc4hkR4yxxvvNJ4kuiN25B0g+Qp8XagYz361LLL7DCzR5bvFJ81QKtQ==}
     engines: {node: '>=16.0.0', npm: '>=8.0.0'}
 
   yn@3.1.1:
@@ -10207,16 +10207,16 @@ snapshots:
 
   xtend@4.0.2: {}
 
-  y-protocols@1.0.7(yjs@13.6.31):
+  y-protocols@1.0.7(yjs@13.6.32):
     dependencies:
       lib0: 0.2.117
-      yjs: 13.6.31
+      yjs: 13.6.32
 
-  y-websocket@3.1.0(yjs@13.6.31):
+  y-websocket@3.0.0(yjs@13.6.32):
     dependencies:
       lib0: 0.2.117
-      y-protocols: 1.0.7(yjs@13.6.31)
-      yjs: 13.6.31
+      y-protocols: 1.0.7(yjs@13.6.32)
+      yjs: 13.6.32
 
   y18n@4.0.3: {}
 
@@ -10259,7 +10259,7 @@ snapshots:
       y18n: 5.0.8
       yargs-parser: 21.1.1
 
-  yjs@13.6.31:
+  yjs@13.6.32:
     dependencies:
       lib0: 0.2.117
 
