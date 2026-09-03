@@ -4,75 +4,92 @@ import { useHardwareWallet } from '../useHardwareWallet';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 //
-// This is the compatibility smoke check required alongside pinning the Ledger
-// packages: it verifies TransportWebHID.create() and the Eth() constructor are
-// actually invoked (and wired to the returned address/signature) on the pinned
-// versions, so a future bump that breaks this initialization surface fails
-// here instead of only being discovered against real hardware.
+// The hardware wallet gateway talks to a Ledger running the Stellar app through
+// either WebHID or WebUSB, and uses @ledgerhq/hw-app-str (the `Str` client) to
+// derive addresses and sign transactions. We mock the transports and the Str
+// client so we can assert the exact initialization + signing surface the hook
+// uses — a change in those pinned packages that breaks this surface fails here
+// before it ever reaches real hardware.
 
 const mockClose = vi.fn().mockResolvedValue(undefined);
-const mockTransportCreate = vi.fn();
-const mockGetAddress = vi.fn();
-const mockSignPersonalMessage = vi.fn();
+const mockWebhidCreate = vi.fn();
+const mockWebusbCreate = vi.fn();
+const mockGetPublicKey = vi.fn();
+const mockSignTransaction = vi.fn();
 
 vi.mock('@ledgerhq/hw-transport-webhid', () => ({
   default: {
-    create: (...args: unknown[]) => mockTransportCreate(...args),
+    create: (...args: unknown[]) => mockWebhidCreate(...args),
   },
 }));
 
-vi.mock('@ledgerhq/hw-app-eth', () => ({
-  default: class MockEth {
+vi.mock('@ledgerhq/hw-transport-webusb', () => ({
+  default: {
+    create: (...args: unknown[]) => mockWebusbCreate(...args),
+  },
+}));
+
+vi.mock('@ledgerhq/hw-app-str', () => ({
+  default: class MockStr {
     constructor(public transport: unknown) {}
-    getAddress(...args: unknown[]) {
-      return mockGetAddress(...args);
+    getPublicKey(...args: unknown[]) {
+      return mockGetPublicKey(...args);
     }
-    signPersonalMessage(...args: unknown[]) {
-      return mockSignPersonalMessage(...args);
+    signTransaction(...args: unknown[]) {
+      return mockSignTransaction(...args);
     }
   },
 }));
 
-const ADDRESS = '0xABCDEF1234567890';
+const PUBLIC_KEY = 'GBADDRESSMAINNETPUBLICKEYEXAMPLESTRING';
+const DEFAULT_PATH = "44'/148'/0'";
 
-function setHidSupport(isSupported: boolean) {
-  if (isSupported) {
-    Object.defineProperty(window.navigator, 'hid', {
-      value: {},
-      configurable: true,
-    });
+function setHydrusSupport(hid: boolean, usb: boolean) {
+  const nav = window.navigator as unknown as Record<string, unknown>;
+  if (hid) {
+    Object.defineProperty(window.navigator, 'hid', { value: {}, configurable: true });
   } else {
-    delete (window.navigator as unknown as Record<string, unknown>).hid;
+    delete nav.hid;
+  }
+  if (usb) {
+    Object.defineProperty(window.navigator, 'usb', { value: {}, configurable: true });
+  } else {
+    delete nav.usb;
   }
 }
 
 describe('useHardwareWallet', () => {
   beforeEach(() => {
-    mockTransportCreate.mockReset();
-    mockGetAddress.mockReset();
-    mockSignPersonalMessage.mockReset();
+    mockWebhidCreate.mockReset();
+    mockWebusbCreate.mockReset();
+    mockGetPublicKey.mockReset();
+    mockSignTransaction.mockReset();
     mockClose.mockClear();
-    setHidSupport(true);
+    setHydrusSupport(true, true);
   });
 
   afterEach(() => {
-    setHidSupport(false);
+    setHydrusSupport(false, false);
   });
 
-  it('reports unsupported when WebHID is not available', () => {
-    setHidSupport(false);
+  it('reports unsupported when neither WebHID nor WebUSB is available', () => {
+    setHydrusSupport(false, false);
     const { result } = renderHook(() => useHardwareWallet());
     expect(result.current.isSupported).toBe(false);
+    expect(result.current.supportedTransports).toEqual([]);
   });
 
-  it('reports supported when WebHID is available', () => {
+  it('reports the supported transports', () => {
+    setHydrusSupport(true, true);
     const { result } = renderHook(() => useHardwareWallet());
     expect(result.current.isSupported).toBe(true);
+    expect(result.current.supportedTransports).toContain('webhid');
+    expect(result.current.supportedTransports).toContain('webusb');
   });
 
-  it('connect() initializes the Ledger transport and Eth app, and stores the derived address', async () => {
-    mockTransportCreate.mockResolvedValue({ close: mockClose });
-    mockGetAddress.mockResolvedValue({ address: ADDRESS });
+  it('connect() creates a transport, derives the Stellar address, and stores it', async () => {
+    mockWebhidCreate.mockResolvedValue({ close: mockClose });
+    mockGetPublicKey.mockResolvedValue({ publicKey: PUBLIC_KEY });
 
     const { result } = renderHook(() => useHardwareWallet());
 
@@ -80,15 +97,33 @@ describe('useHardwareWallet', () => {
       await result.current.connect();
     });
 
-    expect(mockTransportCreate).toHaveBeenCalledTimes(1);
-    expect(mockGetAddress).toHaveBeenCalledWith("44'/60'/0'/0/0", false, true);
-    expect(result.current.address).toBe(ADDRESS);
+    expect(mockWebhidCreate).toHaveBeenCalledTimes(1);
+    expect(mockGetPublicKey).toHaveBeenCalledWith(DEFAULT_PATH);
+    expect(result.current.address).toBe(PUBLIC_KEY);
+    expect(result.current.publicKey).toBe(PUBLIC_KEY);
     expect(result.current.isConnected).toBe(true);
     expect(result.current.error).toBeNull();
+    expect(result.current.derivationPath).toBe(`m/${DEFAULT_PATH}`);
   });
 
-  it('connect() surfaces an error and leaves the wallet disconnected when the transport fails to initialize', async () => {
-    mockTransportCreate.mockRejectedValue(new Error('device not found'));
+  it('connect() honors an explicit transport + derivation path', async () => {
+    mockWebusbCreate.mockResolvedValue({ close: mockClose });
+    mockGetPublicKey.mockResolvedValue({ publicKey: PUBLIC_KEY });
+
+    const { result } = renderHook(() => useHardwareWallet());
+
+    await act(async () => {
+      await result.current.connect({ transport: 'webusb', derivationPath: "m/44'/148'/0'/1'" });
+    });
+
+    expect(mockWebusbCreate).toHaveBeenCalledTimes(1);
+    expect(mockGetPublicKey).toHaveBeenCalledWith("44'/148'/0'/1'");
+    expect(result.current.isConnected).toBe(true);
+  });
+
+  it('connect() surfaces an error and stays disconnected when all transports fail', async () => {
+    mockWebhidCreate.mockRejectedValue(new Error('device not found'));
+    mockWebusbCreate.mockRejectedValue(new Error('device not found'));
 
     const { result } = renderHook(() => useHardwareWallet());
 
@@ -98,24 +133,27 @@ describe('useHardwareWallet', () => {
 
     expect(result.current.isConnected).toBe(false);
     expect(result.current.address).toBeNull();
-    expect(result.current.error).toBe('Unable to connect to Ledger device.');
+    expect(mockWebhidCreate).toHaveBeenCalled();
+    expect(mockWebusbCreate).toHaveBeenCalled();
+    expect(result.current.error).toBe('device not found');
   });
 
-  it('connect() does not attempt initialization when WebHID is unsupported', async () => {
-    setHidSupport(false);
+  it('connect() does not attempt initialization when WebHID/WebUSB is unsupported', async () => {
+    setHydrusSupport(false, false);
     const { result } = renderHook(() => useHardwareWallet());
 
     await act(async () => {
       await result.current.connect();
     });
 
-    expect(mockTransportCreate).not.toHaveBeenCalled();
-    expect(result.current.error).toBe('WebHID is not available in this browser');
+    expect(mockWebhidCreate).not.toHaveBeenCalled();
+    expect(mockWebusbCreate).not.toHaveBeenCalled();
+    expect(result.current.error).toBe('WebHID/WebUSB is not available in this browser');
   });
 
   it('disconnect() closes the transport and clears the connected state', async () => {
-    mockTransportCreate.mockResolvedValue({ close: mockClose });
-    mockGetAddress.mockResolvedValue({ address: ADDRESS });
+    mockWebhidCreate.mockResolvedValue({ close: mockClose });
+    mockGetPublicKey.mockResolvedValue({ publicKey: PUBLIC_KEY });
 
     const { result } = renderHook(() => useHardwareWallet());
     await act(async () => {
@@ -132,10 +170,42 @@ describe('useHardwareWallet', () => {
     expect(result.current.address).toBeNull();
   });
 
-  it('signPersonalMessage() returns a signature assembled from the Eth app response', async () => {
-    mockTransportCreate.mockResolvedValue({ close: mockClose });
-    mockGetAddress.mockResolvedValue({ address: ADDRESS });
-    mockSignPersonalMessage.mockResolvedValue({ r: 'r'.repeat(64), s: 's'.repeat(64), v: 27 });
+  it('signTransaction() returns the signature produced by the Str app', async () => {
+    mockWebhidCreate.mockResolvedValue({ close: mockClose });
+    mockGetPublicKey.mockResolvedValue({ publicKey: PUBLIC_KEY });
+    mockSignTransaction.mockResolvedValue({ signature: 'signature-bytes' });
+
+    const { result } = renderHook(() => useHardwareWallet());
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    let signature: string | null = null;
+    await act(async () => {
+      signature = await result.current.signTransaction('AAAA...tx...');
+    });
+
+    await waitFor(() => expect(signature).not.toBeNull());
+    expect(mockSignTransaction).toHaveBeenCalledWith(DEFAULT_PATH, 'AAAA...tx...');
+    expect(signature).toBe('signature-bytes');
+  });
+
+  it('signTransaction() fails gracefully when no wallet is connected', async () => {
+    const { result } = renderHook(() => useHardwareWallet());
+
+    let signature: string | null = 'unset';
+    await act(async () => {
+      signature = await result.current.signTransaction('AAAA...tx...');
+    });
+
+    expect(signature).toBeNull();
+    expect(result.current.error).toBe('Hardware wallet is not connected');
+  });
+
+  it('signPersonalMessage() returns a signature assembled from the Str app response', async () => {
+    mockWebhidCreate.mockResolvedValue({ close: mockClose });
+    mockGetPublicKey.mockResolvedValue({ publicKey: PUBLIC_KEY });
+    mockSignTransaction.mockResolvedValue({ signature: 'sig' });
 
     const { result } = renderHook(() => useHardwareWallet());
     await act(async () => {
@@ -148,7 +218,8 @@ describe('useHardwareWallet', () => {
     });
 
     await waitFor(() => expect(signature).not.toBeNull());
-    expect(signature).toBe(`0x${'r'.repeat(64)}${'s'.repeat(64)}1b`);
+    expect(signature).toBe('sig');
+    expect(mockSignTransaction).toHaveBeenCalledWith(DEFAULT_PATH, expect.any(String));
   });
 
   it('signPersonalMessage() fails gracefully when no wallet is connected', async () => {

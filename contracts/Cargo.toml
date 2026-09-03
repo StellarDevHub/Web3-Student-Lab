@@ -39,8 +39,7 @@ members = [
     "token_migration",
     "zk_proof_verifier",
     "certificate",
-    "contract_events",
-    "peer_review",
+    "storage_ttl_manager",
 ]
 # Incomplete or non-crate directories under contracts/ must not be listed as members.
 exclude = [
