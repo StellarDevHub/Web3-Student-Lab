@@ -1,7 +1,12 @@
-use soroban_sdk::{contract, contractimpl, Address, Bytes, BytesN, Env, String, Vec};
+#![no_std]
 
-#[derive(Clone, Debug, PartialEq)]
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, panic_with_error, Address, Bytes, BytesN,
+    Env, String, Vec,
+};
+
 #[contracttype]
+#[derive(Clone, Debug, PartialEq)]
 pub enum CertificateStatus {
     Active,
     Revoked,
@@ -9,8 +14,8 @@ pub enum CertificateStatus {
     Expired,
 }
 
-#[derive(Clone, Debug)]
 #[contracttype]
+#[derive(Clone, Debug)]
 pub struct CertificateRecord {
     pub cert_id: BytesN<32>,
     pub owner: Address,
@@ -23,8 +28,8 @@ pub struct CertificateRecord {
     pub content_hash: BytesN<32>,
 }
 
-#[derive(Clone, Debug)]
 #[contracttype]
+#[derive(Clone, Debug)]
 pub struct RevocationAuditLog {
     pub cert_id: BytesN<32>,
     pub actor: Address,
@@ -33,8 +38,8 @@ pub struct RevocationAuditLog {
     pub action: String,
 }
 
-#[derive(Clone, Debug)]
 #[contracttype]
+#[derive(Clone, Debug)]
 pub struct MerkleCohortRoot {
     pub cohort_id: String,
     pub root_hash: BytesN<32>,
@@ -61,8 +66,14 @@ impl CertificateContract {
     ) -> BytesN<32> {
         issuer.require_auth();
 
-        let cert_id: u64 = env.storage().instance().get(&DataKey::NextCertId).unwrap_or(0);
-        let cert_id_bytes = BytesN::from_array(&env, &cert_id.to_be_bytes());
+        let cert_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextCertId)
+            .unwrap_or(0);
+        let mut cert_id_arr = [0u8; 32];
+        cert_id_arr[24..32].copy_from_slice(&cert_id.to_be_bytes());
+        let cert_id_bytes = BytesN::from_array(&env, &cert_id_arr);
 
         let record = CertificateRecord {
             cert_id: cert_id_bytes.clone(),
@@ -76,29 +87,53 @@ impl CertificateContract {
             content_hash,
         };
 
-        env.storage().persistent().set(&DataKey::Certificate(cert_id_bytes.clone()), &record);
         env.storage()
             .persistent()
-            .extend_ttl(&DataKey::Certificate(cert_id_bytes.clone()), 500_000, 500_000);
+            .set(&DataKey::Certificate(cert_id_bytes.clone()), &record);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Certificate(cert_id_bytes.clone()),
+            500_000,
+            500_000,
+        );
 
-        env.storage().instance().set(&DataKey::NextCertId, &(cert_id + 1));
+        env.storage()
+            .instance()
+            .set(&DataKey::NextCertId, &(cert_id + 1));
 
-        Self::log_audit(&env, &cert_id_bytes, &issuer, String::from_str(&env, "ISSUED"), String::from_str(&env, ""));
+        Self::log_audit(
+            &env,
+            &cert_id_bytes,
+            &issuer,
+            String::from_str(&env, "ISSUED"),
+            String::from_str(&env, ""),
+        );
 
         cert_id_bytes
     }
 
     pub fn revoke_certificate(env: Env, cert_id: BytesN<32>, reason_code: String) {
         let caller = env.current_contract_address();
-        let mut record: CertificateRecord = env.storage().persistent().get(&DataKey::Certificate(cert_id.clone())).unwrap_or_else(|| env.panic_with_error(Error::from_contract_error(1)));
+        let mut record: CertificateRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Certificate(cert_id.clone()))
+            .unwrap_or_else(|| panic_with_error!(&env, Error::NotFound));
         if record.status == CertificateStatus::Revoked {
-            env.panic_with_error(Error::from_contract_error(2));
+            panic_with_error!(&env, Error::AlreadyRevoked);
         }
         record.status = CertificateStatus::Revoked;
         record.revocation_reason = reason_code.clone();
-        env.storage().persistent().set(&DataKey::Certificate(cert_id.clone()), &record);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Certificate(cert_id.clone()), &record);
 
-        Self::log_audit(&env, &cert_id, &caller, String::from_str(&env, "REVOKED"), reason_code);
+        Self::log_audit(
+            &env,
+            &cert_id,
+            &caller,
+            String::from_str(&env, "REVOKED"),
+            reason_code,
+        );
     }
 
     pub fn reissue_certificate(
@@ -107,13 +142,23 @@ impl CertificateContract {
         new_content_hash: BytesN<32>,
     ) -> BytesN<32> {
         let caller = env.current_contract_address();
-        let mut old_record: CertificateRecord = env.storage().persistent().get(&DataKey::Certificate(old_cert_id.clone())).unwrap_or_else(|| env.panic_with_error(Error::from_contract_error(1)));
+        let mut old_record: CertificateRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Certificate(old_cert_id.clone()))
+            .unwrap_or_else(|| panic_with_error!(&env, Error::NotFound));
         if old_record.status != CertificateStatus::Revoked {
-            env.panic_with_error(Error::from_contract_error(3));
+            panic_with_error!(&env, Error::NotRevoked);
         }
 
-        let new_cert_id: u64 = env.storage().instance().get(&DataKey::NextCertId).unwrap_or(0);
-        let new_cert_id_bytes = BytesN::from_array(&env, &new_cert_id.to_be_bytes());
+        let new_cert_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextCertId)
+            .unwrap_or(0);
+        let mut new_cert_id_arr = [0u8; 32];
+        new_cert_id_arr[24..32].copy_from_slice(&new_cert_id.to_be_bytes());
+        let new_cert_id_bytes = BytesN::from_array(&env, &new_cert_id_arr);
 
         let new_record = CertificateRecord {
             cert_id: new_cert_id_bytes.clone(),
@@ -127,14 +172,31 @@ impl CertificateContract {
             content_hash: new_content_hash,
         };
 
-        env.storage().persistent().set(&DataKey::Certificate(new_cert_id_bytes.clone()), &new_record);
-        env.storage().persistent().extend_ttl(&DataKey::Certificate(new_cert_id_bytes.clone()), 500_000, 500_000);
-        env.storage().instance().set(&DataKey::NextCertId, &(new_cert_id + 1));
+        env.storage().persistent().set(
+            &DataKey::Certificate(new_cert_id_bytes.clone()),
+            &new_record,
+        );
+        env.storage().persistent().extend_ttl(
+            &DataKey::Certificate(new_cert_id_bytes.clone()),
+            500_000,
+            500_000,
+        );
+        env.storage()
+            .instance()
+            .set(&DataKey::NextCertId, &(new_cert_id + 1));
 
         old_record.status = CertificateStatus::Reissued;
-        env.storage().persistent().set(&DataKey::Certificate(old_cert_id), &old_record);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Certificate(old_cert_id), &old_record);
 
-        Self::log_audit(&env, &new_cert_id_bytes, &caller, String::from_str(&env, "REISSUED"), String::from_str(&env, ""));
+        Self::log_audit(
+            &env,
+            &new_cert_id_bytes,
+            &caller,
+            String::from_str(&env, "REISSUED"),
+            String::from_str(&env, ""),
+        );
 
         new_cert_id_bytes
     }
@@ -147,21 +209,34 @@ impl CertificateContract {
             anchored_at: env.ledger().timestamp(),
             issuer: caller,
         };
-        env.storage().persistent().set(&DataKey::MerkleRoot(cohort_id.clone()), &root);
-        env.storage().persistent().extend_ttl(&DataKey::MerkleRoot(cohort_id), 500_000, 500_000);
+        env.storage()
+            .persistent()
+            .set(&DataKey::MerkleRoot(cohort_id.clone()), &root);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::MerkleRoot(cohort_id), 500_000, 500_000);
     }
 
-    pub fn verify_merkle_inclusion(env: Env, cohort_id: String, leaf_hash: BytesN<32>, proof: Vec<BytesN<32>>) -> bool {
-        let root_entry: MerkleCohortRoot = env.storage().persistent().get(&DataKey::MerkleRoot(cohort_id)).unwrap_or_else(|| env.panic_with_error(Error::from_contract_error(4)));
+    pub fn verify_merkle_inclusion(
+        env: Env,
+        cohort_id: String,
+        leaf_hash: BytesN<32>,
+        proof: Vec<BytesN<32>>,
+    ) -> bool {
+        let root_entry: MerkleCohortRoot = env
+            .storage()
+            .persistent()
+            .get(&DataKey::MerkleRoot(cohort_id))
+            .unwrap_or_else(|| panic_with_error!(&env, Error::CohortNotFound));
         let mut current = leaf_hash;
         for sibling in proof.iter() {
             let mut combined = Bytes::new(&env);
-            if current < *sibling {
-                combined.append(&Bytes::from(current.clone()));
-                combined.append(&Bytes::from(sibling.clone()));
+            if current.to_array() < sibling.to_array() {
+                combined.append(&current.clone().into());
+                combined.append(&sibling.clone().into());
             } else {
-                combined.append(&Bytes::from(sibling.clone()));
-                combined.append(&Bytes::from(current.clone()));
+                combined.append(&sibling.clone().into());
+                combined.append(&current.clone().into());
             }
             current = env.crypto().sha256(&combined).into();
         }
@@ -169,19 +244,32 @@ impl CertificateContract {
     }
 
     pub fn get_certificate(env: Env, cert_id: BytesN<32>) -> CertificateRecord {
-        env.storage().persistent().get(&DataKey::Certificate(cert_id)).unwrap_or_else(|| env.panic_with_error(Error::from_contract_error(1)))
+        env.storage()
+            .persistent()
+            .get(&DataKey::Certificate(cert_id))
+            .unwrap_or_else(|| panic_with_error!(&env, Error::NotFound))
     }
 
     pub fn get_merkle_root(env: Env, cohort_id: String) -> MerkleCohortRoot {
-        env.storage().persistent().get(&DataKey::MerkleRoot(cohort_id)).unwrap_or_else(|| env.panic_with_error(Error::from_contract_error(4)))
+        env.storage()
+            .persistent()
+            .get(&DataKey::MerkleRoot(cohort_id))
+            .unwrap_or_else(|| panic_with_error!(&env, Error::CohortNotFound))
     }
 
     pub fn get_audit_log(env: Env, cert_id: BytesN<32>) -> Vec<RevocationAuditLog> {
-        env.storage().persistent().get(&DataKey::AuditLog(cert_id)).unwrap_or_else(|| Vec::new(&env))
+        env.storage()
+            .persistent()
+            .get(&DataKey::AuditLog(cert_id))
+            .unwrap_or_else(|| Vec::new(&env))
     }
 
     fn log_audit(env: &Env, cert_id: &BytesN<32>, actor: &Address, action: String, reason: String) {
-        let mut logs: Vec<RevocationAuditLog> = env.storage().persistent().get(&DataKey::AuditLog(cert_id.clone())).unwrap_or_else(|| Vec::new(env));
+        let mut logs: Vec<RevocationAuditLog> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AuditLog(cert_id.clone()))
+            .unwrap_or_else(|| Vec::new(env));
         logs.push_back(RevocationAuditLog {
             cert_id: cert_id.clone(),
             actor: actor.clone(),
@@ -189,13 +277,19 @@ impl CertificateContract {
             timestamp: env.ledger().timestamp(),
             action,
         });
-        env.storage().persistent().set(&DataKey::AuditLog(cert_id.clone()), &logs);
-        env.storage().persistent().extend_ttl(&DataKey::AuditLog(cert_id.clone()), 500_000, 500_000);
+        env.storage()
+            .persistent()
+            .set(&DataKey::AuditLog(cert_id.clone()), &logs);
+        env.storage().persistent().extend_ttl(
+            &DataKey::AuditLog(cert_id.clone()),
+            500_000,
+            500_000,
+        );
     }
 }
 
-#[derive(Clone, Debug)]
 #[contracttype]
+#[derive(Clone, Debug)]
 pub enum DataKey {
     Admin,
     NextCertId,
@@ -204,6 +298,7 @@ pub enum DataKey {
     AuditLog(BytesN<32>),
 }
 
+#[contracterror]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
@@ -211,12 +306,6 @@ pub enum Error {
     AlreadyRevoked = 2,
     NotRevoked = 3,
     CohortNotFound = 4,
-}
-
-impl From<Error> for soroban_sdk::Error {
-    fn from(e: Error) -> Self {
-        soroban_sdk::Error::from_contract_error(e as u32)
-    }
 }
 
 #[cfg(test)]
@@ -262,11 +351,25 @@ mod tests {
         client.initialize(&admin);
 
         let cohort_id = String::from_str(&env, "cohort-2025-01");
-        let root = BytesN::from_array(&env, &[9u8; 32]);
-        client.anchor_merkle_cohort(&cohort_id, &root);
-
         let leaf = BytesN::from_array(&env, &[1u8; 32]);
-        let proof: Vec<BytesN<32>> = Vec::from_array(&env, [BytesN::from_array(&env, &[2u8; 32]), BytesN::from_array(&env, &[3u8; 32])]);
+        let s1 = BytesN::from_array(&env, &[2u8; 32]);
+        let s2 = BytesN::from_array(&env, &[3u8; 32]);
+        let proof: Vec<BytesN<32>> = Vec::from_array(&env, [s1.clone(), s2.clone()]);
+
+        let mut cur = leaf.clone();
+        for sibling in [s1, s2] {
+            let mut combined = Bytes::new(&env);
+            if cur.to_array() < sibling.to_array() {
+                combined.append(&cur.into());
+                combined.append(&sibling.into());
+            } else {
+                combined.append(&sibling.into());
+                combined.append(&cur.into());
+            }
+            cur = env.crypto().sha256(&combined).into();
+        }
+
+        client.anchor_merkle_cohort(&cohort_id, &cur);
         assert!(client.verify_merkle_inclusion(&cohort_id, &leaf, &proof));
     }
 }

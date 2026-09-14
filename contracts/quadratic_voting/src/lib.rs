@@ -39,8 +39,12 @@ impl QuadraticVotingContract {
             panic!("Already initialized");
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::SybilContract, &sybil_contract);
-        env.storage().instance().set(&DataKey::CreditsPerUser, &credits_per_user);
+        env.storage()
+            .instance()
+            .set(&DataKey::SybilContract, &sybil_contract);
+        env.storage()
+            .instance()
+            .set(&DataKey::CreditsPerUser, &credits_per_user);
         env.storage().instance().set(&DataKey::ProposalCount, &0u32);
     }
 
@@ -49,7 +53,11 @@ impl QuadraticVotingContract {
         creator.require_auth();
         Self::check_sybil(&env, &creator);
 
-        let mut count: u32 = env.storage().instance().get(&DataKey::ProposalCount).unwrap_or(0);
+        let mut count: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProposalCount)
+            .unwrap_or(0);
         count += 1;
 
         let proposal = Proposal {
@@ -60,10 +68,17 @@ impl QuadraticVotingContract {
             executed: false,
         };
 
-        env.storage().persistent().set(&DataKey::Proposal(count), &proposal);
-        env.storage().instance().set(&DataKey::ProposalCount, &count);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Proposal(count), &proposal);
+        env.storage()
+            .instance()
+            .set(&DataKey::ProposalCount, &count);
 
-        env.events().publish((Symbol::new(&env, "proposal_created"),), (count, creator, title));
+        env.events().publish(
+            (Symbol::new(&env, "proposal_created"),),
+            (count, creator, title),
+        );
         count
     }
 
@@ -76,18 +91,31 @@ impl QuadraticVotingContract {
             panic!("Must cast at least 1 vote");
         }
 
-        let mut proposal: Proposal =
-            env.storage().persistent().get(&DataKey::Proposal(proposal_id)).expect("Proposal not found");
+        let mut proposal: Proposal = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Proposal(proposal_id))
+            .expect("Proposal not found");
         if proposal.executed {
             panic!("Proposal already executed");
         }
 
-        let default_credits: u32 = env.storage().instance().get(&DataKey::CreditsPerUser).unwrap();
-        let mut current_credits =
-            env.storage().persistent().get(&DataKey::UserCredits(voter.clone())).unwrap_or(default_credits);
+        let default_credits: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::CreditsPerUser)
+            .unwrap();
+        let mut current_credits = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserCredits(voter.clone()))
+            .unwrap_or(default_credits);
 
-        let previous_votes: u32 =
-            env.storage().persistent().get(&DataKey::UserVotes(voter.clone(), proposal_id)).unwrap_or(0);
+        let previous_votes: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserVotes(voter.clone(), proposal_id))
+            .unwrap_or(0);
         let new_total_votes = previous_votes + additional_votes;
 
         // Quadratic cost logic: Total cost should be (total_votes)^2.
@@ -102,12 +130,21 @@ impl QuadraticVotingContract {
         current_credits -= incremental_cost;
         proposal.votes_received += additional_votes;
 
-        env.storage().persistent().set(&DataKey::UserCredits(voter.clone()), &current_credits);
-        env.storage().persistent().set(&DataKey::UserVotes(voter.clone(), proposal_id), &new_total_votes);
-        env.storage().persistent().set(&DataKey::Proposal(proposal_id), &proposal);
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserCredits(voter.clone()), &current_credits);
+        env.storage().persistent().set(
+            &DataKey::UserVotes(voter.clone(), proposal_id),
+            &new_total_votes,
+        );
+        env.storage()
+            .persistent()
+            .set(&DataKey::Proposal(proposal_id), &proposal);
 
-        env.events()
-            .publish((Symbol::new(&env, "voted"),), (voter, proposal_id, additional_votes, incremental_cost));
+        env.events().publish(
+            (Symbol::new(&env, "voted"),),
+            (voter, proposal_id, additional_votes, incremental_cost),
+        );
     }
 
     /// Executes a proposal after the voting period has concluded.
@@ -115,32 +152,53 @@ impl QuadraticVotingContract {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
 
-        let mut proposal: Proposal =
-            env.storage().persistent().get(&DataKey::Proposal(proposal_id)).expect("Proposal not found");
+        let mut proposal: Proposal = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Proposal(proposal_id))
+            .expect("Proposal not found");
         if proposal.executed {
             panic!("Already executed");
         }
 
         proposal.executed = true;
-        env.storage().persistent().set(&DataKey::Proposal(proposal_id), &proposal);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Proposal(proposal_id), &proposal);
 
-        env.events()
-            .publish((Symbol::new(&env, "proposal_executed"),), (proposal_id, proposal.votes_received));
+        env.events().publish(
+            (Symbol::new(&env, "proposal_executed"),),
+            (proposal_id, proposal.votes_received),
+        );
     }
 
     // --- View & Helper Functions ---
 
     pub fn get_proposal(env: Env, proposal_id: u32) -> Proposal {
-        env.storage().persistent().get(&DataKey::Proposal(proposal_id)).expect("Proposal not found")
+        env.storage()
+            .persistent()
+            .get(&DataKey::Proposal(proposal_id))
+            .expect("Proposal not found")
     }
 
     pub fn get_user_credits(env: Env, user: Address) -> u32 {
-        let default_credits: u32 = env.storage().instance().get(&DataKey::CreditsPerUser).unwrap();
-        env.storage().persistent().get(&DataKey::UserCredits(user)).unwrap_or(default_credits)
+        let default_credits: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::CreditsPerUser)
+            .unwrap();
+        env.storage()
+            .persistent()
+            .get(&DataKey::UserCredits(user))
+            .unwrap_or(default_credits)
     }
 
     fn check_sybil(env: &Env, user: &Address) {
-        let sybil_contract: Address = env.storage().instance().get(&DataKey::SybilContract).unwrap();
+        let sybil_contract: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::SybilContract)
+            .unwrap();
         let is_verified: bool = env.invoke_contract(
             &sybil_contract,
             &Symbol::new(env, "is_verified"),

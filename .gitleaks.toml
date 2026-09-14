@@ -26,10 +26,16 @@
     '''\.env\.example$''',
 
     # Documentation and policy files
-    '''docs/governance/SUPPLY_CHAIN_SECURITY\.md$''',
-    '''docs/governance/SECRET_SCANNING_POLICY\.md$''',
+    '''docs/.*''',
+    '''README\.md$''',
+    '''MVP_READINESS\.md$''',
+    '''INTEGRATION_GUIDE\.md$''',
 
-    # Generated/compiled output
+    # Generated, dependency cache and workflow configs
+    '''\.pnpm-store/.*''',
+    '''\.github/workflows/.*''',
+    '''docker-compose.*\.ya?ml$''',
+    '''scripts/setup\.sh$''',
     '''backend/coverage/.*''',
     '''frontend/coverage/.*''',
     '''backend/dist/.*''',

@@ -41,6 +41,10 @@ jobs:
             revert
           requireScope: false
 
+      - name: Install commitlint dependencies
+        if: github.event_name == 'push'
+        run: npm install --no-save @commitlint/cli @commitlint/config-conventional
+
       - name: Validate Git Commit Messages
         if: github.event_name == 'push'
         run: |

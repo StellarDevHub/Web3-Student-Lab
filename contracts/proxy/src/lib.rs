@@ -171,7 +171,8 @@ impl ProxyContract {
             .instance()
             .set(&ProxyDataKey::PendingAdmin, &Some(new_admin.clone()));
 
-        env.events().publish((symbol_short!("admin"),), (caller, new_admin));
+        env.events()
+            .publish((symbol_short!("admin"),), (caller, new_admin));
     }
 
     pub fn transfer_admin_to(env: Env, caller: Address, new_admin: Address) {
@@ -195,11 +196,19 @@ impl ProxyContract {
         }
 
         env.storage().instance().set(&ProxyDataKey::Admin, &caller);
-        env.storage().instance().set(&ProxyDataKey::PendingAdmin, &None::<Address>);
+        env.storage()
+            .instance()
+            .set(&ProxyDataKey::PendingAdmin, &None::<Address>);
     }
 
     /// Delegates a host-call through the proxy to another contract address.
-    pub fn forward_call(env: Env, caller: Address, target: Address, function: Symbol, args: Vec<Val>) -> Val {
+    pub fn forward_call(
+        env: Env,
+        caller: Address,
+        target: Address,
+        function: Symbol,
+        args: Vec<Val>,
+    ) -> Val {
         caller.require_auth();
         Self::require_admin(&env, &caller);
         env.invoke_contract(&target, &function, args)

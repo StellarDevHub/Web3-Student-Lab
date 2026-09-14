@@ -236,6 +236,8 @@ backend/dist/
 !next.config.ts
 !postcss.config.mjs
 !eslint.config.mjs
+!commitlint.config.js
+!commitlint.config.cjs
 
 
 # temp error logs

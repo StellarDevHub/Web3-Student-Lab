@@ -1,7 +1,5 @@
 use super::*;
-use soroban_sdk::{
-    contract, contractimpl, testutils::Address as _, Env,
-};
+use soroban_sdk::{contract, contractimpl, testutils::Address as _, Env};
 
 /// Minimal legacy token: tracks transfers but otherwise a no-op.
 #[contract]
@@ -36,7 +34,15 @@ impl MockNewToken {
     pub fn mint(_env: Env, _to: Address, _amount: i128) {}
 }
 
-fn setup(env: &Env) -> (TokenMigrationContractClient<'static>, Address, Address, Address, Address) {
+fn setup(
+    env: &Env,
+) -> (
+    TokenMigrationContractClient<'static>,
+    Address,
+    Address,
+    Address,
+    Address,
+) {
     let id = env.register(TokenMigrationContract, ());
     let client = TokenMigrationContractClient::new(env, &id);
     let admin = Address::generate(env);

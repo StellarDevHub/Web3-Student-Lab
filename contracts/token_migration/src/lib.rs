@@ -57,7 +57,9 @@ impl TokenMigrationContract {
         };
 
         env.storage().instance().set(&DataKey::Config, &config);
-        env.storage().instance().set(&DataKey::TotalMigrated, &0i128);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalMigrated, &0i128);
 
         env.storage().instance().extend_ttl(100_000, 100_000);
     }
@@ -94,15 +96,27 @@ impl TokenMigrationContract {
 
         let user_key = DataKey::UserMigrated(caller.clone());
         let user_migrated: i128 = env.storage().persistent().get(&user_key).unwrap_or(0);
+        env.storage().persistent().set(
+            &user_key,
+            &user_migrated
+                .checked_add(amount)
+                .expect("User amount overflow"),
+        );
         env.storage()
             .persistent()
-            .set(&user_key, &user_migrated.checked_add(amount).expect("User amount overflow"));
-        env.storage().persistent().extend_ttl(&user_key, 100_000, 100_000);
+            .extend_ttl(&user_key, 100_000, 100_000);
 
-        let total_migrated: i128 = env.storage().instance().get(&DataKey::TotalMigrated).unwrap();
-        env.storage()
+        let total_migrated: i128 = env
+            .storage()
             .instance()
-            .set(&DataKey::TotalMigrated, &total_migrated.checked_add(amount).expect("Total amount overflow"));
+            .get(&DataKey::TotalMigrated)
+            .unwrap();
+        env.storage().instance().set(
+            &DataKey::TotalMigrated,
+            &total_migrated
+                .checked_add(amount)
+                .expect("Total amount overflow"),
+        );
 
         env.events().publish(
             (String::from_slice(&env, "migrated"), caller),
@@ -141,7 +155,10 @@ impl TokenMigrationContract {
     }
 
     pub fn get_total_migrated(env: Env) -> i128 {
-        env.storage().instance().get(&DataKey::TotalMigrated).unwrap()
+        env.storage()
+            .instance()
+            .get(&DataKey::TotalMigrated)
+            .unwrap()
     }
 }
 

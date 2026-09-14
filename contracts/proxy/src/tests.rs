@@ -50,6 +50,7 @@ fn test_upgrade_to() {
     let wasm2 = dummy_wasm_hash(&env, 2);
 
     client.init(&admin, &wasm1);
+    client.register_wasm(&admin, &wasm2);
     client.upgrade_to(&admin, &wasm2);
 
     assert_eq!(client.get_implementation(), wasm2);
@@ -75,7 +76,6 @@ fn test_storage_version_and_registered_hashes() {
     let wasm1 = dummy_wasm_hash(&env, 1);
     let wasm2 = dummy_wasm_hash(&env, 2);
 
-    client.register_wasm(&admin, &wasm1);
     client.init(&admin, &wasm1);
     assert_eq!(client.get_storage_version(), 1u32);
 
@@ -93,7 +93,6 @@ fn test_two_step_admin_transfer() {
     let wasm = dummy_wasm_hash(&env, 1);
     let new_admin = Address::generate(&env);
 
-    client.register_wasm(&admin, &wasm);
     client.init(&admin, &wasm);
     client.transfer_admin(&admin, &new_admin);
 
@@ -120,7 +119,6 @@ fn test_transfer_admin_revokes_old_admin() {
     let wasm = dummy_wasm_hash(&env, 1);
     let new_admin = Address::generate(&env);
 
-    client.register_wasm(&admin, &wasm);
     client.init(&admin, &wasm);
     client.transfer_admin(&admin, &new_admin);
     client.accept_admin(&new_admin);

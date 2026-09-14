@@ -634,6 +634,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "did_registry"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1297,7 +1304,7 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 name = "payment-gateway"
 version = "0.1.0"
 dependencies = [
- "rand 0.9.5",
+ "rand 0.8.8",
  "soroban-sdk",
 ]
 
@@ -1305,15 +1312,6 @@ dependencies = [
 name = "payment-streaming"
 version = "0.1.0"
 dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
-name = "peer-review"
-version = "0.1.0"
-dependencies = [
- "contract-events",
- "proptest",
  "soroban-sdk",
 ]
 
@@ -1795,11 +1793,11 @@ dependencies = [
 
 [[package]]
 name = "soroban-certificate-contract"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "ed25519-dalek",
  "proptest",
- "rand 0.9.5",
+ "rand 0.8.8",
  "soroban-sdk",
 ]
 
@@ -2057,6 +2055,13 @@ dependencies = [
  "serde_with",
  "sha2",
  "stellar-strkey 0.0.13",
+]
+
+[[package]]
+name = "storage-ttl-manager"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
 ]
 
 [[package]]

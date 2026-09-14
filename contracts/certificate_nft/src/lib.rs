@@ -1,5 +1,7 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, String, Symbol};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, symbol_short, Address, Env, String, Symbol,
+};
 
 #[contracttype]
 pub struct CertificateMetadata {
@@ -50,11 +52,7 @@ impl CertificateNFTContract {
 
         // Emit an on-chain minting event with indexed student and course topic symbols
         // Topics: ("mint", student_addr, course_id)
-        let topics = (
-            symbol_short!("mint"),
-            student,
-            course_id,
-        );
+        let topics = (symbol_short!("mint"), student, course_id);
         env.events().publish(topics, metadata);
     }
 }

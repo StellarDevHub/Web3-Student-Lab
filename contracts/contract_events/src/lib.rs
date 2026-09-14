@@ -234,7 +234,13 @@ pub fn publish_submission(
 ///
 /// Topics: `(STAKE, reviewer)`
 /// Data: `(amount, total_stake, deposit, ts)`
-pub fn publish_stake(env: &Env, reviewer: &Address, amount: i128, total_stake: i128, deposit: bool) {
+pub fn publish_stake(
+    env: &Env,
+    reviewer: &Address,
+    amount: i128,
+    total_stake: i128,
+    deposit: bool,
+) {
     env.events().publish(
         (topic::STAKE, reviewer.clone()),
         (amount, total_stake, deposit, env.ledger().timestamp()),
@@ -245,19 +251,10 @@ pub fn publish_stake(env: &Env, reviewer: &Address, amount: i128, total_stake: i
 ///
 /// Topics: `(COMMIT, reviewer)`
 /// Data: `(submission_id, commitment, ts)`
-pub fn publish_commit(
-    env: &Env,
-    reviewer: &Address,
-    submission_id: u64,
-    commitment: &BytesN<32>,
-) {
+pub fn publish_commit(env: &Env, reviewer: &Address, submission_id: u64, commitment: &BytesN<32>) {
     env.events().publish(
         (topic::COMMIT, reviewer.clone()),
-        (
-            submission_id,
-            commitment.clone(),
-            env.ledger().timestamp(),
-        ),
+        (submission_id, commitment.clone(), env.ledger().timestamp()),
     );
 }
 
@@ -316,12 +313,7 @@ pub fn publish_enrollment(env: &Env, student: &Address, content_id: u64, revoked
 ///
 /// Topics: `(MILESTONE, student)`
 /// Data: `(content_id, milestone, ts)`
-pub fn publish_milestone(
-    env: &Env,
-    student: &Address,
-    content_id: u64,
-    milestone: Symbol,
-) {
+pub fn publish_milestone(env: &Env, student: &Address, content_id: u64, milestone: Symbol) {
     env.events().publish(
         (topic::MILESTONE, student.clone()),
         (content_id, milestone, env.ledger().timestamp()),
@@ -812,19 +804,16 @@ mod tests {
 
     /// Convert `env.events().all()` into `(topics, payload)` pairs where the
     /// payload `ScVal` has been unpacked into its component values.
-    fn raw_events(
-        env: &Env,
-    ) -> std::vec::Vec<(std::vec::Vec<Val>, std::vec::Vec<Val>)> {
+    fn raw_events(env: &Env) -> std::vec::Vec<(std::vec::Vec<Val>, std::vec::Vec<Val>)> {
         let mut out = std::vec::Vec::new();
         for e in env.events().all().events() {
             if let xdr::ContractEventBody::V0(v0) = &e.body {
                 let topics: Vec<Val> = Vec::try_from_val(env, &v0.topics).unwrap();
-                let payload: Vec<Val> = Vec::try_from_val(env, &v0.data)
-                    .unwrap_or_else(|_| {
-                        let mut v = Vec::new(env);
-                        v.push_back(Val::try_from_val(env, &v0.data).unwrap());
-                        v
-                    });
+                let payload: Vec<Val> = Vec::try_from_val(env, &v0.data).unwrap_or_else(|_| {
+                    let mut v = Vec::new(env);
+                    v.push_back(Val::try_from_val(env, &v0.data).unwrap());
+                    v
+                });
                 let mut t = std::vec::Vec::new();
                 let mut i = 0u32;
                 while i < topics.len() {
@@ -861,7 +850,10 @@ mod tests {
 
         // trade
         let (topics, data) = &events[0];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::TRADE);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::TRADE
+        );
         let trade = decode_trade(&env, topics, data);
         assert_eq!(trade.trader, admin);
         assert_eq!(trade.action, symbol_short!("buy"));
@@ -874,26 +866,38 @@ mod tests {
 
         // pause
         let (topics, data) = &events[1];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::PAUSE);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::PAUSE
+        );
         let pause = decode_pause(&env, topics, data);
         assert!(pause.paused);
 
         // fee withdrawal
         let (topics, data) = &events[2];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::FEE_WITHDRAW);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::FEE_WITHDRAW
+        );
         let fee = decode_fee_withdraw(&env, topics, data);
         assert_eq!(fee.amount, 42);
 
         // vault lock
         let (topics, data) = &events[3];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::VAULT_LOCK);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::VAULT_LOCK
+        );
         let lock = decode_vault_lock(&env, topics, data);
         assert!(lock.locked);
         assert_eq!(lock.token_id, token_id);
 
         // shares minted
         let (topics, data) = &events[4];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::SHARES_MINTED);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::SHARES_MINTED
+        );
         let shares = decode_shares_minted(&env, topics, data);
         assert_eq!(shares.amount, 500);
 
@@ -905,47 +909,68 @@ mod tests {
 
         // auction
         let (topics, data) = &events[6];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::AUCTION);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::AUCTION
+        );
         let auction = decode_auction(&env, topics, data);
         assert!(auction.finalized);
         assert_eq!(auction.winner, admin);
 
         // payout
         let (topics, data) = &events[7];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::PAYOUT);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::PAYOUT
+        );
         let payout = decode_payout(&env, topics, data);
         assert_eq!(payout.amount, 5_000);
 
         // submission
         let (topics, data) = &events[8];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::SUBMISSION);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::SUBMISSION
+        );
         let sub = decode_submission(&env, topics, data);
         assert_eq!(sub.submission_id, 42);
         assert_eq!(sub.reward_pool, 1_000);
 
         // stake
         let (topics, data) = &events[9];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::STAKE);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::STAKE
+        );
         let stake = decode_stake(&env, topics, data);
         assert!(stake.deposit);
         assert_eq!(stake.total_stake, 250);
 
         // commit
         let (topics, data) = &events[10];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::COMMIT);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::COMMIT
+        );
         let commit = decode_commit(&env, topics, data);
         assert_eq!(commit.submission_id, 42);
         assert_eq!(commit.commitment, token_id);
 
         // reveal
         let (topics, data) = &events[11];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::REVEAL);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::REVEAL
+        );
         let reveal = decode_reveal(&env, topics, data);
         assert_eq!(reveal.grade, 87);
 
         // review done
         let (topics, data) = &events[12];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::REVIEW_DONE);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::REVIEW_DONE
+        );
         let done = decode_review_done(&env, topics, data);
         assert_eq!(done.median, 87);
         assert_eq!(done.rewarded, 3);
@@ -953,32 +978,47 @@ mod tests {
 
         // slash
         let (topics, data) = &events[13];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::SLASH);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::SLASH
+        );
         let slash = decode_slash(&env, topics, data);
         assert_eq!(slash.amount, 100);
 
         // enrollment
         let (topics, data) = &events[14];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::ENROLL);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::ENROLL
+        );
         let enroll = decode_enrollment(&env, topics, data);
         assert_eq!(enroll.content_id, 7);
         assert!(!enroll.revoked);
 
         // milestone
         let (topics, data) = &events[15];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::MILESTONE);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::MILESTONE
+        );
         let milestone = decode_milestone(&env, topics, data);
         assert_eq!(milestone.milestone, symbol_short!("unit2"));
 
         // certificate mint
         let (topics, data) = &events[16];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::CERT_MINT);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::CERT_MINT
+        );
         let cert = decode_certificate_mint(&env, topics, data);
         assert_eq!(cert.course_id, symbol_short!("cs101"));
 
         // transfer
         let (topics, data) = &events[17];
-        assert_eq!(Symbol::try_from_val(&env, &topics[0]).unwrap(), topic::TRANSFER);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::TRANSFER
+        );
         let xfer = decode_transfer(&env, topics, data);
         assert_eq!(xfer.amount, 123);
     }

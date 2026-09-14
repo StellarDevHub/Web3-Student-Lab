@@ -1,8 +1,6 @@
 use super::*;
-use soroban_sdk::{
-    testutils::Address as _,
-    Env, String,
-};#[contract]
+use soroban_sdk::{testutils::Address as _, Env, String};
+#[contract]
 struct MockSybil;
 
 #[contractimpl]

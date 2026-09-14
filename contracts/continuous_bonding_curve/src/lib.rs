@@ -178,11 +178,22 @@ impl ContinuousBondingCurveContract {
         }
 
         write_i128(&env, DataKey::Supply, supply + tokens_out);
-        write_i128(&env, DataKey::Reserve, read_i128(&env, DataKey::Reserve) + cost);
-        write_i128(&env, DataKey::FeePool, read_i128(&env, DataKey::FeePool) + fee);
+        write_i128(
+            &env,
+            DataKey::Reserve,
+            read_i128(&env, DataKey::Reserve) + cost,
+        );
+        write_i128(
+            &env,
+            DataKey::FeePool,
+            read_i128(&env, DataKey::FeePool) + fee,
+        );
 
-        token::Client::new(&env, &read_reserve_token(&env))
-            .transfer(&buyer, &env.current_contract_address(), &total_in);
+        token::Client::new(&env, &read_reserve_token(&env)).transfer(
+            &buyer,
+            &env.current_contract_address(),
+            &total_in,
+        );
 
         publish_trade(
             &env,
@@ -218,9 +229,14 @@ impl ContinuousBondingCurveContract {
         }
 
         let supply = read_i128(&env, DataKey::Supply);
-        let tokens_out =
-            solve_tokens_for_reserve(supply, reserve_in, read_base(&env), read_slope(&env), read_fee_bps(&env))
-                .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow));
+        let tokens_out = solve_tokens_for_reserve(
+            supply,
+            reserve_in,
+            read_base(&env),
+            read_slope(&env),
+            read_fee_bps(&env),
+        )
+        .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow));
 
         if tokens_out < min_tokens_out {
             panic_with_error!(&env, CurveError::SlippageExceeded);
@@ -234,11 +250,22 @@ impl ContinuousBondingCurveContract {
         let (total_in, fee) = apply_buy_fee(cost, read_fee_bps(&env));
 
         write_i128(&env, DataKey::Supply, supply + tokens_out);
-        write_i128(&env, DataKey::Reserve, read_i128(&env, DataKey::Reserve) + cost);
-        write_i128(&env, DataKey::FeePool, read_i128(&env, DataKey::FeePool) + fee);
+        write_i128(
+            &env,
+            DataKey::Reserve,
+            read_i128(&env, DataKey::Reserve) + cost,
+        );
+        write_i128(
+            &env,
+            DataKey::FeePool,
+            read_i128(&env, DataKey::FeePool) + fee,
+        );
 
-        token::Client::new(&env, &read_reserve_token(&env))
-            .transfer(&buyer, &env.current_contract_address(), &total_in);
+        token::Client::new(&env, &read_reserve_token(&env)).transfer(
+            &buyer,
+            &env.current_contract_address(),
+            &total_in,
+        );
 
         publish_trade(
             &env,
@@ -291,11 +318,22 @@ impl ContinuousBondingCurveContract {
         }
 
         write_i128(&env, DataKey::Supply, supply - tokens_in);
-        write_i128(&env, DataKey::Reserve, read_i128(&env, DataKey::Reserve) - payout);
-        write_i128(&env, DataKey::FeePool, read_i128(&env, DataKey::FeePool) + fee);
+        write_i128(
+            &env,
+            DataKey::Reserve,
+            read_i128(&env, DataKey::Reserve) - payout,
+        );
+        write_i128(
+            &env,
+            DataKey::FeePool,
+            read_i128(&env, DataKey::FeePool) + fee,
+        );
 
-        token::Client::new(&env, &read_reserve_token(&env))
-            .transfer(&env.current_contract_address(), &seller, &payout_net);
+        token::Client::new(&env, &read_reserve_token(&env)).transfer(
+            &env.current_contract_address(),
+            &seller,
+            &payout_net,
+        );
 
         publish_trade(
             &env,
@@ -371,8 +409,11 @@ impl ContinuousBondingCurveContract {
         }
 
         write_i128(&env, DataKey::FeePool, fee_pool - amount);
-        token::Client::new(&env, &read_reserve_token(&env))
-            .transfer(&env.current_contract_address(), &treasury, &amount);
+        token::Client::new(&env, &read_reserve_token(&env)).transfer(
+            &env.current_contract_address(),
+            &treasury,
+            &amount,
+        );
         publish_fee_withdraw(&env, &admin, &treasury, amount);
     }
 }
@@ -719,7 +760,10 @@ mod tests {
         assert!(payout < total_in);
         let fee = total_in - payout;
         let (_, _, fee_pool) = client.state();
-        assert!((fee_pool - fee).abs() <= 1, "fee_pool {fee_pool} vs fee {fee}");
+        assert!(
+            (fee_pool - fee).abs() <= 1,
+            "fee_pool {fee_pool} vs fee {fee}"
+        );
     }
 
     #[test]
@@ -790,20 +834,17 @@ mod tests {
 
     /// Convert `env.events().all()` into `(topics, payload)` pairs with the
     /// payload unpacked into its component values.
-    fn raw_events(
-        env: &Env,
-    ) -> std::vec::Vec<(std::vec::Vec<Val>, std::vec::Vec<Val>)> {
+    fn raw_events(env: &Env) -> std::vec::Vec<(std::vec::Vec<Val>, std::vec::Vec<Val>)> {
         use soroban_sdk::{xdr, TryFromVal, Val, Vec};
         let mut out = std::vec::Vec::new();
         for e in env.events().all().events() {
             if let xdr::ContractEventBody::V0(v0) = &e.body {
                 let topics: Vec<Val> = Vec::try_from_val(env, &v0.topics).unwrap();
-                let payload: Vec<Val> = Vec::try_from_val(env, &v0.data)
-                    .unwrap_or_else(|_| {
-                        let mut v = Vec::new(env);
-                        v.push_back(Val::try_from_val(env, &v0.data).unwrap());
-                        v
-                    });
+                let payload: Vec<Val> = Vec::try_from_val(env, &v0.data).unwrap_or_else(|_| {
+                    let mut v = Vec::new(env);
+                    v.push_back(Val::try_from_val(env, &v0.data).unwrap());
+                    v
+                });
                 let mut t = std::vec::Vec::new();
                 for i in 0..topics.len() {
                     t.push(topics.get(i).unwrap());
@@ -819,10 +860,7 @@ mod tests {
     }
 
     /// Find the first event whose first topic is `topic`.
-    fn find_event(
-        env: &Env,
-        topic: Symbol,
-    ) -> Option<(std::vec::Vec<Val>, std::vec::Vec<Val>)> {
+    fn find_event(env: &Env, topic: Symbol) -> Option<(std::vec::Vec<Val>, std::vec::Vec<Val>)> {
         use soroban_sdk::TryFromVal;
         for (t, d) in raw_events(env) {
             if Symbol::try_from_val(env, &t[0]).ok() == Some(topic.clone()) {

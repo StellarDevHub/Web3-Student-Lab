@@ -126,8 +126,7 @@ impl CrossChainClient {
         env.storage()
             .persistent()
             .set(&ClientKey::Validator(validator.clone()), &false);
-        env.events()
-            .publish((symbol_short!("val_rm"),), validator);
+        env.events().publish((symbol_short!("val_rm"),), validator);
     }
 
     /// Set the minimum number of validator signatures required for block verification.
@@ -137,7 +136,9 @@ impl CrossChainClient {
         if threshold == 0 {
             panic_with_error!(&env, ClientError::InvalidThreshold);
         }
-        env.storage().instance().set(&ClientKey::Threshold, &threshold);
+        env.storage()
+            .instance()
+            .set(&ClientKey::Threshold, &threshold);
     }
 
     pub fn get_threshold(env: Env) -> u32 {
@@ -337,7 +338,7 @@ impl CrossChainClient {
             panic_with_error!(&env, ClientError::ReplayDetected);
         }
 
-        if !Self::verify_merkle_proof(env.clone(), leaf_hash, proof, path, expected_root) {
+        if !Self::verify_merkle_proof(env.clone(), leaf_hash, proof, path, expected_root.clone()) {
             panic_with_error!(&env, ClientError::InvalidProof);
         }
 
@@ -538,14 +539,8 @@ impl CrossChainClient {
         signature: &BytesN<64>,
     ) -> bool {
         let payload: Bytes = message_hash.clone().into();
-        let mut ok = false;
-        let result = std::panic::catch_unwind(|| {
-            env.crypto().ed25519_verify(validator, &payload, signature);
-        });
-        if result.is_ok() {
-            ok = true;
-        }
-        ok
+        env.crypto().ed25519_verify(validator, &payload, signature);
+        true
     }
 
     fn assert_initialized(env: &Env) {

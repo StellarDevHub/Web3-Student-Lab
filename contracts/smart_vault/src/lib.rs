@@ -139,9 +139,10 @@ impl SmartVault {
             &(total_assets.checked_add(amount).expect("overflow")),
         );
         let reserves: i128 = env.storage().instance().get(&RESERVES).unwrap_or(0);
-        env.storage()
-            .instance()
-            .set(&RESERVES, &(reserves.checked_add(amount).expect("overflow")));
+        env.storage().instance().set(
+            &RESERVES,
+            &(reserves.checked_add(amount).expect("overflow")),
+        );
 
         Self::assert_invariant(&env);
         Self::unlock(&env);
@@ -189,9 +190,10 @@ impl SmartVault {
             &(total_assets.checked_sub(assets_out).expect("underflow")),
         );
         let reserves: i128 = env.storage().instance().get(&RESERVES).unwrap_or(0);
-        env.storage()
-            .instance()
-            .set(&RESERVES, &(reserves.checked_sub(assets_out).expect("underflow")));
+        env.storage().instance().set(
+            &RESERVES,
+            &(reserves.checked_sub(assets_out).expect("underflow")),
+        );
 
         Self::assert_invariant(&env);
         Self::unlock(&env);
@@ -277,9 +279,10 @@ impl SmartVault {
             &(total_assets.checked_add(reward).expect("overflow")),
         );
         let reserves: i128 = env.storage().instance().get(&RESERVES).unwrap_or(0);
-        env.storage()
-            .instance()
-            .set(&RESERVES, &(reserves.checked_add(reward).expect("overflow")));
+        env.storage().instance().set(
+            &RESERVES,
+            &(reserves.checked_add(reward).expect("overflow")),
+        );
 
         pos.last_harvest = current_ledger;
         Self::set_position(&env, &user, &pos);
@@ -375,8 +378,11 @@ impl SmartVault {
         count += 1;
         let now = env.ledger().timestamp();
 
-        let mut proposals: Map<u32, Proposal> =
-            env.storage().persistent().get(&PROPOSALS).unwrap_or_else(|| Map::new(&env));
+        let mut proposals: Map<u32, Proposal> = env
+            .storage()
+            .persistent()
+            .get(&PROPOSALS)
+            .unwrap_or_else(|| Map::new(&env));
         proposals.set(
             count,
             Proposal {
@@ -408,18 +414,14 @@ impl SmartVault {
         let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
         assert!(guardians.contains(&signer), "Not a guardian");
 
-        let mut proposals: Map<u32, Proposal> =
-            env.storage().persistent().get(&PROPOSALS).unwrap();
+        let mut proposals: Map<u32, Proposal> = env.storage().persistent().get(&PROPOSALS).unwrap();
         let mut proposal = Self::load_proposal(&env, &proposals, proposal_id);
         match proposal.state {
             ProposalState::Executed => panic_with_error!(&env, VaultError::AlreadyExecuted),
             ProposalState::Cancelled => panic_with_error!(&env, VaultError::AlreadyCancelled),
             _ => {}
         }
-        assert!(
-            !proposal.approvals.contains(&signer),
-            "Already approved"
-        );
+        assert!(!proposal.approvals.contains(&signer), "Already approved");
         proposal.approvals.push_back(signer);
 
         let threshold: u32 = env.storage().instance().get(&THRESHOLD).unwrap();
@@ -430,16 +432,17 @@ impl SmartVault {
             proposal.queued_at = Some(now.checked_add(period).expect("overflow"));
             proposal.state = ProposalState::Queued;
         }
-        proposals.set(
-            proposal_id,
-            proposal.clone(),
-        );
+        proposals.set(proposal_id, proposal.clone());
         env.storage().persistent().set(&PROPOSALS, &proposals);
 
         if proposal.state == ProposalState::Queued {
             env.events().publish(
                 (symbol_short!("gov"), symbol_short!("queued")),
-                (proposal_id, proposal.approvals.len(), proposal.queued_at.unwrap()),
+                (
+                    proposal_id,
+                    proposal.approvals.len(),
+                    proposal.queued_at.unwrap(),
+                ),
             );
         }
     }
@@ -448,8 +451,7 @@ impl SmartVault {
     /// queued, and the 48-hour timelock has elapsed.
     pub fn execute_proposal(env: Env, proposal_id: u32) {
         Self::assert_governance(&env);
-        let mut proposals: Map<u32, Proposal> =
-            env.storage().persistent().get(&PROPOSALS).unwrap();
+        let mut proposals: Map<u32, Proposal> = env.storage().persistent().get(&PROPOSALS).unwrap();
         let mut proposal = Self::load_proposal(&env, &proposals, proposal_id);
 
         match proposal.state {
@@ -480,8 +482,7 @@ impl SmartVault {
     pub fn cancel(env: Env, caller: Address, proposal_id: u32) {
         caller.require_auth();
         Self::assert_governance(&env);
-        let mut proposals: Map<u32, Proposal> =
-            env.storage().persistent().get(&PROPOSALS).unwrap();
+        let mut proposals: Map<u32, Proposal> = env.storage().persistent().get(&PROPOSALS).unwrap();
         let mut proposal = Self::load_proposal(&env, &proposals, proposal_id);
 
         match proposal.state {
@@ -513,10 +514,8 @@ impl SmartVault {
         guardian.require_auth();
         assert!(guardians.contains(&guardian), "Not a guardian");
         env.storage().instance().set(&FREEZED, &true);
-        env.events().publish(
-            (symbol_short!("gov"), symbol_short!("freeze")),
-            guardian,
-        );
+        env.events()
+            .publish((symbol_short!("gov"), symbol_short!("freeze")), guardian);
     }
 
     /// Lift an emergency freeze. Only a guardian may unfreeze.
@@ -526,10 +525,8 @@ impl SmartVault {
         guardian.require_auth();
         assert!(guardians.contains(&guardian), "Not a guardian");
         env.storage().instance().set(&FREEZED, &false);
-        env.events().publish(
-            (symbol_short!("gov"), symbol_short!("unfreeze")),
-            guardian,
-        );
+        env.events()
+            .publish((symbol_short!("gov"), symbol_short!("unfreeze")), guardian);
     }
 
     /// Returns `true` if the vault is currently emergency-frozen.
@@ -539,8 +536,11 @@ impl SmartVault {
 
     /// Returns the proposal matching `proposal_id`.
     pub fn get_proposal(env: Env, proposal_id: u32) -> Proposal {
-        let proposals: Map<u32, Proposal> =
-            env.storage().persistent().get(&PROPOSALS).unwrap_or_else(|| Map::new(&env));
+        let proposals: Map<u32, Proposal> = env
+            .storage()
+            .persistent()
+            .get(&PROPOSALS)
+            .unwrap_or_else(|| Map::new(&env));
         Self::load_proposal(&env, &proposals, proposal_id)
     }
 
@@ -633,8 +633,8 @@ impl SmartVault {
 mod tests {
     use super::*;
     use soroban_sdk::testutils::{Address as _, Ledger};
-    use soroban_sdk::{String, Vec};
     use soroban_sdk::Env;
+    use soroban_sdk::{String, Vec};
 
     fn setup() -> (Env, Address, Address) {
         let env = Env::default();
@@ -786,10 +786,12 @@ mod tests {
         // TOTAL_ASSETS == RESERVES throughout; withdrawn amount is conserved:
         assert_eq!(client.shares_of(&user), 1200);
         assert_eq!(out, 300);
-        let total_assets: i128 = env
-            .as_contract(&contract_id, || env.storage().instance().get(&TOTAL_ASSETS).unwrap());
-        let reserves: i128 = env
-            .as_contract(&contract_id, || env.storage().instance().get(&RESERVES).unwrap());
+        let total_assets: i128 = env.as_contract(&contract_id, || {
+            env.storage().instance().get(&TOTAL_ASSETS).unwrap()
+        });
+        let reserves: i128 = env.as_contract(&contract_id, || {
+            env.storage().instance().get(&RESERVES).unwrap()
+        });
         assert_eq!(total_assets, reserves);
         assert_eq!(total_assets, 1200);
     }
@@ -805,10 +807,12 @@ mod tests {
             .with_mut(|l| l.sequence_number += 100 + HARVEST_COOL);
         client.compound(&user);
 
-        let total_assets: i128 = env
-            .as_contract(&contract_id, || env.storage().instance().get(&TOTAL_ASSETS).unwrap());
-        let reserves: i128 = env
-            .as_contract(&contract_id, || env.storage().instance().get(&RESERVES).unwrap());
+        let total_assets: i128 = env.as_contract(&contract_id, || {
+            env.storage().instance().get(&TOTAL_ASSETS).unwrap()
+        });
+        let reserves: i128 = env.as_contract(&contract_id, || {
+            env.storage().instance().get(&RESERVES).unwrap()
+        });
         assert_eq!(total_assets, reserves);
         assert!(total_assets > 1_000_000);
     }

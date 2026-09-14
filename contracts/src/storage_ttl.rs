@@ -104,9 +104,7 @@ pub fn track_persistent_key(env: &Env, key: TTLKey) {
     }
     if !exists {
         keys.push_back(key);
-        env.storage()
-            .persistent()
-            .set(&TTLKey::TrackedKeys, &keys);
+        env.storage().persistent().set(&TTLKey::TrackedKeys, &keys);
     }
 }
 
@@ -282,10 +280,7 @@ mod tests {
         let sum = client.scratchpad_sum(&50, &25, &Symbol::new(&env, "tmp"));
         assert_eq!(sum, 75);
         // scratchpad_sum clears temp entry
-        assert_eq!(
-            client.scratchpad_get(&Symbol::new(&env, "tmp")),
-            None
-        );
+        assert_eq!(client.scratchpad_get(&Symbol::new(&env, "tmp")), None);
         client.scratchpad_clear(&key);
         assert_eq!(client.scratchpad_get(&key), None);
     }

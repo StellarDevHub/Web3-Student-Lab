@@ -115,7 +115,9 @@ impl FractionalNftVaultContract {
             .instance()
             .set(&DataKey::NftContract, &nft_contract);
         env.storage().instance().set(&DataKey::TokenId, &token_id);
-        env.storage().instance().set(&DataKey::ShareToken, &share_token);
+        env.storage()
+            .instance()
+            .set(&DataKey::ShareToken, &share_token);
         env.storage()
             .instance()
             .set(&DataKey::PaymentToken, &payment_token);
@@ -165,10 +167,16 @@ impl FractionalNftVaultContract {
         // Custodial lock: pull the NFT into the vault.
         let nft_contract = read_nft_contract(&env);
         let token_id = read_token_id(&env);
-        NftClient::new(&env, &nft_contract).transfer(&owner, &env.current_contract_address(), &token_id);
+        NftClient::new(&env, &nft_contract).transfer(
+            &owner,
+            &env.current_contract_address(),
+            &token_id,
+        );
         env.storage().instance().set(&DataKey::NftLocked, &true);
 
-        env.storage().instance().set(&DataKey::TotalShares, &total_shares);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalShares, &total_shares);
         let share_token = read_share_token(&env);
         let share_client = token::StellarAssetClient::new(&env, &share_token);
         for (recipient, amount) in recipients.iter() {
@@ -284,11 +292,7 @@ impl FractionalNftVaultContract {
                     &auction.current_bid,
                 );
                 refunded = auction.current_bid;
-                payment_client.transfer(
-                    &bidder,
-                    &env.current_contract_address(),
-                    &amount,
-                );
+                payment_client.transfer(&bidder, &env.current_contract_address(), &amount);
                 auction.current_bidder = Some(bidder.clone());
                 auction.current_bid = amount;
             }
@@ -336,8 +340,11 @@ impl FractionalNftVaultContract {
 
         let nft_contract = read_nft_contract(&env);
         let token_id = read_token_id(&env);
-        NftClient::new(&env, &nft_contract)
-            .transfer(&env.current_contract_address(), &winner, &token_id);
+        NftClient::new(&env, &nft_contract).transfer(
+            &env.current_contract_address(),
+            &winner,
+            &token_id,
+        );
 
         let total_shares = read_total_shares(&env);
         publish_auction(&env, &winner, auction.current_bid, total_shares, true);
@@ -365,7 +372,13 @@ impl FractionalNftVaultContract {
         }
         env.storage().instance().remove(&DataKey::Auction);
         let total_shares = read_total_shares(&env);
-        publish_auction(&env, &env.current_contract_address(), 0, total_shares, false);
+        publish_auction(
+            &env,
+            &env.current_contract_address(),
+            0,
+            total_shares,
+            false,
+        );
     }
 
     /// Claim your pro-rata share of the buyout treasury. Payouts are
@@ -396,8 +409,11 @@ impl FractionalNftVaultContract {
         env.storage()
             .instance()
             .set(&DataKey::PayoutClaimed(holder.clone()), &true);
-        token::Client::new(&env, &read_payment_token(&env))
-            .transfer(&env.current_contract_address(), &holder, &payout);
+        token::Client::new(&env, &read_payment_token(&env)).transfer(
+            &env.current_contract_address(),
+            &holder,
+            &payout,
+        );
 
         publish_payout(&env, &holder, payout);
         payout
@@ -420,8 +436,7 @@ impl FractionalNftVaultContract {
         }
 
         // 100% redeemed: burn all shares and unlock the NFT.
-        token::StellarAssetClient::new(&env, &read_share_token(&env))
-            .burn(&holder, &total_shares);
+        token::StellarAssetClient::new(&env, &read_share_token(&env)).burn(&holder, &total_shares);
         env.storage()
             .instance()
             .set(&DataKey::Share(holder.clone()), &0i128);
@@ -430,8 +445,11 @@ impl FractionalNftVaultContract {
 
         let nft_contract = read_nft_contract(&env);
         let token_id = read_token_id(&env);
-        NftClient::new(&env, &nft_contract)
-            .transfer(&env.current_contract_address(), &holder, &token_id);
+        NftClient::new(&env, &nft_contract).transfer(
+            &env.current_contract_address(),
+            &holder,
+            &token_id,
+        );
 
         publish_vault_lock(&env, &holder, &nft_contract, &token_id, false);
     }
@@ -564,7 +582,10 @@ fn read_total_shares(env: &Env) -> i128 {
 }
 
 fn read_treasury(env: &Env) -> i128 {
-    env.storage().instance().get(&DataKey::Treasury).unwrap_or(0)
+    env.storage()
+        .instance()
+        .get(&DataKey::Treasury)
+        .unwrap_or(0)
 }
 
 fn read_bool(env: &Env, key: DataKey) -> bool {
@@ -665,8 +686,7 @@ mod tests {
         let vault_id = env.register(FractionalNftVaultContract, ());
         let share_token = env.register_stellar_asset_contract_v2(vault_id.clone());
         let payment_token = env.register_stellar_asset_contract_v2(admin.clone());
-        token::StellarAssetClient::new(&env, &payment_token.address())
-            .mint(&bidder, &10_000_000);
+        token::StellarAssetClient::new(&env, &payment_token.address()).mint(&bidder, &10_000_000);
 
         FractionalNftVaultContractClient::new(&env, &vault_id).initialize(
             &admin,
@@ -855,20 +875,17 @@ mod tests {
 
     /// Convert `v.env.events().all()` into `(topics, payload)` pairs with the
     /// payload unpacked into its component values.
-    fn raw_events(
-        env: &Env,
-    ) -> std::vec::Vec<(std::vec::Vec<Val>, std::vec::Vec<Val>)> {
+    fn raw_events(env: &Env) -> std::vec::Vec<(std::vec::Vec<Val>, std::vec::Vec<Val>)> {
         use soroban_sdk::{xdr, TryFromVal, Val, Vec};
         let mut out = std::vec::Vec::new();
         for e in env.events().all().events() {
             if let xdr::ContractEventBody::V0(v0) = &e.body {
                 let topics: Vec<Val> = Vec::try_from_val(env, &v0.topics).unwrap();
-                let payload: Vec<Val> = Vec::try_from_val(env, &v0.data)
-                    .unwrap_or_else(|_| {
-                        let mut v = Vec::new(env);
-                        v.push_back(Val::try_from_val(env, &v0.data).unwrap());
-                        v
-                    });
+                let payload: Vec<Val> = Vec::try_from_val(env, &v0.data).unwrap_or_else(|_| {
+                    let mut v = Vec::new(env);
+                    v.push_back(Val::try_from_val(env, &v0.data).unwrap());
+                    v
+                });
                 let mut t = std::vec::Vec::new();
                 for i in 0..topics.len() {
                     t.push(topics.get(i).unwrap());
@@ -884,10 +901,7 @@ mod tests {
     }
 
     /// Find the first event whose first topic is `topic`.
-    fn find_event(
-        env: &Env,
-        topic: Symbol,
-    ) -> Option<(std::vec::Vec<Val>, std::vec::Vec<Val>)> {
+    fn find_event(env: &Env, topic: Symbol) -> Option<(std::vec::Vec<Val>, std::vec::Vec<Val>)> {
         use soroban_sdk::TryFromVal;
         for (t, d) in raw_events(env) {
             if Symbol::try_from_val(env, &t[0]).ok() == Some(topic.clone()) {
@@ -899,7 +913,10 @@ mod tests {
 
     #[test]
     fn emits_standardized_vault_events() {
-        use contract_events::{decode_auction, decode_bid, decode_payout, decode_shares_minted, decode_vault_lock, topic};
+        use contract_events::{
+            decode_auction, decode_bid, decode_payout, decode_shares_minted, decode_vault_lock,
+            topic,
+        };
         use soroban_sdk::{Symbol, TryFromVal};
         let v = setup();
 

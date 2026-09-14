@@ -31,14 +31,20 @@ impl SybilResistanceContract {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
 
-        env.storage().persistent().set(&DataKey::VerifiedUser(user.clone()), &true);
+        env.storage()
+            .persistent()
+            .set(&DataKey::VerifiedUser(user.clone()), &true);
 
-        env.events().publish((String::from_slice(&env, "user_verified"),), user);
+        env.events()
+            .publish((String::from_slice(&env, "user_verified"),), user);
     }
 
     /// Checks if a user has been verified as a unique human identity.
     pub fn is_verified(env: Env, user: Address) -> bool {
-        env.storage().persistent().get(&DataKey::VerifiedUser(user)).unwrap_or(false)
+        env.storage()
+            .persistent()
+            .get(&DataKey::VerifiedUser(user))
+            .unwrap_or(false)
     }
 
     /// Revokes a user's verified status if they are found to be a sybil account.
@@ -46,9 +52,16 @@ impl SybilResistanceContract {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
 
-        if env.storage().persistent().has(&DataKey::VerifiedUser(user.clone())) {
-            env.storage().persistent().remove(&DataKey::VerifiedUser(user.clone()));
-            env.events().publish((String::from_slice(&env, "user_revoked"),), user);
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::VerifiedUser(user.clone()))
+        {
+            env.storage()
+                .persistent()
+                .remove(&DataKey::VerifiedUser(user.clone()));
+            env.events()
+                .publish((String::from_slice(&env, "user_revoked"),), user);
         } else {
             panic!("User is not verified");
         }
