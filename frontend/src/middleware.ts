@@ -179,7 +179,7 @@ export async function middleware(request: NextRequest) {
   const cspDirectives = {
     'default-src': ["'self'"],
     'script-src': [`'nonce-${nonce}'`, "'strict-dynamic'", "'self'"],
-    'style-src': [`'nonce-${nonce}'`, "'self'"],
+    'style-src': ["'self'", "'unsafe-inline'"],
     'img-src': ["'self'", 'data:', 'blob:', 'https:'],
     'font-src': ["'self'", 'data:'],
     'connect-src': [
@@ -196,8 +196,10 @@ export async function middleware(request: NextRequest) {
     'base-uri': ["'self'"],
     'form-action': ["'self'"],
     'frame-ancestors': ["'none'"],
-    'block-all-mixed-content': [],
-    'upgrade-insecure-requests': [],
+    ...(process.env.VERCEL_ENV === 'production' ? {
+      'block-all-mixed-content': [],
+      'upgrade-insecure-requests': [],
+    } : {}),
     'worker-src': ["'self'", 'blob:'],
     'manifest-src': ["'self'"],
   };
