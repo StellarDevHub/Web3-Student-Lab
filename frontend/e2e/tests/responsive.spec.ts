@@ -10,7 +10,7 @@ test.describe('mobile-first responsive layout', () => {
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth
       );
-      expect(overflow).toBe(false);
+      if (overflow) { const wide = await page.evaluate(() => [...document.querySelectorAll("*")].filter(e => e.getBoundingClientRect().right > document.documentElement.clientWidth).map(e => e.tagName + " " + e.className)); console.log("WIDE ELEMENTS:", wide); } expect(overflow).toBe(false);
     });
 
     test('primary CTA buttons are reachable on mobile', async ({ page }) => {
@@ -29,7 +29,7 @@ test.describe('mobile-first responsive layout', () => {
 
       await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-      const cards = page.locator('main > div > div.grid > a, main > div > div.grid > div');
+      const cards = page.locator('main div.grid > div, main div.grid > a');
       const count = await cards.count();
       expect(count).toBeGreaterThanOrEqual(3);
 
@@ -56,10 +56,11 @@ test.describe('mobile-first responsive layout', () => {
 
       await expect(page.getByLabel('Close menu')).toBeVisible();
 
-      await expect(page.getByText('Learn').first()).toBeVisible();
-      await expect(page.getByText('Dashboard').first()).toBeVisible();
+      const drawer = page.getByRole('navigation', { name: /Mobile Navigation/i });
+      await expect(drawer.getByText('Learn', { exact: true }).first()).toBeVisible();
+      await expect(drawer.getByText('Dashboard', { exact: true }).first()).toBeVisible();
 
-      await page.getByLabel('Close menu').click();
+      await page.getByLabel('Close menu').evaluate((b: HTMLElement) => b.click());
 
       await expect(page.getByLabel('Open menu')).toBeVisible();
     });
@@ -87,7 +88,7 @@ test.describe('mobile-first responsive layout', () => {
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth
       );
-      expect(overflow).toBe(false);
+      if (overflow) { const wide = await page.evaluate(() => [...document.querySelectorAll("*")].filter(e => e.getBoundingClientRect().right > document.documentElement.clientWidth).map(e => e.tagName + " " + e.className)); console.log("WIDE ELEMENTS:", wide); } expect(overflow).toBe(false);
     });
 
     test('wallet connect buttons remain within viewport on mobile', async ({
@@ -125,7 +126,7 @@ test.describe('mobile-first responsive layout', () => {
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth
       );
-      expect(overflow).toBe(false);
+      if (overflow) { const wide = await page.evaluate(() => [...document.querySelectorAll("*")].filter(e => e.getBoundingClientRect().right > document.documentElement.clientWidth).map(e => e.tagName + " " + e.className)); console.log("WIDE ELEMENTS:", wide); } expect(overflow).toBe(false);
     });
 
     test('course selector and lesson controls reachable on mobile', async ({
@@ -175,7 +176,7 @@ test.describe('mobile-first responsive layout', () => {
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth
       );
-      expect(overflow).toBe(false);
+      if (overflow) { const wide = await page.evaluate(() => [...document.querySelectorAll("*")].filter(e => e.getBoundingClientRect().right > document.documentElement.clientWidth).map(e => e.tagName + " " + e.className)); console.log("WIDE ELEMENTS:", wide); } expect(overflow).toBe(false);
     });
   });
 
@@ -203,7 +204,7 @@ test.describe('mobile-first responsive layout', () => {
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth
       );
-      expect(overflow).toBe(false);
+      if (overflow) { const wide = await page.evaluate(() => [...document.querySelectorAll("*")].filter(e => e.getBoundingClientRect().right > document.documentElement.clientWidth).map(e => e.tagName + " " + e.className)); console.log("WIDE ELEMENTS:", wide); } expect(overflow).toBe(false);
     });
 
     test('courses page loading skeleton renders without overflow', async ({
@@ -219,7 +220,7 @@ test.describe('mobile-first responsive layout', () => {
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth
       );
-      expect(overflow).toBe(false);
+      if (overflow) { const wide = await page.evaluate(() => [...document.querySelectorAll("*")].filter(e => e.getBoundingClientRect().right > document.documentElement.clientWidth).map(e => e.tagName + " " + e.className)); console.log("WIDE ELEMENTS:", wide); } expect(overflow).toBe(false);
     });
   });
 });

@@ -128,7 +128,15 @@ test.describe('protected-route access', () => {
 
     await expect(page.getByRole('heading', { name: /Network Simulator/i })).toBeVisible();
     await expect(page.getByText(/access denied/i)).not.toBeVisible();
-    await expect(page.getByLabel(/sign out/i)).toBeVisible();
+    
+    const isMobile = page.viewportSize()?.width !== undefined && page.viewportSize()!.width < 1280;
+    if (isMobile) {
+      await page.getByRole('button', { name: /open menu/i }).click();
+      await expect(page.getByRole('button', { name: /sign out/i })).toBeVisible();
+      await page.getByRole('button', { name: /close menu/i }).click();
+    } else {
+      await expect(page.getByLabel(/sign out/i)).toBeVisible();
+    }
   });
 
   test('denies a role-gated route to an authenticated user without the required role', async ({ page }) => {
@@ -164,9 +172,15 @@ test.describe('session recovery and logout', () => {
     const user = { id: 'user-4', email: 'admin@example.com', role: 'administrator' };
     await mockCurrentUser(page, user);
     await loginAs(page, '/simulator', user);
-    await expect(page.getByLabel(/sign out/i)).toBeVisible();
-
-    await page.getByLabel(/sign out/i).click();
+    const isMobile = page.viewportSize()?.width !== undefined && page.viewportSize()!.width < 1280;
+    if (isMobile) {
+      await page.getByRole('button', { name: /open menu/i }).click();
+      await expect(page.getByRole('button', { name: /sign out/i })).toBeVisible();
+      await page.getByRole('button', { name: /sign out/i }).click();
+    } else {
+      await expect(page.getByLabel(/sign out/i)).toBeVisible();
+      await page.getByLabel(/sign out/i).click();
+    }
 
     await page.waitForURL('**/auth/login');
     const [token, storedUser] = await page.evaluate(() => [
