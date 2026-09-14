@@ -1,2 +1,11 @@
+packages:
+  - 'frontend'
+
 allowBuilds:
-  unrs-resolver: set this to true or false
+  '@sentry/cli': true
+  core-js: true
+  esbuild: true
+  keccak: true
+  msw: true
+  sharp: true
+  unrs-resolver: true

@@ -34,14 +34,9 @@ jobs:
         ports:
           - 6379:6379
       webhook-receiver:
-        image: functions/http-bin:latest
+        image: mccutchen/go-httpbin:latest
         ports:
-          - 9000:80
-        options: >-
-          --health-cmd "curl -f http://localhost:80/ || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          - 9000:8080
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -54,10 +49,17 @@ jobs:
       - name: Install dependencies
         working-directory: ./backend
         run: npm ci
-      - name: Start Redis and Postgres
+      - name: Wait for webhook receiver
         run: |
-          docker compose up -d redis db
-          sleep 5
+          for i in {1..30}; do
+            if curl -s http://localhost:9000/status/200 > /dev/null; then
+              echo "Webhook receiver ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Webhook receiver failed to start"
+          exit 1
       - name: Run backend build
         working-directory: ./backend
         run: |
@@ -99,9 +101,9 @@ jobs:
         ports:
           - 6379:6379
       webhook-listener:
-        image: functions/http-bin:latest
+        image: mccutchen/go-httpbin:latest
         ports:
-          - 9001:80
+          - 9001:8080
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
