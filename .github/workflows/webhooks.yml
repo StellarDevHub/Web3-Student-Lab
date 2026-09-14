@@ -134,7 +134,7 @@ jobs:
           REDIS_URL: redis://localhost:6379
           WEBHOOK_RECEIVER_URL: http://localhost:9001
         run: |
-          npx tsx src/services/webhooks/osct-emitter.ts || true
+          timeout 30s npx tsx src/services/webhooks/osct-emitter.ts || true
       - name: Report status
         if: always()
         run: echo "Webhook E2E test completed"
