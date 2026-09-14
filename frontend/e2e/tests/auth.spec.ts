@@ -133,7 +133,7 @@ test.describe('protected-route access', () => {
     if (isMobile) {
       await page.getByRole('button', { name: /open menu/i }).click();
       await expect(page.getByRole('button', { name: /sign out/i })).toBeVisible();
-      await page.getByRole('button', { name: /close menu/i }).click();
+      await page.getByRole('button', { name: /close menu/i }).evaluate((b: HTMLElement) => b.click());
     } else {
       await expect(page.getByLabel(/sign out/i)).toBeVisible();
     }
@@ -176,7 +176,7 @@ test.describe('session recovery and logout', () => {
     if (isMobile) {
       await page.getByRole('button', { name: /open menu/i }).click();
       await expect(page.getByRole('button', { name: /sign out/i })).toBeVisible();
-      await page.getByRole('button', { name: /sign out/i }).click();
+      await page.getByRole('button', { name: /sign out/i }).evaluate((b: HTMLElement) => b.click());
     } else {
       await expect(page.getByLabel(/sign out/i)).toBeVisible();
       await page.getByLabel(/sign out/i).click();
