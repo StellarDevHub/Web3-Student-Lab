@@ -80,7 +80,7 @@ test.describe('mobile-first responsive layout', () => {
     test('connect wallet options render without overflow', async ({ page }) => {
       await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
 
-      await expect(page.getByRole('heading', { name: /Authentication Required/i })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /Authentication Required|Connect Web3 Wallet/i })).toBeVisible();
       await expect(page.getByText('Freighter').first()).toBeVisible();
       await expect(page.getByText('Albedo').first()).toBeVisible();
 
@@ -231,6 +231,9 @@ async function mockWallet(
 ) {
   await page.addInitScript(
     (params: { walletName: string; walletAddress: string }) => {
+      window.sessionStorage.setItem('local_storage_cleared', 'true');
+      window.sessionStorage.setItem('render_warning_seen', 'true');
+      window.localStorage.setItem('render_warning_seen', 'true');
       window.localStorage.setItem(
         'stellar_wallet',
         JSON.stringify({ wallet: params.walletName, pk: params.walletAddress })

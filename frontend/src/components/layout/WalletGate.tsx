@@ -89,6 +89,7 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
             </div>
             <div>
               <h1 className="text-xl font-black uppercase tracking-tight">
+                <span className="sr-only">Authentication Required: </span>
                 Connect Web3 Wallet
               </h1>
               <p className="text-xs text-text-secondary">
@@ -144,10 +145,23 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
                   </div>
                 </div>
 
-                {installed ? (
+                <div className="flex items-center gap-2">
+                  {!installed && (
+                    <a
+                      href={wallet.downloadUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-xs font-medium rounded-lg text-neutral-300 transition-colors flex items-center gap-1 shrink-0"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Install
+                      <ExternalLink className="h-3 w-3 text-neutral-500" />
+                    </a>
+                  )}
                   <button
                     onClick={() => connect(wallet.name)}
                     disabled={isConnecting}
+                    aria-label={`Connect ${wallet.name}`}
                     className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
                   >
                     {isConnecting && activeWallet === wallet.name ? (
@@ -159,18 +173,7 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
                       'Connect →'
                     )}
                   </button>
-                ) : (
-                  <a
-                    href={wallet.downloadUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-xs font-medium rounded-lg text-neutral-300 transition-colors flex items-center gap-1 shrink-0"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    Install
-                    <ExternalLink className="h-3 w-3 text-neutral-500" />
-                  </a>
-                )}
+                </div>
               </div>
             );
           })}

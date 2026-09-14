@@ -47,7 +47,12 @@ test.beforeEach(async ({ page }) => {
     // (fresh per page) scopes the clear to once per test.
     if (!window.sessionStorage.getItem('local_storage_cleared')) {
       window.sessionStorage.setItem('local_storage_cleared', 'true');
+      const savedWallet = window.localStorage.getItem('stellar_wallet');
       window.localStorage.clear();
+      if (savedWallet) {
+        window.localStorage.setItem('stellar_wallet', savedWallet);
+      }
+      window.localStorage.setItem('render_warning_seen', 'true');
     }
   });
 });

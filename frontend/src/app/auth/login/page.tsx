@@ -13,7 +13,7 @@ const GITHUB_OAUTH_URL = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, error, clearError, user, isLoading } = useAuth();
+  const { login, error, clearError, user, isLoading, isAuthenticated } = useAuth();
   const { publicKey } = useWallet();
   const completedProfile = useWalletProfileCompletion(publicKey);
   const profileCompleted = !!completedProfile;

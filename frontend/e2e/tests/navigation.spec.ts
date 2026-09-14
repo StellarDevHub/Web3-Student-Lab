@@ -9,13 +9,13 @@ test.describe('critical learning journeys', () => {
     await installWebSocketMock();
 
     await page.addInitScript(
-      (address) => {
+      (pk) => {
         window.localStorage.setItem(
           'stellar_wallet',
-          JSON.stringify({ wallet: 'Dev Mock Wallet', pk: address })
+          JSON.stringify({ wallet: 'Dev Mock Wallet', pk })
         );
       },
-      { address: stellarAddress }
+      stellarAddress
     );
 
     await page.goto('/simulator', { waitUntil: 'domcontentloaded' });

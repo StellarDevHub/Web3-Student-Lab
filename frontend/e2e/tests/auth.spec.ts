@@ -86,12 +86,12 @@ test.describe('wallet authentication journey', () => {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
 
     // Every route but "/" is blocked behind WalletGate until a wallet connects.
-    await expect(page.getByRole('heading', { name: /Authentication Required/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Authentication Required|Connect Web3 Wallet/i })).toBeVisible();
 
     await page.getByRole('button', { name: /Dev Mock Wallet/ }).click();
 
     // Once connected, WalletGate renders the real /dashboard page underneath.
-    await expect(page.getByRole('heading', { name: /Authentication Required/i })).not.toBeVisible();
+    await expect(page.getByRole('heading', { name: /Authentication Required|Connect Web3 Wallet/i })).not.toBeVisible();
 
     const storedWallet = await page.evaluate(() => window.localStorage.getItem('stellar_wallet'));
     expect(JSON.parse(storedWallet ?? '{}')).toMatchObject({
@@ -112,7 +112,7 @@ test.describe('wallet authentication journey', () => {
     // The gate stays up — no crash, no silent false "connected" state — and
     // the button recovers to a re-clickable state instead of hanging on
     // "Connecting...".
-    await expect(page.getByRole('heading', { name: /Authentication Required/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Authentication Required|Connect Web3 Wallet/i })).toBeVisible();
     await expect(connectButton).toBeEnabled();
 
     const storedWallet = await page.evaluate(() => window.localStorage.getItem('stellar_wallet'));

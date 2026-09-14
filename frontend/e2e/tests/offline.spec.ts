@@ -17,32 +17,22 @@ test.describe('offline experience', () => {
     // "/" is the one route WalletGate never blocks, so this exercises the
     // banner without needing a connected wallet.
     await page.goto('/', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('link', { name: 'Launch App' })).toBeVisible();
-    // context.setOffline() only fires the browser's 'offline' event once,
-    // and the home page ships a much heavier client bundle than /offline —
-    // server-rendered markup like the button above can be visible before
-    // hydration (and therefore the offline/online listeners) is ready, so
-    // give it time to finish before toggling and manually re-dispatching.
-    await page.waitForTimeout(2000);
+    await expect(page.getByRole('link', { name: /launch app/i })).toBeVisible();
+    await page.waitForTimeout(500);
 
     await context.setOffline(true);
     await page.evaluate(() => window.dispatchEvent(new Event('offline')));
-    const notice = page.getByRole('status');
-    await expect(notice).toContainText('Offline Mode');
+    await expect(page.getByRole('status')).toContainText('Offline Mode');
 
     await context.setOffline(false);
     await page.evaluate(() => window.dispatchEvent(new Event('online')));
-    await expect(notice).toContainText('Back Online');
+    await expect(page.getByRole('status')).toContainText('Back Online');
   });
 
   test('does not repeat the offline notice while the connection stays down', async ({ page, context }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('link', { name: 'Launch App' })).toBeVisible();
-    // The home page ships a much heavier client bundle than /offline; give
-    // it time to finish hydrating so the offline/online listeners are
-    // actually attached (server-rendered markup like the button above can
-    // be visible before hydration completes).
-    await page.waitForTimeout(2000);
+    await expect(page.getByRole('link', { name: /launch app/i })).toBeVisible();
+    await page.waitForTimeout(1000);
 
     await context.setOffline(true);
     await page.evaluate(() => window.dispatchEvent(new Event('offline')));
@@ -65,7 +55,7 @@ test.describe('offline experience', () => {
 
     // WalletGate would otherwise redirect every non-"/" route to its own
     // "Authentication Required" screen for a disconnected wallet.
-    await expect(page.getByRole('heading', { name: /authentication required/i })).not.toBeVisible();
+    await expect(page.getByRole('heading', { name: /authentication required|connect web3 wallet/i })).not.toBeVisible();
     await expect(page.getByRole('heading', { name: /back online/i })).toBeVisible();
 
     await context.setOffline(true);

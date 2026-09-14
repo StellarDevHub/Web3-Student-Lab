@@ -7,7 +7,9 @@ export default function RenderWarningModal() {
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    const hasSeenWarning = sessionStorage.getItem('render_warning_seen');
+    const hasSeenWarning =
+      sessionStorage.getItem('render_warning_seen') ||
+      localStorage.getItem('render_warning_seen');
     if (!hasSeenWarning) {
       setIsOpen(true);
     }
@@ -15,6 +17,7 @@ export default function RenderWarningModal() {
 
   const handleClose = () => {
     sessionStorage.setItem('render_warning_seen', 'true');
+    localStorage.setItem('render_warning_seen', 'true');
     setIsOpen(false);
   };
 

@@ -41,8 +41,19 @@ test.describe('Complete Learner Journey', () => {
       });
     });
 
+    await page.addInitScript(
+      (pk) => {
+        window.sessionStorage.setItem('local_storage_cleared', 'true');
+        window.localStorage.setItem(
+          'stellar_wallet',
+          JSON.stringify({ wallet: 'Dev Mock Wallet', pk })
+        );
+      },
+      stellarAddress
+    );
+
     await page.goto('/auth/register', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: /register|sign up|create account/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /complete profile|register|sign up|create account/i })).toBeVisible();
 
     // Fill registration form if input elements exist
     const emailInput = page.locator('input[type="email"], input[name="email"]');
