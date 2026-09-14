@@ -1,5 +1,5 @@
 import { REDIS_MODE, redisClusterConfig, redisConfig } from '../config/redis.config.js';
-import Ioredis, { Cluster } from 'ioredis';
+import { Redis, Cluster } from 'ioredis';
 
 /**
  * Cluster-aware certificate verification keys (#1142).
@@ -38,7 +38,7 @@ export function verificationAttemptsKey(certificateId: string, windowSec = 60): 
  * ioredis' Cluster pipeline internally.
  */
 export class VerificationRedisClient {
-  private client: Ioredis | Cluster;
+  private client: Redis | Cluster;
 
   constructor() {
     if (REDIS_MODE === 'cluster') {
@@ -49,7 +49,7 @@ export class VerificationRedisClient {
         enableClusterPipeline: true,
       } as any);
     } else {
-      this.client = new Ioredis(redisConfig as any);
+      this.client = new Redis(redisConfig as any);
     }
   }
 
@@ -91,7 +91,7 @@ export class VerificationRedisClient {
       revocationKey(certificateId),
     );
     return {
-      verification,
+      verification: verification ?? null,
       revoked: revoked === '1',
     };
   }

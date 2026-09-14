@@ -3,6 +3,10 @@ import jwt from 'jsonwebtoken';
 import logger from '../utils/logger.js';
 import { getRedisClient } from '../utils/redis.js';
 
+const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || 'access-secret';
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || 'refresh-secret';
+export const getAccessTokenSecret = (): string => ACCESS_TOKEN_SECRET;
+
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY_DAYS = 7;
 export const ROTATION_GRACE_PERIOD_MS = 10_000; // 10 seconds

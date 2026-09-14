@@ -8,7 +8,8 @@ const ENCRYPTED_FIELDS = new Map<string, string[]>([
 ]);
 
 export function encryptionMiddleware() {
-  return Prisma.getExtension?.(() => ({
+  return Prisma.defineExtension({
+    name: 'prisma-encryption',
     query: {
       $allModels: {
         async create({ model, args, query }: any) {
@@ -85,5 +86,5 @@ export function encryptionMiddleware() {
         },
       },
     },
-  }));
+  });
 }

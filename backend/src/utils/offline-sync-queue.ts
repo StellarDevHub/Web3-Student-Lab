@@ -23,7 +23,7 @@
  *   const result = await offlineSyncQueue.reconcile(userId);
  */
 
-import { redisConnection } from './redis';
+import { redisConnection } from './redis.js';
 
 const QUEUE_PREFIX = 'offline:sync:';
 const PROCESSED_PREFIX = 'offline:sync:processed:';
@@ -95,15 +95,15 @@ class OfflineSyncQueue {
 
     // Sort by timestamp (oldest first) for consistent replay
     const events = rawEvents
-      .map((raw) => {
+      .map((raw: string) => {
         try {
           return JSON.parse(raw) as OfflineEvent;
         } catch {
           return null;
         }
       })
-      .filter((e): e is OfflineEvent => e !== null)
-      .sort((a, b) => a.timestamp - b.timestamp);
+      .filter((e: OfflineEvent | null): e is OfflineEvent => e !== null)
+      .sort((a: OfflineEvent, b: OfflineEvent) => a.timestamp - b.timestamp);
 
     // Process each event
     for (const event of events) {

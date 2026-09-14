@@ -1,6 +1,6 @@
 import express from 'express';
 import { buildSchema, execute, subscribe } from 'graphql';
-import { useServer } from 'graphql-ws/lib/use/ws';
+import { useServer } from 'graphql-ws/use/ws';
 import http from 'http';
 import jwt from 'jsonwebtoken';
 import { WebSocketServer } from 'ws';
@@ -87,8 +87,8 @@ app.get('/health', (_req, res) => res.status(200).send('ok'));
       schema,
       execute,
       subscribe,
-      rootValue,
-      onConnect: async (ctx) => {
+      roots: { subscription: rootValue, query: rootValue, mutation: rootValue } as any,
+      onConnect: async (ctx: any) => {
         const connectionParams = (ctx.connectionParams || {}) as Record<string, any>;
         const token = (connectionParams.authorization || connectionParams.token || '').replace(/^Bearer\s+/i, '');
         if (!token) throw new Error('Missing auth token');
@@ -99,21 +99,21 @@ app.get('/health', (_req, res) => res.status(200).send('ok'));
           throw new Error('Unauthorized');
         }
       },
-      onSubscribe: async (ctx, msg) => {
+      onSubscribe: async (ctx: any, msg: any) => {
         // multiplexing: allow clients to subscribe to different rooms via variables
         return msg.payload;
       },
-      onNext: (ctx, msg, args) => {
+      onNext: (ctx: any, msg: any, args: any) => {
         // no-op: handled by graphql execution
       },
-      onUnhandledError: (ctx, err) => {
+      onError: (_ctx: any, _id: any, _payload: any, err: any) => {
         console.error('WS error', err);
       },
-      onClose: (ctx, code, reason) => {
+      onClose: (ctx: any, code: any, reason: any) => {
         // cleanup handled by graphql-ws
       },
       // customize sending to add backpressure dropping stale frames
-      sendMessage: (socket, message) => {
+      sendMessage: (socket: any, message: any) => {
         // attach a small queue on the socket
         const qSymbol = Symbol.for('gqlws_queue');
         // @ts-ignore
@@ -134,7 +134,7 @@ app.get('/health', (_req, res) => res.status(200).send('ok'));
         }
         return Promise.resolve();
       },
-    },
+    } as any,
     wsServer
   );
 

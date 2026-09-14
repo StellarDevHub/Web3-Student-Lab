@@ -92,31 +92,27 @@ function toCourseView(course: {
 }
 
 async function ensureSeedCourses() {
-  try {
-    const count = await prisma.course.count();
-    if (count > 0) {
-      const persistedCourses = await prisma.course.findMany({
-        orderBy: {
-          createdAt: 'asc',
-        },
-      });
-      courses = persistedCourses.map(toCourseView);
-      return courses;
-    }
+  const count = await prisma.course.count();
+  if (count > 0) {
+    const persistedCourses = await prisma.course.findMany({
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+    courses = persistedCourses.map(toCourseView);
+    return courses;
+  }
 
-    for (const course of courses) {
-      await prisma.course.create({
-        data: {
-          id: course.id,
-          title: course.title,
-          description: course.description,
-          instructor: course.instructor,
-          credits: course.credits,
-        },
-      });
-    }
-  } catch (error) {
-    logger.error('Failed to seed courses', { error });
+  for (const course of courses) {
+    await prisma.course.create({
+      data: {
+        id: course.id,
+        title: course.title,
+        description: course.description,
+        instructor: course.instructor,
+        credits: course.credits,
+      },
+    });
   }
 }
 
@@ -270,10 +266,9 @@ router.put('/:id', auditAction('UPDATE_COURSE', 'Course'), async (req, res) => {
     const updated = await prisma.course.update({
       where: { id },
       data: { title, description, instructor, credits },
-
     });
 
-    await invalidateCourseCache(courseId);
+    await invalidateCourseCache(id);
 
     // Notify enrolled students about the update
     if (existing.title !== updated.title || description) {
@@ -281,7 +276,6 @@ router.put('/:id', auditAction('UPDATE_COURSE', 'Course'), async (req, res) => {
         type: 'course_updated',
         courseId: id,
         courseTitle: updated.title,
-
         title: 'Course Updated',
         message: `"${updated.title}" has been updated with new content. Check it out!`,
         metadata: {
@@ -311,15 +305,10 @@ router.delete('/:id', auditAction('DELETE_COURSE', 'Course'), async (req, res) =
     return res.status(400).json({ error: 'Course id is required' });
   }
   try {
-    const id = getQueryString(req.params.id);
-
-
-    courses = courses.filter((c) => c.id !== courseId);
+    courses = courses.filter((c) => c.id !== id);
     await prisma.course.delete({
-      where: { id: courseId },
+      where: { id },
     });
-
-
 
     await invalidateCourseCache(id);
     res.status(204).send();

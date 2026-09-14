@@ -174,7 +174,7 @@ export const verifySep10Challenge = async (
 
   // Multi-signature & threshold verification via Horizon
   const horizon = horizonServerOverride || getHorizonServer();
-  let signerSummary: Array<{ key: string; weight: number }> = [];
+  let signerSummary: any[] = [];
   let requiredThreshold = 1;
 
   try {

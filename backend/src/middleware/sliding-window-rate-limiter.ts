@@ -12,7 +12,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { redisConnection } from '../utils/redis';
+import { redisConnection } from '../utils/redis.js';
 
 export interface SlidingWindowConfig {
   /** Maximum requests allowed in the window. */

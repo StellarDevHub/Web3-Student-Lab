@@ -14,7 +14,7 @@
  *   await dlq.startWorker(); // Background worker
  */
 
-import { redisConnection } from './redis';
+import { redisConnection } from './redis.js';
 
 const DLQ_PREFIX = 'dlq:';
 const DLQ_SET_KEY = 'dlq:pending';
@@ -51,6 +51,7 @@ class DeadLetterQueue {
     attempts: number = 0,
   ): Promise<string> {
     const id = `${queue}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const delay = RETRY_DELAYS_MS[Math.min(attempts, RETRY_DELAYS_MS.length - 1)] ?? 60_000;
     const message: DLQMessage = {
       id,
       queue,
@@ -59,7 +60,7 @@ class DeadLetterQueue {
       attempts,
       maxRetries: MAX_RETRIES,
       createdAt: Date.now(),
-      nextRetryAt: Date.now() + RETRY_DELAYS_MS[Math.min(attempts, RETRY_DELAYS_MS.length - 1)],
+      nextRetryAt: Date.now() + delay,
     };
 
     await redisConnection.set(`${DLQ_PREFIX}${id}`, JSON.stringify(message));
@@ -157,7 +158,8 @@ class DeadLetterQueue {
       for (const msg of retryable) {
         try {
           msg.attempts++;
-          msg.nextRetryAt = Date.now() + RETRY_DELAYS_MS[Math.min(msg.attempts, RETRY_DELAYS_MS.length - 1)];
+          const retryDelay = RETRY_DELAYS_MS[Math.min(msg.attempts, RETRY_DELAYS_MS.length - 1)] ?? 60_000;
+          msg.nextRetryAt = Date.now() + retryDelay;
           await redisConnection.set(`${DLQ_PREFIX}${msg.id}`, JSON.stringify(msg));
           await processor(msg);
         } catch (error) {

@@ -1,7 +1,4 @@
-// @ts-nocheck
 import { storageGcQueue, storagePinQueue, STORAGE_PIN_QUEUE_NAME } from './queue.js';
-
-import { storageGcQueue, storagePinQueue } from './queue.js';
 import { createStorageProvider } from './provider.js';
 import { buildGatewayUrl, buildIpfsUri, canonicalizeJson, sha256Hex } from './utils.js';
 import * as defaultRepository from './asset.repository.js';

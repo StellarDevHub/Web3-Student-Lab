@@ -14,7 +14,7 @@
  *   });
  */
 
-import { redisConnection } from './redis';
+import { redisConnection } from './redis.js';
 
 const LOCK_PREFIX = 'lock:';
 const DEFAULT_TTL_MS = 30_000;

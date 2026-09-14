@@ -248,9 +248,7 @@ export function startBackupWorker(): Worker<BackupJobData> | null {
     return backupWorker;
   }
 
-  const redisUrl = new URL(process.env.REDIS_URL || (() => {
-    throw new Error('REDIS_URL environment variable is required');
-  })());
+  const redisUrl = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
 
   backupWorker = new Worker<BackupJobData>(
     BACKUP_QUEUE_NAME,

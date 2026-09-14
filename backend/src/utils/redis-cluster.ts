@@ -13,7 +13,7 @@
  *   await cluster.set(`cert:${certId}`, JSON.stringify(certData));
  */
 
-import Redis from 'ioredis';
+import { Cluster } from 'ioredis';
 
 export interface RedisClusterConfig {
   /** Comma-separated list of cluster nodes (host:port). */
@@ -42,12 +42,15 @@ const DEFAULT_CONFIG: Partial<RedisClusterConfig> = {
  */
 export function createClusterClient(
   config?: Partial<RedisClusterConfig>,
-): Redis.Cluster {
-  const nodes = (config?.nodes || process.env.REDIS_CLUSTER_NODES || '')
+): Cluster {
+  const rawNodes = config?.nodes
+    ? (Array.isArray(config.nodes) ? config.nodes.join(',') : String(config.nodes))
+    : (process.env.REDIS_CLUSTER_NODES || '');
+  const nodes = rawNodes
     .split(',')
-    .map((n) => n.trim())
+    .map((n: string) => n.trim())
     .filter(Boolean)
-    .map((n) => {
+    .map((n: string) => {
       const [host, port] = n.split(':');
       return { host: host || '127.0.0.1', port: Number(port) || 6379 };
     });
@@ -58,7 +61,7 @@ export function createClusterClient(
     );
   }
 
-  return new Redis.Cluster(nodes, {
+  return new Cluster(nodes, {
     redisOptions: {
       password: config?.password || process.env.REDIS_CLUSTER_PASSWORD,
       maxRetriesPerRequest: config?.maxRetriesPerRequest ?? DEFAULT_CONFIG.maxRetriesPerRequest,
@@ -104,9 +107,9 @@ function crc16(str: string): number {
  * Certificate verification cache operations for cluster mode.
  */
 export class CertificateClusterStore {
-  private cluster: Redis.Cluster;
+  private cluster: Cluster;
 
-  constructor(cluster: Redis.Cluster) {
+  constructor(cluster: Cluster) {
     this.cluster = cluster;
   }
 

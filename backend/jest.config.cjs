@@ -7,7 +7,7 @@ module.exports = {
     '^.+\\.(ts|tsx|js)$': ['babel-jest'],
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(sanitize-html|htmlparser2|marked|uuid|@sentry|ioredis)/)',
+    '/node_modules/(?!.*(sanitize-html|dom|entities|htmlparser2|marked|uuid|@sentry))',
   ],
   testMatch: ['**/tests/**/*.test.ts'],
   testPathIgnorePatterns: [

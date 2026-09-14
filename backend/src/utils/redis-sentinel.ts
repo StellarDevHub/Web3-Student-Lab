@@ -15,7 +15,7 @@
  *   const client = await pool.getConnection();
  */
 
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 
 export interface SentinelConfig {
   sentinels: Array<{ host: string; port: number }>;
@@ -96,11 +96,11 @@ export class SentinelConnectionPool {
     }
 
     // Monitor for failover
-    this.sentinelClient.subscribe(`+switch-master`, (err) => {
+    this.sentinelClient.subscribe(`+switch-master`, (err: any) => {
       if (err) console.error('[sentinel] Subscribe error:', err);
     });
 
-    this.sentinelClient.on('message', async (_channel, message) => {
+    this.sentinelClient.on('message', async (_channel: string, message: string) => {
       console.log('[sentinel] Master switched:', message);
       await this.handleFailover();
     });

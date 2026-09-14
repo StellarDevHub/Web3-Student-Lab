@@ -2,23 +2,23 @@ import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
 
-const courseCount = jest.fn();
-const courseFindMany = jest.fn();
-const courseCreate = jest.fn();
-const courseFindUnique = jest.fn();
-const courseUpdate = jest.fn();
-const courseDelete = jest.fn();
+const mockCourseCount = jest.fn();
+const mockCourseFindMany = jest.fn();
+const mockCourseCreate = jest.fn();
+const mockCourseFindUnique = jest.fn();
+const mockCourseUpdate = jest.fn();
+const mockCourseDelete = jest.fn();
 
 jest.mock('../src/db/index.js', () => ({
   __esModule: true,
   default: {
     course: {
-      count: courseCount,
-      findMany: courseFindMany,
-      create: courseCreate,
-      findUnique: courseFindUnique,
-      update: courseUpdate,
-      delete: courseDelete,
+      count: mockCourseCount,
+      findMany: mockCourseFindMany,
+      create: mockCourseCreate,
+      findUnique: mockCourseFindUnique,
+      update: mockCourseUpdate,
+      delete: mockCourseDelete,
     },
   },
 }));
@@ -65,8 +65,8 @@ describe('GET /api/courses — explicit demo/live data source (#911)', () => {
   });
 
   it('returns dataSource "live" with real courses when the database is reachable', async () => {
-    courseCount.mockResolvedValue(1);
-    courseFindMany.mockResolvedValue([
+    mockCourseCount.mockResolvedValue(1);
+    mockCourseFindMany.mockResolvedValue([
       {
         id: 'course-real',
         title: 'Real Course',
@@ -87,7 +87,7 @@ describe('GET /api/courses — explicit demo/live data source (#911)', () => {
   });
 
   it('returns dataSource "demo" and a warning message instead of silently passing off demo data as live', async () => {
-    courseCount.mockRejectedValue(new Error('connection refused'));
+    mockCourseCount.mockRejectedValue(new Error('connection refused'));
 
     const app = await buildApp();
     const response = await request(app).get('/api/courses');
@@ -100,7 +100,7 @@ describe('GET /api/courses — explicit demo/live data source (#911)', () => {
   });
 
   it('POST /api/courses fails explicitly (503) instead of pretending to save when the database is down', async () => {
-    courseCreate.mockRejectedValue(new Error('connection refused'));
+    mockCourseCreate.mockRejectedValue(new Error('connection refused'));
 
     const app = await buildApp();
     const response = await request(app)

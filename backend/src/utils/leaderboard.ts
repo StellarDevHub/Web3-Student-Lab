@@ -12,7 +12,7 @@
  *   const rank = await leaderboard.getRank('global', userId);
  */
 
-import { redisConnection } from './redis';
+import { redisConnection } from './redis.js';
 
 const LEADERBOARD_PREFIX = 'leaderboard:';
 const TTL_SECONDS = 86400 * 90; // 90 days retention

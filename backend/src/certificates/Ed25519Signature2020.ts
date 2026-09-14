@@ -56,7 +56,9 @@ function base58Decode(input: string): Buffer {
   let length = 0;
 
   for (let i = 0; i < input.length; i += 1) {
-    const digit = BASE58_ALPHABET.indexOf(input[i]);
+    const char = input[i];
+    if (!char) continue;
+    const digit = BASE58_ALPHABET.indexOf(char);
     if (digit === -1) throw new Error('Invalid base58 character');
     let carry = digit;
     for (let j = 0; j < length; j += 1) {

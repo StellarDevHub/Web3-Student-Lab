@@ -43,6 +43,7 @@ import deployRouter from './deploy.routes.js';
 import didRouter from './did.routes.js';
 import webhooksRouter from './webhooks.js';
 import adminDLQRouter from './admin/dlq.routes.js';
+import contributorProofsRouter from './contributor-proofs.routes.js';
 import adminCoursesRouter from './admin/courses.routes.js';
 import apiRouter from './api.js';
 import policyRouter from './policy/policy.routes.js';
@@ -107,6 +108,6 @@ router.use('/playground/privacy-policy', privacyPolicyRouter);
 router.use('/oauth', oauthRouter);
 router.use('/', apiRouter);
 router.use('/tokenomics', tokenomicsRouter);
-router.use('/contributor-proofs', await import('./contributor-proofs.routes.js').then(m => m.default));
+router.use('/contributor-proofs', contributorProofsRouter);
 
 export default router;

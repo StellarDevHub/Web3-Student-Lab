@@ -198,6 +198,7 @@ pnpm-debug.log*
 # Benchmarks / large generated output
 # ──────────────────────────────────────────────────────────────────────────────
 backend/benchmarks/results/
+backend/prisma/migrations_prev/
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Certificates & Identity — generated outputs (issues #1176-#1179)

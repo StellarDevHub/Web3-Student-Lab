@@ -3,7 +3,7 @@ import config from '../config/env.config.js';
 import { encryptionMiddleware } from '../middleware/prismaEncryption.js';
 import { getWorkspaceId } from '../middleware/WorkspaceContext.js';
 import logger from '../utils/logger.js';
-import { encryptionMiddleware } from '../middleware/prismaEncryption.js';
+import { getDatabaseRoleForOperation } from './requestContext.js';
 import { workspaceModels } from './workspaceModels.js';
 
 const globalForPrisma = globalThis as unknown as {
@@ -184,9 +184,14 @@ const checkReadReplicaHealth = async () => {
 };
 
 // Start periodic health checks
-setInterval(() => {
-  void checkReadReplicaHealth();
-}, getReplicaCheckIntervalMs());
+if (process.env.NODE_ENV !== 'test') {
+  const replicaTimer = setInterval(() => {
+    void checkReadReplicaHealth();
+  }, getReplicaCheckIntervalMs());
+  if (typeof replicaTimer.unref === 'function') {
+    replicaTimer.unref();
+  }
+}
 
 const routingExtension = {
   name: 'read-replica-routing',
@@ -232,15 +237,17 @@ const encryptionExt = encryptionMiddleware();
 
 const routedPrisma = prisma.$extends(routingExtension).$extends(encryptionExt);
 
-routedPrisma.$use(async (params, next) => {
-  if (
-    params.model === 'AuditLog' &&
-    ['update', 'delete', 'updateMany', 'deleteMany'].includes(params.action)
-  ) {
-    throw new Error('AuditLog records are immutable and cannot be modified or deleted');
-  }
-  return next(params);
-});
+if (typeof (basePrisma as any).$use === 'function') {
+  (basePrisma as any).$use(async (params: any, next: any) => {
+    if (
+      params.model === 'AuditLog' &&
+      ['update', 'delete', 'updateMany', 'deleteMany'].includes(params.action)
+    ) {
+      throw new Error('AuditLog records are immutable and cannot be modified or deleted');
+    }
+    return next(params);
+  });
+}
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = basePrisma;

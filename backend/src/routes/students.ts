@@ -148,17 +148,23 @@ router.post(
 
       res.status(201).json(student);
     } catch (error) {
-      if (error instanceof DidValidationError) {
+      if (
+        (error instanceof DidValidationError) ||
+        (error instanceof Error && error.message.startsWith('Invalid DID format'))
+      ) {
+        const message = error instanceof Error ? error.message : 'Invalid DID format';
         logger.warn('Rejected student creation due to DID validation failure', {
           route: '/api/v1/students',
           email: req.body?.email,
-          reason: error.message,
+          reason: message,
         });
-        res.status(400).json({ error: error.message });
+        res.status(400).json({ error: message });
         return;
       }
 
-      console.error("CREATE STUDENT ERROR:", error);
+      logger.error('Failed to create student', {
+        error: error instanceof Error ? error.message : error,
+      });
       res.status(500).json({ error: 'Failed to create student' });
     }
   }

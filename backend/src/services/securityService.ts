@@ -64,8 +64,10 @@ export class SecurityService {
     // Allow injection for tests; fall back to the application singleton.
     this.ekm = ekm ?? getEncryptionKeyManager();
 
-    this.rotateRsaKeys();
-    setInterval(() => this.rotateRsaKeys(), this.RSA_ROTATION_INTERVAL_MS);
+    const timer = setInterval(() => this.rotateRsaKeys(), this.RSA_ROTATION_INTERVAL_MS);
+    if (typeof timer.unref === 'function') {
+      timer.unref();
+    }
   }
 
   // =========================================================================

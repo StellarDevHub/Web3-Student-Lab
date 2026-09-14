@@ -20,7 +20,7 @@
  *   await revokeAllUserTokens(userId);
  */
 
-import { redisConnection } from './redis';
+import { redisConnection } from './redis.js';
 
 const BLACKLIST_PREFIX = 'jwt:blacklist:';
 const USER_SESSIONS_PREFIX = 'jwt:sessions:';

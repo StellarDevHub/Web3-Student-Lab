@@ -56,11 +56,9 @@ describe('did:stellar resolver', () => {
     const ok = verifyContributorProof(claim, signature, binding);
     expect(ok.valid).toBe(true);
 
-    // Tampered claim must be rejected
+    // Tampered claim must be rejected (original signature does not verify against tampered payload)
     const tampered = { ...claim, itemId: '999' };
-    const tamperedMsg = canonicalizeClaim(tampered);
-    const tamperedSig = ed25519Sign(null, Buffer.from(tamperedMsg), privateKey).toString('base64');
-    const bad = verifyContributorProof(tampered, tamperedSig, binding);
+    const bad = verifyContributorProof(tampered, signature, binding);
     expect(bad.valid).toBe(false);
     expect(bad.reason).toContain('signature');
 

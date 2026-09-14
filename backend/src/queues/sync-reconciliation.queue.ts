@@ -1,6 +1,6 @@
 import { Queue, Worker, type Job } from 'bullmq';
-import { createClient } from 'redis';
 import { redisConfig } from '../config/redis.config.js';
+import { getRedisClient } from '../utils/redis.js';
 
 /**
  * Offline sync reconciliation queue (#1141).
@@ -35,26 +35,17 @@ export const syncReconciliationQueue = new Queue<SyncReconciliationJob>(SYNC_REC
   connection,
 });
 
-const dedupeClient = createClient({
-  url: process.env.REDIS_URL || undefined,
-  socket:
-    redisConfig.host && redisConfig.port
-      ? { host: redisConfig.host, port: redisConfig.port, password: redisConfig.password }
-      : undefined,
-});
-
 /** Redis-backed dedupe: returns true when the idempotency key is new. */
 async function isNewIdempotencyKey(key: string): Promise<boolean> {
-  if (!dedupeClient.isReady) {
-    try {
-      await dedupeClient.connect();
-    } catch {
-      // Dedupe store unavailable — fall back to in-flight job check only.
-      return true;
-    }
+  try {
+    const redis = getRedisClient();
+    if (!redis || typeof redis.set !== 'function') return true;
+    const ok = await redis.set(`sync:idem:${key}`, '1', 'EX', 7 * 24 * 3600, 'NX');
+    return ok === 'OK';
+  } catch {
+    // Dedupe store unavailable — fall back to in-flight job check only.
+    return true;
   }
-  const ok = await dedupeClient.set(`sync:idem:${key}`, '1', { EX: 7 * 24 * 3600, NX: true });
-  return ok === 'OK';
 }
 
 /**
@@ -113,5 +104,4 @@ export const syncReconciliationWorker = new Worker<SyncReconciliationJob>(
 export async function closeSyncReconciliation() {
   await syncReconciliationQueue.close();
   await syncReconciliationWorker.close();
-  if (dedupeClient.isReady) await dedupeClient.quit();
 }

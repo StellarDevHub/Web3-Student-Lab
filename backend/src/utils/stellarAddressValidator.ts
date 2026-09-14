@@ -13,7 +13,7 @@
  * stable avatar from any valid public key.
  */
 
-import { StrKey } from '@stellar/stellar-sdk';
+import { StrKey, MuxedAccount } from '@stellar/stellar-sdk';
 import { createHash } from 'crypto';
 
 export type StellarAddressKind =
@@ -123,13 +123,13 @@ export function decodeMuxedAddress(input: string): StellarAddressValidation {
   }
 
   try {
-    const decoded = StrKey.decodeMed25519PublicKey(value);
-    const baseAddress = StrKey.encodeEd25519PublicKey(decoded.ed25519);
+    const muxed = (MuxedAccount as any).fromAddress(value, '0');
+    const baseAddress = muxed.baseAccount().accountId();
     return {
       valid: true,
       kind: 'muxed',
       baseAddress,
-      memoId: decoded.id.toString(),
+      memoId: muxed.id(),
       normalized: value,
     };
   } catch {
@@ -257,7 +257,7 @@ export function identiconFromPublicKey(publicKey: string): string[] | null {
   let raw: Buffer;
   try {
     raw = StrKey.isValidMed25519PublicKey(trimmed)
-      ? Buffer.from(StrKey.decodeMed25519PublicKey(trimmed).ed25519)
+      ? Buffer.from(StrKey.decodeMed25519PublicKey(trimmed).subarray(0, 32))
       : Buffer.from(StrKey.decodeEd25519PublicKey(trimmed));
   } catch {
     return null;
@@ -270,10 +270,11 @@ export function identiconFromPublicKey(publicKey: string): string[] | null {
   for (let row = 0; row < 5; row++) {
     for (let col = 0; col < 3; col++) {
       const idx = row * 5 + col;
-      const byte = digest[idx % digest.length];
-      cells[idx] = IDENTICON_COLORS[byte % IDENTICON_COLORS.length];
+      const byte = digest[idx % digest.length] ?? 0;
+      const color = IDENTICON_COLORS[byte % IDENTICON_COLORS.length] ?? '#000000';
+      cells[idx] = color;
       // Mirror horizontally: col 4 mirrors col 0, col 3 mirrors col 1.
-      cells[row * 5 + (4 - col)] = cells[idx];
+      cells[row * 5 + (4 - col)] = color;
     }
   }
   return cells;

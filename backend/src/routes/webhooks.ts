@@ -207,14 +207,14 @@ router.delete('/subscriptions/:id', async (req: Request, res: Response) => {
 
 
     const exists = await prisma.webhookSubscription.findUnique({
-      where: { id: subscriptionId },
+      where: { id },
     });
     if (!exists) {
       return res.status(404).json({ error: 'Subscription not found' });
     }
 
     await prisma.webhookSubscription.delete({
-      where: { id: subscriptionId },
+      where: { id },
     });
     return res.status(204).send();
   } catch (error) {

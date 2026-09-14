@@ -295,7 +295,7 @@ router.get(
   ],
   async (req: Request, res: Response) => {
     try {
-      const { userId } = req.params;
+      const userId = req.params.userId as string;
 
       const credentials = await passkeyService.getUserCredentials(userId);
 
@@ -331,7 +331,7 @@ router.get(
   '/credentials/:userId/count',
   async (req: Request, res: Response) => {
     try {
-      const { userId } = req.params;
+      const userId = req.params.userId as string;
 
       const count = await passkeyService.getUserCredentialCount(userId);
 
@@ -361,7 +361,7 @@ router.delete(
   '/credentials/:credentialId',
   async (req: Request, res: Response) => {
     try {
-      const { credentialId } = req.params;
+      const credentialId = req.params.credentialId as string;
 
       const deleted = await passkeyService.deleteCredential(credentialId);
 

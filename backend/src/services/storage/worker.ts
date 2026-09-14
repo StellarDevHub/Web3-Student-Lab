@@ -59,11 +59,15 @@ export const handleStorageFailure = async (
 
 export const pinStorageContent = async (
   job: Job<StoragePinJobData>,
-  _token?: string
+  dependenciesOrToken?: StorageWorkerDependencies | string
 ): Promise<StoragePinResult> => {
+  const dependencies: StorageWorkerDependencies =
+    typeof dependenciesOrToken === 'object' && dependenciesOrToken !== null
+      ? dependenciesOrToken
+      : {};
   const payload = job.data;
-  const activeProvider = provider;
-  const repository = defaultWorkerRepository;
+  const activeProvider = dependencies.provider ?? provider;
+  const repository = dependencies.repository ?? defaultWorkerRepository;
 
   try {
     const pinResult =
@@ -156,22 +160,19 @@ export const startStorageWorkers = (): {
     return { pinWorker: null, gcWorker: null };
   }
 
-  if (!pinWorker) {
-    pinWorker = new Worker(STORAGE_PIN_QUEUE_NAME, pinStorageContent as any, {
-      connection: {
-        host: new URL(process.env.REDIS_URL || (() => {
-          throw new Error('REDIS_URL environment variable is required');
-        })()).hostname,
-        port: Number(new URL(process.env.REDIS_URL || (() => {
-          throw new Error('REDIS_URL environment variable is required');
-        })()).port) || 6379,
-        password: new URL(process.env.REDIS_URL || (() => {
-          throw new Error('REDIS_URL environment variable is required');
-        })()).password || undefined,
-        maxRetriesPerRequest: null,
-      },
-      concurrency: Number(process.env.STORAGE_WORKER_CONCURRENCY || '10'),
-    });
+    const redisUrl = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
+    const connection = {
+      host: redisUrl.hostname,
+      port: Number(redisUrl.port) || 6379,
+      password: redisUrl.password || undefined,
+      maxRetriesPerRequest: null,
+    };
+
+    if (!pinWorker) {
+      pinWorker = new Worker(STORAGE_PIN_QUEUE_NAME, pinStorageContent as any, {
+        connection,
+        concurrency: Number(process.env.STORAGE_WORKER_CONCURRENCY || '10'),
+      });
 
     // Dead-letter handling: when a pin job exhausts all retry attempts,
     // enqueue the failed payload to the DLQ for later replay.
@@ -223,18 +224,7 @@ export const startStorageWorkers = (): {
       STORAGE_GC_QUEUE_NAME,
       async (job) => garbageCollectStorage(job),
       {
-        connection: {
-          host: new URL(process.env.REDIS_URL || (() => {
-            throw new Error('REDIS_URL environment variable is required');
-          })()).hostname,
-          port: Number(new URL(process.env.REDIS_URL || (() => {
-            throw new Error('REDIS_URL environment variable is required');
-          })()).port) || 6379,
-          password: new URL(process.env.REDIS_URL || (() => {
-            throw new Error('REDIS_URL environment variable is required');
-          })()).password || undefined,
-          maxRetriesPerRequest: null,
-        },
+        connection,
         concurrency: 1,
       }
     );

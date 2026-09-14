@@ -29,7 +29,7 @@ export class CertificateWorker {
     metadataUri: string;
     studentId: number; // DB reference
   }) {
-    console.log(\`[CertificateWorker] Starting mint job for student \${job.studentAddr}...\`);
+    console.log(`[CertificateWorker] Starting mint job for student ${job.studentAddr}...`);
 
     try {
       // 1. Invoke Soroban Smart Contract on Testnet (Mocked logic for illustration)
@@ -38,7 +38,7 @@ export class CertificateWorker {
       // const contract = new Contract(this.contractId);
       // const tx = await invokeContract(...)
       
-      console.log(\`[CertificateWorker] Invoking mint_certificate(student=\${job.studentAddr}, course=\${job.courseId}, grade=\${job.grade}, uri=\${job.metadataUri})\`);
+      console.log(`[CertificateWorker] Invoking mint_certificate(student=${job.studentAddr}, course=${job.courseId}, grade=${job.grade}, uri=${job.metadataUri})`);
       
       // Simulate network delay and response
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -47,10 +47,10 @@ export class CertificateWorker {
       const mockTxHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('');
       const mockLedgerSequence = Math.floor(Math.random() * 1000000) + 1000000;
 
-      console.log(\`[CertificateWorker] Transaction confirmed! Hash: \${mockTxHash}, Ledger: \${mockLedgerSequence}\`);
+      console.log(`[CertificateWorker] Transaction confirmed! Hash: ${mockTxHash}, Ledger: ${mockLedgerSequence}`);
 
       // 2. Persist confirmed transaction hash and ledger sequence into database read model
-      const query = \`
+      const query = `
         UPDATE student_certificates 
         SET 
           tx_hash = $1, 
@@ -58,7 +58,7 @@ export class CertificateWorker {
           status = 'minted',
           minted_at = NOW()
         WHERE student_id = $3 AND course_id = $4
-      \`;
+      `;
 
       await db.query(query, [
         mockTxHash, 
@@ -67,16 +67,16 @@ export class CertificateWorker {
         job.courseId
       ]);
 
-      console.log(\`[CertificateWorker] DB updated for student \${job.studentId}\`);
+      console.log(`[CertificateWorker] DB updated for student ${job.studentId}`);
       
       return { success: true, txHash: mockTxHash };
 
     } catch (error) {
-      console.error(\`[CertificateWorker] Failed to mint certificate:\`, error);
+      console.error(`[CertificateWorker] Failed to mint certificate:`, error);
       
       // Handle failure (e.g., retry logic or mark as failed in DB)
       await db.query(
-        \`UPDATE student_certificates SET status = 'failed' WHERE student_id = $1 AND course_id = $2\`,
+        `UPDATE student_certificates SET status = 'failed' WHERE student_id = $1 AND course_id = $2`,
         [job.studentId, job.courseId]
       );
       

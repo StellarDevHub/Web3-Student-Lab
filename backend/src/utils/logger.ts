@@ -92,7 +92,7 @@ const sanitizeFormat = format((info) => {
 const consoleLogFormat = printf(({ level, message, timestamp, traceId, stack, ...meta }) => {
   const prefix = traceId ? `[${traceId}] ` : '';
   const sanitizedMeta = redactSensitiveData(meta);
-  const metaStr = Object.keys(sanitizedMeta).length > 0 ? ` ${JSON.stringify(sanitizedMeta)}` : '';
+  const metaStr = sanitizedMeta && typeof sanitizedMeta === 'object' && Object.keys(sanitizedMeta as object).length > 0 ? ` ${JSON.stringify(sanitizedMeta)}` : '';
   return `${timestamp} ${prefix}${level}: ${stack || message}${metaStr}`;
 });
 

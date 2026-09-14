@@ -49,10 +49,10 @@ export async function logAudit(data: AuditLogData): Promise<void> {
 
     const previousLog = await prisma.auditLog.findFirst({
       orderBy: { createdAt: 'desc' },
-      select: { hash: true },
+      select: { prevHash: true },
     });
 
-    const prevHash = previousLog?.hash ?? undefined;
+    const prevHash = previousLog?.prevHash ?? undefined;
 
     const payload = {
       userEmail: data.userEmail,

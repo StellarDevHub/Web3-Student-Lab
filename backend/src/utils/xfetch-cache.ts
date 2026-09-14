@@ -18,7 +18,7 @@
  *   });
  */
 
-import { redisConnection } from './redis';
+import { redisConnection } from './redis.js';
 
 const CACHE_PREFIX = 'cache:';
 const LOCK_PREFIX = 'xfetch:lock:';

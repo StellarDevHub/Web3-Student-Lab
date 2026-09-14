@@ -1,5 +1,5 @@
-import { Queue } from 'bullmq';
-import logger from '../utils/logger.js';
+import { Queue, Worker } from 'bullmq';
+import logger from '../../utils/logger.js';
 
 const connection = { host: process.env.REDIS_HOST || 'localhost', port: parseInt(process.env.REDIS_PORT || '6379') };
 
@@ -30,8 +30,8 @@ export async function enqueueEmail(jobData: EmailJobData) {
   );
 }
 
-export async function processEmailQueue() {
-  emailQueue.process('send-email', async (job) => {
+export function processEmailQueue() {
+  const worker = new Worker('email-delivery', async (job) => {
     const { to, subject, html, attachments } = job.data as EmailJobData;
     logger.info(`Processing email job ${job.id} for ${to}`);
 
@@ -39,18 +39,18 @@ export async function processEmailQueue() {
     // In production, replace with actual provider SDK call
     if (process.env.RESEND_API_KEY) {
       try {
-        const { Resend } = await import('resend');
-        const resend = new Resend(process.env.RESEND_API_KEY);
+        const resendModule: any = await import('resend' as any);
+        const resend = new resendModule.Resend(process.env.RESEND_API_KEY);
         await resend.emails.send({
           from: process.env.EMAIL_FROM || 'noreply@web3studentlab.example',
           to,
           subject,
           html,
-          attachments: attachments?.map((a) => ({
+          attachments: attachments ? attachments.map((a) => ({
             filename: a.filename,
             content: Buffer.from(a.content, 'base64'),
             contentType: a.contentType || 'application/pdf',
-          })),
+          })) : undefined,
         });
         logger.info(`Email sent to ${to}`);
         return { delivered: true };
@@ -62,19 +62,19 @@ export async function processEmailQueue() {
 
     if (process.env.SENDGRID_API_KEY) {
       try {
-        const sgMail = await import('@sendgrid/mail');
+        const sgMail: any = await import('@sendgrid/mail' as any);
         sgMail.setApiKey(process.env.SENDGRID_API_KEY);
         await sgMail.send({
           to,
           from: process.env.EMAIL_FROM || 'noreply@web3studentlab.example',
           subject,
           html,
-          attachments: attachments?.map((a) => ({
+          attachments: attachments ? attachments.map((a) => ({
             content: Buffer.from(a.content, 'base64'),
             filename: a.filename,
             type: a.contentType || 'application/pdf',
             disposition: 'attachment',
-          })),
+          })) : undefined,
         });
         logger.info(`Email sent to ${to}`);
         return { delivered: true };
@@ -86,5 +86,7 @@ export async function processEmailQueue() {
 
     logger.warn(`No email provider configured. Would send email to ${to}: ${subject}`);
     return { delivered: false, reason: 'No provider configured' };
-  });
+  }, { connection });
+
+  return worker;
 }

@@ -702,7 +702,7 @@ export class CertificateService {
       throw new Error('Cohort not found');
     }
 
-    const { verifyMerkleProof } = await import('./../utils/merkle.ts');
+    const { verifyMerkleProof } = await import('../utils/merkle.js');
     const proofSteps = proof.map((hash, index) => ({ hash, position: index % 2 === 0 ? 'left' : 'right' as 'left' | 'right' }));
     const valid = verifyMerkleProof(leafHash, proofSteps, cohort.rootHash);
     return { valid, cohortId };

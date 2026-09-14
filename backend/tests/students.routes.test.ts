@@ -37,19 +37,36 @@ jest.mock('../src/db/index.js', () => ({
 
 const mockLoggerError = jest.fn();
 const mockLoggerInfo = jest.fn();
+const mockLoggerWarn = jest.fn();
 jest.mock('../src/utils/logger.js', () => ({
   __esModule: true,
   default: {
     error: (...args: unknown[]) => mockLoggerError(...args),
     info: (...args: unknown[]) => mockLoggerInfo(...args),
+    warn: (...args: unknown[]) => mockLoggerWarn(...args),
   },
   auditLogger: { info: jest.fn() },
   getCorrelationId: jest.fn().mockReturnValue('test-cid'),
 }));
 
-const mockNormalizeSorobanDid = jest.fn();
+class mockDidValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DidValidationError';
+  }
+}
+const mockNormalizeSorobanDid = jest.fn((did: unknown) => did);
+const mockValidateStudentDidCompatibility = jest.fn((params: any) => {
+  if (params?.did) {
+    return mockNormalizeSorobanDid(params.did);
+  }
+  return params?.did;
+});
+
 jest.mock('../src/auth/auth.service.js', () => ({
+  DidValidationError: mockDidValidationError,
   normalizeSorobanDid: (...args: unknown[]) => mockNormalizeSorobanDid(...args),
+  validateStudentDidCompatibility: (...args: unknown[]) => mockValidateStudentDidCompatibility(...args),
 }));
 
 const mockInvalidateUserCache = jest.fn();
@@ -109,8 +126,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  // Default: normalizeSorobanDid passes through undefined (no DID supplied)
-  mockNormalizeSorobanDid.mockReturnValue(undefined);
+  mockNormalizeSorobanDid.mockReset();
+  mockNormalizeSorobanDid.mockImplementation((did: unknown) => did);
+  mockPrismaStudentFindUnique.mockResolvedValue(null);
   mockBroadcastEvent.mockResolvedValue(undefined);
   mockInvalidateUserCache.mockResolvedValue(undefined);
   mockPrismaCertificateUpdateMany.mockResolvedValue({ count: 0 });

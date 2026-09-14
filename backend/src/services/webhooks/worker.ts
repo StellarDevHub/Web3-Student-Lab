@@ -184,18 +184,15 @@ export const startWebhookWorker = (): Worker<WebhookDeliveryJobData> | null => {
       });
     },
     {
-      connection: {
-        host: new URL(process.env.REDIS_URL || (() => {
-          throw new Error('REDIS_URL environment variable is required');
-        })()).hostname,
-        port: Number(new URL(process.env.REDIS_URL || (() => {
-          throw new Error('REDIS_URL environment variable is required');
-        })()).port) || 6379,
-        password: new URL(process.env.REDIS_URL || (() => {
-          throw new Error('REDIS_URL environment variable is required');
-        })()).password || undefined,
-        maxRetriesPerRequest: null,
-      },
+      connection: (() => {
+        const redisUrl = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
+        return {
+          host: redisUrl.hostname,
+          port: Number(redisUrl.port) || 6379,
+          password: redisUrl.password || undefined,
+          maxRetriesPerRequest: null,
+        };
+      })(),
       concurrency: Number(process.env.WEBHOOK_WORKER_CONCURRENCY || '25'),
     }
   );

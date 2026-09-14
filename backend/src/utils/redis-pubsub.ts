@@ -13,7 +13,7 @@
  *   wsSync.subscribe((message) => { /* broadcast to local WS clients *\/ });
  */
 
-import { redisConnection } from './redis';
+import { redisConnection } from './redis.js';
 
 export interface WsMessage {
   type: string;

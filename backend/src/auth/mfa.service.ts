@@ -23,7 +23,8 @@ export function generateTotpSecret(length = 20): string {
   const randomBytes = crypto.randomBytes(length);
   let secret = '';
   for (let i = 0; i < randomBytes.length; i++) {
-    secret += BASE32_CHARS[randomBytes[i] % BASE32_CHARS.length];
+    const byte = randomBytes[i] ?? 0;
+    secret += BASE32_CHARS[byte % BASE32_CHARS.length];
   }
   return secret;
 }
@@ -37,7 +38,8 @@ function base32Decode(base32: string): Buffer {
   const output: number[] = [];
 
   for (let i = 0; i < base32.length; i++) {
-    const char = base32[i].toUpperCase();
+    const char = base32[i]?.toUpperCase();
+    if (!char) continue;
     const val = BASE32_CHARS.indexOf(char);
     if (val === -1) continue;
 
@@ -68,12 +70,18 @@ export function generateTotpCode(secret: string, timeStep = 30, timestamp = Date
   hmac.update(counterBuffer);
   const digest = hmac.digest();
 
-  const offset = digest[digest.length - 1] & 0xf;
+  const lastByte = digest[digest.length - 1] ?? 0;
+  const offset = lastByte & 0xf;
+  const b0 = digest[offset] ?? 0;
+  const b1 = digest[offset + 1] ?? 0;
+  const b2 = digest[offset + 2] ?? 0;
+  const b3 = digest[offset + 3] ?? 0;
+
   const binaryCode =
-    ((digest[offset] & 0x7f) << 24) |
-    ((digest[offset + 1] & 0xff) << 16) |
-    ((digest[offset + 2] & 0xff) << 8) |
-    (digest[offset + 3] & 0xff);
+    ((b0 & 0x7f) << 24) |
+    ((b1 & 0xff) << 16) |
+    ((b2 & 0xff) << 8) |
+    (b3 & 0xff);
 
   const otp = binaryCode % 1000000;
   return otp.toString().padStart(6, '0');

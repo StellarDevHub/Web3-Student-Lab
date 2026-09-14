@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client';
+import prisma from '../../db/index.js';
 import type { StorageAssetKind, StorageAssetRecord } from './types.js';
-
 
 const getPrisma = async () => {
   return prisma;
@@ -22,8 +22,8 @@ export const upsertStorageAsset = async (asset: {
   metadata?: Record<string, unknown> | null;
   error?: string | null;
 }): Promise<StorageAssetRecord> => {
-  const prisma = await getPrisma();
-  const record = await prisma.decentralizedAsset.upsert({
+  const prismaClient = await getPrisma();
+  const record = await prismaClient.decentralizedAsset.upsert({
     where: {
       workspaceId_resourceType_resourceId_name: {
         workspaceId: 'default',
@@ -46,7 +46,6 @@ export const upsertStorageAsset = async (asset: {
       error: asset.error ?? null,
       pinnedAt: asset.status === 'pinned' ? new Date() : (undefined as any),
       unpinnedAt: null,
-
     },
     create: {
       workspaceId: 'default',
@@ -63,12 +62,12 @@ export const upsertStorageAsset = async (asset: {
       status: asset.status ?? 'pinned',
       referenceCount: asset.referenceCount ?? 1,
       metadata: (asset.metadata ?? null) as Prisma.InputJsonValue,
-
       error: asset.error ?? null,
       pinnedAt: new Date(),
     },
   }) as unknown as StorageAssetRecord;
 
+  return record;
 };
 
 export const markAssetFailed = async (
@@ -77,8 +76,8 @@ export const markAssetFailed = async (
   name: string,
   error: string
 ): Promise<void> => {
-  const prisma = await getPrisma();
-  await prisma.decentralizedAsset.upsert({
+  const prismaClient = await getPrisma();
+  await prismaClient.decentralizedAsset.upsert({
     where: {
       workspaceId_resourceType_resourceId_name: {
         workspaceId: 'default',
@@ -107,8 +106,8 @@ export const markAssetFailed = async (
 };
 
 export const listUnreferencedAssets = async (olderThan: Date): Promise<StorageAssetRecord[]> => {
-  const prisma = await getPrisma();
-  const records = await prisma.decentralizedAsset.findMany({
+  const prismaClient = await getPrisma();
+  const records = await prismaClient.decentralizedAsset.findMany({
     where: {
       referenceCount: { lte: 0 },
       OR: [{ unpinnedAt: null }, { unpinnedAt: { lt: olderThan } }],
@@ -116,11 +115,12 @@ export const listUnreferencedAssets = async (olderThan: Date): Promise<StorageAs
     },
   }) as unknown as StorageAssetRecord[];
 
+  return records;
 };
 
 export const markAssetUnpinned = async (cid: string): Promise<void> => {
-  const prisma = await getPrisma();
-  await prisma.decentralizedAsset.updateMany({
+  const prismaClient = await getPrisma();
+  await prismaClient.decentralizedAsset.updateMany({
     where: { cid },
     data: {
       status: 'unpinned',
@@ -134,8 +134,8 @@ export const markAssetsUnreferenced = async (
   resourceType: string,
   resourceId: string
 ): Promise<void> => {
-  const prisma = await getPrisma();
-  await prisma.decentralizedAsset.updateMany({
+  const prismaClient = await getPrisma();
+  await prismaClient.decentralizedAsset.updateMany({
     where: {
       resourceType,
       resourceId,

@@ -6,6 +6,8 @@ import {
   RevokeCertificateSchema,
   ReissueCertificateSchema,
   BatchVerificationSchema,
+  AnchorMerkleCohortSchema,
+  VerifyMerkleInclusionSchema,
 } from './certificates/validation.schemas.js';
 import explorerRouter from './certificates/explorer.routes.js';
 import { certificatePdfGenerator } from '../certificates/PdfGenerator.js';

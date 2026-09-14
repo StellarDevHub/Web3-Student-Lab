@@ -14,7 +14,7 @@
  *   res.send(metrics);
  */
 
-import { redisConnection } from '../utils/redis';
+import { redisConnection } from '../utils/redis.js';
 
 interface MetricLine {
   name: string;
@@ -119,13 +119,13 @@ export async function collectRedisMetrics(): Promise<string> {
           name: 'redis_db_keys',
           help: 'Number of keys in database',
           type: 'gauge',
-          samples: [{ labels: { db: dbMatch[1] }, value: keysNum }],
+          samples: [{ labels: { db: dbMatch[1] ?? '0' }, value: keysNum }],
         });
         metrics.push({
           name: 'redis_db_keys_with_expiry',
           help: 'Number of keys with expiry in database',
           type: 'gauge',
-          samples: [{ labels: { db: dbMatch[1] }, value: expiresNum }],
+          samples: [{ labels: { db: dbMatch[1] ?? '0' }, value: expiresNum }],
         });
       }
     }

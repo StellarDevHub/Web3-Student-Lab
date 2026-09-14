@@ -49,32 +49,33 @@ const allowedPreviewSubdomains = parseOrigins(
 );
 
 export function createCorsMiddleware(): (req: any, res: any, next: any) => void {
-  const options: CorsOptions = {
+  const corsHandler = cors({
     origin: (origin, callback) => {
-      if (origin === 'null') {
-        return callback(new Error('Spoofed origin detected'), null as any);
-      }
-
       if (!origin) {
         return callback(null, false);
       }
 
-      if (allowedOrigins.includes(origin)) {
+      const origins = buildAllowedOrigins();
+      const previewSubdomains = parseOrigins(
+        process.env.CORS_ALLOWED_PREVIEW_SUBDOMAINS || ''
+      );
+
+      if (origins.includes(origin)) {
         return callback(null, true);
       }
 
-      if (allowedPreviewSubdomains.length > 0 && isPreviewSubdomain(origin, allowedPreviewSubdomains)) {
+      if (previewSubdomains.length > 0 && isPreviewSubdomain(origin, previewSubdomains)) {
         return callback(null, true);
       }
 
       logger.warn('CORS origin rejected', {
         origin,
-        allowedOrigins,
-        allowedPreviewSubdomains,
+        allowedOrigins: origins,
+        allowedPreviewSubdomains: previewSubdomains,
         env: config.app.env,
       });
 
-      return callback(new Error('Origin not allowed'), null as any);
+      return callback(null, false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -83,9 +84,14 @@ export function createCorsMiddleware(): (req: any, res: any, next: any) => void 
     maxAge: 86400,
     preflightContinue: false,
     optionsSuccessStatus: 204,
-  };
+  });
 
-  return cors(options);
+  return (req: any, res: any, next: any) => {
+    if (req.headers && req.headers.origin === 'null') {
+      return res.status(403).json({ error: 'Origin not allowed' });
+    }
+    return corsHandler(req, res, next);
+  };
 }
 
 export function getCorsConfigForLogging() {

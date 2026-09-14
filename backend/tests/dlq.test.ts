@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from '@jest/globals';
+import { describe, expect, it, beforeEach, jest } from '@jest/globals';
 import {
   calculateExponentialBackoffWithJitter,
   calculateLinearBackoffWithJitter,
@@ -10,10 +10,16 @@ import {
   replayDLQJob,
   resetDLQStore,
 } from '../src/services/dlq.service.js';
+import { exportQueue } from '../src/jobs/export.queue.js';
 
 describe('DLQ & Retry Service', () => {
   beforeEach(() => {
     resetDLQStore();
+    if (exportQueue && typeof exportQueue.add === 'function') {
+      jest.spyOn(exportQueue, 'add').mockImplementation(async (name, data, opts) => {
+        return { id: `mock_replayed_${Date.now()}`, name, data, opts } as any;
+      });
+    }
   });
 
   describe('Backoff Calculations', () => {

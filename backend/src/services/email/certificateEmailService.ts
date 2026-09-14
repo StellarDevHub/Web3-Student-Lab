@@ -1,6 +1,6 @@
-import logger from '../utils/logger.js';
+import logger from '../../utils/logger.js';
 import { enqueueEmail, type EmailJobData } from './emailQueue.js';
-import { notificationPreferencesService } from '../notifications/preferences.service.js';
+import { notificationPreferencesService } from '../../notifications/preferences.service.js';
 
 export interface CertificateEmailOptions {
   studentEmail: string;
@@ -9,9 +9,9 @@ export interface CertificateEmailOptions {
   certificateId: string;
   tokenId: string;
   verificationUrl: string;
-  linkedInShareUrl?: string;
-  twitterShareUrl?: string;
-  pdfBase64?: string;
+  linkedInShareUrl?: string | undefined;
+  twitterShareUrl?: string | undefined;
+  pdfBase64?: string | undefined;
 }
 
 export async function sendCertificateMintedEmail(options: CertificateEmailOptions) {

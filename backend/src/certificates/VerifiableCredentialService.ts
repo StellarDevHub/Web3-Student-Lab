@@ -218,7 +218,7 @@ export class VerifiableCredentialService {
           serviceEndpoint: `${this.apiBaseUrl}/api/v1/certificates/vc/verify`,
         },
       ],
-    });
+    }) as unknown as Record<string, unknown>;
   }
 
   /**

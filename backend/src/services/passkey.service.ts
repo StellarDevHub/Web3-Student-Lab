@@ -22,9 +22,9 @@ export interface PasskeyCredential {
   publicKeyY: string; // hex-encoded P-256 Y coordinate
   signCount: number;
   userId: string;
-  deviceName?: string;
+  deviceName?: string | undefined;
   createdAt: Date;
-  lastUsedAt?: Date;
+  lastUsedAt?: Date | undefined;
 }
 
 export interface RegistrationChallenge {
@@ -41,7 +41,7 @@ export interface RegistrationChallenge {
 export interface AuthenticationChallenge {
   challenge: string;
   rpId: string;
-  userId?: string; // Optional: allow authentication without user ID
+  userId?: string | undefined; // Optional: allow authentication without user ID
   createdAt: number;
   expiresAt: number;
 }
@@ -51,7 +51,7 @@ export interface PasskeyRegistrationResult {
   publicKeyX: string;
   publicKeyY: string;
   signCount: number;
-  deviceName?: string;
+  deviceName?: string | undefined;
 }
 
 export interface PasskeyAuthenticationResult {
@@ -525,8 +525,8 @@ export class PasskeyService {
 
     return {
       rpIdHash: buffer.subarray(0, 32).toString('hex'),
-      flags: buffer[32],
-      signCount: buffer.readUInt32BE(33),
+      flags: buffer[32] ?? 0,
+      signCount: buffer.length >= 37 ? buffer.readUInt32BE(33) : 0,
       credentialPublicKey: buffer.subarray(37).toString('hex'),
     };
   }
@@ -541,9 +541,9 @@ export class PasskeyService {
 
     return {
       rpIdHash: buffer.subarray(0, 32).toString('hex'),
-      userPresent: (buffer[32] & 0x01) === 0x01,
-      userVerified: (buffer[32] & 0x04) === 0x04,
-      signCount: buffer.readUInt32BE(33),
+      userPresent: ((buffer[32] ?? 0) & 0x01) === 0x01,
+      userVerified: ((buffer[32] ?? 0) & 0x04) === 0x04,
+      signCount: buffer.length >= 37 ? buffer.readUInt32BE(33) : 0,
     };
   }
 
