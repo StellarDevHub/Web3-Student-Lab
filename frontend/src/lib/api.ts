@@ -242,22 +242,79 @@ function normalizeCourseResponse(data: unknown): CourseDetailResult {
   return { course: data as Course, dataSource: 'live' };
 }
 
+export const DEMO_COURSES: Course[] = [
+  {
+    id: 'cm1yxxxx-intro',
+    title: 'Introduction to Web3 and Stellar',
+    description:
+      'Learn the foundational concepts of blockchain technology, decentralized networks, and how the Stellar consensus protocol enables fast, low-cost cross-border payments.',
+    instructor: 'Satoshi N.',
+    credits: 3,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'cm1yxxxx-soroban',
+    title: 'Soroban Smart Contracts 101',
+    description:
+      'A deep dive into writing secure smart contracts on the Stellar network using Rust and the Soroban SDK. Execute state changes and build immutable modules.',
+    instructor: 'Vitalik B.',
+    credits: 5,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'cm1yxxxx-defi',
+    title: 'Decentralized Finance (DeFi) primitives',
+    description:
+      'Master the core primitives of DeFi including Liquidity Pools, Automated Market Makers (AMMs), and yield generation directly on-chain.',
+    instructor: 'Hayden A.',
+    credits: 4,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+];
+
 // Courses APIs
 export const coursesAPI = {
   /**
    * Returns the course list along with an explicit `dataSource` flag
    * so callers can distinguish live data from the demo fallback shown
-   * when the backend database is unreachable (#911).
+   * when the backend database or network is unreachable (#911).
    */
   getAllWithSource: async (): Promise<CoursesListResult> => {
-    return apiRequestCache.fetch(
-      'courses:list',
-      async () => {
-        const response = await apiClient.get('/courses');
-        return normalizeCoursesResponse(response.data);
-      },
-      { ttlMs: DEFAULT_CACHE_TTL_MS }
-    );
+    try {
+      return await apiRequestCache.fetch(
+        'courses:list',
+        async () => {
+          try {
+            const response = await apiClient.get('/courses');
+            const normalized = normalizeCoursesResponse(response.data);
+            if (!normalized.courses || normalized.courses.length === 0) {
+              return {
+                courses: DEMO_COURSES,
+                dataSource: 'demo',
+                message: 'Live database has no courses seeded yet. Showing demo course catalog.',
+              };
+            }
+            return normalized;
+          } catch {
+            return {
+              courses: DEMO_COURSES,
+              dataSource: 'demo',
+              message: 'Live course service is temporarily unreachable. Showing offline demo catalog.',
+            };
+          }
+        },
+        { ttlMs: DEFAULT_CACHE_TTL_MS }
+      );
+    } catch {
+      return {
+        courses: DEMO_COURSES,
+        dataSource: 'demo',
+        message: 'Live course service is temporarily unreachable. Showing offline demo catalog.',
+      };
+    }
   },
 
   getAll: async (): Promise<Course[]> => {
@@ -266,14 +323,48 @@ export const coursesAPI = {
   },
 
   getByIdWithSource: async (id: string): Promise<CourseDetailResult> => {
-    return apiRequestCache.fetch(
-      `courses:detail:${id}`,
-      async () => {
-        const response = await apiClient.get(`/courses/${id}`);
-        return normalizeCourseResponse(response.data);
-      },
-      { ttlMs: DEFAULT_CACHE_TTL_MS }
-    );
+    try {
+      return await apiRequestCache.fetch(
+        `courses:detail:${id}`,
+        async () => {
+          try {
+            const response = await apiClient.get(`/courses/${id}`);
+            return normalizeCourseResponse(response.data);
+          } catch {
+            const fallback = DEMO_COURSES.find((c) => c.id === id) || {
+              id,
+              title: id.replace(/[-_]/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+              description: 'Course details are running in demo mode while the live backend is unreachable.',
+              instructor: 'Stellar Instructor',
+              credits: 3,
+              createdAt: '2025-01-01T00:00:00.000Z',
+              updatedAt: '2025-01-01T00:00:00.000Z',
+            };
+            return {
+              course: fallback,
+              dataSource: 'demo',
+              message: 'Live course service is temporarily unreachable. Showing offline demo data.',
+            };
+          }
+        },
+        { ttlMs: DEFAULT_CACHE_TTL_MS }
+      );
+    } catch {
+      const fallback = DEMO_COURSES.find((c) => c.id === id) || {
+        id,
+        title: id.replace(/[-_]/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+        description: 'Course details are running in demo mode while the live backend is unreachable.',
+        instructor: 'Stellar Instructor',
+        credits: 3,
+        createdAt: '2025-01-01T00:00:00.000Z',
+        updatedAt: '2025-01-01T00:00:00.000Z',
+      };
+      return {
+        course: fallback,
+        dataSource: 'demo',
+        message: 'Live course service is temporarily unreachable. Showing offline demo data.',
+      };
+    }
   },
 
   getById: async (id: string): Promise<Course> => {
@@ -371,14 +462,18 @@ export const enrollmentsAPI = {
   },
 
   getByStudentId: async (studentId: string): Promise<Enrollment[]> => {
-    return apiRequestCache.fetch(
-      `enrollments:student:${studentId}`,
-      async () => {
-        const response = await apiClient.get(`/enrollments/student/${studentId}`);
-        return response.data;
-      },
-      { ttlMs: DEFAULT_CACHE_TTL_MS }
-    );
+    try {
+      return await apiRequestCache.fetch(
+        `enrollments:student:${studentId}`,
+        async () => {
+          const response = await apiClient.get(`/enrollments/student/${studentId}`);
+          return Array.isArray(response.data) ? response.data : [];
+        },
+        { ttlMs: DEFAULT_CACHE_TTL_MS }
+      );
+    } catch {
+      return [];
+    }
   },
 
   enroll: async (studentId: string, courseId: string): Promise<Enrollment> => {

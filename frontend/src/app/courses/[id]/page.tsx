@@ -3,13 +3,13 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { useI18n } from '@/i18n';
-import { certificatesAPI, Course, coursesAPI, enrollmentsAPI } from '@/lib/api';
+import { certificatesAPI, Course, CourseDataSource, coursesAPI, enrollmentsAPI } from '@/lib/api';
 import { getTranslatedCourseContent } from '@/lib/course-content';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
 import { CelebrationOverlay } from '@/app/components/CompletionCelebration';
-import { ErrorBoundary, ErrorFallback, CourseDetailSkeleton } from '@/components/ui';
+import { ErrorBoundary, ErrorFallback, CourseDetailSkeleton, DemoDataBanner } from '@/components/ui';
 import { courses as curriculumCourses, storageKeys } from '@/app/curriculum-data';
 
 export default function CourseDetailPage() {
@@ -19,6 +19,8 @@ export default function CourseDetailPage() {
   const { publicKey } = useWallet();
   const { t, tn } = useI18n();
   const [course, setCourse] = useState<Course | null>(null);
+  const [dataSource, setDataSource] = useState<CourseDataSource>('live');
+  const [demoMessage, setDemoMessage] = useState<string | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEnrolled, setIsEnrolled] = useState(false);
@@ -41,13 +43,19 @@ export default function CourseDetailPage() {
     try {
       const id = typeof params?.id === 'string' ? params.id : params?.id?.[0];
       if (!id) return;
-      const data = await coursesAPI.getById(id);
-      setCourse(data);
+      const data = await coursesAPI.getByIdWithSource(id);
+      setCourse(data.course);
+      setDataSource(data.dataSource);
+      setDemoMessage(data.message);
 
       if (user) {
-        const enrollments = await enrollmentsAPI.getByStudentId(user.id);
-        const enrolled = enrollments.some((enrollment) => enrollment.courseId === data.id);
-        setIsEnrolled(enrolled);
+        try {
+          const enrollments = await enrollmentsAPI.getByStudentId(user.id);
+          const enrolled = enrollments.some((enrollment) => enrollment.courseId === data.course.id);
+          setIsEnrolled(enrolled);
+        } catch {
+          setIsEnrolled(false);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load course');
@@ -163,6 +171,7 @@ export default function CourseDetailPage() {
             <span className="transform transition-transform group-hover:-translate-x-1">←</span>{' '}
             {t('courses.detail.back')}
           </Link>
+          {dataSource === 'demo' && <DemoDataBanner message={demoMessage} />}
           <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
             <div>
               <div className="mb-4 inline-block rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 font-mono text-xs tracking-widest text-red-500 uppercase">
