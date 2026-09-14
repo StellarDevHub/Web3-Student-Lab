@@ -39,21 +39,7 @@ export const test = base.extend<Web3Mocks>({
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     window.sessionStorage.setItem('render_warning_seen', 'true');
-    // Only clear localStorage on the first navigation of each fresh page.
-    // Playwright reuses the same browser context across tests in a worker,
-    // so localStorage otherwise leaks between tests. But a naive clear here
-    // runs on *every* navigation (including in-test reloads), which silently
-    // wipes state that login/logout journeys rely on. A sessionStorage flag
-    // (fresh per page) scopes the clear to once per test.
-    if (!window.sessionStorage.getItem('local_storage_cleared')) {
-      window.sessionStorage.setItem('local_storage_cleared', 'true');
-      const savedWallet = window.localStorage.getItem('stellar_wallet');
-      window.localStorage.clear();
-      if (savedWallet) {
-        window.localStorage.setItem('stellar_wallet', savedWallet);
-      }
-      window.localStorage.setItem('render_warning_seen', 'true');
-    }
+    window.localStorage.setItem('render_warning_seen', 'true');
   });
 });
 
