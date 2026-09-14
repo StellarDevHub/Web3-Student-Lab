@@ -18,7 +18,7 @@ jobs:
           POSTGRES_PASSWORD: test
           POSTGRES_DB: test_db
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -34,7 +34,6 @@ jobs:
         ports:
           - 6379:6379
       webhook-receiver:
-        name: Webhook Receiver
         image: functions/http-bin:latest
         ports:
           - 9000:80
