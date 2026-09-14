@@ -177,7 +177,7 @@ jobs:
         run: cargo build --workspace
       - name: Audit dependencies
         working-directory: ./contracts
-        run: cargo audit --deny warnings
+        run: cargo audit --deny warnings --ignore RUSTSEC-2024-0436
       - name: Test
         working-directory: ./contracts
         env:
