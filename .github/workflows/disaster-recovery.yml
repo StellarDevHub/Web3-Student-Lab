@@ -117,3 +117,4 @@ jobs:
           fi
 
       - name: Cleanup temporary artifacts
+        run: rm -rf /tmp/backups /tmp/*-counts.txt

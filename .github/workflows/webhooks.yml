@@ -99,7 +99,6 @@ jobs:
         ports:
           - 6379:6379
       webhook-listener:
-        name: Webhook Listener
         image: functions/http-bin:latest
         ports:
           - 9001:80
