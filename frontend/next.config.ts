@@ -6,7 +6,7 @@ const withBundleAnalyzer = process.env.ANALYZE === 'true'
   : (config: NextConfig) => config;
 
 const nextConfig: NextConfig = {
-  outputFileTracingRoot: path.join(__dirname),
+  outputFileTracingRoot: path.join(__dirname, '../'),
   reactCompiler: true,
   transpilePackages: ['recharts'],
 
