@@ -98,7 +98,11 @@ export function validatePublicEnv(source: NodeJS.ProcessEnv = process.env): EnvV
   const env: PublicEnv = {
     apiUrl: (
       data.NEXT_PUBLIC_API_URL ??
-      (production ? 'https://web3-student-lab.onrender.com/api/v1' : DEV_API_URL)
+      (production
+        ? typeof window !== 'undefined'
+          ? '/api/v1'
+          : 'https://web3-student-lab.onrender.com/api/v1'
+        : DEV_API_URL)
     ).replace(/\/+$/, ''),
     wsUrl:
       data.NEXT_PUBLIC_WS_URL ??

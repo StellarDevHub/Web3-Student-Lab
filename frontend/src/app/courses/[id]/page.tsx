@@ -142,12 +142,22 @@ export default function CourseDetailPage() {
   const COURSE_MAP: Record<string, string> = {
     'cm1yxxxx-intro': 'blockchain-foundations',
     'cm1yxxxx-soroban': 'smart-contracts',
-    'cm1yxxxx-defi': 'open-source'
+    'cm1yxxxx-defi': 'open-source',
+    'course-1': 'smart-contracts',
+    'course-2': 'blockchain-foundations',
+    'course-3': 'smart-contracts',
+    'course-4': 'smart-contracts',
+    'course-5': 'open-source',
+    'blockchain-foundations': 'blockchain-foundations',
+    'smart-contracts': 'smart-contracts',
+    'open-source': 'open-source',
+    'dao-governance': 'smart-contracts',
   };
-  const mappedId = course?.id ? COURSE_MAP[course.id] : null;
+  const mappedId = course?.id ? (COURSE_MAP[course.id] || course.id) : null;
   
   const curriculumCourse = curriculumCourses.find(c => 
     c.id === mappedId ||
+    c.id === course?.id ||
     course?.title.toLowerCase().includes(c.title.toLowerCase()) || 
     c.title.toLowerCase().includes(course?.title.toLowerCase() || '')
   ) || curriculumCourses[0];

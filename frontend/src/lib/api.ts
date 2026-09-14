@@ -273,6 +273,96 @@ export const DEMO_COURSES: Course[] = [
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-01T00:00:00.000Z',
   },
+  {
+    id: 'course-1',
+    title: 'Soroban 101: Smart Contract Basics',
+    description:
+      'Master the art of writing, testing, and deploying Rust-based smart contracts on the Stellar Soroban virtual machine.',
+    instructor: 'Stellar Dev Hub',
+    credits: 3,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'course-2',
+    title: 'Stellar Blockchain Fundamentals',
+    description:
+      'Learn the core concepts of the Stellar network: accounts, assets, trustlines, anchors, and fast transaction settlement.',
+    instructor: 'Web3 Academy',
+    credits: 2,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'course-3',
+    title: 'DApp Development with Next.js',
+    description:
+      'Build end-to-end decentralized applications using Next.js 16, React 19, Freighter wallet authentication, and Soroban contract RPCs.',
+    instructor: 'Frontend Masters',
+    credits: 4,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'course-4',
+    title: 'Advanced Soroban & Rust Smart Contracts',
+    description:
+      'Deep dive into WASM memory management, Rust contract patterns, reentrancy guards, TTL storage expiration, and security auditing.',
+    instructor: 'Rust Security Labs',
+    credits: 5,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'course-5',
+    title: 'DeFi & Automated Market Makers on Stellar',
+    description:
+      'Build constant-product DEX liquidity pools, TWAP price oracles, multi-hop swaps, and atomic cross-contract arbitrage.',
+    instructor: 'DeFi Engineering Group',
+    credits: 5,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'blockchain-foundations',
+    title: 'Blockchain Foundations',
+    description:
+      'Understand cryptographic hashes, blocks, asymmetric key cryptography, and Federated Byzantine Agreement consensus.',
+    instructor: 'Stellar Dev Hub',
+    credits: 3,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'smart-contracts',
+    title: 'Smart Contracts Lab',
+    description:
+      'Learn how programmable agreements power Web3 products with practical Soroban Rust contract exercises and tests.',
+    instructor: 'Soroban Core Team',
+    credits: 4,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'open-source',
+    title: 'Open Source Lab',
+    description:
+      'Practice triaging real GitHub issues, managing Git feature branches and rebases, and submitting production-grade pull requests.',
+    instructor: 'Open Source Collective',
+    credits: 3,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'dao-governance',
+    title: 'DAO Governance & Voting Systems',
+    description:
+      'Explore decentralized governance, on-chain proposals, quorum calculation, and sybil-resistant quadratic voting contracts on Stellar.',
+    instructor: 'Governance Guild',
+    credits: 4,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
 ];
 
 // Courses APIs
