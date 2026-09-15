@@ -132,8 +132,8 @@ test.describe('protected-route access', () => {
     const isMobile = page.viewportSize()?.width !== undefined && page.viewportSize()!.width < 1280;
     if (isMobile) {
       await page.getByRole('button', { name: /open menu/i }).click();
-      await expect(page.getByRole('button', { name: /sign out/i })).toBeVisible();
-      await page.getByRole('button', { name: /close menu/i }).evaluate((b: HTMLElement) => b.click());
+      await expect(page.getByRole('button', { name: /sign out/i }).first()).toBeVisible();
+      await page.getByRole('button', { name: /close menu/i }).first().evaluate((b: HTMLElement) => b.click());
     } else {
       await expect(page.getByLabel(/sign out/i)).toBeVisible();
     }
@@ -175,8 +175,8 @@ test.describe('session recovery and logout', () => {
     const isMobile = page.viewportSize()?.width !== undefined && page.viewportSize()!.width < 1280;
     if (isMobile) {
       await page.getByRole('button', { name: /open menu/i }).click();
-      await expect(page.getByRole('button', { name: /sign out/i })).toBeVisible();
-      await page.getByRole('button', { name: /sign out/i }).evaluate((b: HTMLElement) => b.click());
+      await expect(page.getByRole('button', { name: /sign out/i }).first()).toBeVisible();
+      await page.getByRole('button', { name: /sign out/i }).first().evaluate((b: HTMLElement) => b.click());
     } else {
       await expect(page.getByLabel(/sign out/i)).toBeVisible();
       await page.getByLabel(/sign out/i).click();
