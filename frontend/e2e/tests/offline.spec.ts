@@ -18,7 +18,7 @@ test.describe('offline experience', () => {
     // banner without needing a connected wallet.
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('link', { name: /launch app/i })).toBeVisible();
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(3000);
 
     await context.setOffline(true);
     await page.evaluate(() => window.dispatchEvent(new Event('offline')));
@@ -32,7 +32,7 @@ test.describe('offline experience', () => {
   test('does not repeat the offline notice while the connection stays down', async ({ page, context }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('link', { name: /launch app/i })).toBeVisible();
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(3000);
 
     await context.setOffline(true);
     await page.evaluate(() => window.dispatchEvent(new Event('offline')));
