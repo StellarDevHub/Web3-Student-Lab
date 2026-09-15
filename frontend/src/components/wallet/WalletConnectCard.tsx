@@ -122,9 +122,16 @@ export function WalletConnectCard({
               >
                 <span className="text-2xl">{wallet.icon}</span>
                 <div className="flex-1">
-                  <p className="text-sm font-bold uppercase tracking-[0.14em] text-white">
-                    {wallet.name}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-bold uppercase tracking-[0.14em] text-white">
+                      {wallet.name}
+                    </p>
+                    {wallet.name === 'Freighter' && (
+                      <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                        Recommended
+                      </span>
+                    )}
+                  </div>
                   <p className={`mt-1 text-xs ${statusClass}`}>{statusText}</p>
                 </div>
               </button>
