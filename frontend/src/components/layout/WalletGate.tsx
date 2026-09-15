@@ -131,6 +131,11 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-sm">{wallet.name}</span>
+                      {wallet.name === 'Freighter' && (
+                        <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full font-semibold">
+                          Recommended
+                        </span>
+                      )}
                       {installed ? (
                         <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
                           <CheckCircle2 className="h-3 w-3" /> Detected
