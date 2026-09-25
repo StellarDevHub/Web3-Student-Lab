@@ -26,6 +26,7 @@ members = [
     "implementation_v2",
     "lending_pool",
     "multisig_wallet_timelock",
+    "oracle_aggregator",
     "parametric_insurance",
     "payment_gateway",
     "payment_streaming",
