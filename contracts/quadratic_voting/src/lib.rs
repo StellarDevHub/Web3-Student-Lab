@@ -1,11 +1,12 @@
-//! Quadratic Voting contract with sybil-resistance checks.
+//! Quadratic Voting contract with sybil-resistance checks and DID-based humanity scores.
 //!
 //! Users vote with quadratic cost logic (cost = votes²) using bounded
 //! voting credits, and can only interact after passing a sybil check.
+//! Matching pool weight is tied to verified DID credentials (humanity scores).
 
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, IntoVal, String, Symbol};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, IntoVal, String, Symbol};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -21,11 +22,14 @@ pub struct Proposal {
 pub enum DataKey {
     Admin,
     SybilContract,
+    DIDRegistry,
     CreditsPerUser,
     ProposalCount,
     Proposal(u32),
     UserCredits(Address),
-    UserVotes(Address, u32), // User Address, Proposal ID -> votes cast
+    UserVotes(Address, u32),         // User Address, Proposal ID -> votes cast
+    VoterDID(Address),               // Voter Address -> Their DID (32 bytes)
+    VoterHumanityScore(Address),     // Voter Address -> # of verified proofs (humanity score)
 }
 
 #[contract]
@@ -33,8 +37,8 @@ pub struct QuadraticVotingContract;
 
 #[contractimpl]
 impl QuadraticVotingContract {
-    /// Initializes the Quadratic Voting governance system.
-    pub fn initialize(env: Env, admin: Address, sybil_contract: Address, credits_per_user: u32) {
+    /// Initializes the Quadratic Voting governance system with DID registry integration.
+    pub fn initialize(env: Env, admin: Address, sybil_contract: Address, did_registry: Address, credits_per_user: u32) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("Already initialized");
         }
@@ -44,8 +48,42 @@ impl QuadraticVotingContract {
             .set(&DataKey::SybilContract, &sybil_contract);
         env.storage()
             .instance()
+            .set(&DataKey::DIDRegistry, &did_registry);
+        env.storage()
+            .instance()
             .set(&DataKey::CreditsPerUser, &credits_per_user);
         env.storage().instance().set(&DataKey::ProposalCount, &0u32);
+    }
+
+    /// Registers a voter with their DID, enabling matching pool participation.
+    /// Humanity score is derived from the count of verified contributor proofs.
+    pub fn register_voter_did(env: Env, voter: Address, did: BytesN<32>) {
+        voter.require_auth();
+
+        // Resolve DID from registry to count proofs (humanity score).
+        let did_registry: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::DIDRegistry)
+            .unwrap();
+
+        let proof_count: u32 = env.invoke_contract(
+            &did_registry,
+            &Symbol::new(&env, "get_proofs"),
+            soroban_sdk::vec![&env, did.into_val(&env)],
+        );
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::VoterDID(voter.clone()), &did);
+        env.storage()
+            .persistent()
+            .set(&DataKey::VoterHumanityScore(voter.clone()), &proof_count);
+
+        env.events().publish(
+            (Symbol::new(&env, "voter_registered"),),
+            (voter, proof_count),
+        );
     }
 
     /// Creates a new governance proposal. Creator must be sybil-verified.
@@ -191,6 +229,29 @@ impl QuadraticVotingContract {
             .persistent()
             .get(&DataKey::UserCredits(user))
             .unwrap_or(default_credits)
+    }
+
+    /// Returns the humanity score (count of verified proofs) for a voter.
+    /// Unregistered/unverified voters have a score of 0.
+    pub fn get_humanity_score(env: Env, voter: Address) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::VoterHumanityScore(voter))
+            .unwrap_or(0)
+    }
+
+    /// Returns the matching pool weight for a voter. Only voters with
+    /// verified DID credentials (proof_count > 0) receive non-zero weight.
+    /// Unverified voters (score = 0) always return 0 matching pool weight.
+    pub fn get_matching_pool_weight(env: Env, voter: Address) -> u32 {
+        let score: u32 = Self::get_humanity_score(env, voter.clone());
+        // Unverified account: zero matching pool weight (acceptance criterion)
+        if score == 0 {
+            return 0;
+        }
+        // Verified account: matching weight proportional to humanity score.
+        // Can be scaled (e.g., 1x, 2x, 10x per proof) for fine-tuning.
+        score * 10
     }
 
     fn check_sybil(env: &Env, user: &Address) {

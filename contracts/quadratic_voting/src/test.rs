@@ -1,5 +1,6 @@
 use super::*;
-use soroban_sdk::{testutils::Address as _, Env, String};
+use soroban_sdk::{testutils::Address as _, BytesN, Env, String};
+
 #[contract]
 struct MockSybil;
 
@@ -20,12 +21,38 @@ impl MockSybilReject {
     }
 }
 
+// Mock DID Registry: stores proof count for each DID.
+// In reality, this resolves from a persistent DID document;
+// here we just return a fixed proof count per test.
+#[contract]
+struct MockDIDRegistry;
+
+#[contractimpl]
+impl MockDIDRegistry {
+    pub fn get_proofs(_env: Env, _did: BytesN<32>) -> u32 {
+        // Mock: assume registered DIDs have 3 proofs (verified)
+        3
+    }
+}
+
+#[contract]
+struct MockDIDRegistryZeroProofs;
+
+#[contractimpl]
+impl MockDIDRegistryZeroProofs {
+    pub fn get_proofs(_env: Env, _did: BytesN<32>) -> u32 {
+        // Mock: DIDs with 0 proofs (unverified)
+        0
+    }
+}
+
 fn setup(env: &Env) -> (QuadraticVotingContractClient<'static>, Address) {
     let id = env.register(QuadraticVotingContract, ());
     let client = QuadraticVotingContractClient::new(env, &id);
     let admin = Address::generate(env);
     let sybil = env.register(MockSybil, ());
-    client.initialize(&admin, &sybil, &100);
+    let did_registry = env.register(MockDIDRegistry, ());
+    client.initialize(&admin, &sybil, &did_registry, &100);
     (client, admin)
 }
 
@@ -91,10 +118,56 @@ fn unverified_voter_rejected() {
     let client = QuadraticVotingContractClient::new(&env, &id);
     let admin = Address::generate(&env);
     let sybil = env.register(MockSybilReject, ());
-    client.initialize(&admin, &sybil, &100);
+    let did_registry = env.register(MockDIDRegistry, ());
+    client.initialize(&admin, &sybil, &did_registry, &100);
     let user = Address::generate(&env);
     client.create_proposal(&user, &String::from_str(&env, "p"));
     client.vote(&user, &1, &1);
+}
+
+#[test]
+fn unverified_account_zero_matching_weight() {
+    // Acceptance criterion: unverified accounts receive zero matching pool weight.
+    let env = Env::default();
+    env.mock_all_auths();
+    let id = env.register(QuadraticVotingContract, ());
+    let client = QuadraticVotingContractClient::new(&env, &id);
+    let admin = Address::generate(&env);
+    let sybil = env.register(MockSybil, ());
+    let did_registry = env.register(MockDIDRegistryZeroProofs, ()); // 0 proofs
+    client.initialize(&admin, &sybil, &did_registry, &100);
+
+    let unverified_voter = Address::generate(&env);
+    let did = BytesN::from_array(&env, &[1u8; 32]);
+
+    // Register voter with DID that has 0 proofs
+    client.register_voter_did(&unverified_voter, &did);
+
+    // Humanity score should be 0
+    assert_eq!(client.get_humanity_score(&unverified_voter), 0);
+
+    // Matching pool weight must be zero for unverified account
+    assert_eq!(client.get_matching_pool_weight(&unverified_voter), 0);
+}
+
+#[test]
+fn verified_account_nonzero_matching_weight() {
+    // Verified accounts (with proofs) receive non-zero matching pool weight.
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _) = setup(&env);
+
+    let verified_voter = Address::generate(&env);
+    let did = BytesN::from_array(&env, &[2u8; 32]);
+
+    // Register voter with DID that has 3 proofs
+    client.register_voter_did(&verified_voter, &did);
+
+    // Humanity score should be 3
+    assert_eq!(client.get_humanity_score(&verified_voter), 3);
+
+    // Matching pool weight should be non-zero (3 * 10 = 30)
+    assert_eq!(client.get_matching_pool_weight(&verified_voter), 30);
 }
 
 #[test]
