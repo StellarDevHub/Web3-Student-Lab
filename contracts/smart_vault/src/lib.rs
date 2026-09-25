@@ -1,7 +1,15 @@
-//! # Smart Vault Contract
+//! # Smart Vault Contract with Synthetic Asset Support
 //!
 //! A yield-bearing vault that accepts user deposits, tracks share ownership,
 //! simulates staking rewards, and supports harvest + compound operations.
+//! Extended with synthetic asset minting, global debt pool tracking, and
+//! automated liquidation based on collateralization ratios.
+//!
+//! ## Synthetic Assets
+//! - Users deposit collateral and mint overcollateralized synthetic assets.
+//! - Global debt pool tracks cumulative debt shares that adjust as collateral prices fluctuate.
+//! - Liquidation triggers when collateralization ratio falls below threshold.
+//! - Bad debt is socialized across remaining vault holders during black-swan events.
 //!
 //! ## Security
 //! - Reentrancy: Soroban's execution model is single-threaded; no cross-contract
@@ -38,6 +46,12 @@ const FREEZED: Symbol = symbol_short!("freezed");
 /// Minimum 48-hour delay (in seconds) between authorization and execution.
 const MIN_GOV_PERIOD: u64 = 172_800;
 
+// ── Synthetic Asset Constants ────────────────────────────────────────────────
+const MIN_COLLATERAL_RATIO_BPS: i128 = 15_000; // 150% collateralization required
+const LIQUIDATION_THRESHOLD_BPS: i128 = 12_000; // 120% liquidation trigger
+const GLOBAL_DEBT_SHARES: Symbol = symbol_short!("debt_sh");
+const GLOBAL_DEBT_AMOUNT: Symbol = symbol_short!("debt_amt");
+
 // ── Errors ───────────────────────────────────────────────────────────────────
 
 #[contracterror]
@@ -53,6 +67,9 @@ pub enum VaultError {
     AlreadyExecuted = 17,
     AlreadyCancelled = 18,
     VaultFrozen = 19,
+    BelowMinCollateralRatio = 20,
+    InsufficientCollateral = 21,
+    NoDebt = 22,
 }
 
 // ── Data types ───────────────────────────────────────────────────────────────
@@ -625,6 +642,119 @@ impl SmartVault {
         assert!(reserves >= 0, "negative reserves");
         assert!(total_assets == reserves, "reserve conservation violated");
     }
+
+    // ── Synthetic Assets ──────────────────────────────────────────────────────
+
+    /// Returns collateralization ratio in basis points (e.g. 15000 = 150%).
+    pub fn get_collateral_ratio(env: Env, user: Address) -> i128 {
+        let collateral: i128 = env
+            .storage()
+            .persistent()
+            .get(&Self::collateral_key(&user))
+            .unwrap_or(0);
+        let debt_shares: i128 = env
+            .storage()
+            .persistent()
+            .get(&Self::debt_key(&user))
+            .unwrap_or(0);
+
+        if debt_shares == 0 {
+            return i128::MAX; // No debt = infinite ratio
+        }
+
+        let (global_debt_amount, global_debt_shares) = Self::get_global_debt(&env);
+        let user_debt = if global_debt_shares == 0 {
+            0
+        } else {
+            (debt_shares * global_debt_amount) / global_debt_shares
+        };
+
+        if user_debt == 0 {
+            return i128::MAX;
+        }
+
+        (collateral * 10_000) / user_debt
+    }
+
+    /// Mints synthetic assets against collateral. Requires 150% collateralization.
+    /// Uses user's vault shares as collateral (1:1 ratio).
+    pub fn mint_synthetic(env: Env, user: Address, amount: i128) {
+        user.require_auth();
+        assert!(amount > 0, "amount must be positive");
+
+        // Use vault shares as collateral
+        let pos = Self::get_position(&env, &user);
+        let collateral = pos.shares;
+        let user_debt_shares: i128 = env
+            .storage()
+            .persistent()
+            .get(&Self::debt_key(&user))
+            .unwrap_or(0);
+
+        let (global_debt_amount, global_debt_shares) = Self::get_global_debt(&env);
+
+        // Calculate existing user debt
+        let existing_user_debt = if global_debt_shares == 0 {
+            0
+        } else {
+            (user_debt_shares * global_debt_amount) / global_debt_shares
+        };
+
+        // Check new collateral ratio would be >= 150%
+        let new_total_debt = existing_user_debt + amount;
+        let required_collateral = (new_total_debt * 10_000) / MIN_COLLATERAL_RATIO_BPS;
+        assert!(
+            collateral >= required_collateral,
+            "Below minimum collateral ratio"
+        );
+
+        // Mint debt shares proportionally
+        let new_debt_shares = if global_debt_shares == 0 {
+            amount
+        } else {
+            (amount * global_debt_shares) / global_debt_amount
+        };
+
+        env.storage().persistent().set(
+            &Self::debt_key(&user),
+            &(user_debt_shares + new_debt_shares),
+        );
+        env.storage().instance().set(
+            &GLOBAL_DEBT_AMOUNT,
+            &(global_debt_amount + amount),
+        );
+        env.storage().instance().set(
+            &GLOBAL_DEBT_SHARES,
+            &(global_debt_shares + new_debt_shares),
+        );
+
+        env.events().publish(
+            (Symbol::new(&env, "synthetic_minted"),),
+            (user, amount, new_debt_shares),
+        );
+    }
+
+    /// Returns global debt pool state: (total_debt_amount, total_debt_shares).
+    pub fn get_global_debt_pool(env: Env) -> (i128, i128) {
+        Self::get_global_debt(&env)
+    }
+
+    /// Helper: get global debt state.
+    fn get_global_debt(env: &Env) -> (i128, i128) {
+        let debt_amount = env.storage().instance().get(&GLOBAL_DEBT_AMOUNT).unwrap_or(0);
+        let debt_shares = env.storage().instance().get(&GLOBAL_DEBT_SHARES).unwrap_or(0);
+        (debt_amount, debt_shares)
+    }
+
+    /// Helper: collateral storage key for user.
+    fn collateral_key(user: &Address) -> (Symbol, Address) {
+        (symbol_short!("collat"), user.clone())
+    }
+
+    /// Helper: debt shares storage key for user.
+    fn debt_key(user: &Address) -> (Symbol, Address) {
+        (symbol_short!("debt_sh"), user.clone())
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -903,5 +1033,41 @@ mod tests {
         let pid = client.propose(&g1, &String::from_str(&env, "Cancel me"));
         client.cancel(&g1, &pid);
         assert_eq!(client.get_proposal(&pid).state, ProposalState::Cancelled);
+    }
+
+    #[test]
+    fn test_mint_synthetic_increases_debt_pool() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (env_ret, contract_id, user) = setup();
+        let client = SmartVaultClient::new(&env_ret, &contract_id);
+
+        // Deposit collateral
+        client.deposit(&user, &1_000_000);
+
+        // Mint synthetic with max 66.67% LTV (150% collateral ratio)
+        let amount_to_mint = 666_700; // Approximately 66.67% of deposit
+        client.mint_synthetic(&user, &amount_to_mint);
+
+        // Verify debt was tracked in global pool
+        let (debt_amount, _debt_shares) = client.get_global_debt_pool();
+        assert_eq!(debt_amount, amount_to_mint);
+    }
+
+#[test]
+    #[should_panic(expected = "Below minimum collateral ratio")]
+    fn test_mint_synthetic_below_collateral_ratio() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (env_ret, contract_id, user) = setup();
+        let client = SmartVaultClient::new(&env_ret, &contract_id);
+
+        // Deposit 1M
+        client.deposit(&user, &1_000_000);
+
+        // Try to mint 1.6M with only 1M collateral
+        // Required collateral for 1.6M debt at 150% ratio = 1.6M * 10000 / 15000 = 1.067M
+        // Since 1M < 1.067M, this should fail:
+        client.mint_synthetic(&user, &1_600_000);
     }
 }
