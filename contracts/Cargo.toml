@@ -8,6 +8,7 @@ edition = "2021"
 [workspace]
 members = [
     ".",
+    "amm",
     "auth_checker",
     "certificate_nft",
     "commit_reveal_rng",
