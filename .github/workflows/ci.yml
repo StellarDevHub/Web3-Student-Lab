@@ -187,3 +187,40 @@ jobs:
       - name: Test (unit + property/fuzz)
         working-directory: ./contracts
         run: cargo test --lib
+
+
+# .github/workflows/ci.yml
+name: Backend CI - Schema & Migration Integrity
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  validate-migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Verify Prisma Schema and Migration Drift
+        working-directory: ./backend
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/test_db?schema=public"
+        run: |
+          # Start ephemeral postgres service container for diff validation if needed
+          npx prisma migrate diff \
+            --from-migrations ./prisma/migrations \
+            --to-schema-datamodel ./prisma/schema.prisma \
+            --exit-code
