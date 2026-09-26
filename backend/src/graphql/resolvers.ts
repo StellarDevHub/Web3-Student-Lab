@@ -279,49 +279,17 @@ export const resolvers = {
   },
 
   Student: {
-    enrollments: async (parent: { id: string }, _args: unknown, context: GraphQLContext) => {
-      return prisma.enrollment.findMany({
-        where: { studentId: parent.id },
-        include: {
-          course: {
-            select: { id: true, title: true, instructor: true, credits: true },
-          },
-        },
-      });
-    },
-    certificates: async (parent: { id: string }, _args: unknown, context: GraphQLContext) => {
-      return prisma.certificate.findMany({
-        where: { studentId: parent.id },
-        include: {
-          course: {
-            select: { id: true, title: true, instructor: true, credits: true },
-          },
-        },
-      });
-    },
-    learningProgress: async (parent: { id: string }, _args: unknown, context: GraphQLContext) => {
-      return prisma.learningProgress.findMany({
-        where: { studentId: parent.id },
-        include: {
-          course: {
-            select: { id: true, title: true, instructor: true, credits: true },
-          },
-        },
-      });
-    },
+    enrollments: (parent: { id: string }, _args: unknown, context: GraphQLContext) =>
+      context.loaders.enrollmentsByStudentId.load(parent.id),
+    certificates: (parent: { id: string }, _args: unknown, context: GraphQLContext) =>
+      context.loaders.certificatesByStudentId.load(parent.id),
+    learningProgress: (parent: { id: string }, _args: unknown, context: GraphQLContext) =>
+      context.loaders.learningProgressByStudentId.load(parent.id),
   },
 
   Course: {
-    enrollments: async (parent: { id: string }, _args: unknown, context: GraphQLContext) => {
-      return prisma.enrollment.findMany({
-        where: { courseId: parent.id },
-        include: {
-          student: {
-            select: { id: true, email: true, firstName: true, lastName: true },
-          },
-        },
-      });
-    },
+    enrollments: (parent: { id: string }, _args: unknown, context: GraphQLContext) =>
+      context.loaders.enrollmentsByCourseId.load(parent.id),
     modules: async (parent: { id: string }, _args: unknown, context: GraphQLContext) => {
       const cacheKey = `graphql:modules:${parent.id}`;
       const client = redisClient.getClient();
@@ -331,10 +299,8 @@ export const resolvers = {
           return JSON.parse(cached);
         }
       }
-      const result = await prisma.course.findUnique({
-        where: { id: parent.id },
-        select: { id: true, title: true, description: true },
-      });
+      // Batched through the per-request loader instead of a per-course query.
+      const result = await context.loaders.courseById.load(parent.id);
 
       const modules = [
         {
@@ -359,47 +325,23 @@ export const resolvers = {
   },
 
   Enrollment: {
-    student: async (parent: { studentId: string }, _args: unknown, context: GraphQLContext) => {
-      return prisma.student.findUnique({
-        where: { id: parent.studentId },
-        select: { id: true, email: true, firstName: true, lastName: true },
-      });
-    },
-    course: async (parent: { courseId: string }, _args: unknown, context: GraphQLContext) => {
-      return prisma.course.findUnique({
-        where: { id: parent.courseId },
-        select: { id: true, title: true, instructor: true, credits: true },
-      });
-    },
+    student: (parent: { studentId: string }, _args: unknown, context: GraphQLContext) =>
+      context.loaders.studentById.load(parent.studentId),
+    course: (parent: { courseId: string }, _args: unknown, context: GraphQLContext) =>
+      context.loaders.courseById.load(parent.courseId),
   },
 
   Certificate: {
-    student: async (parent: { studentId: string }, _args: unknown, context: GraphQLContext) => {
-      return prisma.student.findUnique({
-        where: { id: parent.studentId },
-        select: { id: true, email: true, firstName: true, lastName: true },
-      });
-    },
-    course: async (parent: { courseId: string }, _args: unknown, context: GraphQLContext) => {
-      return prisma.course.findUnique({
-        where: { id: parent.courseId },
-        select: { id: true, title: true, instructor: true, credits: true },
-      });
-    },
+    student: (parent: { studentId: string }, _args: unknown, context: GraphQLContext) =>
+      context.loaders.studentById.load(parent.studentId),
+    course: (parent: { courseId: string }, _args: unknown, context: GraphQLContext) =>
+      context.loaders.courseById.load(parent.courseId),
   },
 
   LearningProgress: {
-    student: async (parent: { studentId: string }, _args: unknown, context: GraphQLContext) => {
-      return prisma.student.findUnique({
-        where: { id: parent.studentId },
-        select: { id: true, email: true, firstName: true, lastName: true },
-      });
-    },
-    course: async (parent: { courseId: string }, _args: unknown, context: GraphQLContext) => {
-      return prisma.course.findUnique({
-        where: { id: parent.courseId },
-        select: { id: true, title: true, instructor: true, credits: true },
-      });
-    },
+    student: (parent: { studentId: string }, _args: unknown, context: GraphQLContext) =>
+      context.loaders.studentById.load(parent.studentId),
+    course: (parent: { courseId: string }, _args: unknown, context: GraphQLContext) =>
+      context.loaders.courseById.load(parent.courseId),
   },
 };

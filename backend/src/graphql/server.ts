@@ -17,7 +17,7 @@ export const createGraphQLServer = async () => {
     resolvers,
     introspection: !['production', 'staging'].includes(process.env.NODE_ENV || 'development'),
     validationRules: [
-      depthLimitRule(() => config.graphql?.maxDepth ?? 5),
+      depthLimitRule(() => config.graphql?.maxDepth ?? 6),
       complexityLimitRule(() => config.graphql?.maxComplexity ?? 500),
     ],
     plugins: [

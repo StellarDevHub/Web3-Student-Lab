@@ -1,14 +1,17 @@
 import express from 'express';
-import { buildSchema, execute, subscribe } from 'graphql';
+import { buildSchema, execute, subscribe, validate, type ExecutionArgs } from 'graphql';
 import { useServer } from 'graphql-ws/use/ws';
 import http from 'http';
 import jwt from 'jsonwebtoken';
 import { WebSocketServer } from 'ws';
 import { typeDefs } from './graphql/schema.js';
 import { graphQLMiddleware } from './graphql/server.js';
+import { depthLimitRule } from './graphql/validationRules.js';
+import config from './config/env.config.js';
 
 const PORT = Number(process.env.PORT || process.env.WS_PORT || 4001);
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
+const MAX_DEPTH = config.graphql?.maxDepth ?? 6;
 
 class PubSub {
   private events = new Map<string, Set<(payload: any) => void>>();
@@ -66,6 +69,24 @@ const rootValue: Record<string, any> = {
   courseUpdated: ({ courseId }: { courseId: string }) => pubsub.subscribe(`course:${courseId}`),
 };
 
+/**
+ * graphql-ws calls `execute`/`subscribe` directly, bypassing Apollo's
+ * validation rules. Validate the document first so the WS path enforces the
+ * same query-depth cap as the HTTP path (#1424 / BE-HARD-33).
+ */
+const withDepthLimit = <T extends ExecutionArgs>(runner: (args: T) => any) => {
+  return (args: T) => {
+    const errors = validate(args.schema, args.document, [depthLimitRule(() => MAX_DEPTH)]);
+    if (errors.length > 0) {
+      return { errors };
+    }
+    return runner(args);
+  };
+};
+
+const executeWithDepthLimit = withDepthLimit(execute);
+const subscribeWithDepthLimit = withDepthLimit(subscribe);
+
 const app = express();
 
 app.get('/health', (_req, res) => res.status(200).send('ok'));
@@ -85,8 +106,8 @@ app.get('/health', (_req, res) => res.status(200).send('ok'));
   useServer(
     {
       schema,
-      execute,
-      subscribe,
+      execute: executeWithDepthLimit,
+      subscribe: subscribeWithDepthLimit,
       roots: { subscription: rootValue, query: rootValue, mutation: rootValue } as any,
       onConnect: async (ctx: any) => {
         const connectionParams = (ctx.connectionParams || {}) as Record<string, any>;

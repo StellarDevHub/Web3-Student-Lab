@@ -33,7 +33,7 @@ const DEFAULT_COST_CONFIG: CostConfig = {
   fieldCost: 1,
   depthCostFactor: 2,
   maxCost: 500,
-  maxDepth: 5,
+  maxDepth: 6,
   costBudgetPerWindow: 5000,
   budgetWindowMs: 60000, // 1 minute
 };

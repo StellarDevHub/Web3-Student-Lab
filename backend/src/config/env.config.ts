@@ -120,7 +120,7 @@ export const config = {
     tempDir: getEnvVar('BACKUP_TEMP_DIR', '/tmp/backups'),
   },
   graphql: {
-    maxDepth: parseInt(getEnvVar('GRAPHQL_MAX_DEPTH', '10'), 10),
+    maxDepth: parseInt(getEnvVar('GRAPHQL_MAX_DEPTH', '6'), 10),
     maxComplexity: parseInt(getEnvVar('GRAPHQL_MAX_COMPLEXITY', '100'), 10),
   },
 
