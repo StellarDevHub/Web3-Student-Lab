@@ -1,6 +1,7 @@
 'use client';
 
 import CertificateTemplate from '@/components/certificates/CertificateTemplate';
+import { IpfsArchivePanel } from '@/components/certificates/IpfsArchivePanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { Certificate, certificatesAPI } from '@/lib/api';
 import {
@@ -246,6 +247,9 @@ function CertificateGeneratorInner() {
                 Add to LinkedIn
               </a>
             </div>
+
+            {/* Decentralized IPFS archive (Issue #1402) */}
+            <IpfsArchivePanel data={formData} />
 
             {/* Hash info box */}
             {formData.transactionHash && (

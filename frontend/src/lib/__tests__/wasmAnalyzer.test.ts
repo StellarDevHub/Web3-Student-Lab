@@ -2,13 +2,16 @@ import { describe, it, expect } from 'vitest';
 
 import {
   SOROBAN_HOST_MODULE,
+  WASM_PAGE_BYTES,
   analyzeWasm,
   emptyModuleBytes,
   formatBytes,
   groupHostFunctions,
   hasWasmMagic,
   optimizationHints,
+  profileMemory,
   sectionBreakdown,
+  simulateAllocatorGrowth,
 } from '@/lib/wasmAnalyzer';
 
 // ─── Binary builders ────────────────────────────────────────────────────────
@@ -54,6 +57,44 @@ function funcExport(exportName: string, index = 0): number[] {
 
 function customSection(customName: string, payloadBytes: number[] = []): number[] {
   return section(0, [...name(customName), ...payloadBytes]);
+}
+
+/** Signed LEB128, for i32.const offsets in data-segment expressions. */
+function sleb(value: number): number[] {
+  const out: number[] = [];
+  let v = value;
+  let more = true;
+  while (more) {
+    let byte = v & 0x7f;
+    v >>= 7;
+    if ((v === 0 && (byte & 0x40) === 0) || (v === -1 && (byte & 0x40) !== 0)) {
+      more = false;
+    } else {
+      byte |= 0x80;
+    }
+    out.push(byte);
+  }
+  return out;
+}
+
+/** Memory section (id 5) payload for a single memory with the given limits. */
+function memorySection(min: number, max?: number): number[] {
+  const limits = max === undefined ? [0x00, ...leb(min)] : [0x01, ...leb(min), ...leb(max)];
+  return section(5, [...leb(1), ...limits]);
+}
+
+/** An active data segment (memory index 0) with a constant `i32.const` offset. */
+function activeDataSegment(offset: number, size: number): number[] {
+  return [...leb(0), 0x41, ...sleb(offset), 0x0b, ...leb(size), ...new Array(size).fill(0xaa)];
+}
+
+/** A passive data segment — no fixed address until `memory.init` runs. */
+function passiveDataSegment(size: number): number[] {
+  return [...leb(1), ...leb(size), ...new Array(size).fill(0xaa)];
+}
+
+function dataSection(...segments: number[][]): number[] {
+  return section(11, [...leb(segments.length), ...segments.flat()]);
 }
 
 describe('hasWasmMagic', () => {
@@ -275,6 +316,115 @@ describe('optimizationHints', () => {
 
     expect(info.hostFunctions).toHaveLength(1);
     expect(optimizationHints(info).some((h) => h.title.includes('No Soroban host'))).toBe(false);
+  });
+});
+
+describe('memory and data sections', () => {
+  it('parses a locally declared memory', () => {
+    const info = analyzeWasm(module(memorySection(2, 10)));
+    expect(info.memories).toEqual([{ min: 2, max: 10 }]);
+  });
+
+  it('parses a memory with no maximum', () => {
+    const info = analyzeWasm(module(memorySection(1)));
+    expect(info.memories).toEqual([{ min: 1, max: undefined }]);
+  });
+
+  it('folds an imported memory into the same memories list', () => {
+    const memImport = [...name('env'), ...name('memory'), 0x02, 0x01, ...leb(1), ...leb(4)];
+    const info = analyzeWasm(module(section(2, [...leb(1), ...memImport])));
+    expect(info.memories).toEqual([{ min: 1, max: 4 }]);
+  });
+
+  it('resolves a constant offset on an active data segment', () => {
+    const info = analyzeWasm(module(memorySection(1), dataSection(activeDataSegment(16, 8))));
+    expect(info.dataSegments).toEqual([{ active: true, memoryIndex: 0, offset: 16, size: 8 }]);
+  });
+
+  it('records a passive segment with no offset', () => {
+    const info = analyzeWasm(module(memorySection(1), dataSection(passiveDataSegment(5))));
+    expect(info.dataSegments).toEqual([{ active: false, size: 5 }]);
+  });
+});
+
+describe('profileMemory', () => {
+  it('lays a resolvable data segment out on its page', () => {
+    const info = analyzeWasm(module(memorySection(1), dataSection(activeDataSegment(100, 50))));
+    const [profile] = profileMemory(info);
+
+    expect(profile.minPages).toBe(1);
+    expect(profile.minBytes).toBe(WASM_PAGE_BYTES);
+    expect(profile.staticBytesUsed).toBe(50);
+    expect(profile.pages[0].usedBytes).toBe(50);
+  });
+
+  it('flags a data segment that writes past the declared memory', () => {
+    const offset = WASM_PAGE_BYTES - 10;
+    const info = analyzeWasm(module(memorySection(1), dataSection(activeDataSegment(offset, 100))));
+    const [profile] = profileMemory(info);
+
+    expect(profile.risks.some((r) => r.title.includes('past declared memory'))).toBe(true);
+    expect(profile.risks[0].severity).toBe('critical');
+  });
+
+  it('flags two data segments that overlap', () => {
+    const info = analyzeWasm(
+      module(memorySection(1), dataSection(activeDataSegment(0, 20), activeDataSegment(10, 20))),
+    );
+    const [profile] = profileMemory(info);
+
+    expect(profile.risks.some((r) => r.title.includes('Overlapping'))).toBe(true);
+  });
+
+  it('warns about unbounded growth when no maximum is declared', () => {
+    const info = analyzeWasm(module(memorySection(1)));
+    const [profile] = profileMemory(info);
+
+    expect(profile.risks.some((r) => r.title.includes('Unbounded memory growth'))).toBe(true);
+  });
+
+  it('does not warn about growth when a maximum is declared', () => {
+    const info = analyzeWasm(module(memorySection(1, 4)));
+    const [profile] = profileMemory(info);
+
+    expect(profile.risks.some((r) => r.title.includes('Unbounded memory growth'))).toBe(false);
+  });
+
+  it('flags static data that nearly fills the initial memory', () => {
+    const info = analyzeWasm(
+      module(memorySection(1, 4), dataSection(activeDataSegment(0, WASM_PAGE_BYTES - 100))),
+    );
+    const [profile] = profileMemory(info);
+
+    expect(profile.risks.some((r) => r.title.includes('nearly fills'))).toBe(true);
+  });
+
+  it('produces one profile per declared memory', () => {
+    expect(profileMemory(analyzeWasm(emptyModuleBytes()))).toEqual([]);
+  });
+});
+
+describe('simulateAllocatorGrowth', () => {
+  it('grows page count by the requested step size', () => {
+    const info = analyzeWasm(module(memorySection(1, 10)));
+    const [profile] = profileMemory(info);
+
+    const steps = simulateAllocatorGrowth(profile, { growthPagesPerStep: 2, steps: 3 });
+
+    expect(steps.map((s) => s.pages)).toEqual([3, 5, 7]);
+    expect(steps.every((s) => !s.overMax)).toBe(true);
+  });
+
+  it('flags the step that exceeds the declared maximum and stops there', () => {
+    const info = analyzeWasm(module(memorySection(1, 3)));
+    const [profile] = profileMemory(info);
+
+    const steps = simulateAllocatorGrowth(profile, { growthPagesPerStep: 2, steps: 10 });
+
+    // 1 -> 3 (ok) -> 5 (over max=3, and the simulation stops immediately after)
+    expect(steps).toHaveLength(2);
+    expect(steps[0].overMax).toBe(false);
+    expect(steps[1].overMax).toBe(true);
   });
 });
 

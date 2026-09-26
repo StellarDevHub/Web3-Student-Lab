@@ -61,6 +61,22 @@ export interface WasmExport {
   kindName: string;
 }
 
+/** A `limits` pair from a memory (or table) type: initial and optional maximum page count. */
+export interface WasmMemoryLimits {
+  min: number;
+  max?: number;
+}
+
+/** One entry of the Data section — the static bytes the module ships pre-loaded into memory. */
+export interface WasmDataSegment {
+  /** False for a passive segment (loaded on demand via `memory.init`, no fixed address). */
+  active: boolean;
+  memoryIndex?: number;
+  /** Constant byte offset into linear memory, when it could be statically resolved. */
+  offset?: number;
+  size: number;
+}
+
 export interface WasmModuleInfo {
   valid: boolean;
   version: number;
@@ -70,6 +86,9 @@ export interface WasmModuleInfo {
   exports: WasmExport[];
   /** Imports from the Soroban host environment. */
   hostFunctions: WasmImport[];
+  /** Memories declared locally (Memory section) or imported. */
+  memories: WasmMemoryLimits[];
+  dataSegments: WasmDataSegment[];
   error?: string;
 }
 
@@ -122,6 +141,46 @@ class Reader {
     }
   }
 
+  /** Signed LEB128 (up to 32 bits), used by i32.const and offset expressions. */
+  sleb32(): number {
+    let result = 0;
+    let shift = 0;
+    let byte: number;
+
+    do {
+      byte = this.u8();
+      result |= (byte & 0x7f) << shift;
+      shift += 7;
+      if (shift > 35) throw new Error('Malformed signed LEB128 integer');
+    } while ((byte & 0x80) !== 0);
+
+    // Sign-extend if the sign bit of the last group is set and we haven't
+    // filled all 32 bits yet.
+    if (shift < 32 && (byte & 0x40) !== 0) {
+      result |= -1 << shift;
+    }
+    return result;
+  }
+
+  /** Signed LEB128 as a bigint, for i64.const and 64-bit offsets. */
+  sleb64(): bigint {
+    let result = 0n;
+    let shift = 0n;
+    let byte: number;
+
+    do {
+      byte = this.u8();
+      result |= BigInt(byte & 0x7f) << shift;
+      shift += 7n;
+      if (shift > 70n) throw new Error('Malformed 64-bit signed LEB128 integer');
+    } while ((byte & 0x80) !== 0);
+
+    if (shift < 64n && (byte & 0x40) !== 0) {
+      result |= -1n << shift;
+    }
+    return BigInt.asIntN(64, result);
+  }
+
   /** A length-prefixed UTF-8 name. */
   name(): string {
     const length = this.varuint();
@@ -143,10 +202,11 @@ export function hasWasmMagic(bytes: Uint8Array): boolean {
   return WASM_MAGIC.every((byte, i) => bytes[i] === byte);
 }
 
-function parseImports(payload: Uint8Array): WasmImport[] {
+function parseImports(payload: Uint8Array): { imports: WasmImport[]; memories: WasmMemoryLimits[] } {
   const reader = new Reader(payload);
   const count = reader.varuint();
   const imports: WasmImport[] = [];
+  const memories: WasmMemoryLimits[] = [];
 
   for (let i = 0; i < count; i++) {
     const module = reader.name();
@@ -163,16 +223,91 @@ function parseImports(payload: Uint8Array): WasmImport[] {
       reader.varuint();
       if (limits === 1) reader.varuint();
     } else if (kind === 2) {
-      const limits = reader.u8();
-      reader.varuint();
-      if (limits === 1) reader.varuint();
+      const limitsFlag = reader.u8();
+      const min = reader.varuint();
+      const max = limitsFlag === 1 ? reader.varuint() : undefined;
+      memories.push({ min, max });
     } else if (kind === 3) {
       reader.u8(); // value type
       reader.u8(); // mutability
     }
   }
 
-  return imports;
+  return { imports, memories };
+}
+
+/** Memory section (id 5): `vec(limits)` — every memory the module declares itself. */
+function parseMemorySection(payload: Uint8Array): WasmMemoryLimits[] {
+  const reader = new Reader(payload);
+  const count = reader.varuint();
+  const memories: WasmMemoryLimits[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const limitsFlag = reader.u8();
+    const min = reader.varuint();
+    const max = limitsFlag === 1 ? reader.varuint() : undefined;
+    memories.push({ min, max });
+  }
+
+  return memories;
+}
+
+/**
+ * A constant expression, as used for a data (or element) segment's offset:
+ * one instruction producing a value, terminated by `end` (0x0B). Real modules
+ * emit `i32.const <n> end`; `global.get <idx> end` is legal too (e.g. an
+ * imported base-address global) but not statically resolvable here, so it
+ * reports no fixed offset rather than guessing.
+ */
+function parseConstOffsetExpr(reader: Reader): number | undefined {
+  const opcode = reader.u8();
+  let value: number | undefined;
+
+  if (opcode === 0x41) {
+    value = reader.sleb32(); // i32.const
+  } else if (opcode === 0x23) {
+    reader.varuint(); // global.get <idx> — not statically known
+    value = undefined;
+  } else {
+    value = undefined;
+  }
+
+  // Drain any further bytes up to `end` defensively (extended-const proposal
+  // allows i32.add/i32.mul chains); we only need the terminator's position.
+  let guard = 0;
+  while (reader.u8() !== 0x0b) {
+    guard++;
+    if (guard > 64) throw new Error('Runaway offset expression in data segment');
+  }
+
+  return value;
+}
+
+/** Data section (id 11): the segments the module pre-loads into linear memory. */
+function parseDataSection(payload: Uint8Array): WasmDataSegment[] {
+  const reader = new Reader(payload);
+  const count = reader.varuint();
+  const segments: WasmDataSegment[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const flags = reader.varuint();
+
+    if (flags === 1) {
+      // Passive: no address until `memory.init` runs.
+      const size = reader.varuint();
+      reader.skip(size);
+      segments.push({ active: false, size });
+      continue;
+    }
+
+    const memoryIndex = flags === 2 ? reader.varuint() : 0;
+    const offset = parseConstOffsetExpr(reader);
+    const size = reader.varuint();
+    reader.skip(size);
+    segments.push({ active: true, memoryIndex, offset, size });
+  }
+
+  return segments;
 }
 
 function parseExports(payload: Uint8Array): WasmExport[] {
@@ -206,6 +341,8 @@ export function analyzeWasm(bytes: Uint8Array): WasmModuleInfo {
     imports: [],
     exports: [],
     hostFunctions: [],
+    memories: [],
+    dataSegments: [],
   };
 
   if (!hasWasmMagic(bytes)) {
@@ -247,9 +384,15 @@ export function analyzeWasm(bytes: Uint8Array): WasmModuleInfo {
           section.customName = '(unreadable)';
         }
       } else if (id === 2) {
-        info.imports = parseImports(payload);
+        const { imports, memories } = parseImports(payload);
+        info.imports = imports;
+        info.memories.push(...memories);
+      } else if (id === 5) {
+        info.memories.push(...parseMemorySection(payload));
       } else if (id === 7) {
         info.exports = parseExports(payload);
+      } else if (id === 11) {
+        info.dataSegments = parseDataSection(payload);
       }
 
       info.sections.push(section);
@@ -376,6 +519,180 @@ export function optimizationHints(info: WasmModuleInfo): OptimizationHint[] {
   }
 
   return hints;
+}
+
+// ─── Memory profiler & allocator leak detector (Issue #1404) ──────────────
+//
+// There is no VM here — nothing executes, so this cannot watch a live heap.
+// What it can do, honestly: read the module's declared memories and its Data
+// section (the bytes the module ships pre-loaded into linear memory), lay
+// them out page by page, and flag the two classes of bug that are visible
+// *before* a single instruction runs: a data segment that writes past the
+// memory the module itself declared (an out-of-bounds pointer risk baked
+// into the binary), and a memory with no `max`, which is the shape every
+// "leaks forever" allocator bug takes once it reaches the host's own ceiling
+// instead of Wasm's. Simulated growth (below) models the runtime spike a
+// bump/arena allocator produces when it grows without ever freeing.
+
+/** Every WebAssembly page is exactly 64 KiB, fixed by the spec. */
+export const WASM_PAGE_BYTES = 64 * 1024;
+
+export interface MemoryPageUsage {
+  index: number;
+  /** Bytes of static data landing in this page, from resolvable data segments. */
+  usedBytes: number;
+  segments: { start: number; end: number }[];
+}
+
+export interface MemoryRisk {
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  detail: string;
+}
+
+export interface MemoryProfile {
+  memoryIndex: number;
+  minPages: number;
+  maxPages?: number;
+  minBytes: number;
+  maxBytes?: number;
+  pages: MemoryPageUsage[];
+  /** Bytes claimed by data segments that could be statically resolved. */
+  staticBytesUsed: number;
+  /** Data segments whose offset could not be resolved statically (e.g. `global.get`). */
+  unresolvedSegments: number;
+  /** Segments loaded on demand via `memory.init`, with no fixed address. */
+  passiveSegments: number;
+  risks: MemoryRisk[];
+}
+
+/**
+ * Lay out every declared memory page by page against the module's Data
+ * section, and flag what is visible statically: out-of-bounds writes,
+ * overlapping segments, and unbounded growth.
+ */
+export function profileMemory(info: WasmModuleInfo): MemoryProfile[] {
+  return info.memories.map((mem, memoryIndex) => {
+    const minBytes = mem.min * WASM_PAGE_BYTES;
+    const maxBytes = mem.max !== undefined ? mem.max * WASM_PAGE_BYTES : undefined;
+    const pages: MemoryPageUsage[] = Array.from({ length: mem.min }, (_, index) => ({
+      index,
+      usedBytes: 0,
+      segments: [],
+    }));
+    const risks: MemoryRisk[] = [];
+
+    const ownSegments = info.dataSegments.filter((s) => (s.memoryIndex ?? 0) === memoryIndex);
+    const passiveSegments = ownSegments.filter((s) => !s.active).length;
+    const unresolvedSegments = ownSegments.filter((s) => s.active && s.offset === undefined).length;
+
+    const resolved = ownSegments
+      .filter((s): s is WasmDataSegment & { offset: number } => s.active && s.offset !== undefined)
+      .map((s) => ({ start: s.offset, end: s.offset + s.size }))
+      .sort((a, b) => a.start - b.start);
+
+    let staticBytesUsed = 0;
+    let prevEnd = 0;
+    let overlapFlagged = false;
+    let oobFlagged = false;
+
+    for (const seg of resolved) {
+      if (seg.start < prevEnd && !overlapFlagged) {
+        risks.push({
+          severity: 'critical',
+          title: 'Overlapping data segments',
+          detail: `A data segment starting at byte ${seg.start} overlaps another ending at byte ${prevEnd}. The module would corrupt its own static data the moment it is instantiated.`,
+        });
+        overlapFlagged = true;
+      }
+
+      if (seg.end > minBytes && !oobFlagged) {
+        risks.push({
+          severity: 'critical',
+          title: 'Data segment writes past declared memory',
+          detail: `A data segment ends at byte ${seg.end}, past the ${formatBytes(minBytes)} (${mem.min}-page) initial memory this module declares. Instantiation traps unless something grows memory first — an out-of-bounds pointer baked directly into the binary.`,
+        });
+        oobFlagged = true;
+      }
+
+      staticBytesUsed += seg.end - seg.start;
+      prevEnd = Math.max(prevEnd, seg.end);
+
+      const firstPage = Math.floor(seg.start / WASM_PAGE_BYTES);
+      const lastPage = Math.floor(Math.max(seg.start, seg.end - 1) / WASM_PAGE_BYTES);
+      for (let p = firstPage; p <= lastPage && p >= 0 && p < pages.length; p++) {
+        const pageStart = p * WASM_PAGE_BYTES;
+        const pageEnd = pageStart + WASM_PAGE_BYTES;
+        const overlapStart = Math.max(seg.start, pageStart);
+        const overlapEnd = Math.min(seg.end, pageEnd);
+        pages[p].usedBytes += Math.max(0, overlapEnd - overlapStart);
+        pages[p].segments.push({ start: seg.start, end: seg.end });
+      }
+    }
+
+    if (maxBytes === undefined) {
+      risks.push({
+        severity: 'warning',
+        title: 'Unbounded memory growth',
+        detail: 'This memory declares no maximum, so `memory.grow` can succeed until the host enforces its own ceiling. Paired with a bump/arena allocator that never frees, this is exactly the shape an allocator leak takes — set an explicit `max` so runaway growth fails fast instead of quietly consuming ledger resources.',
+      });
+    }
+
+    const staticRatio = minBytes > 0 ? staticBytesUsed / minBytes : 0;
+    if (staticRatio > 0.9) {
+      risks.push({
+        severity: 'warning',
+        title: 'Static data nearly fills initial memory',
+        detail: `Data segments occupy ${(staticRatio * 100).toFixed(1)}% of the ${mem.min}-page initial memory, leaving almost no room for a stack or heap before the first allocation forces a page grow.`,
+      });
+    }
+
+    return {
+      memoryIndex,
+      minPages: mem.min,
+      maxPages: mem.max,
+      minBytes,
+      maxBytes,
+      pages,
+      staticBytesUsed,
+      unresolvedSegments,
+      passiveSegments,
+      risks,
+    };
+  });
+}
+
+export interface GrowthSimulationStep {
+  step: number;
+  pages: number;
+  bytes: number;
+  /** True once simulated growth would exceed the declared `max` (or, absent a `max`, a very large heuristic ceiling). */
+  overMax: boolean;
+}
+
+/**
+ * Simulate a bump/arena allocator that only ever grows memory and never
+ * frees — the standard shape of a WASM allocator leak — and report when that
+ * pattern would exceed the module's declared `max` (or, for an unbounded
+ * memory, a generous 4 GiB heuristic ceiling representing wasm32's real
+ * address-space limit). Purely arithmetic: no bytes are actually allocated.
+ */
+export function simulateAllocatorGrowth(
+  profile: MemoryProfile,
+  options: { growthPagesPerStep: number; steps: number },
+): GrowthSimulationStep[] {
+  const ceilingPages = profile.maxPages ?? 65536; // wasm32 address space, in pages
+  const steps: GrowthSimulationStep[] = [];
+  let pages = profile.minPages;
+
+  for (let i = 1; i <= options.steps; i++) {
+    pages += Math.max(0, options.growthPagesPerStep);
+    const overMax = pages > ceilingPages;
+    steps.push({ step: i, pages, bytes: pages * WASM_PAGE_BYTES, overMax });
+    if (overMax) break; // the host traps the grow call here; nothing further can happen
+  }
+
+  return steps;
 }
 
 /** Human-readable byte size. */

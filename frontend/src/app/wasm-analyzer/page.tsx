@@ -10,6 +10,7 @@ import {
   optimizationHints,
   sectionBreakdown,
 } from '@/lib/wasmAnalyzer';
+import { MemoryProfilerPanel } from '@/components/wasm-analyzer/MemoryProfilerPanel';
 import type { WatResponse } from '@/workers/wat.worker';
 
 /**
@@ -230,6 +231,9 @@ export default function WasmAnalyzerPage() {
                 </ul>
               </section>
             )}
+
+            {/* Memory profiler & allocator leak detector (Issue #1404) */}
+            <MemoryProfilerPanel info={info} />
 
             {/* WAT viewer */}
             <section className="rounded-2xl border border-white/10 bg-zinc-950 p-6">

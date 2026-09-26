@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 
 import { LivePoolYield } from '@/components/yield-calculator/LivePoolYield';
+import { TwapBacktestCanvas } from '@/components/analytics/TwapBacktestCanvas';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -349,6 +350,11 @@ export default function YieldCalculatorPage() {
               <Line data={chartData} options={chartOptions} />
             </div>
           </div>
+        </div>
+
+        {/* TWAP oracle manipulation backtester (Issue #1405) */}
+        <div className="mb-8">
+          <TwapBacktestCanvas />
         </div>
 
         {/* Information Panel */}
