@@ -24,6 +24,8 @@ model Student {
   githubUsername    String?
   githubAvatarUrl   String?
   githubAccessToken String?
+  // Additive nullable column (zero-downtime expand phase, #1426 / BE-HARD-35)
+  profileTag        String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

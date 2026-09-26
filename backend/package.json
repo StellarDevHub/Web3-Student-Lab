@@ -12,6 +12,8 @@
     "test:coverage": "jest --coverage --runInBand --forceExit",
     "test:migrations": "bash scripts/test-migration-rollback.sh",
     "migration:lint": "tsx scripts/migration-rollback.ts --lint",
+    "migration:scan-locks": "tsx scripts/migration-rollback.ts --scan-locks --strict-lint",
+    "migration:plan": "tsx scripts/expand-contract.ts --plan",
     "migration:verify": "tsx scripts/migration-rollback.ts --verify",
     "validate:curriculum": "tsx scripts/validate-curriculum.ts",
     "bench": "tsx benchmarks/runBenchmarks.ts",
