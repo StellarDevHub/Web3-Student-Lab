@@ -88,6 +88,20 @@ export const config = {
     issuerName: process.env.ISSUER_NAME || 'Web3 Student Lab',
     issuerDid: process.env.ISSUER_DID || 'did:stellar:GBRPYHIL2CI3FYQMWVUGE62KMGOBQKLCYJ3HLKBUBIW5VZH4S4MNOWT',
   },
+  /**
+   * AWS KMS / HSM key management (BE-HARD-32 / #1423).
+   * When enabled, administrative and faucet transactions are signed inside KMS
+   * and no plaintext Stellar secret is read from disk.
+   */
+  kms: {
+    region: process.env.AWS_REGION || 'us-east-1',
+    keyId: process.env.AWS_KMS_KEY_ID || '',
+    /** Public key of the KMS-held Ed25519 key (non-secret). */
+    masterPublicKey: process.env.PLATFORM_MASTER_PUBLIC_KEY || '',
+    useKmsSigner: process.env.USE_KMS_SIGNER === 'true',
+    required: process.env.KMS_REQUIRED === 'true' || environment === 'production',
+    signingAlgorithm: process.env.KMS_SIGNING_ALGORITHM || 'ED25519_SHA_512',
+  },
   openai: {
     apiKey: process.env.OPENAI_API_KEY || '',
   },
@@ -140,6 +154,14 @@ export const config = {
       stellar: {
         ...this.stellar,
         issuerSecretKey: this.stellar.issuerSecretKey ? '***REDACTED***' : '',
+      },
+      kms: {
+        region: this.kms.region,
+        keyId: this.kms.keyId ? this.maskSecret(this.kms.keyId) : '',
+        masterPublicKey: this.kms.masterPublicKey,
+        useKmsSigner: this.kms.useKmsSigner,
+        required: this.kms.required,
+        signingAlgorithm: this.kms.signingAlgorithm,
       },
       openai: {
         apiKey: this.openai.apiKey ? '***REDACTED***' : '',

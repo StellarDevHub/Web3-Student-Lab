@@ -29,6 +29,12 @@
  *  5. After migration is confirmed, remove the old key variable in the next deploy.
  */
 
+import {
+  DataKeySpec,
+  DecryptCommand,
+  GenerateDataKeyCommand,
+  KMSClient,
+} from '@aws-sdk/client-kms';
 import logger from '../utils/logger.js';
 import {
   validateKeyMaterial,
@@ -97,12 +103,10 @@ function loadKeysFromEnv(): KeyEntry[] {
   }
 
   if (entries.length === 0) {
-    const defaultKeyHex = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
-    entries.push({
-      version: 1,
-      keyBuffer: validateKeyMaterial(defaultKeyHex),
-      loadedAt: new Date(),
-    });
+    // Fail closed: never fall back to an implicit, well-known key.
+    throw new Error(
+      'No PAYLOAD_ENCRYPTION_KEY_v<N> environment variables found; refusing to start with an implicit default key.',
+    );
   }
 
   return entries.sort((a, b) => a.version - b.version);
@@ -311,4 +315,122 @@ export function setEncryptionKeyManager(manager: EncryptionKeyManager): void {
  */
 export function resetEncryptionKeyManager(): void {
   _instance = null;
+}
+
+// ---------------------------------------------------------------------------
+// KMS envelope encryption (BE-HARD-32 / #1423)
+// ---------------------------------------------------------------------------
+
+export interface KmsEnvelopeConfig {
+  kmsKeyId?: string;
+  region?: string;
+  kmsClientOverride?: any;
+}
+
+export interface WrappedDataKey {
+  /** Plaintext data key (DEK) — the caller must wipe it after use. */
+  plaintextKey: Buffer;
+  /** DEK encrypted under the KMS customer master key. */
+  encryptedKey: Buffer;
+}
+
+const KMS_ENVELOPE_PREFIX = 'kms';
+const KMS_ENVELOPE_VERSION = 'v1';
+
+/**
+ * Envelope encryption backed by an AWS KMS customer master key (CMK).
+ *
+ * Each `encrypt()` call asks KMS for a fresh AES-256 data key
+ * (`GenerateDataKey`), uses it to AES-256-GCM encrypt the payload, and stores
+ * the KMS-wrapped data key alongside the ciphertext. `decrypt()` unwraps the
+ * data key through KMS (`Decrypt`) and decrypts locally. The CMK never leaves
+ * KMS and the data key only exists in memory for the duration of the call.
+ */
+export class KmsEnvelopeEncryption {
+  private readonly client?: KMSClient;
+  private readonly keyId?: string;
+
+  constructor(config: KmsEnvelopeConfig = {}) {
+    this.keyId = config.kmsKeyId || process.env.AWS_KMS_KEY_ID;
+    const region = config.region || process.env.AWS_REGION || 'us-east-1';
+    this.client = this.keyId ? config.kmsClientOverride || new KMSClient({ region }) : undefined;
+  }
+
+  public isKmsActive(): boolean {
+    return Boolean(this.client && this.keyId);
+  }
+
+  public getKeyId(): string | undefined {
+    return this.keyId;
+  }
+
+  /** Ask KMS for a fresh AES-256 data key. */
+  public async generateDataKey(): Promise<WrappedDataKey> {
+    if (!this.client || !this.keyId) {
+      throw new Error('AWS_KMS_KEY_ID is required for KMS envelope encryption');
+    }
+
+    const response = await this.client.send(
+      new GenerateDataKeyCommand({ KeyId: this.keyId, KeySpec: DataKeySpec.AES_256 }),
+    );
+
+    if (!response.Plaintext || !response.CiphertextBlob) {
+      throw new Error('KMS GenerateDataKey response did not include key material');
+    }
+
+    return {
+      plaintextKey: Buffer.from(response.Plaintext),
+      encryptedKey: Buffer.from(response.CiphertextBlob),
+    };
+  }
+
+  /** Unwrap a KMS-encrypted data key. */
+  public async unwrapDataKey(encryptedKey: Buffer): Promise<Buffer> {
+    if (!this.client) {
+      throw new Error('AWS_KMS_KEY_ID is required for KMS envelope decryption');
+    }
+
+    const response = await this.client.send(new DecryptCommand({ CiphertextBlob: encryptedKey }));
+    if (!response.Plaintext) {
+      throw new Error('KMS Decrypt response did not include a plaintext key');
+    }
+    return Buffer.from(response.Plaintext);
+  }
+
+  /**
+   * Encrypt `plaintext` under a fresh KMS-wrapped data key.
+   * Envelope format: `kms:v1:<base64url wrapped DEK>:<AES envelope>`.
+   */
+  public async encrypt(plaintext: string): Promise<string> {
+    const { plaintextKey, encryptedKey } = await this.generateDataKey();
+    try {
+      const ciphertext = encryptPayload(plaintext, plaintextKey, 1);
+      return `${KMS_ENVELOPE_PREFIX}:${KMS_ENVELOPE_VERSION}:${encryptedKey.toString(
+        'base64url',
+      )}:${ciphertext}`;
+    } finally {
+      plaintextKey.fill(0);
+    }
+  }
+
+  /** Decrypt an envelope produced by {@link encrypt}. */
+  public async decrypt(envelope: string): Promise<string> {
+    const parts = envelope.split(':');
+    if (
+      parts.length !== 4 ||
+      parts[0] !== KMS_ENVELOPE_PREFIX ||
+      parts[1] !== KMS_ENVELOPE_VERSION
+    ) {
+      throw new Error('Invalid KMS envelope: expected kms:v1:<wrapped-key>:<ciphertext>');
+    }
+
+    const wrappedKey = parts[2]!;
+    const ciphertext = parts[3]!;
+    const dataKey = await this.unwrapDataKey(Buffer.from(wrappedKey, 'base64url'));
+    try {
+      return decryptPayload(ciphertext, dataKey);
+    } finally {
+      dataKey.fill(0);
+    }
+  }
 }
