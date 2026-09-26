@@ -4,6 +4,27 @@ import { webhookDeliveryQueue, WEBHOOK_DELIVERY_QUEUE_NAME } from './webhooks/qu
 import { exportQueue, EXPORT_QUEUE_NAME } from '../jobs/export.queue.js';
 import { backupQueue, BACKUP_QUEUE_NAME } from '../jobs/backup.queue.js';
 import { storagePinQueue, STORAGE_PIN_QUEUE_NAME } from './storage/queue.js';
+import { buildSignedWebhookHeaders, canonicalizeWebhookPayload } from './webhooks/signature.js';
+import type { SignedWebhookHeaders, WebhookDeliveryJobData } from './webhooks/types.js';
+
+export type DLQFailureCategory =
+  | 'rate_limited'
+  | 'timeout'
+  | 'network'
+  | 'server_error'
+  | 'client_error'
+  | 'validation'
+  | 'unknown';
+
+export type DLQTriageAction = 'replay' | 'escalate';
+
+export interface DLQTriage {
+  category: DLQFailureCategory;
+  action: DLQTriageAction;
+  retryable: boolean;
+  reason: string;
+  statusCode?: number;
+}
 
 export interface DLQJobRecord {
   dlqId: string;
@@ -15,7 +36,21 @@ export interface DLQJobRecord {
   error: string;
   traceId: string;
   attemptsMade: number;
+  /** Automated failure classification used by the inspector dashboard. */
+  triage?: DLQTriage;
 }
+
+export const DLQ_FAILURE_CATEGORIES: DLQFailureCategory[] = [
+  'rate_limited',
+  'timeout',
+  'network',
+  'server_error',
+  'client_error',
+  'validation',
+  'unknown',
+];
+
+export const DLQ_TRIAGE_ACTIONS: DLQTriageAction[] = ['replay', 'escalate'];
 
 // In-memory store for DLQ records, providing fast inspection, replay, and purge.
 const dlqStore = new Map<string, DLQJobRecord>();
@@ -52,6 +87,169 @@ export function calculateLinearBackoffWithJitter(
   return Math.floor(delay + jitter);
 }
 
+function parseStatusCode(error: string): number | undefined {
+  const match = error?.match(/\b([1-5]\d{2})\b/);
+  return match ? Number(match[1]) : undefined;
+}
+
+const RETRYABLE_CATEGORIES = new Set<DLQFailureCategory>([
+  'rate_limited',
+  'timeout',
+  'network',
+  'server_error',
+]);
+
+function classifyFailure(
+  error: string,
+  statusCode?: number
+): { category: DLQFailureCategory; reason: string } {
+  const message = error || '';
+
+  if (statusCode === 429 || /rate.?limit|too many requests?/i.test(message)) {
+    return {
+      category: 'rate_limited',
+      reason: 'Destination throttled the delivery; safe to replay after backoff.',
+    };
+  }
+  if (/timeout|timed out|etimedout|aborted|deadline/i.test(message)) {
+    return { category: 'timeout', reason: 'Delivery exceeded the request deadline; safe to replay.' };
+  }
+  if (/econnrefused|econnreset|enotfound|eai_again|socket hang up|network|fetch failed/i.test(message)) {
+    return { category: 'network', reason: 'Transient network failure; safe to replay.' };
+  }
+  if ((typeof statusCode === 'number' && statusCode >= 500) || /\b5\d{2}\b/.test(message)) {
+    return { category: 'server_error', reason: 'Destination returned a 5xx error; safe to replay.' };
+  }
+  if (
+    (typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500) ||
+    /\b4\d{2}\b/.test(message)
+  ) {
+    return {
+      category: 'client_error',
+      reason: 'Destination rejected the request (4xx); escalate for review.',
+    };
+  }
+  if (/validation|invalid|schema|malformed|bad request/i.test(message)) {
+    return {
+      category: 'validation',
+      reason: 'Payload failed destination validation; escalate rather than replay.',
+    };
+  }
+  return { category: 'unknown', reason: 'Unclassified failure; escalate for manual review.' };
+}
+
+/**
+ * Automated failure triage: classifies a DLQ failure and recommends whether it
+ * is safe to replay or should be escalated for manual inspection.
+ */
+export function triageDLQFailure(input: {
+  error: string;
+  attemptsMade?: number;
+  statusCode?: number;
+}): DLQTriage {
+  const statusCode =
+    typeof input.statusCode === 'number' ? input.statusCode : parseStatusCode(input.error);
+  const { category, reason } = classifyFailure(input.error, statusCode);
+  const retryable = RETRYABLE_CATEGORIES.has(category);
+  const attemptsSuffix =
+    typeof input.attemptsMade === 'number' ? ` (after ${input.attemptsMade} attempt(s))` : '';
+
+  const triage: DLQTriage = {
+    category,
+    action: retryable ? 'replay' : 'escalate',
+    retryable,
+    reason: `${reason}${attemptsSuffix}`,
+  };
+  if (typeof statusCode === 'number') {
+    triage.statusCode = statusCode;
+  }
+  return triage;
+}
+
+const SIGNATURE_HEADER_KEYS = new Set([
+  'x-webhook-signature',
+  'x-webhook-timestamp',
+  'x-webhook-delivery-id',
+  'x-webhook-event',
+]);
+
+/**
+ * Remove any stale webhook signature headers so a replayed delivery is signed
+ * with a fresh timestamp rather than a previous attempt's signature.
+ */
+export function stripStaleSignatureHeaders(
+  headers?: Record<string, string>
+): Record<string, string> {
+  if (!headers) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(headers).filter(([key]) => !SIGNATURE_HEADER_KEYS.has(key.toLowerCase()))
+  );
+}
+
+export function isWebhookDeliveryJobData(value: unknown): value is WebhookDeliveryJobData {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const candidate = value as Partial<WebhookDeliveryJobData>;
+  return Boolean(
+    candidate.deliveryId &&
+      candidate.event &&
+      typeof candidate.event === 'object' &&
+      candidate.destination &&
+      typeof candidate.destination === 'object'
+  );
+}
+
+export interface WebhookResignature {
+  deliveryId: string;
+  eventType: string;
+  timestamp: string;
+  signature: string;
+  serializedPayload: string;
+  headers: SignedWebhookHeaders;
+}
+
+/**
+ * Cryptographically re-sign a webhook payload with a fresh timestamp so a job
+ * replayed from the DLQ passes the destination's signature verification.
+ */
+export function reSignWebhookPayload(
+  data: WebhookDeliveryJobData,
+  options: { timestamp?: string; secret?: string } = {}
+): WebhookResignature {
+  const secret = options.secret ?? data.destination?.secret ?? process.env.WEBHOOK_SIGNING_SECRET;
+  if (!secret) {
+    throw new Error(
+      'WEBHOOK_SIGNING_SECRET environment variable is required to re-sign webhook payloads'
+    );
+  }
+
+  const serializedPayload = canonicalizeWebhookPayload({
+    event: data.event,
+    metadata: data.metadata ?? {},
+    deliveryId: data.deliveryId,
+  });
+  const timestamp = options.timestamp ?? new Date().toISOString();
+  const headers = buildSignedWebhookHeaders({
+    deliveryId: data.deliveryId,
+    eventType: data.event.type,
+    payload: serializedPayload,
+    secret,
+    timestamp,
+  });
+
+  return {
+    deliveryId: data.deliveryId,
+    eventType: data.event.type,
+    timestamp,
+    signature: headers['x-webhook-signature'],
+    serializedPayload,
+    headers,
+  };
+}
+
 /**
  * Enqueues a failed job record to the Dead Letter Queue.
  */
@@ -79,6 +277,10 @@ export async function enqueueToDLQ(
     error: input.error,
     traceId,
     attemptsMade: input.attemptsMade,
+    triage: triageDLQFailure({
+      error: input.error,
+      attemptsMade: input.attemptsMade,
+    }),
   };
 
   dlqStore.set(dlqId, record);
@@ -112,6 +314,53 @@ export async function inspectDLQ(filter?: {
   }
 
   return records;
+}
+
+/**
+ * Fetches a single DLQ record by id without loading the whole store.
+ */
+export async function getDLQJob(dlqId: string): Promise<DLQJobRecord | undefined> {
+  return dlqStore.get(dlqId);
+}
+
+/**
+ * Aggregated automated-triage view for the inspector dashboard: how many
+ * records fall into each failure category and which are safe to auto-replay.
+ */
+export async function getDLQTriageSummary(): Promise<{
+  total: number;
+  byCategory: Record<DLQFailureCategory, number>;
+  byAction: Record<DLQTriageAction, number>;
+  replayableIds: string[];
+}> {
+  const byCategory = DLQ_FAILURE_CATEGORIES.reduce(
+    (acc, category) => ({ ...acc, [category]: 0 }),
+    {} as Record<DLQFailureCategory, number>
+  );
+  const byAction = DLQ_TRIAGE_ACTIONS.reduce(
+    (acc, action) => ({ ...acc, [action]: 0 }),
+    {} as Record<DLQTriageAction, number>
+  );
+  const replayableIds: string[] = [];
+
+  for (const record of dlqStore.values()) {
+    const triage = record.triage ?? triageDLQFailure({
+      error: record.error,
+      attemptsMade: record.attemptsMade,
+    });
+    byCategory[triage.category] += 1;
+    byAction[triage.action] += 1;
+    if (triage.action === 'replay') {
+      replayableIds.push(record.dlqId);
+    }
+  }
+
+  return {
+    total: dlqStore.size,
+    byCategory,
+    byAction,
+    replayableIds,
+  };
 }
 
 /**
@@ -177,8 +426,35 @@ export async function replayDLQJob(
     const targetQueue = queueRegistry[record.originalQueue];
     let replayedJobId: string | undefined;
 
+    const jobData = record.data;
+    let payload: Record<string, any> = jobData;
+    if (
+      record.originalQueue === WEBHOOK_DELIVERY_QUEUE_NAME &&
+      isWebhookDeliveryJobData(jobData)
+    ) {
+      // Cryptographically re-sign with a fresh timestamp and drop any stale
+      // signature headers so the replayed delivery is accepted downstream.
+      const resigned = reSignWebhookPayload(jobData);
+      payload = {
+        ...jobData,
+        destination: {
+          ...jobData.destination,
+          headers: stripStaleSignatureHeaders(jobData.destination?.headers),
+        },
+        replayed: {
+          replayedAt: new Date().toISOString(),
+          signature: resigned.signature,
+          timestamp: resigned.timestamp,
+          previousError: record.error,
+        },
+      };
+      logger.info(
+        `Re-signed webhook payload for DLQ job ${dlqId} (signature ${resigned.signature.slice(0, 20)}...)`
+      );
+    }
+
     if (targetQueue && typeof targetQueue.add === 'function') {
-      const job = await targetQueue.add(record.jobName, record.data, record.opts);
+      const job = await targetQueue.add(record.jobName, payload, record.opts);
       replayedJobId = job?.id ? String(job.id) : `replayed_${Date.now()}`;
     } else {
       replayedJobId = `replayed_simulated_${Date.now()}`;

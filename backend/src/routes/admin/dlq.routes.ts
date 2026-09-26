@@ -1,15 +1,24 @@
 import { Router, Request, Response } from 'express';
 import {
   inspectDLQ,
+  getDLQJob,
   getDLQMetrics,
+  getDLQTriageSummary,
   replayDLQJob,
   replayAllDLQJobs,
   purgeDLQ,
-  DLQJobRecord
 } from '../../services/dlq.service.js';
+import { authenticateToken } from '../../middleware/auth.js';
+import { requireAdmin } from '../../middleware/admin.js';
+import { validate } from '../../middleware/validation.js';
+import { dlqReplaySchema, dlqPurgeSchema } from './dlq.validation.schemas.js';
 import logger from '../../utils/logger.js';
 
 const router: ReturnType<typeof Router> = Router();
+
+// The DLQ inspector exposes replay/purge controls, so it is admin-only.
+router.use(authenticateToken as any);
+router.use(requireAdmin as any);
 
 /**
  * @route GET /api/v1/admin/dlq/metrics
@@ -76,10 +85,9 @@ router.get('/jobs', async (req: Request, res: Response) => {
  */
 router.get('/jobs/:dlqId', async (req: Request, res: Response) => {
   try {
-    const { dlqId } = req.params;
-    const jobs = await inspectDLQ();
-    const job = jobs.find(j => j.dlqId === dlqId);
-    
+    const dlqId = String(req.params.dlqId);
+    const job = await getDLQJob(dlqId);
+
     if (!job) {
       res.status(404).json({
         status: 'error',
@@ -138,10 +146,10 @@ router.post('/jobs/:dlqId/replay', async (req: Request, res: Response) => {
  * @route POST /api/v1/admin/dlq/replay
  * @desc Replay all DLQ jobs or all jobs for a specific queue
  */
-router.post('/replay', async (req: Request, res: Response) => {
+router.post('/replay', validate(dlqReplaySchema), async (req: Request, res: Response) => {
   try {
-    const { queueName } = req.body;
-    
+    const { queueName } = req.body as { queueName?: string };
+
     const result = await replayAllDLQJobs(queueName);
     
     res.json({
@@ -166,18 +174,10 @@ router.post('/replay', async (req: Request, res: Response) => {
  * @route DELETE /api/v1/admin/dlq/purge
  * @desc Purge DLQ jobs from storage
  */
-router.delete('/purge', async (req: Request, res: Response) => {
+router.delete('/purge', validate(dlqPurgeSchema), async (req: Request, res: Response) => {
   try {
-    const { queueName, confirm } = req.body;
-    
-    if (!confirm) {
-      res.status(400).json({
-        status: 'error',
-        error: 'Purge operation must be confirmed with confirm: true'
-      });
-      return;
-    }
-    
+    const { queueName } = req.body as { queueName?: string };
+
     const result = await purgeDLQ(queueName);
     
     res.json({
@@ -265,6 +265,27 @@ router.get('/queues', async (_req: Request, res: Response) => {
     res.status(500).json({
       status: 'error',
       error: 'Failed to retrieve DLQ queue information'
+    });
+  }
+});
+
+/**
+ * @route GET /api/v1/admin/dlq/triage
+ * @desc Automated failure triage: per-category/action counts and replayable ids
+ */
+router.get('/triage', async (_req: Request, res: Response) => {
+  try {
+    const triage = await getDLQTriageSummary();
+
+    res.json({
+      status: 'success',
+      data: { triage }
+    });
+  } catch (error: any) {
+    logger.error('Failed to triage DLQ jobs:', error);
+    res.status(500).json({
+      status: 'error',
+      error: 'Failed to triage DLQ jobs'
     });
   }
 });
