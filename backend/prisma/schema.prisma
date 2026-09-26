@@ -514,3 +514,36 @@ model ContributorProof {
   @@index([workspaceId, createdAt])
   @@map("contributor_proofs")
 }
+
+// backend/prisma/schema.prisma
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String   @id @default(uuid())
+  walletAddress String   @unique @map("wallet_address")
+  nonce         String
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([walletAddress], map: "idx_users_wallet_address")
+  @@map("users")
+}
+
+model PayoutTransaction {
+  id             String    @id @default(uuid())
+  anchorId       String    @map("anchor_id")
+  status         String    // ESCROWED, SETTLED, FAILED
+  escrowedAt     DateTime  @default(now()) @map("escrowed_at")
+  settledAt      DateTime? @map("settled_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([anchorId, status], map: "idx_payout_anchor_status")
+  @@map("v2_payout_transactions")
+}
