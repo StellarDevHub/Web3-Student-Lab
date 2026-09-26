@@ -19,7 +19,7 @@
 
 import { AsyncLocalStorage } from 'async_hooks';
 import winston, { format } from 'winston';
-import { redactSensitiveData } from './logSanitizer.js';
+import { redactSensitiveData, sanitizeString } from './logSanitizer.js';
 
 // ─── Async context store ────────────────────────────────────────────────────
 
@@ -79,9 +79,13 @@ const traceIdFormat = format((info) => {
 
 const sanitizeFormat = format((info) => {
   for (const key of Object.keys(info)) {
-    if (!['level', 'message', 'timestamp', 'traceId', 'stack', 'symbol'].includes(key)) {
-      info[key] = redactSensitiveData(info[key]);
+    // Keep structural fields untouched; sanitize everything else — including
+    // `message` and `stack` — so secrets/PII never reach log output (#1425).
+    if (['level', 'timestamp', 'traceId', 'symbol'].includes(key)) {
+      continue;
     }
+    const value = info[key];
+    info[key] = typeof value === 'string' ? sanitizeString(value) : redactSensitiveData(value);
   }
   return info;
 })();
@@ -93,7 +97,8 @@ const consoleLogFormat = printf(({ level, message, timestamp, traceId, stack, ..
   const prefix = traceId ? `[${traceId}] ` : '';
   const sanitizedMeta = redactSensitiveData(meta);
   const metaStr = sanitizedMeta && typeof sanitizedMeta === 'object' && Object.keys(sanitizedMeta as object).length > 0 ? ` ${JSON.stringify(sanitizedMeta)}` : '';
-  return `${timestamp} ${prefix}${level}: ${stack || message}${metaStr}`;
+  const text = sanitizeString(String(stack || message || ''));
+  return `${timestamp} ${prefix}${level}: ${text}${metaStr}`;
 });
 
 /**

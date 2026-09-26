@@ -20,6 +20,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import logger, { traceContext } from '../utils/logger.js';
+import { redactSensitiveData } from '../utils/logSanitizer.js';
 
 // ─── Extend Express typings ──────────────────────────────────────────────────
 
@@ -46,21 +47,16 @@ function resolveTraceId(req: Request): string {
   );
 }
 
+/**
+ * Deep-sanitize request headers/body/query with the shared log sanitizer so
+ * secrets and PII are masked by both key name and value pattern (#1425).
+ */
 function sanitizeHeaders(headers: Record<string, unknown>): Record<string, unknown> {
-  const out = { ...headers };
-  for (const key of ['authorization', 'cookie', 'x-api-key', 'password']) {
-    if (out[key]) out[key] = '[REDACTED]';
-  }
-  return out;
+  return redactSensitiveData(headers) as Record<string, unknown>;
 }
 
 function sanitizeBody(body: unknown): unknown {
-  if (!body || typeof body !== 'object') return body;
-  const out = { ...(body as Record<string, unknown>) };
-  for (const key of ['password', 'token', 'secret', 'apiKey', 'privateKey']) {
-    if (out[key]) out[key] = '[REDACTED]';
-  }
-  return out;
+  return redactSensitiveData(body);
 }
 
 // ─── Primary middleware (exported as requestLogger for drop-in replacement) ──
@@ -108,7 +104,7 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
       userAgent: req.headers['user-agent'],
       headers: sanitizeHeaders(req.headers as Record<string, unknown>),
       body: sanitizeBody(req.body),
-      query: req.query,
+      query: redactSensitiveData(req.query),
     });
 
     // Intercept res.send to log the response

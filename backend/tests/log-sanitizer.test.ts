@@ -1,4 +1,4 @@
-import { redactSensitiveData } from '../src/utils/logSanitizer.js';
+import { redactSensitiveData, sanitizeString } from '../src/utils/logSanitizer.js';
 
 describe('redactSensitiveData', () => {
   it('should mask email addresses as u***@domain.com', () => {
@@ -97,5 +97,44 @@ describe('redactSensitiveData', () => {
   it('should handle plain strings that are not emails or cards', () => {
     expect(redactSensitiveData('hello world')).toBe('hello world');
     expect(redactSensitiveData('123')).toBe('123');
+  });
+});
+
+describe('redactSensitiveData — secrets & embedded PII (#1425)', () => {
+  const stellarSeed = `S${'A'.repeat(55)}`;
+
+  it('masks Stellar secret seed keys (S...)', () => {
+    expect(redactSensitiveData(stellarSeed)).toBe('S***');
+
+    const embedded = `funding account seed=${stellarSeed} done`;
+    const masked = redactSensitiveData(embedded) as string;
+    expect(masked).not.toContain(stellarSeed);
+    expect(masked).toContain('S***');
+  });
+
+  it('masks PEM private key blocks', () => {
+    const pem = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkq\n-----END PRIVATE KEY-----';
+    expect(redactSensitiveData(pem)).toBe('[REDACTED_PRIVATE_KEY]');
+  });
+
+  it('masks 0x-prefixed private keys', () => {
+    const key = `0x${'a'.repeat(64)}`;
+    const masked = redactSensitiveData(`private key ${key}`) as string;
+    expect(masked).not.toContain(key);
+    expect(masked).toContain('[REDACTED_PRIVATE_KEY]');
+  });
+
+  it('masks password assignments in free text', () => {
+    expect(redactSensitiveData('password=hunter2')).toBe('password=[REDACTED]');
+    expect(String(redactSensitiveData('{"password":"hunter2"}'))).not.toContain('hunter2');
+  });
+
+  it('masks email addresses embedded inside longer strings', () => {
+    expect(sanitizeString('contact user@example.com now')).toBe('contact u***@example.com now');
+  });
+
+  it('keeps masking whole-string emails and cards', () => {
+    expect(sanitizeString('user@example.com')).toBe('u***@example.com');
+    expect(sanitizeString('4111-1111-1111-1234')).toBe('****-****-****-1234');
   });
 });

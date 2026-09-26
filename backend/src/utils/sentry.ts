@@ -1,7 +1,21 @@
 import type { ErrorRequestHandler, RequestHandler, Application } from 'express';
 import * as Sentry from '@sentry/node';
+import { redactSensitiveData } from './logSanitizer.js';
 
 let sentryEnabled = false;
+
+/**
+ * Scrub an outgoing Sentry payload so secrets/PII never leave the process
+ * (#1425). A JSON round-trip normalises Sentry's class instances into plain
+ * data before the shared sanitizer inspects it.
+ */
+function scrubSentryPayload<T>(payload: T): T {
+  try {
+    return redactSensitiveData(JSON.parse(JSON.stringify(payload))) as T;
+  } catch {
+    return payload;
+  }
+}
 
 export function initializeSentry(app?: Application): void {
   const dsn = process.env.SENTRY_DSN;
@@ -21,7 +35,7 @@ export function initializeSentry(app?: Application): void {
       if (process.env.NODE_ENV === 'test') {
         return null;
       }
-      return event;
+      return scrubSentryPayload(event);
     },
   });
 
@@ -54,6 +68,24 @@ export function captureException(error: unknown): void {
     return;
   }
   Sentry.captureException(error);
+}
+
+/**
+ * Stream a (sanitized) security telemetry message to Sentry. Used by the
+ * threat-detection middleware (#1425).
+ */
+export function captureMessage(
+  message: string,
+  level: 'info' | 'warning' | 'error' = 'warning',
+  context?: Record<string, unknown>,
+): void {
+  if (!sentryEnabled) {
+    return;
+  }
+  Sentry.captureMessage(redactSensitiveData(message) as string, {
+    level,
+    ...(context ? { extra: redactSensitiveData(context) as Record<string, unknown> } : {}),
+  });
 }
 
 export function getSentryRequestHandler(): RequestHandler {

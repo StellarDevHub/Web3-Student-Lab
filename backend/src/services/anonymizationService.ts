@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import prisma from '../db/index.js';
 import redisClient from '../cache/RedisClient.js';
 import logger from '../utils/logger.js';
+import { redactSensitiveData } from '../utils/logSanitizer.js';
 
 export const SYSTEM_BURN_USER_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -28,6 +29,15 @@ class AnonymizationService {
   public aggregateLocation(city: string | null, country: string | null): string {
     if (!country) return 'Unknown';
     return country;
+  }
+
+  /**
+   * Mask PII / secrets in an arbitrary payload before it is logged or shipped
+   * to telemetry (#1425 / BE-HARD-34). Shares the exact rule set used by the
+   * logger with the GDPR erasure pipeline.
+   */
+  public maskPII<T>(payload: T): unknown {
+    return redactSensitiveData(payload);
   }
 
   /**
