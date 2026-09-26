@@ -11,6 +11,7 @@ export const contractCompileSchema = z.object({
   optimization: z.boolean().default(false),
   target: z.enum(['solidity', 'evm', 'soroban', 'wasm']),
   entryPoint: z.string().max(128).optional(),
+  projectId: z.string().max(128).optional(),
 });
 
 export const contractCancelSchema = z.object({

@@ -1,6 +1,7 @@
 /// <reference types="node" />
 import { createHash, randomUUID } from 'crypto';
 import { certificateBlockchainService } from '../blockchain/CertificateBlockchainService.js';
+import { lockManager } from '../lib/lock/index.js';
 import logger from '../utils/logger.js';
 
 export interface ContractCompileRequest {
@@ -9,6 +10,8 @@ export interface ContractCompileRequest {
   optimization: boolean;
   target: 'solidity' | 'evm' | 'soroban' | 'wasm';
   entryPoint?: string;
+  /** Optional project identifier used to serialize compilations per project. */
+  projectId?: string;
 }
 
 export interface ContractExecutionRequest {
@@ -78,62 +81,74 @@ async function measureExecution<T>(work: () => Promise<T> | T): Promise<{ result
 export async function compileSmartContract(
   request: ContractCompileRequest
 ): Promise<ContractCompileResult> {
-  const { sourceCode, compilerVersion, optimization, target, entryPoint } = request;
+  const { sourceCode, compilerVersion, optimization, target, entryPoint, projectId } = request;
   const sourceHash = createSourceHash(sourceCode);
-  const { result, durationMs } = await measureExecution(() => {
-    const warnings: string[] = [];
-    const errors: string[] = [];
 
-    if (!sourceCode.trim().includes('contract') && !sourceCode.trim().includes('module')) {
-      errors.push('Contract source must include a valid contract or module declaration.');
+  // Only one worker may hold the compile lock for a given project at any
+  // instant (#1419). Without a project id we fall back to the source hash so
+  // identical payloads are still de-duplicated.
+  const compileLock = lockManager.compileLockKey(projectId ?? sourceHash);
+
+  return lockManager.withLock(
+    compileLock,
+    { ttlMs: 30_000, retryCount: 50, retryDelayMs: 100, retryJitterMs: 25, autoExtend: true },
+    async () => {
+      const { result, durationMs } = await measureExecution(() => {
+        const warnings: string[] = [];
+        const errors: string[] = [];
+
+        if (!sourceCode.trim().includes('contract') && !sourceCode.trim().includes('module')) {
+          errors.push('Contract source must include a valid contract or module declaration.');
+        }
+
+        if (sourceCode.length > MAX_COMPILE_SIZE) {
+          errors.push(`Source exceeds maximum allowed size of ${MAX_COMPILE_SIZE} characters.`);
+        }
+
+        if (optimization && sourceCode.includes('assembly')) {
+          warnings.push('Assembly blocks may increase compilation complexity and gas usage.');
+        }
+
+        if (compilerVersion === '0.0.0') {
+          errors.push('Compiler version must be a valid semantic version.');
+        }
+
+        return {
+          warnings,
+          errors,
+          bytecode: buildBytecodeHash(sourceHash),
+          abi: buildAbi(entryPoint || 'execute'),
+          compiled: errors.length === 0,
+        };
+      });
+
+      const compileResult: ContractCompileResult = {
+        compiled: result.compiled,
+        warnings: result.warnings,
+        errors: result.errors,
+        bytecode: result.bytecode,
+        abi: result.abi,
+        sourceHash,
+        compilerVersion,
+        optimization,
+        target,
+        durationMs,
+      };
+
+      logger.info('Smart contract compilation completed', {
+        durationMs: compileResult.durationMs,
+        sourceHash: compileResult.sourceHash,
+        target,
+        compilerVersion,
+        optimization,
+        compiled: compileResult.compiled,
+        warningCount: compileResult.warnings.length,
+        errorCount: compileResult.errors.length,
+      });
+
+      return compileResult;
     }
-
-    if (sourceCode.length > MAX_COMPILE_SIZE) {
-      errors.push(`Source exceeds maximum allowed size of ${MAX_COMPILE_SIZE} characters.`);
-    }
-
-    if (optimization && sourceCode.includes('assembly')) {
-      warnings.push('Assembly blocks may increase compilation complexity and gas usage.');
-    }
-
-    if (compilerVersion === '0.0.0') {
-      errors.push('Compiler version must be a valid semantic version.');
-    }
-
-    return {
-      warnings,
-      errors,
-      bytecode: buildBytecodeHash(sourceHash),
-      abi: buildAbi(entryPoint || 'execute'),
-      compiled: errors.length === 0,
-    };
-  });
-
-  const compileResult: ContractCompileResult = {
-    compiled: result.compiled,
-    warnings: result.warnings,
-    errors: result.errors,
-    bytecode: result.bytecode,
-    abi: result.abi,
-    sourceHash,
-    compilerVersion,
-    optimization,
-    target,
-    durationMs,
-  };
-
-  logger.info('Smart contract compilation completed', {
-    durationMs: compileResult.durationMs,
-    sourceHash: compileResult.sourceHash,
-    target,
-    compilerVersion,
-    optimization,
-    compiled: compileResult.compiled,
-    warningCount: compileResult.warnings.length,
-    errorCount: compileResult.errors.length,
-  });
-
-  return compileResult;
+  );
 }
 
 export async function executeSmartContract(
