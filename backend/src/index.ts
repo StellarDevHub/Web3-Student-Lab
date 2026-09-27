@@ -10,6 +10,17 @@ import { livenessHandler, readinessHandler } from './routes/health.routes.js';
 import routes from './routes/index.js';
 import logger from './utils/logger.js';
 import { getSentryErrorHandler, getSentryRequestHandler, initializeSentry } from './utils/sentry.js';
+// backend/src/index.ts (Gateway Integration excerpt)
+import express from 'express';
+import rootRouter from './routes';
+
+const app = express();
+app.use(express.json());
+
+// Mount unified gateway router at root /api prefix (preventing double /api/v1/v1 prefixes)
+app.use('/api', rootRouter);
+
+export default app;
 
 dotenv.config();
 
