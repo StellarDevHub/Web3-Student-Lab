@@ -111,3 +111,69 @@ router.use('/tokenomics', tokenomicsRouter);
 router.use('/contributor-proofs', contributorProofsRouter);
 
 export default router;
+
+// backend/src/index.ts
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { Logger } from '@nestjs/common';
+import { PrismaService } from './database/prisma.service';
+
+async function bootstrap() {
+    const logger = new Logger('Bootstrap');
+    const app = await NestFactory.create(AppModule);
+
+    // Enable shutdown hooks for NestJS (listens to SIGTERM/SIGINT)
+    app.enableShutdownHooks();
+
+    const port = process.env.PORT || 3000;
+    const server = await app.listen(port);
+    logger.log(`Application is running on port ${port}`);
+
+    const gracefulShutdown = async (signal: string) => {
+        logger.warn(`Received ${signal}. Starting graceful shutdown...`);
+
+        const shutdownTimer = setTimeout(() => {
+            logger.error('Graceful shutdown timed out after 15s. Forcefully terminating process.');
+            process.exit(1);
+        }, 15000);
+
+        try {
+            // 1. Stop accepting new HTTP connections
+            await new Promise<void>((resolve, reject) => {
+                server.close((err) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
+            });
+            logger.log('HTTP server closed. No longer accepting new connections.');
+
+            // 2. Drain database connection pools and active in-flight transactions
+            const prismaService = app.get(PrismaService);
+            if (prismaService && typeof prismaService.$disconnect === 'function') {
+                await prismaService.$disconnect();
+                logger.log('Database connection pools drained and disconnected successfully.');
+            }
+
+            // 3. Close NestJS application context (BullMQ queues, WebSockets, custom providers)
+            await app.close();
+            logger.log('NestJS application context closed cleanly.');
+
+            clearTimeout(shutdownTimer);
+            logger.log('Graceful shutdown completed successfully. Exiting process.');
+            process.exit(0);
+        } catch (error) {
+            logger.error('Error during graceful shutdown execution:', error);
+            clearTimeout(shutdownTimer);
+            process.exit(1);
+        }
+    };
+
+    // Register signal listeners
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+}
+
+bootstrap().catch((err) => {
+    console.error('Failed to start application:', err);
+    process.exit(1);
+});
