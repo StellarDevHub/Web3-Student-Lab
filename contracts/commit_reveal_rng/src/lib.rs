@@ -1,15 +1,15 @@
 //! # Commit-Reveal RNG Contract
 //!
 //! A secure, bias-resistant random number generator using a two-phase
-//! commit-reveal scheme.  Because block hashes are manipulatable by validators,
+//! commit-reveal scheme. Because block hashes are manipulatable by validators,
 //! this contract derives entropy from the XOR-hash of all participant secrets.
 //!
 //! ## Protocol
 //! 1. **Commit phase** – each participant submits `H(secret)` (a 32-byte hash).
 //! 2. **Reveal phase** – each participant reveals their `secret`; the contract
 //!    verifies `H(secret) == commitment` and accumulates entropy.
-//! 3. **Finalise** – once all participants have revealed, the final random value
-//!    is `H(entropy_accumulator)`.
+//! 3. **Finalise** – once reveal window expires, unrevealed commitments are slashed
+//!    and the final random value is `H(entropy_accumulator)`.
 //!
 //! ## Penalties
 //! Participants who committed but fail to reveal before the deadline are
@@ -18,7 +18,7 @@
 //! ## Security
 //! - No block-hash dependency; entropy comes entirely from participant secrets.
 //! - Commitments are binding: revealing a different value panics.
-//! - Phase transitions are time-locked via ledger sequence numbers.
+//! - Phase transitions are time-locked via ledger sequence numbers with block-delay window enforcement.
 //! - Integer overflow: all arithmetic uses `checked_*`.
 
 #![no_std]
@@ -35,6 +35,7 @@ const RESULT_KEY: Symbol = symbol_short!("RESULT");
 const COMMIT_END: Symbol = symbol_short!("CMTEND");
 const REVEAL_END: Symbol = symbol_short!("RVLEND");
 const COMMITS_KEY: Symbol = symbol_short!("COMMITS");
+const COMMIT_BLOCKS_KEY: Symbol = symbol_short!("CMTBLKS");
 const REVEALS_KEY: Symbol = symbol_short!("REVEALS");
 const SLASHED_KEY: Symbol = symbol_short!("SLASHED");
 
@@ -82,6 +83,9 @@ impl CommitRevealRng {
             .set(&COMMITS_KEY, &Map::<Address, BytesN<32>>::new(&env));
         env.storage()
             .instance()
+            .set(&COMMIT_BLOCKS_KEY, &Map::<Address, u32>::new(&env));
+        env.storage()
+            .instance()
             .set(&REVEALS_KEY, &Map::<Address, bool>::new(&env));
         env.storage()
             .instance()
@@ -115,6 +119,11 @@ impl CommitRevealRng {
         commits.set(participant.clone(), commitment);
         env.storage().instance().set(&COMMITS_KEY, &commits);
 
+        let mut commit_blocks: Map<Address, u32> =
+            env.storage().instance().get(&COMMIT_BLOCKS_KEY).unwrap();
+        commit_blocks.set(participant.clone(), env.ledger().sequence());
+        env.storage().instance().set(&COMMIT_BLOCKS_KEY, &commit_blocks);
+
         env.events()
             .publish((symbol_short!("committed"), participant), ());
     }
@@ -144,6 +153,7 @@ impl CommitRevealRng {
     /// # Panics
     /// - If not in reveal phase or reveal window has closed.
     /// - If participant did not commit.
+    /// - If reveal attempted in the same block as commitment (block delay violation).
     /// - If `sha256(secret) != commitment`.
     pub fn reveal(env: Env, participant: Address, secret: Bytes) {
         participant.require_auth();
@@ -159,6 +169,15 @@ impl CommitRevealRng {
         let commitment = commits
             .get(participant.clone())
             .expect("participant did not commit");
+
+        let commit_blocks: Map<Address, u32> =
+            env.storage().instance().get(&COMMIT_BLOCKS_KEY).unwrap();
+        if let Some(commit_blk) = commit_blocks.get(participant.clone()) {
+            assert!(
+                env.ledger().sequence() > commit_blk,
+                "block delay requirement not met"
+            );
+        }
 
         // Verify commitment: sha256(secret) must equal the stored hash.
         let hash: BytesN<32> = env.crypto().sha256(&secret).into();
@@ -184,7 +203,7 @@ impl CommitRevealRng {
     // ── Slash non-revealers ───────────────────────────────────────────────────
 
     /// After the reveal window closes, slash participants who committed but
-    /// did not reveal.  In production their stake would be seized here.
+    /// did not reveal. In production their stake would be seized here.
     pub fn slash_non_revealers(env: Env) {
         Self::assert_phase(&env, Phase::Reveal);
         let reveal_end: u32 = env.storage().instance().get(&REVEAL_END).unwrap();
@@ -199,7 +218,7 @@ impl CommitRevealRng {
         let mut slashed: Vec<Address> = env.storage().instance().get(&SLASHED_KEY).unwrap();
 
         for (addr, _) in commits.iter() {
-            if !reveals.contains_key(addr.clone()) {
+            if !reveals.contains_key(addr.clone()) && !slashed.contains(addr.clone()) {
                 slashed.push_back(addr.clone());
                 env.events().publish((symbol_short!("slashed"), addr), ());
             }
@@ -211,7 +230,7 @@ impl CommitRevealRng {
 
     /// Finalise the round and produce the final random value.
     ///
-    /// The result is `sha256(entropy_accumulator)`.
+    /// Automatically slashes unrevealed commitments upon expiry and computes `sha256(entropy_accumulator)`.
     ///
     /// # Panics
     /// - If not in reveal phase.
@@ -223,6 +242,8 @@ impl CommitRevealRng {
             env.ledger().sequence() > reveal_end,
             "reveal window still open"
         );
+
+        Self::slash_non_revealers(env.clone());
 
         let entropy: BytesN<32> = env.storage().instance().get(&ENTROPY_KEY).unwrap();
         // Final hash: sha256(accumulated_entropy) for additional mixing.
