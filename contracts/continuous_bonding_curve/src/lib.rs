@@ -693,7 +693,7 @@ mod tests {
         token, Address, Env, Symbol, Val,
     };
 
-    fn setup(fee_bps: i128) -> (Env, Address, Address, Address, Address) {
+    pub(super) fn setup(fee_bps: i128) -> (Env, Address, Address, Address, Address) {
         let env = Env::default();
         env.mock_all_auths();
         let admin = Address::generate(&env);
@@ -977,6 +977,32 @@ mod proptests {
             let err = (back - x).abs();
             proptest::prop_assert!(err <= 1_000_000,
                 "ln(exp({x})) = {back}, err {err}");
+        }
+
+        /// Property test: Reserve invariants across randomized buy and sell operations.
+        #[test]
+        fn prop_bonding_curve_reserve_invariant(
+            tokens_buy in 100i128..10_000i128,
+            sell_pct in 1i128..100i128,
+        ) {
+            use crate::tests::setup;
+            let (env, _admin, buyer, id, _token_id) = setup(0);
+            let client = ContinuousBondingCurveContractClient::new(&env, &id);
+            let deadline = env.ledger().timestamp() + 100;
+
+            let total_in = client.buy_exact_tokens(&buyer, &tokens_buy, &i128::MAX, &deadline);
+            let (supply, reserve, _) = client.state();
+            proptest::prop_assert!(reserve >= 0);
+            proptest::prop_assert_eq!(supply, tokens_buy);
+
+            let tokens_sell = (tokens_buy * sell_pct) / 100;
+            if tokens_sell > 0 {
+                let payout = client.sell_exact_tokens(&buyer, &tokens_sell, &0, &deadline);
+                let (supply2, reserve2, _) = client.state();
+                proptest::prop_assert!(reserve2 >= 0);
+                proptest::prop_assert_eq!(supply2, supply - tokens_sell);
+                proptest::prop_assert_eq!(reserve2, total_in - payout);
+            }
         }
     }
 }

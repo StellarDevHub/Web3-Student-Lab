@@ -21,6 +21,9 @@
 
 #![no_std]
 
+#[cfg(test)]
+extern crate std;
+
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, token,
     Address, Env, IntoVal, Symbol,
@@ -699,5 +702,40 @@ mod tests {
         client.deposit_collateral(&user, &token, &2_000);
 
         assert_eq!(client.collateral_of(&user, &token), 3_000);
+    }
+
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(1000))]
+        #[test]
+        fn prop_lending_pool_collateral_repay_invariants(
+            deposit_amt in 1_000i128..1_000_000_000i128,
+            repay_frac in 1i128..100i128,
+        ) {
+            let env = Env::default();
+            env.mock_all_auths();
+            let (client, _, _) = setup(&env);
+            let token = add_token(&env, &client);
+            let user = Address::generate(&env);
+
+            client.deposit_collateral(&user, &token, &deposit_amt);
+            let coll = client.collateral_of(&user, &token);
+            prop_assert_eq!(coll, deposit_amt);
+
+            let max_borrow = deposit_amt * 10_000 / 15_000;
+            if max_borrow > 0 {
+                client.borrow(&user, &token, &token, &max_borrow);
+                let debt = client.debt_of(&user, &token);
+                prop_assert_eq!(debt, max_borrow);
+
+                let repay_amt = (debt * repay_frac) / 100;
+                if repay_amt > 0 {
+                    client.repay(&user, &token, &repay_amt);
+                    let rem_debt = client.debt_of(&user, &token);
+                    prop_assert_eq!(rem_debt, debt - repay_amt);
+                }
+            }
+        }
     }
 }
