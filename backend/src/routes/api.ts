@@ -1,3 +1,10 @@
+// backend/src/routes/api.ts
+import activityRoutes from './activity.routes';
+import auditRoutes from './audit';
+import freelanceRoutes from './freelance';
+import progressRoutes from './progress';
+import lotteryRoutes from './lottery'; // Fixed nested prefix bug
+
 import { Router } from 'express';
 import v2Lottery from './lottery.routes.js';
 
@@ -26,3 +33,14 @@ apiRouter.use('/v2', v2Router);
 
 export default apiRouter;
 export { v1Router, v2Router };
+
+const apiRouter = Router();
+
+// Mount previously orphaned route modules under unified /api/v1 gateway
+apiRouter.use('/activity', activityRoutes);
+apiRouter.use('/audit', auditRoutes);
+apiRouter.use('/freelance', freelanceRoutes);
+apiRouter.use('/progress', progressRoutes);
+apiRouter.use('/lottery', lotteryRoutes);
+
+export default apiRouter;
