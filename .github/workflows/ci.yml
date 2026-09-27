@@ -168,7 +168,7 @@ jobs:
         run: cargo fmt --check
       - name: Clippy Check
         working-directory: ./contracts
-        run: cargo clippy --workspace
+        run: cargo clippy --workspace --all-targets
       - name: Workspace Check
         working-directory: ./contracts
         run: cargo check --workspace
@@ -178,15 +178,12 @@ jobs:
       - name: Audit dependencies
         working-directory: ./contracts
         run: cargo audit --deny warnings --ignore RUSTSEC-2024-0436
-      - name: Test
+      - name: Test (workspace + all targets)
         working-directory: ./contracts
         env:
           RUST_BACKTRACE: 1
           CARGO_TERM_COLOR: always
-        run: cargo test -- --nocapture
-      - name: Test (unit + property/fuzz)
-        working-directory: ./contracts
-        run: cargo test --lib
+        run: cargo test --workspace --all-targets -- --nocapture
 
 
 # .github/workflows/ci.yml
