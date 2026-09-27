@@ -47,12 +47,32 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
+          targets: wasm32-unknown-unknown
           components: clippy, rustfmt
 
       - name: Cache Cargo registry & build
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: contracts -> target
+
+      - name: Build WASM binaries and check size budget (<64KB)
+        run: |
+          cargo build --target wasm32-unknown-unknown --release --manifest-path contracts/Cargo.toml
+          OVERSIZED=0
+          for f in target/wasm32-unknown-unknown/release/*.wasm; do
+            if [ -f "$f" ]; then
+              SIZE=$(stat -c%s "$f")
+              FNAME=$(basename "$f")
+              echo "Binary: $FNAME - Size: ${SIZE} bytes"
+              if [ "$SIZE" -gt 65536 ]; then
+                echo "::error::Binary $FNAME exceeds 64KB limit (${SIZE} bytes > 65536 bytes)"
+                OVERSIZED=1
+              fi
+            fi
+          done
+          if [ "$OVERSIZED" -eq 1 ]; then
+            exit 1
+          fi
 
       - name: Run Gas Benchmark Suite
         id: bench

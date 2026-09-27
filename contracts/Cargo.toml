@@ -49,6 +49,14 @@ exclude = [
     "cicd_pipeline",
 ]
 
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+overflow-checks = true
+strip = true
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
