@@ -6,7 +6,10 @@
 //! exposes the resulting price for downstream contracts (e.g. AMMs, vaults).
 
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, Vec};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, panic_with_error, Address, Env, Symbol,
+    Vec,
+};
 
 /// Reports older than this many seconds are rejected as stale.
 pub const MAX_STALENESS_SECONDS: u64 = 300; // 5 minutes
@@ -16,6 +19,34 @@ pub const OUTLIER_DEVIATION_BPS: i128 = 1500; // 15.00% expressed in bps/100
 
 /// Percentage (in bps/100, i.e. 1000 = 10%) of stake slashed on an outlier.
 pub const SLASH_BPS: i128 = 1000; // 10%
+
+// ── Errors (SC-HARD-20: range 400+) ──────────────────────────────────────────
+
+/// Typed contract errors for the oracle aggregator.
+///
+/// Discriminants are in the `400+` range.
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum OracleError {
+    /// `420` — Contract has already been initialised.
+    AlreadyInitialized = 420,
+    /// `421` — Caller is not the admin.
+    Unauthorized = 421,
+    /// `422` — Stake must be a positive value.
+    InvalidStake = 422,
+    /// `423` — Price must be a positive value.
+    InvalidPrice = 423,
+    /// `424` — Reporter is not on the whitelist.
+    NotWhitelisted = 424,
+    /// `425` — No fresh price reports are available.
+    NoFreshReports = 425,
+    /// `426` — All submitted reports were flagged as outliers.
+    AllOutliers = 426,
+    /// `427` — The latest aggregated price is stale.
+    PriceStale = 427,
+    /// `428` — Contract has not been initialised.
+    NotInitialized = 428,
+}
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -28,11 +59,11 @@ pub struct PriceReport {
 #[contracttype]
 pub enum DataKey {
     Admin,
-    Reporters,               // Vec<Address> whitelist
-    Stake(Address),          // reporter -> staked amount
-    LatestReport(Address),   // reporter -> last submitted PriceReport
-    LastMedian,              // i128 last computed median price
-    LastMedianTimestamp,     // u64
+    Reporters,             // Vec<Address> whitelist
+    Stake(Address),        // reporter -> staked amount
+    LatestReport(Address), // reporter -> last submitted PriceReport
+    LastMedian,            // i128 last computed median price
+    LastMedianTimestamp,   // u64
 }
 
 #[contract]
@@ -43,7 +74,7 @@ impl OracleAggregatorContract {
     /// Initializes the aggregator with an admin address.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
+            panic_with_error!(&env, OracleError::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
@@ -55,7 +86,7 @@ impl OracleAggregatorContract {
     pub fn add_reporter(env: Env, reporter: Address, stake: i128) {
         Self::require_admin(&env);
         if stake <= 0 {
-            panic!("Stake must be positive");
+            panic_with_error!(&env, OracleError::InvalidStake);
         }
         let mut reporters: Vec<Address> = env
             .storage()
@@ -94,7 +125,7 @@ impl OracleAggregatorContract {
     pub fn submit_price(env: Env, reporter: Address, price: i128) {
         reporter.require_auth();
         if price <= 0 {
-            panic!("Price must be positive");
+            panic_with_error!(&env, OracleError::InvalidPrice);
         }
         let reporters: Vec<Address> = env
             .storage()
@@ -102,7 +133,7 @@ impl OracleAggregatorContract {
             .get(&DataKey::Reporters)
             .unwrap_or_else(|| Vec::new(&env));
         if !reporters.contains(&reporter) {
-            panic!("Reporter not whitelisted");
+            panic_with_error!(&env, OracleError::NotWhitelisted);
         }
 
         let report = PriceReport {
@@ -149,7 +180,7 @@ impl OracleAggregatorContract {
         }
 
         if fresh_prices.len() == 0 {
-            panic!("No fresh price reports available");
+            panic_with_error!(&env, OracleError::NoFreshReports);
         }
 
         let median = Self::median(&env, &fresh_prices);
@@ -170,7 +201,7 @@ impl OracleAggregatorContract {
         }
 
         if inlier_prices.len() == 0 {
-            panic!("All reports flagged as outliers");
+            panic_with_error!(&env, OracleError::AllOutliers);
         }
 
         let final_median = Self::median(&env, &inlier_prices);
@@ -188,16 +219,16 @@ impl OracleAggregatorContract {
         final_median
     }
 
-    /// Returns the last aggregated (medianized) price. Panics if stale.
+    /// Returns the last aggregated (medianized) price. Reverts if stale.
     pub fn get_price(env: Env) -> i128 {
         let ts: u64 = env
             .storage()
             .instance()
             .get(&DataKey::LastMedianTimestamp)
-            .expect("No price aggregated yet");
+            .unwrap_or_else(|| panic_with_error!(&env, OracleError::NotInitialized));
         let now = env.ledger().timestamp();
         if now.saturating_sub(ts) > MAX_STALENESS_SECONDS {
-            panic!("Latest aggregated price is stale");
+            panic_with_error!(&env, OracleError::PriceStale);
         }
         env.storage().instance().get(&DataKey::LastMedian).unwrap()
     }
@@ -222,7 +253,11 @@ impl OracleAggregatorContract {
     // --- internal helpers ---
 
     fn require_admin(env: &Env) {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic_with_error!(env, OracleError::NotInitialized));
         admin.require_auth();
     }
 

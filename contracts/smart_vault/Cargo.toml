@@ -8,6 +8,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = "27.0.6"
+access-control = { path = "../access_control" }
 
 [dev-dependencies]
 soroban-sdk = { version = "27.0.6", features = ["testutils"] }

@@ -5,7 +5,34 @@
 //! legacy tokens.
 
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, String, Vec};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, token,
+    Address, Env, Vec,
+};
+
+// ── Errors (SC-HARD-20: range 400+) ──────────────────────────────────────────
+
+/// Typed contract errors for the token migration contract.
+///
+/// Discriminants are in the `400+` range.
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum MigError {
+    /// `480` — Contract has already been initialised.
+    AlreadyInitialized = 480,
+    /// `481` — The migration period has ended.
+    MigrationPeriodEnded = 481,
+    /// `482` — Amount must be strictly positive.
+    ZeroAmount = 482,
+    /// `483` — Arithmetic overflow in amount computation.
+    Overflow = 483,
+    /// `484` — Cannot withdraw before the deadline has passed.
+    DeadlineNotReached = 484,
+    /// `485` — Caller is not the admin.
+    Unauthorized = 485,
+    /// `486` — Contract has not been initialised.
+    NotInitialized = 486,
+}
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -75,11 +102,11 @@ pub struct TokenMigrationContract;
 impl TokenMigrationContract {
     /// Initializes the migration contract.
     ///
-    /// * `admin`           – The admin address, who can withdraw remaining legacy tokens after the deadline.
-    /// * `old_token`       – The address of the legacy token contract.
-    /// * `new_token`       – The address of the new token contract. Must have minting rights on it.
+    /// * `admin`             – The admin address, who can withdraw remaining legacy tokens after the deadline.
+    /// * `old_token`         – The address of the legacy token contract.
+    /// * `new_token`         – The address of the new token contract. Must have minting rights on it.
     /// * `ratio_new_per_old` – The number of new tokens minted for 1 old token.
-    /// * `deadline`        – A Unix timestamp after which migrations are no longer possible.
+    /// * `deadline`          – A Unix timestamp after which migrations are no longer possible.
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -89,7 +116,7 @@ impl TokenMigrationContract {
         deadline: u64,
     ) {
         if env.storage().instance().has(&DataKey::Config) {
-            panic!("Already initialized");
+            panic_with_error!(&env, MigError::AlreadyInitialized);
         }
 
         let config = MigrationConfig {
@@ -120,19 +147,23 @@ impl TokenMigrationContract {
     pub fn migrate(env: Env, caller: Address, amount: i128) {
         caller.require_auth();
 
-        let config: MigrationConfig = env.storage().instance().get(&DataKey::Config).unwrap();
+        let config: MigrationConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .unwrap_or_else(|| panic_with_error!(&env, MigError::NotInitialized));
 
         if env.ledger().timestamp() > config.deadline {
-            panic!("Migration period has ended");
+            panic_with_error!(&env, MigError::MigrationPeriodEnded);
         }
 
         if amount <= 0 {
-            panic!("Amount must be positive");
+            panic_with_error!(&env, MigError::ZeroAmount);
         }
 
         let new_amount = amount
             .checked_mul(config.ratio_new_per_old as i128)
-            .expect("Amount overflow");
+            .unwrap_or_else(|| panic_with_error!(&env, MigError::Overflow));
 
         let old_token_client = token::Client::new(&env, &config.old_token);
         old_token_client.transfer_from(
@@ -149,7 +180,7 @@ impl TokenMigrationContract {
         let user_migrated: i128 = env.storage().persistent().get(&user_key).unwrap_or(0);
         let new_total = user_migrated
             .checked_add(amount)
-            .expect("User amount overflow");
+            .unwrap_or_else(|| panic_with_error!(&env, MigError::Overflow));
         env.storage().persistent().set(&user_key, &new_total);
         env.storage()
             .persistent()
@@ -189,27 +220,31 @@ impl TokenMigrationContract {
             .storage()
             .instance()
             .get(&DataKey::TotalMigrated)
-            .unwrap();
+            .unwrap_or(0);
         env.storage().instance().set(
             &DataKey::TotalMigrated,
             &total_migrated
                 .checked_add(amount)
-                .expect("Total amount overflow"),
+                .unwrap_or_else(|| panic_with_error!(&env, MigError::Overflow)),
         );
 
         env.events().publish(
-            (String::from_slice(&env, "migrated"), caller),
+            (symbol_short!("migrated"), caller),
             (amount, new_amount),
         );
     }
 
     /// Allows the admin to withdraw any remaining legacy tokens after the deadline.
     pub fn withdraw_legacy(env: Env) {
-        let config: MigrationConfig = env.storage().instance().get(&DataKey::Config).unwrap();
+        let config: MigrationConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .unwrap_or_else(|| panic_with_error!(&env, MigError::NotInitialized));
         config.admin.require_auth();
 
         if env.ledger().timestamp() <= config.deadline {
-            panic!("Cannot withdraw before deadline");
+            panic_with_error!(&env, MigError::DeadlineNotReached);
         }
 
         let old_token_client = token::Client::new(&env, &config.old_token);
@@ -223,7 +258,10 @@ impl TokenMigrationContract {
     // --- View Functions ---
 
     pub fn get_config(env: Env) -> MigrationConfig {
-        env.storage().instance().get(&DataKey::Config).unwrap()
+        env.storage()
+            .instance()
+            .get(&DataKey::Config)
+            .unwrap_or_else(|| panic_with_error!(&env, MigError::NotInitialized))
     }
 
     pub fn get_user_migrated(env: Env, user: Address) -> i128 {
@@ -237,7 +275,7 @@ impl TokenMigrationContract {
         env.storage()
             .instance()
             .get(&DataKey::TotalMigrated)
-            .unwrap()
+            .unwrap_or(0)
     }
 
     /// Current status of the in-place v1 -> v2 storage schema migration.
@@ -250,13 +288,20 @@ impl TokenMigrationContract {
 
     /// Number of users indexed for storage-key iteration.
     pub fn user_count(env: Env) -> u32 {
-        env.storage().instance().get(&DataKey::UserCount).unwrap_or(0)
+        env.storage()
+            .instance()
+            .get(&DataKey::UserCount)
+            .unwrap_or(0)
     }
 
     /// Iterate storage keys: list up to `limit` migrated user addresses
     /// starting at `start`, without loading the entire user set at once.
     pub fn list_users(env: Env, start: u32, limit: u32) -> Vec<Address> {
-        let count: u32 = env.storage().instance().get(&DataKey::UserCount).unwrap_or(0);
+        let count: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::UserCount)
+            .unwrap_or(0);
         let mut users = Vec::new(&env);
         let mut i = start;
         let end = core::cmp::min(count, start.saturating_add(limit));
@@ -284,13 +329,21 @@ impl TokenMigrationContract {
     /// across many transactions without exhausting the per-tx CPU
     /// instruction budget. Returns the new cursor position.
     pub fn migrate_storage_batch(env: Env, caller: Address, batch_size: u32) -> u32 {
-        let config: MigrationConfig = env.storage().instance().get(&DataKey::Config).unwrap();
+        let config: MigrationConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .unwrap_or_else(|| panic_with_error!(&env, MigError::NotInitialized));
         caller.require_auth();
         if caller != config.admin {
-            panic!("Only admin can run storage migration");
+            panic_with_error!(&env, MigError::Unauthorized);
         }
 
-        let count: u32 = env.storage().instance().get(&DataKey::UserCount).unwrap_or(0);
+        let count: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::UserCount)
+            .unwrap_or(0);
         let mut cursor: u32 = env
             .storage()
             .instance()
@@ -327,10 +380,14 @@ impl TokenMigrationContract {
         } else {
             MigrationStatus::InProgress
         };
-        env.storage().instance().set(&DataKey::MigrationStatus, &status);
+        env.storage()
+            .instance()
+            .set(&DataKey::MigrationStatus, &status);
 
-        env.events()
-            .publish((String::from_slice(&env, "storage_migrated"),), cursor);
+        env.events().publish(
+            (symbol_short!("stor_mig"),),
+            cursor,
+        );
 
         cursor
     }

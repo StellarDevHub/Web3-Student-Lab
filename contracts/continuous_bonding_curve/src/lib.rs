@@ -67,16 +67,53 @@ pub enum DataKey {
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum CurveError {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    InvalidAmount = 3,
-    SlippageExceeded = 4,
-    DeadlinePassed = 5,
-    Unauthorized = 6,
-    InsufficientSupply = 7,
-    Paused = 8,
-    Overflow = 9,
-    InvalidFee = 10,
+    /// `200` — Contract has already been initialised.
+    AlreadyInitialized = 200,
+    /// `201` — Contract has not been initialised.
+    NotInitialized = 201,
+    /// `202` — Amount is invalid (zero or negative).
+    InvalidAmount = 202,
+    /// `203` — Trade would exceed slippage tolerance.
+    SlippageExceeded = 203,
+    /// `204` — Transaction deadline has passed.
+    DeadlinePassed = 204,
+    /// `205` — Caller is not the admin.
+    Unauthorized = 205,
+    /// `206` — Token supply is insufficient for the requested sell.
+    InsufficientSupply = 206,
+    /// `207` — Contract is paused.
+    Paused = 207,
+    /// `208` — Fixed-point arithmetic overflow.
+    Overflow = 208,
+    /// `209` — Fee is outside the allowed range.
+    InvalidFee = 209,
+    /// `210` — Fixed-point arithmetic underflow.
+    Underflow = 210,
+    /// `211` — Division by zero in fixed-point math.
+    DivisionByZero = 211,
+    /// `212` — Contract is paused by the circuit-breaker (SC-HARD-19).
+    ContractPaused = 212,
+}
+
+// ── Fixed-point math helpers at 18-decimal precision (SC-HARD-18) ─────────────
+
+/// 18-decimal fixed-point math helpers for the bonding curve.
+pub mod fp18 {
+    /// Scale factor: 10^18.
+    pub const SCALE18: i128 = 1_000_000_000_000_000_000; // 1e18
+
+    /// Checked multiply of two 18-decimal FP values.
+    #[inline]
+    pub fn mul(a: i128, b: i128) -> Option<i128> {
+        a.checked_mul(b)?.checked_div(SCALE18)
+    }
+
+    /// Checked divide of two 18-decimal FP values.
+    #[inline]
+    pub fn div(a: i128, b: i128) -> Option<i128> {
+        if b == 0 { return None; }
+        a.checked_mul(SCALE18)?.checked_div(b)
+    }
 }
 
 #[contract]
@@ -767,7 +804,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #4)")]
+    #[should_panic(expected = "Error(Contract, #203)")]
     fn enforces_slippage_limits_on_buy() {
         let (env, _admin, buyer, id, _token_id) = setup(0);
         let client = ContinuousBondingCurveContractClient::new(&env, &id);
@@ -776,7 +813,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #8)")]
+    #[should_panic(expected = "Error(Contract, #207)")]
     fn paused_pool_rejects_trades() {
         let (env, admin, buyer, id, _token_id) = setup(0);
         let client = ContinuousBondingCurveContractClient::new(&env, &id);
@@ -786,7 +823,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #5)")]
+    #[should_panic(expected = "Error(Contract, #204)")]
     fn rejects_expired_deadline() {
         let (env, _admin, buyer, id, _token_id) = setup(0);
         let client = ContinuousBondingCurveContractClient::new(&env, &id);

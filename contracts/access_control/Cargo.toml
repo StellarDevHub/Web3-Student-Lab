@@ -1,5 +1,5 @@
 [package]
-name = "continuous-bonding-curve"
+name = "access-control"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,10 +7,7 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-soroban-sdk = "27.0.6"
-contract-events = { path = "../contract_events" }
-access-control = { path = "../access_control" }
+soroban-sdk = { version = "27.0.6", default-features = false }
 
 [dev-dependencies]
 soroban-sdk = { version = "27.0.6", features = ["testutils"] }
-proptest = "1"

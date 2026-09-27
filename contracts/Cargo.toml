@@ -42,6 +42,7 @@ members = [
     "zk_proof_verifier",
     "certificate",
     "storage_ttl_manager",
+    "access_control",
 ]
 # Incomplete or non-crate directories under contracts/ must not be listed as members.
 exclude = [

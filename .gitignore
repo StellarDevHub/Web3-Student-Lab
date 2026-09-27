@@ -256,3 +256,10 @@ contracts/errors*.json
 contracts/test_output*.txt
 contracts/check_errors.txt
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Soroban / Stellar build artifacts (SC-HARD-17/18/19/20)
+# ──────────────────────────────────────────────────────────────────────────────
+.soroban/
+*.wasm
+contracts/.soroban/
