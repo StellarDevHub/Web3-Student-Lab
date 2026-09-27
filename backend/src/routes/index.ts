@@ -48,6 +48,12 @@ import adminCoursesRouter from './admin/courses.routes.js';
 import apiRouter from './api.js';
 import policyRouter from './policy/policy.routes.js';
 import storageRouter from './storage.routes.js';
+// backend/src/routes/index.ts
+import { Router, Request, Response, NextFunction } from 'express';
+import apiRouter from './api';
+import { v4 as uuidv4 } from 'uuid';
+
+
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -109,5 +115,43 @@ router.use('/oauth', oauthRouter);
 router.use('/', apiRouter);
 router.use('/tokenomics', tokenomicsRouter);
 router.use('/contributor-proofs', contributorProofsRouter);
+
+export default router;
+
+const router = Router();
+
+// Middleware: Tenant extraction & Request Tracing ID injection
+router.use((req: Request, res: Response, next: NextFunction) => {
+    const traceId = (req.headers['x-request-id'] as string) || uuidv4();
+    const tenantId = (req.headers['x-tenant-id'] as string) || 'default';
+
+    req.headers['x-request-id'] = traceId;
+    res.setHeader('X-Request-Id', traceId);
+    res.setHeader('X-Tenant-Id', tenantId);
+
+    next();
+});
+
+// Standardized Success/Error Envelope Interceptor
+router.use('/v1', apiRouter);
+
+// Global Standardized Error Envelope Handler
+router.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+    const statusCode = err.status || err.statusCode || 500;
+    const traceId = req.headers['x-request-id'];
+
+    res.status(statusCode).json({
+        success: false,
+        error: {
+            code: err.code || 'INTERNAL_SERVER_ERROR',
+            message: err.message || 'An unexpected error occurred',
+            details: err.details || null,
+        },
+        meta: {
+            timestamp: new Date().toISOString(),
+            traceId,
+        },
+    });
+});
 
 export default router;
