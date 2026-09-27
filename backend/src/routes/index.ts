@@ -48,6 +48,7 @@ import adminCoursesRouter from './admin/courses.routes.js';
 import apiRouter from './api.js';
 import policyRouter from './policy/policy.routes.js';
 import storageRouter from './storage.routes.js';
+import passkeyRouter from './passkey.routes.js';
 // backend/src/routes/index.ts
 import { Router, Request, Response, NextFunction } from 'express';
 import apiRouter from './api';
@@ -102,6 +103,7 @@ router.use('/admin/dlq', adminDLQRouter);
 router.use('/admin/courses', adminCoursesRouter);
 router.use('/policy', policyRouter);
 router.use('/storage', storageRouter);
+router.use('/passkey', passkeyRouter);
 router.use('/user', userRouter);
 router.use('/metrics', metricsRouter);
 router.use('/dependencies', dependenciesRouter);

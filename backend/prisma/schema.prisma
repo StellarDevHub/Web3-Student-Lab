@@ -34,7 +34,7 @@ model Student {
   canvases         Canvas[]
   ideas            Idea[]
   votes            Vote[]
-  hashSimulations  HashSimulation[]
+  passkeyCredentials PasskeyCredential[]
 
   @@index([workspaceId, email])
   @@index([firstName, lastName])
@@ -42,6 +42,23 @@ model Student {
   @@index([createdAt])
   @@index([githubId])
   @@map("students")
+}
+
+model PasskeyCredential {
+  id           String    @id @default(cuid())
+  credentialId String    @unique
+  publicKeyX   String
+  publicKeyY   String
+  signCount    Int       @default(0)
+  userId       String
+  deviceName   String?
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+
+  student      Student   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("passkey_credentials")
 }
 
 model OAuthState {

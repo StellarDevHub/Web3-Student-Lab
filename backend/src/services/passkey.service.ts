@@ -10,6 +10,9 @@
 
 import { createHash, randomBytes } from 'crypto';
 import { Redis } from 'ioredis';
+import { PrismaClient } from '@prisma/client';
+
+const prismaClient = new PrismaClient();
 
 // ---------------------------------------------------------------------------
 // Types
@@ -82,9 +85,11 @@ const RP_ID = 'web3-student-lab.com';
 
 export class PasskeyService {
   private redis: Redis;
+  private prisma: PrismaClient;
 
   constructor(redisUrl?: string) {
     this.redis = new Redis(redisUrl || process.env.REDIS_URL || 'redis://localhost:6379');
+    this.prisma = prismaClient;
   }
 
   // -----------------------------------------------------------------------
@@ -420,6 +425,28 @@ export class PasskeyService {
    * Get all credentials for a user.
    */
   async getUserCredentials(userId: string): Promise<PasskeyCredential[]> {
+    try {
+      const dbCreds = await this.prisma.passkeyCredential.findMany({
+        where: { userId },
+      });
+      if (dbCreds.length > 0) {
+        return dbCreds.map((cred) => ({
+          id: cred.id,
+          credentialId: cred.credentialId,
+          publicKeyX: cred.publicKeyX,
+          publicKeyY: cred.publicKeyY,
+          signCount: cred.signCount,
+          userId: cred.userId,
+          deviceName: cred.deviceName || undefined,
+          createdAt: cred.createdAt,
+          lastUsedAt: cred.lastUsedAt || undefined,
+        }));
+      }
+    } catch (err) {
+      console.warn('Prisma lookup failed, falling back to Redis:', err);
+    }
+
+    // Fallback to Redis
     const key = `${USER_CREDENTIALS_PREFIX}${userId}`;
     const credentialIds = await this.redis.smembers(key);
 
@@ -438,32 +465,53 @@ export class PasskeyService {
    * Get a single credential by ID.
    */
   async getCredential(credentialId: string): Promise<PasskeyCredential | null> {
-    const key = `${CREDENTIAL_PREFIX}${credentialId}`;
-    const data = await this.redis.get(key);
-
-    if (!data) {
-      return null;
+    try {
+      const dbCred = await this.prisma.passkeyCredential.findUnique({
+        where: { credentialId },
+      });
+      if (dbCred) {
+        return {
+          id: dbCred.id,
+          credentialId: dbCred.credentialId,
+          publicKeyX: dbCred.publicKeyX,
+          publicKeyY: dbCred.publicKeyY,
+          signCount: dbCred.signCount,
+          userId: dbCred.userId,
+          deviceName: dbCred.deviceName || undefined,
+          createdAt: dbCred.createdAt,
+          lastUsedAt: dbCred.lastUsedAt || undefined,
+        };
+      }
+    } catch (err) {
+      console.warn('Prisma lookup failed, falling back to Redis:', err);
     }
 
-    return JSON.parse(data);
+    // Fallback to Redis
+    const key = `${CREDENTIAL_PREFIX}${credentialId}`;
+    const data = await this.redis.get(key);
+    return data ? JSON.parse(data) : null;
   }
 
   /**
    * Delete a credential.
    */
   async deleteCredential(credentialId: string): Promise<boolean> {
-    const credential = await this.getCredential(credentialId);
-    if (!credential) {
-      return false;
+    try {
+      await this.prisma.passkeyCredential.delete({
+        where: { credentialId },
+      });
+    } catch {
+      // Ignore if not found in DB
     }
 
-    // Remove from user's credential set
-    const userKey = `${USER_CREDENTIALS_PREFIX}${credential.userId}`;
-    await this.redis.srem(userKey, credentialId);
-
-    // Delete credential data
-    const credKey = `${CREDENTIAL_PREFIX}${credentialId}`;
-    await this.redis.del(credKey);
+    // Also remove from Redis if cached
+    const credential = await this.getCredential(credentialId);
+    if (credential) {
+      const userKey = `${USER_CREDENTIALS_PREFIX}${credential.userId}`;
+      await this.redis.srem(userKey, credentialId);
+      const credKey = `${CREDENTIAL_PREFIX}${credentialId}`;
+      await this.redis.del(credKey);
+    }
 
     return true;
   }
@@ -472,8 +520,14 @@ export class PasskeyService {
    * Get the count of credentials for a user.
    */
   async getUserCredentialCount(userId: string): Promise<number> {
-    const key = `${USER_CREDENTIALS_PREFIX}${userId}`;
-    return this.redis.scard(key);
+    try {
+      return await this.prisma.passkeyCredential.count({
+        where: { userId },
+      });
+    } catch {
+      const key = `${USER_CREDENTIALS_PREFIX}${userId}`;
+      return this.redis.scard(key);
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -481,9 +535,32 @@ export class PasskeyService {
   // -----------------------------------------------------------------------
 
   private async storeCredential(credential: PasskeyCredential): Promise<void> {
+    try {
+      await this.prisma.passkeyCredential.upsert({
+        where: { credentialId: credential.credentialId },
+        create: {
+          id: credential.id,
+          credentialId: credential.credentialId,
+          publicKeyX: credential.publicKeyX,
+          publicKeyY: credential.publicKeyY,
+          signCount: credential.signCount,
+          userId: credential.userId,
+          deviceName: credential.deviceName,
+          createdAt: credential.createdAt,
+          lastUsedAt: credential.lastUsedAt,
+        },
+        update: {
+          signCount: credential.signCount,
+          lastUsedAt: credential.lastUsedAt || new Date(),
+        },
+      });
+    } catch (err) {
+      console.warn('Failed to persist credential to Prisma PostgreSQL:', err);
+    }
+
+    // Also store in Redis cache
     const credKey = `${CREDENTIAL_PREFIX}${credential.credentialId}`;
     await this.redis.set(credKey, JSON.stringify(credential));
-
     const userKey = `${USER_CREDENTIALS_PREFIX}${credential.userId}`;
     await this.redis.sadd(userKey, credential.credentialId);
   }
