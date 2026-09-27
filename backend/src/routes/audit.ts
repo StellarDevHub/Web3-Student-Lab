@@ -1,61 +1,34 @@
-import { Request, Response, Router } from 'express';
-import { authenticate } from '../auth/auth.middleware.js';
-import prisma from '../db/index.js';
-import { logRequestAudit } from '../utils/audit.js';
-import { buildPaginatedResponse, parsePaginationQuery } from '../utils/pagination.js';
+import { Router, Request, Response } from 'express';
+import { AuditService } from '../services/audit.service';
 
-const router: ReturnType<typeof Router> = Router();
+const router = Router();
+const auditService = new AuditService();
 
-/**
- * @route   POST /api/audit/log
- * @desc    Manually log a frontend admin action
- * @access  Private (Admin only - though currently anyone authenticated)
- */
-router.post('/log', authenticate, async (req: Request, res: Response) => {
-  try {
-    const { action, entity, entityId, details } = req.body;
+router.post('/deploy', async (req: Request, res: Response) => {
+    try {
+        const { sessionId, ledgerSequence, action, payload } = req.body;
 
-    if (!action) {
-      res.status(400).json({ error: 'Action is required' });
-      return;
+        if (!sessionId || ledgerSequence === undefined || !action) {
+            return res.status(400).json({ error: 'Missing required audit fields: sessionId, ledgerSequence, action' });
+        }
+
+        const auditEntry = auditService.recordDeployment(sessionId, ledgerSequence, action, payload || {});
+        return res.status(201).json({
+            message: 'Deployment recorded securely in tamper-evident audit log',
+            entry: auditEntry,
+        });
+    } catch (error: any) {
+        return res.status(500).json({ error: error.message });
     }
-
-    await logRequestAudit(req, action, entity, entityId, details);
-
-    res.status(201).json({ status: 'success' });
-  } catch (_error) {
-    res.status(500).json({ error: 'Failed to record audit log' });
-  }
 });
 
-import { buildLinkHeader, paginateKeyset } from '../search/PaginationHelper.js';
-
-/**
- * @route   GET /api/audit
- * @desc    Get recent audit logs (supports cursor pagination)
- * @access  Private (Admin only)
- */
-router.get('/', authenticate, async (req: Request, res: Response) => {
-  try {
-    const pagination = parsePaginationQuery(req, { defaultPageSize: 25, maxPageSize: 50 });
-
-
-    const [logs, totalItems] = await Promise.all([
-      prisma.auditLog.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: pagination.pageSize,
-        skip: pagination.offset,
-      }),
-      prisma.auditLog.count(),
-    ]);
-
-    res.json(buildPaginatedResponse(logs, totalItems, pagination.page, pagination.pageSize, pagination.offset));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch audit logs';
-    res.status(message.includes('Page') || message.includes('Offset') ? 400 : 500).json({
-      error: message,
-    });
-  }
+router.get('/verify', async (_req: Request, res: Response) => {
+    try {
+        const verificationResult = auditService.verifyChain();
+        return res.status(200).json(verificationResult);
+    } catch (error: any) {
+        return res.status(500).json({ error: error.message });
+    }
 });
 
 export default router;
