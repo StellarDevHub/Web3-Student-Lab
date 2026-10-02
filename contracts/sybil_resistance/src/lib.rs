@@ -4,7 +4,28 @@
 //! duplicate / synthetic accounts. Only the admin may verify or revoke a user.
 
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
+    Env,
+};
+
+// ── Errors (SC-HARD-20: range 400+) ──────────────────────────────────────────
+
+/// Typed contract errors for the sybil resistance registry.
+///
+/// Discriminants are in the `400+` range.
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum SybilError {
+    /// `460` — Contract has already been initialised.
+    AlreadyInitialized = 460,
+    /// `461` — Caller is not the admin.
+    Unauthorized = 461,
+    /// `462` — The target user is not currently verified.
+    NotVerified = 462,
+    /// `463` — Contract has not been initialised.
+    NotInitialized = 463,
+}
 
 #[contracttype]
 pub enum DataKey {
@@ -20,7 +41,7 @@ impl SybilResistanceContract {
     /// Initializes the Sybil resistance registry with an admin.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
+            panic_with_error!(&env, SybilError::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
     }
@@ -28,7 +49,11 @@ impl SybilResistanceContract {
     /// Verifies a user's identity, granting them a base identity for voting.
     /// Only the admin (or a designated identity oracle) can call this.
     pub fn verify_user(env: Env, user: Address) {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic_with_error!(&env, SybilError::NotInitialized));
         admin.require_auth();
 
         env.storage()
@@ -36,7 +61,7 @@ impl SybilResistanceContract {
             .set(&DataKey::VerifiedUser(user.clone()), &true);
 
         env.events()
-            .publish((String::from_slice(&env, "user_verified"),), user);
+            .publish((symbol_short!("usr_vrfd"),), user);
     }
 
     /// Checks if a user has been verified as a unique human identity.
@@ -49,7 +74,11 @@ impl SybilResistanceContract {
 
     /// Revokes a user's verified status if they are found to be a sybil account.
     pub fn revoke_user(env: Env, user: Address) {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic_with_error!(&env, SybilError::NotInitialized));
         admin.require_auth();
 
         if env
@@ -61,9 +90,9 @@ impl SybilResistanceContract {
                 .persistent()
                 .remove(&DataKey::VerifiedUser(user.clone()));
             env.events()
-                .publish((String::from_slice(&env, "user_revoked"),), user);
+                .publish((symbol_short!("usr_rvkd"),), user);
         } else {
-            panic!("User is not verified");
+            panic_with_error!(&env, SybilError::NotVerified);
         }
     }
 }

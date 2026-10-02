@@ -16,8 +16,21 @@
 //! Global borrow index per token accrues per-second using a first-order
 //! Taylor approximation of compound interest (safe for low rates / short windows).
 //!
-//! ## Reentrancy
-//! A boolean mutex stored in instance storage prevents re-entry.
+//! ## Reentrancy (SC-HARD-17)
+//! A zero-cost atomic mutex is stored in **temporary** storage so it is
+//! automatically discarded at ledger close — preventing stale lock persistence.
+//! A nested reentrant call in the same transaction envelope reverts with
+//! `LPError::ReentrancyGuardTriggered`.
+//!
+//! ## Fixed-point math (SC-HARD-18)
+//! All arithmetic uses `checked_add` / `checked_sub` / `checked_mul` /
+//! `checked_div`. Overflow / underflow / division-by-zero produce typed
+//! `LPError` variants instead of panicking.
+//!
+//! ## Pause (SC-HARD-19)
+//! State-mutating entry points call `check_not_paused()` and revert with
+//! `LPError::ContractPaused` when the circuit-breaker is active.
+//! `emergency_withdraw` is exempt.
 
 #![no_std]
 
@@ -34,7 +47,10 @@ use soroban_sdk::{
 const BPS: i128 = 10_000;
 const SCALE: i128 = 1_000_000_000_000; // 1e12
 const SECS_PER_YEAR: i128 = 31_536_000;
-const LOCK: Symbol = symbol_short!("lp_lock");
+/// Temporary-storage key for the reentrancy guard mutex.
+const RG_KEY: Symbol = symbol_short!("lp_rg");
+/// Instance-storage key for the circuit-breaker pause flag.
+const PAUSED_KEY: Symbol = symbol_short!("lp_pause");
 
 // ── Storage keys ─────────────────────────────────────────────────────────────
 
@@ -63,21 +79,66 @@ pub enum Key {
     UserIdx(Address, Address),
 }
 
-// ── Errors ────────────────────────────────────────────────────────────────────
+// ── Errors (SC-HARD-20: range 1–99) ──────────────────────────────────────────
 
+/// Typed contract errors for the lending pool.
+///
+/// Discriminants are in the range `1–99` (lending-pool partition).
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum LPError {
+    /// `1` — Contract has already been initialised.
     AlreadyInitialized = 1,
+    /// `2` — Contract has not been initialised.
     NotInitialized = 2,
+    /// `3` — Caller is not the admin.
     Unauthorized = 3,
+    /// `4` — Amount must be strictly positive.
     ZeroAmount = 4,
+    /// `5` — Token is not registered as an accepted asset.
     UnsupportedToken = 5,
+    /// `6` — Position would fall below the minimum collateralisation ratio.
     BelowMinCollRatio = 6,
+    /// `7` — Insufficient balance for the requested operation.
     InsufficientBal = 7,
+    /// `8` — Cannot liquidate a healthy position.
     PositionHealthy = 8,
+    /// `9` — Oracle returned a non-positive price.
     OracleBadPrice = 9,
-    ReentrancyGuardActive = 10,
+    /// `10` — A reentrant call was detected and blocked.
+    ReentrancyGuardTriggered = 10,
+    /// `11` — Arithmetic overflow.
+    Overflow = 11,
+    /// `12` — Arithmetic underflow.
+    Underflow = 12,
+    /// `13` — Division by zero.
+    DivisionByZero = 13,
+    /// `14` — Contract is paused by the circuit breaker.
+    ContractPaused = 14,
+}
+
+// ── Fixed-point math helpers (SC-HARD-18) ─────────────────────────────────────
+
+/// Fixed-point math at 18-decimal precision (`1e18` scale).
+pub mod fp18 {
+    /// Scale factor for 18-decimal fixed-point arithmetic.
+    pub const SCALE18: i128 = 1_000_000_000_000_000_000; // 1e18
+
+    /// Multiply two 18-decimal fixed-point numbers, returning `None` on overflow.
+    #[inline]
+    pub fn mul(a: i128, b: i128) -> Option<i128> {
+        a.checked_mul(b)?.checked_div(SCALE18)
+    }
+
+    /// Divide two 18-decimal fixed-point numbers, returning `None` on
+    /// overflow or division-by-zero.
+    #[inline]
+    pub fn div(a: i128, b: i128) -> Option<i128> {
+        if b == 0 {
+            return None;
+        }
+        a.checked_mul(SCALE18)?.checked_div(b)
+    }
 }
 
 // ── Contract ──────────────────────────────────────────────────────────────────
@@ -110,7 +171,7 @@ impl LendingPool {
             .instance()
             .set(&Key::MinCollRatio, &min_coll_ratio);
         env.storage().instance().set(&Key::LiqBonus, &liq_bonus);
-        env.storage().instance().set(&LOCK, &false);
+        env.storage().instance().set(&PAUSED_KEY, &false);
     }
 
     /// Register a token as an accepted collateral / borrow asset.
@@ -144,6 +205,7 @@ impl LendingPool {
     /// Deposit `amount` of `token` as collateral.
     pub fn deposit_collateral(env: Env, user: Address, token: Address, amount: i128) {
         user.require_auth();
+        Self::check_not_paused(&env);
         Self::check_nonzero(&env, amount);
         Self::check_supported(&env, &token);
         Self::lock(&env);
@@ -152,7 +214,10 @@ impl LendingPool {
 
         let key = Key::Collateral(user.clone(), token.clone());
         let prev: i128 = env.storage().persistent().get(&key).unwrap_or(0);
-        env.storage().persistent().set(&key, &(prev + amount));
+        let new_bal = prev
+            .checked_add(amount)
+            .unwrap_or_else(|| panic_with_error!(&env, LPError::Overflow));
+        env.storage().persistent().set(&key, &new_bal);
 
         Self::unlock(&env);
         env.events()
@@ -170,6 +235,7 @@ impl LendingPool {
         amount: i128,
     ) {
         user.require_auth();
+        Self::check_not_paused(&env);
         Self::check_nonzero(&env, amount);
         Self::check_supported(&env, &debt_token);
         Self::lock(&env);
@@ -179,7 +245,10 @@ impl LendingPool {
 
         let debt_key = Key::Debt(user.clone(), debt_token.clone());
         let prev: i128 = env.storage().persistent().get(&debt_key).unwrap_or(0);
-        env.storage().persistent().set(&debt_key, &(prev + amount));
+        let new_debt = prev
+            .checked_add(amount)
+            .unwrap_or_else(|| panic_with_error!(&env, LPError::Overflow));
+        env.storage().persistent().set(&debt_key, &new_debt);
 
         // Snapshot user index.
         let gidx: i128 = env
@@ -208,6 +277,7 @@ impl LendingPool {
     /// Repay up to `amount` of `token` debt.
     pub fn repay(env: Env, user: Address, token: Address, amount: i128) {
         user.require_auth();
+        Self::check_not_paused(&env);
         Self::check_nonzero(&env, amount);
         Self::check_supported(&env, &token);
         Self::lock(&env);
@@ -221,7 +291,10 @@ impl LendingPool {
 
         token::Client::new(&env, &token).transfer(&user, &env.current_contract_address(), &actual);
 
-        env.storage().persistent().set(&debt_key, &(debt - actual));
+        let new_debt = debt
+            .checked_sub(actual)
+            .unwrap_or_else(|| panic_with_error!(&env, LPError::Underflow));
+        env.storage().persistent().set(&debt_key, &new_debt);
 
         Self::unlock(&env);
         env.events()
@@ -237,6 +310,7 @@ impl LendingPool {
         amount: i128,
     ) {
         user.require_auth();
+        Self::check_not_paused(&env);
         Self::check_nonzero(&env, amount);
         Self::lock(&env);
 
@@ -246,7 +320,10 @@ impl LendingPool {
             Self::unlock(&env);
             panic_with_error!(&env, LPError::InsufficientBal);
         }
-        env.storage().persistent().set(&coll_key, &(bal - amount));
+        let new_bal = bal
+            .checked_sub(amount)
+            .unwrap_or_else(|| panic_with_error!(&env, LPError::Underflow));
+        env.storage().persistent().set(&coll_key, &new_bal);
 
         Self::assert_healthy(&env, &user, &collateral_token, &debt_token);
 
@@ -268,10 +345,6 @@ impl LendingPool {
     /// The liquidator repays `repay_amount` of `debt_token` on behalf of `borrower`
     /// and receives an equivalent value of `collateral_token` plus the configured
     /// liquidation bonus (bounty award).
-    ///
-    /// Health factor = (collateral_value × coll_factor / BPS)
-    ///               / (debt_value × min_coll_ratio / BPS)
-    /// Liquidation only proceeds when health factor < 1.0.
     pub fn liquidate(
         env: Env,
         liquidator: Address,
@@ -281,6 +354,7 @@ impl LendingPool {
         repay_amount: i128,
     ) {
         liquidator.require_auth();
+        Self::check_not_paused(&env);
         Self::check_nonzero(&env, repay_amount);
         Self::lock(&env);
 
@@ -299,7 +373,23 @@ impl LendingPool {
         let liq_bonus: i128 = env.storage().instance().get(&Key::LiqBonus).unwrap_or(500);
 
         // seize = repay_amount × (debt_price / coll_price) × (1 + liq_bonus / BPS)
-        let seize = repay_amount * debt_price * (BPS + liq_bonus) / (coll_price * BPS);
+        let bps_plus_bonus = BPS
+            .checked_add(liq_bonus)
+            .unwrap_or_else(|| panic_with_error!(&env, LPError::Overflow));
+        let numerator = repay_amount
+            .checked_mul(debt_price)
+            .unwrap_or_else(|| panic_with_error!(&env, LPError::Overflow))
+            .checked_mul(bps_plus_bonus)
+            .unwrap_or_else(|| panic_with_error!(&env, LPError::Overflow));
+        let denominator = coll_price
+            .checked_mul(BPS)
+            .unwrap_or_else(|| panic_with_error!(&env, LPError::Overflow));
+        if denominator == 0 {
+            panic_with_error!(&env, LPError::DivisionByZero);
+        }
+        let seize = numerator
+            .checked_div(denominator)
+            .unwrap_or_else(|| panic_with_error!(&env, LPError::Overflow));
 
         let debt_key = Key::Debt(borrower.clone(), debt_token.clone());
         let debt: i128 = env.storage().persistent().get(&debt_key).unwrap_or(0);
@@ -320,14 +410,16 @@ impl LendingPool {
             &actual_repay,
         );
 
-        env.storage()
-            .persistent()
-            .set(&debt_key, &(debt - actual_repay));
+        let new_debt = debt
+            .checked_sub(actual_repay)
+            .unwrap_or_else(|| panic_with_error!(&env, LPError::Underflow));
+        env.storage().persistent().set(&debt_key, &new_debt);
 
         // Pool transfers seized collateral (+ bounty) to liquidator.
-        env.storage()
-            .persistent()
-            .set(&coll_key, &(coll_bal - actual_seize));
+        let new_coll = coll_bal
+            .checked_sub(actual_seize)
+            .unwrap_or_else(|| panic_with_error!(&env, LPError::Underflow));
+        env.storage().persistent().set(&coll_key, &new_coll);
         token::Client::new(&env, &collateral_token).transfer(
             &env.current_contract_address(),
             &liquidator,
@@ -339,6 +431,52 @@ impl LendingPool {
             (symbol_short!("liquidate"),),
             (liquidator, borrower, actual_repay, actual_seize),
         );
+    }
+
+    /// Emergency collateral withdrawal — available even when the circuit
+    /// breaker is active, so admin can recover funds during a pause.
+    pub fn emergency_withdraw(
+        env: Env,
+        user: Address,
+        collateral_token: Address,
+        amount: i128,
+    ) {
+        user.require_auth();
+        // NOTE: intentionally does NOT call check_not_paused — this is the
+        // exempted emergency path (SC-HARD-19).
+        Self::only_admin(&env);
+        Self::lock(&env);
+
+        let coll_key = Key::Collateral(user.clone(), collateral_token.clone());
+        let bal: i128 = env.storage().persistent().get(&coll_key).unwrap_or(0);
+        if amount > bal {
+            Self::unlock(&env);
+            panic_with_error!(&env, LPError::InsufficientBal);
+        }
+        let new_bal = bal
+            .checked_sub(amount)
+            .unwrap_or_else(|| panic_with_error!(&env, LPError::Underflow));
+        env.storage().persistent().set(&coll_key, &new_bal);
+
+        token::Client::new(&env, &collateral_token).transfer(
+            &env.current_contract_address(),
+            &user,
+            &amount,
+        );
+
+        Self::unlock(&env);
+        env.events().publish(
+            (symbol_short!("emg_wdraw"),),
+            (user, collateral_token, amount),
+        );
+    }
+
+    /// Pause the contract (admin only).
+    pub fn set_paused(env: Env, admin: Address, paused: bool) {
+        admin.require_auth();
+        Self::only_admin(&env);
+        env.storage().instance().set(&PAUSED_KEY, &paused);
+        env.events().publish((symbol_short!("lp_pause"),), paused);
     }
 
     // ── Views ─────────────────────────────────────────────────────────────────
@@ -359,6 +497,13 @@ impl LendingPool {
 
     pub fn health_ok(env: Env, user: Address, coll_token: Address, debt_token: Address) -> bool {
         Self::is_healthy(&env, &user, &coll_token, &debt_token)
+    }
+
+    pub fn paused(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get::<Symbol, bool>(&PAUSED_KEY)
+            .unwrap_or(false)
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────
@@ -393,11 +538,25 @@ impl LendingPool {
             .persistent()
             .get(&Key::GlobalIdx(token.clone()))
             .unwrap_or(SCALE);
+
         // Δindex = old_idx × rate × elapsed / (BPS × SECS_PER_YEAR)
-        let delta = old_idx * rate * elapsed / (BPS * SECS_PER_YEAR);
+        let denom = BPS
+            .checked_mul(SECS_PER_YEAR)
+            .unwrap_or_else(|| panic_with_error!(env, LPError::Overflow));
+        let delta = old_idx
+            .checked_mul(rate)
+            .unwrap_or_else(|| panic_with_error!(env, LPError::Overflow))
+            .checked_mul(elapsed)
+            .unwrap_or_else(|| panic_with_error!(env, LPError::Overflow))
+            .checked_div(denom)
+            .unwrap_or_else(|| panic_with_error!(env, LPError::DivisionByZero));
+        let new_idx = old_idx
+            .checked_add(delta)
+            .unwrap_or_else(|| panic_with_error!(env, LPError::Overflow));
+
         env.storage()
             .persistent()
-            .set(&Key::GlobalIdx(token.clone()), &(old_idx + delta));
+            .set(&Key::GlobalIdx(token.clone()), &new_idx);
         env.storage()
             .persistent()
             .set(&Key::LastUpdate(token.clone()), &now);
@@ -423,8 +582,12 @@ impl LendingPool {
             .persistent()
             .get(&Key::UserIdx(user.clone(), token.clone()))
             .unwrap_or(SCALE);
-        if gidx > uidx {
-            let new_principal = principal * gidx / uidx;
+        if gidx > uidx && uidx > 0 {
+            let new_principal = principal
+                .checked_mul(gidx)
+                .unwrap_or_else(|| panic_with_error!(env, LPError::Overflow))
+                .checked_div(uidx)
+                .unwrap_or_else(|| panic_with_error!(env, LPError::DivisionByZero));
             env.storage()
                 .persistent()
                 .set(&Key::Debt(user.clone(), token.clone()), &new_principal);
@@ -435,9 +598,6 @@ impl LendingPool {
     }
 
     /// Returns `true` when the (collateral, debt) pair is sufficiently collateralised.
-    ///
-    /// healthy ⟺ coll_bal × coll_price × coll_factor / BPS
-    ///            ≥ debt × debt_price × min_coll_ratio / BPS
     fn is_healthy(env: &Env, user: &Address, coll_token: &Address, debt_token: &Address) -> bool {
         let debt: i128 = env
             .storage()
@@ -467,8 +627,18 @@ impl LendingPool {
             .get(&Key::MinCollRatio)
             .unwrap_or(15_000);
 
-        let adj_coll = coll_bal * coll_price * cf / BPS;
-        let req_coll = debt * debt_price * mcr / BPS;
+        // adj_coll = coll_bal * coll_price * cf / BPS
+        let adj_coll = coll_bal
+            .checked_mul(coll_price)
+            .and_then(|v| v.checked_mul(cf))
+            .and_then(|v| v.checked_div(BPS))
+            .unwrap_or(0);
+        // req_coll = debt * debt_price * mcr / BPS
+        let req_coll = debt
+            .checked_mul(debt_price)
+            .and_then(|v| v.checked_mul(mcr))
+            .and_then(|v| v.checked_div(BPS))
+            .unwrap_or(i128::MAX);
         adj_coll >= req_coll
     }
 
@@ -521,16 +691,35 @@ impl LendingPool {
         }
     }
 
-    fn lock(env: &Env) {
-        let locked: bool = env.storage().instance().get(&LOCK).unwrap_or(false);
-        if locked {
-            panic_with_error!(env, LPError::ReentrancyGuardActive);
+    /// Check circuit-breaker pause state.
+    fn check_not_paused(env: &Env) {
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get::<Symbol, bool>(&PAUSED_KEY)
+            .unwrap_or(false);
+        if paused {
+            panic_with_error!(env, LPError::ContractPaused);
         }
-        env.storage().instance().set(&LOCK, &true);
     }
 
+    /// Acquire the reentrancy guard using temporary storage (SC-HARD-17).
+    ///
+    /// Temporary storage entries are automatically removed at ledger close, so
+    /// a crashed/stuck lock cannot survive across transactions. Within a single
+    /// transaction envelope, the entry persists, blocking any reentrant call.
+    fn lock(env: &Env) {
+        if env.storage().temporary().has(&RG_KEY) {
+            panic_with_error!(env, LPError::ReentrancyGuardTriggered);
+        }
+        // TTL of 1 ledger is sufficient — the value lives exactly until the
+        // transaction completes and temporary storage is cleaned up.
+        env.storage().temporary().set(&RG_KEY, &true);
+    }
+
+    /// Release the reentrancy guard.
     fn unlock(env: &Env) {
-        env.storage().instance().set(&LOCK, &false);
+        env.storage().temporary().remove(&RG_KEY);
     }
 }
 
@@ -594,8 +783,6 @@ mod tests {
         let user = Address::generate(&env);
 
         client.deposit_collateral(&user, &token, &10_000);
-        // borrow 1_000 against the same token (100 % LTV, 150 % min ratio →
-        // 10_000 collateral supports up to 6_666 debt at these settings)
         client.borrow(&user, &token, &token, &1_000);
         assert_eq!(client.debt_of(&user, &token), 1_000);
 
@@ -612,34 +799,8 @@ mod tests {
         let token = add_token(&env, &client);
         let user = Address::generate(&env);
 
-        // Only 100 collateral but trying to borrow 1_000
         client.deposit_collateral(&user, &token, &100);
-        client.borrow(&user, &token, &token, &1_000); // should panic
-    }
-
-    // ── Reentrancy protection (fuzz) tests ─────────────────────────────────
-
-    /// Mock oracle that attempts reentrancy by calling deposit_collateral
-    /// during its get_price callback. This simulates a cross-contract
-    /// reentrancy attack.
-    #[contract]
-    struct ReentrantOracle;
-    #[contractimpl]
-    impl ReentrantOracle {
-        pub fn get_price(env: Env, _token: Address) -> i128 {
-            // Attempt reentrancy: call back into the lending pool
-            // This should be rejected by the reentrancy guard
-            let pool = env.current_contract_address();
-            // The reentrant oracle itself can't directly call back because
-            // it doesn't know the lending pool address at compile time.
-            // In Soroban's execution model, reentrancy is prevented at the
-            // host level: `env.invoke_contract` cannot re-enter a contract
-            // that is already on the call stack.
-            //
-            // This test verifies the guard exists and that the lock pattern
-            // is correctly implemented.
-            1_000_000_000_000i128
-        }
+        client.borrow(&user, &token, &token, &1_000);
     }
 
     #[test]
@@ -651,39 +812,13 @@ mod tests {
         let token = add_token(&env, &client);
         let user = Address::generate(&env);
 
-        // Now simulate reentrant state by directly setting LOCK on the contract instance
+        // Simulate a reentrant state by pre-setting the temporary guard key.
         env.as_contract(&client.address, || {
-            env.storage().instance().set(&LOCK, &true);
+            env.storage().temporary().set(&RG_KEY, &true);
         });
 
-        // This deposit should be rejected because LOCK is already true
+        // This deposit should be rejected because the guard key exists.
         client.deposit_collateral(&user, &token, &1_000);
-        // Should panic before reaching assert
-    }
-
-    #[test]
-    fn state_remains_consistent_after_normal_operations() {
-        let env = Env::default();
-        env.mock_all_auths();
-        let (client, _, _) = setup(&env);
-        let token = add_token(&env, &client);
-        let user = Address::generate(&env);
-
-        // Normal deposit/withdraw cycle should leave consistent state
-        client.deposit_collateral(&user, &token, &10_000);
-        assert_eq!(client.collateral_of(&user, &token), 10_000);
-
-        // Borrow within limits
-        client.borrow(&user, &token, &token, &5_000);
-        assert_eq!(client.debt_of(&user, &token), 5_000);
-
-        // Repay half
-        client.repay(&user, &token, &2_500);
-        assert_eq!(client.debt_of(&user, &token), 2_500);
-
-        // Collateral should be unchanged by borrow/repay
-        assert_eq!(client.collateral_of(&user, &token), 10_000);
-        assert_eq!(client.health_ok(&user, &token, &token), true);
     }
 
     #[test]
@@ -694,13 +829,38 @@ mod tests {
         let token = add_token(&env, &client);
         let user = Address::generate(&env);
 
-        // First deposit should succeed
         client.deposit_collateral(&user, &token, &1_000);
-
-        // Second deposit should also succeed (lock was released after first call)
         client.deposit_collateral(&user, &token, &2_000);
-
         assert_eq!(client.collateral_of(&user, &token), 3_000);
+    }
+
+    #[test]
+    fn state_remains_consistent_after_normal_operations() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _, _) = setup(&env);
+        let token = add_token(&env, &client);
+        let user = Address::generate(&env);
+
+        client.deposit_collateral(&user, &token, &10_000);
+        client.borrow(&user, &token, &token, &5_000);
+        client.repay(&user, &token, &2_500);
+        assert_eq!(client.debt_of(&user, &token), 2_500);
+        assert_eq!(client.collateral_of(&user, &token), 10_000);
+        assert!(client.health_ok(&user, &token, &token));
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #14)")]
+    fn paused_contract_rejects_deposit() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, _) = setup(&env);
+        let token = add_token(&env, &client);
+        let user = Address::generate(&env);
+
+        client.set_paused(&admin, &true);
+        client.deposit_collateral(&user, &token, &1_000);
     }
 
     use proptest::prelude::*;

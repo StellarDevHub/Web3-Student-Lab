@@ -6,7 +6,34 @@
 
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, IntoVal, String, Symbol};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, panic_with_error, Address, BytesN, Env,
+    IntoVal, String, Symbol,
+};
+
+// ── Errors (SC-HARD-20: range 400+) ──────────────────────────────────────────
+
+/// Typed contract errors for the quadratic voting contract.
+///
+/// Discriminants are in the `400+` range.
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum QVError {
+    /// `440` — Contract has already been initialised.
+    AlreadyInitialized = 440,
+    /// `441` — Caller is not the admin.
+    Unauthorized = 441,
+    /// `442` — Must cast at least one vote.
+    ZeroVotes = 442,
+    /// `443` — Proposal has already been executed.
+    ProposalAlreadyExecuted = 443,
+    /// `444` — Insufficient voting credits for this operation.
+    InsufficientCredits = 444,
+    /// `445` — User has not passed Sybil resistance verification.
+    NotSybilVerified = 445,
+    /// `446` — Proposal was not found.
+    ProposalNotFound = 446,
+}
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -27,9 +54,9 @@ pub enum DataKey {
     ProposalCount,
     Proposal(u32),
     UserCredits(Address),
-    UserVotes(Address, u32),         // User Address, Proposal ID -> votes cast
-    VoterDID(Address),               // Voter Address -> Their DID (32 bytes)
-    VoterHumanityScore(Address),     // Voter Address -> # of verified proofs (humanity score)
+    UserVotes(Address, u32),     // User Address, Proposal ID -> votes cast
+    VoterDID(Address),           // Voter Address -> Their DID (32 bytes)
+    VoterHumanityScore(Address), // Voter Address -> # of verified proofs (humanity score)
 }
 
 #[contract]
@@ -38,9 +65,15 @@ pub struct QuadraticVotingContract;
 #[contractimpl]
 impl QuadraticVotingContract {
     /// Initializes the Quadratic Voting governance system with DID registry integration.
-    pub fn initialize(env: Env, admin: Address, sybil_contract: Address, did_registry: Address, credits_per_user: u32) {
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        sybil_contract: Address,
+        did_registry: Address,
+        credits_per_user: u32,
+    ) {
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
+            panic_with_error!(&env, QVError::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
@@ -65,7 +98,7 @@ impl QuadraticVotingContract {
             .storage()
             .instance()
             .get(&DataKey::DIDRegistry)
-            .unwrap();
+            .unwrap_or_else(|| panic_with_error!(&env, QVError::Unauthorized));
 
         let proof_count: u32 = env.invoke_contract(
             &did_registry,
@@ -126,23 +159,23 @@ impl QuadraticVotingContract {
         Self::check_sybil(&env, &voter);
 
         if additional_votes == 0 {
-            panic!("Must cast at least 1 vote");
+            panic_with_error!(&env, QVError::ZeroVotes);
         }
 
         let mut proposal: Proposal = env
             .storage()
             .persistent()
             .get(&DataKey::Proposal(proposal_id))
-            .expect("Proposal not found");
+            .unwrap_or_else(|| panic_with_error!(&env, QVError::ProposalNotFound));
         if proposal.executed {
-            panic!("Proposal already executed");
+            panic_with_error!(&env, QVError::ProposalAlreadyExecuted);
         }
 
         let default_credits: u32 = env
             .storage()
             .instance()
             .get(&DataKey::CreditsPerUser)
-            .unwrap();
+            .unwrap_or(0);
         let mut current_credits = env
             .storage()
             .persistent()
@@ -162,7 +195,7 @@ impl QuadraticVotingContract {
         let incremental_cost = total_cost - previous_cost;
 
         if current_credits < incremental_cost {
-            panic!("Insufficient voting credits");
+            panic_with_error!(&env, QVError::InsufficientCredits);
         }
 
         current_credits -= incremental_cost;
@@ -187,16 +220,20 @@ impl QuadraticVotingContract {
 
     /// Executes a proposal after the voting period has concluded.
     pub fn execute_proposal(env: Env, proposal_id: u32) {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic_with_error!(&env, QVError::Unauthorized));
         admin.require_auth();
 
         let mut proposal: Proposal = env
             .storage()
             .persistent()
             .get(&DataKey::Proposal(proposal_id))
-            .expect("Proposal not found");
+            .unwrap_or_else(|| panic_with_error!(&env, QVError::ProposalNotFound));
         if proposal.executed {
-            panic!("Already executed");
+            panic_with_error!(&env, QVError::ProposalAlreadyExecuted);
         }
 
         proposal.executed = true;
@@ -216,7 +253,7 @@ impl QuadraticVotingContract {
         env.storage()
             .persistent()
             .get(&DataKey::Proposal(proposal_id))
-            .expect("Proposal not found")
+            .unwrap_or_else(|| panic_with_error!(&env, QVError::ProposalNotFound))
     }
 
     pub fn get_user_credits(env: Env, user: Address) -> u32 {
@@ -224,7 +261,7 @@ impl QuadraticVotingContract {
             .storage()
             .instance()
             .get(&DataKey::CreditsPerUser)
-            .unwrap();
+            .unwrap_or(0);
         env.storage()
             .persistent()
             .get(&DataKey::UserCredits(user))
@@ -245,12 +282,11 @@ impl QuadraticVotingContract {
     /// Unverified voters (score = 0) always return 0 matching pool weight.
     pub fn get_matching_pool_weight(env: Env, voter: Address) -> u32 {
         let score: u32 = Self::get_humanity_score(env, voter.clone());
-        // Unverified account: zero matching pool weight (acceptance criterion)
+        // Unverified account: zero matching pool weight.
         if score == 0 {
             return 0;
         }
         // Verified account: matching weight proportional to humanity score.
-        // Can be scaled (e.g., 1x, 2x, 10x per proof) for fine-tuning.
         score * 10
     }
 
@@ -259,14 +295,14 @@ impl QuadraticVotingContract {
             .storage()
             .instance()
             .get(&DataKey::SybilContract)
-            .unwrap();
+            .unwrap_or_else(|| panic_with_error!(env, QVError::Unauthorized));
         let is_verified: bool = env.invoke_contract(
             &sybil_contract,
             &Symbol::new(env, "is_verified"),
             soroban_sdk::vec![env, user.into_val(env)],
         );
         if !is_verified {
-            panic!("User not verified for Sybil resistance");
+            panic_with_error!(env, QVError::NotSybilVerified);
         }
     }
 }

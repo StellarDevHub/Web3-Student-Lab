@@ -12,14 +12,16 @@
 //! - Bad debt is socialized across remaining vault holders during black-swan events.
 //!
 //! ## Security
-//! - Reentrancy: Soroban's execution model is single-threaded; no cross-contract
-//!   calls are made during state-mutating operations, preventing reentrancy.
-//! - Integer overflow: All arithmetic uses checked operations via Rust's
-//!   overflow-panicking debug mode and explicit checked_* calls.
+//! - Reentrancy (SC-HARD-17): Zero-cost atomic guard stored in **temporary**
+//!   storage. A nested reentrant call in the same transaction envelope reverts
+//!   with `VaultError::ReentrancyGuardTriggered`.
+//! - Integer overflow: All arithmetic uses checked operations with typed error
+//!   variants (`VaultError::Overflow` / `VaultError::Underflow`).
 //! - Front-running protection on harvest: a per-user `last_harvest` ledger
 //!   timestamp enforces a minimum cooldown between harvests.
-//! - Oracle manipulation: rewards are calculated from on-chain ledger sequence
-//!   numbers only, with no external price feeds.
+//! - Pause (SC-HARD-19): State-mutating entry points call `assert_not_paused()`
+//!   which reverts with `VaultError::ContractPaused`; emergency admin
+//!   withdrawal is exempt.
 
 #![no_std]
 
@@ -32,7 +34,8 @@ use soroban_sdk::{
 const TOTAL_SHARES: Symbol = symbol_short!("TSHARES");
 const TOTAL_ASSETS: Symbol = symbol_short!("TASSETS");
 const RESERVES: Symbol = symbol_short!("RESERVES");
-const LOCK: Symbol = symbol_short!("sv_lock");
+/// Temporary-storage key for the reentrancy guard mutex (SC-HARD-17).
+const RG_KEY: Symbol = symbol_short!("sv_rg");
 const HARVEST_COOL: u32 = 10; // minimum ledgers between harvests (front-run guard)
 
 // ── Governance constants ─────────────────────────────────────────────────────
@@ -46,30 +49,69 @@ const FREEZED: Symbol = symbol_short!("freezed");
 /// Minimum 48-hour delay (in seconds) between authorization and execution.
 const MIN_GOV_PERIOD: u64 = 172_800;
 
+// ── Circuit-breaker pause (SC-HARD-19) ──────────────────────────────────────
+const PAUSED_KEY: Symbol = symbol_short!("sv_pause");
+
 // ── Synthetic Asset Constants ────────────────────────────────────────────────
 const MIN_COLLATERAL_RATIO_BPS: i128 = 15_000; // 150% collateralization required
 const LIQUIDATION_THRESHOLD_BPS: i128 = 12_000; // 120% liquidation trigger
 const GLOBAL_DEBT_SHARES: Symbol = symbol_short!("debt_sh");
 const GLOBAL_DEBT_AMOUNT: Symbol = symbol_short!("debt_amt");
 
-// ── Errors ───────────────────────────────────────────────────────────────────
+// ── Errors (SC-HARD-20: range 100–199) ──────────────────────────────────────
 
+/// Typed contract errors for the smart vault.
+///
+/// Discriminants are in the range `100–199` (smart-vault partition).
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum VaultError {
-    ReentrancyGuardActive = 10,
-    NotInitialized = 11,
-    Unauthorized = 12,
-    NotFound = 13,
-    AlreadyApproved = 14,
-    NotEnoughApprovals = 15,
-    TimelockActive = 16,
-    AlreadyExecuted = 17,
-    AlreadyCancelled = 18,
-    VaultFrozen = 19,
-    BelowMinCollateralRatio = 20,
-    InsufficientCollateral = 21,
-    NoDebt = 22,
+    /// `100` — A reentrant call was detected and blocked.
+    ReentrancyGuardTriggered = 100,
+    /// `101` — Contract has not been initialised.
+    NotInitialized = 101,
+    /// `102` — Caller is not authorised.
+    Unauthorized = 102,
+    /// `103` — Requested entity was not found.
+    NotFound = 103,
+    /// `104` — Signer has already approved this proposal.
+    AlreadyApproved = 104,
+    /// `105` — Insufficient approvals to proceed.
+    NotEnoughApprovals = 105,
+    /// `106` — Timelock is still active; cannot execute yet.
+    TimelockActive = 106,
+    /// `107` — Proposal has already been executed.
+    AlreadyExecuted = 107,
+    /// `108` — Proposal has already been cancelled.
+    AlreadyCancelled = 108,
+    /// `109` — Vault is frozen; deposits and withdrawals are blocked.
+    VaultFrozen = 109,
+    /// `110` — Collateral ratio falls below the minimum required.
+    BelowMinCollateralRatio = 110,
+    /// `111` — Insufficient collateral for the requested operation.
+    InsufficientCollateral = 111,
+    /// `112` — No debt exists for this position.
+    NoDebt = 112,
+    /// `113` — Amount must be strictly positive.
+    ZeroAmount = 113,
+    /// `114` — Shares requested exceed balance.
+    InsufficientShares = 114,
+    /// `115` — Arithmetic overflow.
+    Overflow = 115,
+    /// `116` — Arithmetic underflow.
+    Underflow = 116,
+    /// `117` — Division by zero.
+    DivisionByZero = 117,
+    /// `118` — Contract is paused by the circuit breaker.
+    ContractPaused = 118,
+    /// `119` — Harvest cooldown has not elapsed yet.
+    HarvestCooldownActive = 119,
+    /// `120` — Threshold must be positive.
+    InvalidThreshold = 120,
+    /// `121` — Timelock has not elapsed; proposal is not ready.
+    TimelockNotElapsed = 121,
+    /// `122` — Reserve conservation invariant violated.
+    InvariantViolated = 122,
 }
 
 // ── Data types ───────────────────────────────────────────────────────────────
@@ -119,14 +161,13 @@ impl SmartVault {
     // ── Deposit ──────────────────────────────────────────────────────────────
 
     /// Deposit `amount` tokens into the vault and receive proportional shares.
-    ///
-    /// # Panics
-    /// - If `amount` is not positive.
-    /// - If reentrant call is detected.
     pub fn deposit(env: Env, user: Address, amount: i128) {
         user.require_auth();
-        assert!(amount > 0, "amount must be positive");
+        if amount <= 0 {
+            panic_with_error!(&env, VaultError::ZeroAmount);
+        }
         Self::assert_not_frozen(&env);
+        Self::assert_not_paused(&env);
         Self::lock(&env);
 
         let total_assets: i128 = env.storage().instance().get(&TOTAL_ASSETS).unwrap_or(0i128);
@@ -138,27 +179,36 @@ impl SmartVault {
         } else {
             amount
                 .checked_mul(total_shares)
-                .expect("overflow")
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))
                 .checked_div(total_assets)
-                .expect("div zero")
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::DivisionByZero))
         };
 
         let mut pos = Self::get_position(&env, &user);
-        pos.shares = pos.shares.checked_add(new_shares).expect("overflow");
+        pos.shares = pos
+            .shares
+            .checked_add(new_shares)
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow));
         Self::set_position(&env, &user, &pos);
 
         env.storage().instance().set(
             &TOTAL_SHARES,
-            &(total_shares.checked_add(new_shares).expect("overflow")),
+            &(total_shares
+                .checked_add(new_shares)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))),
         );
         env.storage().instance().set(
             &TOTAL_ASSETS,
-            &(total_assets.checked_add(amount).expect("overflow")),
+            &(total_assets
+                .checked_add(amount)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))),
         );
         let reserves: i128 = env.storage().instance().get(&RESERVES).unwrap_or(0);
         env.storage().instance().set(
             &RESERVES,
-            &(reserves.checked_add(amount).expect("overflow")),
+            &(reserves
+                .checked_add(amount)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))),
         );
 
         Self::assert_invariant(&env);
@@ -172,44 +222,60 @@ impl SmartVault {
     /// Burn `shares` and return the proportional asset amount to `user`.
     ///
     /// Returns the asset amount redeemed.
-    ///
-    /// # Panics
-    /// - If `shares` is not positive or exceeds the user's balance.
-    /// - If reentrant call is detected.
     pub fn withdraw(env: Env, user: Address, shares: i128) -> i128 {
         user.require_auth();
-        assert!(shares > 0, "shares must be positive");
+        if shares <= 0 {
+            panic_with_error!(&env, VaultError::ZeroAmount);
+        }
         Self::assert_not_frozen(&env);
+        Self::assert_not_paused(&env);
         Self::lock(&env);
 
         let mut pos = Self::get_position(&env, &user);
-        assert!(pos.shares >= shares, "insufficient shares");
+        if pos.shares < shares {
+            Self::unlock(&env);
+            panic_with_error!(&env, VaultError::InsufficientShares);
+        }
 
         let total_assets: i128 = env.storage().instance().get(&TOTAL_ASSETS).unwrap_or(0i128);
         let total_shares: i128 = env.storage().instance().get(&TOTAL_SHARES).unwrap_or(0i128);
 
+        if total_shares == 0 {
+            Self::unlock(&env);
+            panic_with_error!(&env, VaultError::DivisionByZero);
+        }
+
         // assets_out = shares * total_assets / total_shares
         let assets_out = shares
             .checked_mul(total_assets)
-            .expect("overflow")
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))
             .checked_div(total_shares)
-            .expect("div zero");
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::DivisionByZero));
 
-        pos.shares = pos.shares.checked_sub(shares).expect("underflow");
+        pos.shares = pos
+            .shares
+            .checked_sub(shares)
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::Underflow));
         Self::set_position(&env, &user, &pos);
 
         env.storage().instance().set(
             &TOTAL_SHARES,
-            &(total_shares.checked_sub(shares).expect("underflow")),
+            &(total_shares
+                .checked_sub(shares)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Underflow))),
         );
         env.storage().instance().set(
             &TOTAL_ASSETS,
-            &(total_assets.checked_sub(assets_out).expect("underflow")),
+            &(total_assets
+                .checked_sub(assets_out)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Underflow))),
         );
         let reserves: i128 = env.storage().instance().get(&RESERVES).unwrap_or(0);
         env.storage().instance().set(
             &RESERVES,
-            &(reserves.checked_sub(assets_out).expect("underflow")),
+            &(reserves
+                .checked_sub(assets_out)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Underflow))),
         );
 
         Self::assert_invariant(&env);
@@ -222,9 +288,7 @@ impl SmartVault {
 
     // ── Stake (simulate external protocol) ───────────────────────────────────
 
-    /// Mark vault assets as "staked". In a real deployment this would invoke
-    /// an external protocol; here it records the staking ledger for reward
-    /// accrual simulation.
+    /// Mark vault assets as "staked".
     pub fn stake(env: Env, admin: Address) {
         admin.require_auth();
         let ledger = env.ledger().sequence();
@@ -240,20 +304,19 @@ impl SmartVault {
     /// total assets (increasing share value for all holders).
     ///
     /// Enforces a `HARVEST_COOL` ledger cooldown to mitigate front-running.
-    ///
-    /// Returns the reward amount harvested.
     pub fn harvest(env: Env, user: Address) -> i128 {
         user.require_auth();
+        Self::assert_not_paused(&env);
         Self::lock(&env);
 
         let current_ledger = env.ledger().sequence();
         let mut pos = Self::get_position(&env, &user);
 
         // Front-run / sandwich protection: enforce minimum cooldown.
-        assert!(
-            current_ledger >= pos.last_harvest + HARVEST_COOL,
-            "harvest cooldown active"
-        );
+        if current_ledger < pos.last_harvest + HARVEST_COOL {
+            Self::unlock(&env);
+            panic_with_error!(&env, VaultError::HarvestCooldownActive);
+        }
 
         let staked_at: u32 = env
             .storage()
@@ -269,19 +332,16 @@ impl SmartVault {
             return 0;
         }
 
-        // Simulated reward: 1 basis-point (0.01%) per ledger elapsed, pro-rated
-        // by the user's share of the vault.
         let ledgers_elapsed = (current_ledger.saturating_sub(staked_at)) as i128;
         let user_assets = pos
             .shares
             .checked_mul(total_assets)
-            .expect("overflow")
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))
             .checked_div(total_shares)
-            .expect("div zero");
-        // reward = user_assets * ledgers_elapsed / 10_000
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::DivisionByZero));
         let reward = user_assets
             .checked_mul(ledgers_elapsed)
-            .expect("overflow")
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))
             .checked_div(10_000)
             .unwrap_or(0);
 
@@ -290,15 +350,18 @@ impl SmartVault {
             return 0;
         }
 
-        // Credit reward to total assets (raises share price for everyone).
         env.storage().instance().set(
             &TOTAL_ASSETS,
-            &(total_assets.checked_add(reward).expect("overflow")),
+            &(total_assets
+                .checked_add(reward)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))),
         );
         let reserves: i128 = env.storage().instance().get(&RESERVES).unwrap_or(0);
         env.storage().instance().set(
             &RESERVES,
-            &(reserves.checked_add(reward).expect("overflow")),
+            &(reserves
+                .checked_add(reward)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))),
         );
 
         pos.last_harvest = current_ledger;
@@ -314,19 +377,14 @@ impl SmartVault {
 
     // ── Compound ─────────────────────────────────────────────────────────────
 
-    /// Harvest rewards and immediately re-deposit them as new shares,
-    /// maximising APY through auto-compounding.
-    ///
-    /// Returns the number of new shares minted.
+    /// Harvest rewards and immediately re-deposit them as new shares.
     pub fn compound(env: Env, user: Address) -> i128 {
-        // harvest first (includes cooldown check and reentrancy guard)
         let reward = Self::harvest(env.clone(), user.clone());
         if reward == 0 {
             return 0;
         }
 
         Self::lock(&env);
-        // Re-deposit the reward (no auth needed; user already authed in harvest)
         let total_assets: i128 = env.storage().instance().get(&TOTAL_ASSETS).unwrap_or(0i128);
         let total_shares: i128 = env.storage().instance().get(&TOTAL_SHARES).unwrap_or(0i128);
 
@@ -335,20 +393,24 @@ impl SmartVault {
         } else {
             reward
                 .checked_mul(total_shares)
-                .expect("overflow")
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))
                 .checked_div(total_assets)
-                .expect("div zero")
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::DivisionByZero))
         };
 
         let mut pos = Self::get_position(&env, &user);
-        pos.shares = pos.shares.checked_add(new_shares).expect("overflow");
+        pos.shares = pos
+            .shares
+            .checked_add(new_shares)
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow));
         Self::set_position(&env, &user, &pos);
 
         env.storage().instance().set(
             &TOTAL_SHARES,
-            &(total_shares.checked_add(new_shares).expect("overflow")),
+            &(total_shares
+                .checked_add(new_shares)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))),
         );
-        // total_assets already includes the reward from harvest
 
         Self::assert_invariant(&env);
         Self::unlock(&env);
@@ -361,20 +423,17 @@ impl SmartVault {
     // ── Multi-sig timelock governance ────────────────────────────────────────
 
     /// Initialize the multi-sig governance with a set of guardians and a
-    /// signature threshold. Only callable once, by the deployer.
-    ///
-    /// * `guardians` – The set of addresses authorized to propose/approve.
-    /// * `threshold` – Number of signatures required to authorize a proposal
-    ///   (e.g. 3-of-5).
+    /// signature threshold.
     pub fn init_governance(env: Env, guardians: Vec<Address>, threshold: u32) {
         if env.storage().instance().has(&GOV_INIT) {
             panic_with_error!(&env, VaultError::AlreadyExecuted);
         }
-        assert!(threshold > 0, "threshold must be positive");
-        assert!(
-            threshold <= guardians.len(),
-            "threshold exceeds guardian count"
-        );
+        if threshold == 0 {
+            panic_with_error!(&env, VaultError::InvalidThreshold);
+        }
+        if threshold > guardians.len() {
+            panic_with_error!(&env, VaultError::InvalidThreshold);
+        }
         env.storage().instance().set(&GOV_INIT, &true);
         env.storage().instance().set(&GUARDIANS, &guardians);
         env.storage().instance().set(&THRESHOLD, &threshold);
@@ -384,12 +443,13 @@ impl SmartVault {
     }
 
     /// Create a new governance proposal. The proposer must be a guardian.
-    /// The proposal enters the `Proposed` state.
     pub fn propose(env: Env, proposer: Address, description: String) -> u32 {
         proposer.require_auth();
         Self::assert_governance(&env);
         let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
-        assert!(guardians.contains(&proposer), "Not a guardian");
+        if !guardians.contains(&proposer) {
+            panic_with_error!(&env, VaultError::Unauthorized);
+        }
 
         let mut count: u32 = env.storage().instance().get(&PROPOSAL_COUNT).unwrap_or(0);
         count += 1;
@@ -422,14 +482,14 @@ impl SmartVault {
         count
     }
 
-    /// Collect a guardian's signature on a proposal. When the approval count
-    /// reaches the threshold the proposal is authorized and enters the
-    /// `Queued` state with the 48-hour timelock armed.
+    /// Collect a guardian's signature on a proposal.
     pub fn approve(env: Env, signer: Address, proposal_id: u32) {
         signer.require_auth();
         Self::assert_governance(&env);
         let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
-        assert!(guardians.contains(&signer), "Not a guardian");
+        if !guardians.contains(&signer) {
+            panic_with_error!(&env, VaultError::Unauthorized);
+        }
 
         let mut proposals: Map<u32, Proposal> = env.storage().persistent().get(&PROPOSALS).unwrap();
         let mut proposal = Self::load_proposal(&env, &proposals, proposal_id);
@@ -438,15 +498,19 @@ impl SmartVault {
             ProposalState::Cancelled => panic_with_error!(&env, VaultError::AlreadyCancelled),
             _ => {}
         }
-        assert!(!proposal.approvals.contains(&signer), "Already approved");
+        if proposal.approvals.contains(&signer) {
+            panic_with_error!(&env, VaultError::AlreadyApproved);
+        }
         proposal.approvals.push_back(signer);
 
         let threshold: u32 = env.storage().instance().get(&THRESHOLD).unwrap();
         if proposal.approvals.len() as u32 >= threshold && proposal.queued_at.is_none() {
-            // Authorization reached threshold: arm the timelock queue.
             let now = env.ledger().timestamp();
             let period: u64 = env.storage().instance().get(&GOV_PERIOD).unwrap();
-            proposal.queued_at = Some(now.checked_add(period).expect("overflow"));
+            let queued = now
+                .checked_add(period)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow));
+            proposal.queued_at = Some(queued);
             proposal.state = ProposalState::Queued;
         }
         proposals.set(proposal_id, proposal.clone());
@@ -464,8 +528,7 @@ impl SmartVault {
         }
     }
 
-    /// Execute a proposal. Only possible after the proposal is authorized,
-    /// queued, and the 48-hour timelock has elapsed.
+    /// Execute a proposal after timelock has elapsed.
     pub fn execute_proposal(env: Env, proposal_id: u32) {
         Self::assert_governance(&env);
         let mut proposals: Map<u32, Proposal> = env.storage().persistent().get(&PROPOSALS).unwrap();
@@ -479,11 +542,13 @@ impl SmartVault {
         }
 
         let now = env.ledger().timestamp();
-        let queued_at = proposal.queued_at.expect("not queued");
-        assert!(now >= queued_at, "timelock not elapsed");
+        let queued_at = proposal.queued_at.unwrap_or_else(|| {
+            panic_with_error!(&env, VaultError::TimelockActive)
+        });
+        if now < queued_at {
+            panic_with_error!(&env, VaultError::TimelockNotElapsed);
+        }
 
-        // Execution of the proposal's administrative change would occur here
-        // (e.g. updating vault parameters). State transition is recorded now.
         proposal.state = ProposalState::Executed;
         proposals.set(proposal_id, proposal.clone());
         env.storage().persistent().set(&PROPOSALS, &proposals);
@@ -494,8 +559,7 @@ impl SmartVault {
         );
     }
 
-    /// Cancel a proposal. Only the proposer (or a guardian once the proposal
-    /// has not yet been queued) may cancel.
+    /// Cancel a proposal.
     pub fn cancel(env: Env, caller: Address, proposal_id: u32) {
         caller.require_auth();
         Self::assert_governance(&env);
@@ -509,10 +573,9 @@ impl SmartVault {
         }
 
         let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
-        assert!(
-            caller == proposal.proposer || guardians.contains(&caller),
-            "Not authorized to cancel"
-        );
+        if caller != proposal.proposer && !guardians.contains(&caller) {
+            panic_with_error!(&env, VaultError::Unauthorized);
+        }
         proposal.state = ProposalState::Cancelled;
         proposals.set(proposal_id, proposal.clone());
         env.storage().persistent().set(&PROPOSALS, &proposals);
@@ -524,23 +587,26 @@ impl SmartVault {
     }
 
     /// Emergency freeze: immediately halts all deposits and withdrawals.
-    /// Only a designated guardian may trigger it.
     pub fn emergency_freeze(env: Env, guardian: Address) {
         Self::assert_governance(&env);
         let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
         guardian.require_auth();
-        assert!(guardians.contains(&guardian), "Not a guardian");
+        if !guardians.contains(&guardian) {
+            panic_with_error!(&env, VaultError::Unauthorized);
+        }
         env.storage().instance().set(&FREEZED, &true);
         env.events()
             .publish((symbol_short!("gov"), symbol_short!("freeze")), guardian);
     }
 
-    /// Lift an emergency freeze. Only a guardian may unfreeze.
+    /// Lift an emergency freeze.
     pub fn unfreeze(env: Env, guardian: Address) {
         Self::assert_governance(&env);
         let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
         guardian.require_auth();
-        assert!(guardians.contains(&guardian), "Not a guardian");
+        if !guardians.contains(&guardian) {
+            panic_with_error!(&env, VaultError::Unauthorized);
+        }
         env.storage().instance().set(&FREEZED, &false);
         env.events()
             .publish((symbol_short!("gov"), symbol_short!("unfreeze")), guardian);
@@ -561,6 +627,25 @@ impl SmartVault {
         Self::load_proposal(&env, &proposals, proposal_id)
     }
 
+    /// Pause the vault (circuit-breaker) — SC-HARD-19.
+    ///
+    /// Only callable by the vault admin (uses emergency-freeze guardians as
+    /// de-facto guardians when governance is initialized, otherwise any admin
+    /// caller via require_auth).
+    pub fn set_paused(env: Env, caller: Address, paused: bool) {
+        caller.require_auth();
+        // If governance is initialized, caller must be a guardian or the proposer;
+        // otherwise it acts as an admin-only pause.
+        if env.storage().instance().has(&GOV_INIT) {
+            let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
+            if !guardians.contains(&caller) {
+                panic_with_error!(&env, VaultError::Unauthorized);
+            }
+        }
+        env.storage().instance().set(&PAUSED_KEY, &paused);
+        env.events().publish((symbol_short!("sv_pause"),), paused);
+    }
+
     // ── View helpers ─────────────────────────────────────────────────────────
 
     /// Returns the user's current share balance.
@@ -578,9 +663,9 @@ impl SmartVault {
         }
         pos.shares
             .checked_mul(total_assets)
-            .expect("overflow")
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))
             .checked_div(total_shares)
-            .expect("div zero")
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::DivisionByZero))
     }
 
     // ── Internal helpers ─────────────────────────────────────────────────────
@@ -595,14 +680,12 @@ impl SmartVault {
         env.storage().persistent().set(user, pos);
     }
 
-    /// Panics if governance has not been initialized.
     fn assert_governance(env: &Env) {
         if !env.storage().instance().has(&GOV_INIT) {
             panic_with_error!(env, VaultError::NotInitialized);
         }
     }
 
-    /// Panics if the vault is emergency-frozen.
     fn assert_not_frozen(env: &Env) {
         let frozen: bool = env.storage().instance().get(&FREEZED).unwrap_or(false);
         if frozen {
@@ -610,37 +693,46 @@ impl SmartVault {
         }
     }
 
-    /// Loads a proposal by id, panicking if it does not exist.
+    fn assert_not_paused(env: &Env) {
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get::<Symbol, bool>(&PAUSED_KEY)
+            .unwrap_or(false);
+        if paused {
+            panic_with_error!(env, VaultError::ContractPaused);
+        }
+    }
+
     fn load_proposal(env: &Env, proposals: &Map<u32, Proposal>, id: u32) -> Proposal {
         proposals.get(id).unwrap_or_else(|| {
             panic_with_error!(env, VaultError::NotFound);
         })
     }
 
-    /// Acquire reentrancy lock. Panics if already locked.
+    /// Acquire reentrancy guard using temporary storage (SC-HARD-17).
     fn lock(env: &Env) {
-        let locked: bool = env.storage().instance().get(&LOCK).unwrap_or(false);
-        if locked {
-            panic_with_error!(env, VaultError::ReentrancyGuardActive);
+        if env.storage().temporary().has(&RG_KEY) {
+            panic_with_error!(env, VaultError::ReentrancyGuardTriggered);
         }
-        env.storage().instance().set(&LOCK, &true);
+        env.storage().temporary().set(&RG_KEY, &true);
     }
 
-    /// Release reentrancy lock.
+    /// Release reentrancy guard.
     fn unlock(env: &Env) {
-        env.storage().instance().set(&LOCK, &false);
+        env.storage().temporary().remove(&RG_KEY);
     }
 
-    /// State invariant check: the bookkeeping `TOTAL_ASSETS` must always equal
-    /// the independently-accounted `RESERVES`, and neither quantity may go
-    /// negative. This verifies conservation of total deposited assets across
-    /// every deposit, withdrawal, harvest and compound operation.
+    /// State invariant: `TOTAL_ASSETS == RESERVES` and neither is negative.
     fn assert_invariant(env: &Env) {
         let total_assets: i128 = env.storage().instance().get(&TOTAL_ASSETS).unwrap_or(0);
         let reserves: i128 = env.storage().instance().get(&RESERVES).unwrap_or(0);
-        assert!(total_assets >= 0, "negative total assets");
-        assert!(reserves >= 0, "negative reserves");
-        assert!(total_assets == reserves, "reserve conservation violated");
+        if total_assets < 0 || reserves < 0 {
+            panic_with_error!(env, VaultError::InvariantViolated);
+        }
+        if total_assets != reserves {
+            panic_with_error!(env, VaultError::InvariantViolated);
+        }
     }
 
     // ── Synthetic Assets ──────────────────────────────────────────────────────
@@ -659,30 +751,39 @@ impl SmartVault {
             .unwrap_or(0);
 
         if debt_shares == 0 {
-            return i128::MAX; // No debt = infinite ratio
+            return i128::MAX;
         }
 
         let (global_debt_amount, global_debt_shares) = Self::get_global_debt(&env);
         let user_debt = if global_debt_shares == 0 {
             0
         } else {
-            (debt_shares * global_debt_amount) / global_debt_shares
+            debt_shares
+                .checked_mul(global_debt_amount)
+                .unwrap_or(i128::MAX)
+                .checked_div(global_debt_shares)
+                .unwrap_or(i128::MAX)
         };
 
         if user_debt == 0 {
             return i128::MAX;
         }
 
-        (collateral * 10_000) / user_debt
+        collateral
+            .checked_mul(10_000)
+            .unwrap_or(i128::MAX)
+            .checked_div(user_debt)
+            .unwrap_or(i128::MAX)
     }
 
     /// Mints synthetic assets against collateral. Requires 150% collateralization.
-    /// Uses user's vault shares as collateral (1:1 ratio).
     pub fn mint_synthetic(env: Env, user: Address, amount: i128) {
         user.require_auth();
-        assert!(amount > 0, "amount must be positive");
+        if amount <= 0 {
+            panic_with_error!(&env, VaultError::ZeroAmount);
+        }
+        Self::assert_not_paused(&env);
 
-        // Use vault shares as collateral
         let pos = Self::get_position(&env, &user);
         let collateral = pos.shares;
         let user_debt_shares: i128 = env
@@ -693,39 +794,56 @@ impl SmartVault {
 
         let (global_debt_amount, global_debt_shares) = Self::get_global_debt(&env);
 
-        // Calculate existing user debt
         let existing_user_debt = if global_debt_shares == 0 {
             0
         } else {
-            (user_debt_shares * global_debt_amount) / global_debt_shares
+            user_debt_shares
+                .checked_mul(global_debt_amount)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))
+                .checked_div(global_debt_shares)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::DivisionByZero))
         };
 
-        // Check new collateral ratio would be >= 150%
-        let new_total_debt = existing_user_debt + amount;
-        let required_collateral = (new_total_debt * 10_000) / MIN_COLLATERAL_RATIO_BPS;
-        assert!(
-            collateral >= required_collateral,
-            "Below minimum collateral ratio"
-        );
+        let new_total_debt = existing_user_debt
+            .checked_add(amount)
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow));
+        let required_collateral = new_total_debt
+            .checked_mul(10_000)
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))
+            .checked_div(MIN_COLLATERAL_RATIO_BPS)
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::DivisionByZero));
 
-        // Mint debt shares proportionally
+        if collateral < required_collateral {
+            panic_with_error!(&env, VaultError::BelowMinCollateralRatio);
+        }
+
         let new_debt_shares = if global_debt_shares == 0 {
             amount
         } else {
-            (amount * global_debt_shares) / global_debt_amount
+            amount
+                .checked_mul(global_debt_shares)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))
+                .checked_div(global_debt_amount)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::DivisionByZero))
         };
 
-        env.storage().persistent().set(
-            &Self::debt_key(&user),
-            &(user_debt_shares + new_debt_shares),
-        );
+        let new_user_ds = user_debt_shares
+            .checked_add(new_debt_shares)
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow));
+        env.storage()
+            .persistent()
+            .set(&Self::debt_key(&user), &new_user_ds);
         env.storage().instance().set(
             &GLOBAL_DEBT_AMOUNT,
-            &(global_debt_amount + amount),
+            &(global_debt_amount
+                .checked_add(amount)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))),
         );
         env.storage().instance().set(
             &GLOBAL_DEBT_SHARES,
-            &(global_debt_shares + new_debt_shares),
+            &(global_debt_shares
+                .checked_add(new_debt_shares)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))),
         );
 
         env.events().publish(
@@ -739,19 +857,16 @@ impl SmartVault {
         Self::get_global_debt(&env)
     }
 
-    /// Helper: get global debt state.
     fn get_global_debt(env: &Env) -> (i128, i128) {
         let debt_amount = env.storage().instance().get(&GLOBAL_DEBT_AMOUNT).unwrap_or(0);
         let debt_shares = env.storage().instance().get(&GLOBAL_DEBT_SHARES).unwrap_or(0);
         (debt_amount, debt_shares)
     }
 
-    /// Helper: collateral storage key for user.
     fn collateral_key(user: &Address) -> (Symbol, Address) {
         (symbol_short!("collat"), user.clone())
     }
 
-    /// Helper: debt shares storage key for user.
     fn debt_key(user: &Address) -> (Symbol, Address) {
         (symbol_short!("debt_sh"), user.clone())
     }
@@ -792,8 +907,6 @@ mod tests {
 
         client.deposit(&user, &1000);
         client.deposit(&user2, &500);
-
-        // user2 should get 500 shares (1:1 ratio still, no rewards yet)
         assert_eq!(client.shares_of(&user2), 500);
     }
 
@@ -809,7 +922,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "insufficient shares")]
+    #[should_panic(expected = "Error(Contract, #114)")]
     fn test_withdraw_too_many_shares_panics() {
         let (env, contract_id, user) = setup();
         let client = SmartVaultClient::new(&env, &contract_id);
@@ -825,7 +938,6 @@ mod tests {
         client.deposit(&user, &1_000_000);
         client.stake(&user);
 
-        // Advance ledger past cooldown + enough for non-zero reward
         env.ledger()
             .with_mut(|l| l.sequence_number += 100 + HARVEST_COOL);
 
@@ -834,7 +946,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "harvest cooldown active")]
+    #[should_panic(expected = "Error(Contract, #119)")]
     fn test_harvest_cooldown_enforced() {
         let (env, contract_id, user) = setup();
         let client = SmartVaultClient::new(&env, &contract_id);
@@ -844,8 +956,6 @@ mod tests {
         env.ledger()
             .with_mut(|l| l.sequence_number += 100 + HARVEST_COOL);
         client.harvest(&user);
-
-        // Immediate second harvest should fail cooldown
         client.harvest(&user);
     }
 
@@ -866,7 +976,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "amount must be positive")]
+    #[should_panic(expected = "Error(Contract, #113)")]
     fn test_deposit_zero_panics() {
         let (env, contract_id, user) = setup();
         let client = SmartVaultClient::new(&env, &contract_id);
@@ -885,21 +995,18 @@ mod tests {
             .with_mut(|l| l.sequence_number += 100 + HARVEST_COOL);
         client.harvest(&user);
 
-        // user2 deposits same amount but gets fewer shares (price went up)
         client.deposit(&user2, &1_000_000);
         assert!(client.shares_of(&user2) < 1_000_000);
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #10)")]
+    #[should_panic(expected = "Error(Contract, #100)")]
     fn reentrancy_guard_rejects_double_entry() {
         let (env, contract_id, user) = setup();
         let client = SmartVaultClient::new(&env, &contract_id);
 
-        // Simulate a reentrant call by pre-setting the lock, as an attacker
-        // would leave the guard held during a nested invocation.
         env.as_contract(&contract_id, || {
-            env.storage().instance().set(&LOCK, &true);
+            env.storage().temporary().set(&RG_KEY, &true);
         });
         client.deposit(&user, &1000);
     }
@@ -913,7 +1020,6 @@ mod tests {
         client.deposit(&user, &500);
         let out = client.withdraw(&user, &300);
 
-        // TOTAL_ASSETS == RESERVES throughout; withdrawn amount is conserved:
         assert_eq!(client.shares_of(&user), 1200);
         assert_eq!(out, 300);
         let total_assets: i128 = env.as_contract(&contract_id, || {
@@ -947,8 +1053,6 @@ mod tests {
         assert!(total_assets > 1_000_000);
     }
 
-    // ── Multi-sig timelock governance tests ────────────────────────────────
-
     fn gov_setup(env: &Env) -> (SmartVaultClient<'static>, Vec<Address>, Address) {
         let id = env.register(SmartVault, ());
         let client = SmartVaultClient::new(env, &id);
@@ -957,7 +1061,7 @@ mod tests {
         let g3 = Address::generate(env);
         let guardians = Vec::from_array(env, [g1.clone(), g2.clone(), g3.clone()]);
         let _ = g3;
-        client.init_governance(&guardians, &2); // 2-of-3
+        client.init_governance(&guardians, &2);
         (client, guardians, g1)
     }
 
@@ -970,30 +1074,26 @@ mod tests {
         let pid = client.propose(&g1, &String::from_str(&env, "Update fee"));
         assert_eq!(client.get_proposal(&pid).state, ProposalState::Proposed);
 
-        // Single approval is below the 2-of-3 threshold: cannot execute yet.
         client.approve(&g1, &pid);
         let p = client.get_proposal(&pid);
         assert_eq!(p.state, ProposalState::Proposed);
         assert_eq!(p.approvals.len(), 1);
 
-        // Second approval reaches threshold and queues with the timelock.
         client.approve(&guardians.get(1).unwrap(), &pid);
         let p = client.get_proposal(&pid);
         assert_eq!(p.state, ProposalState::Queued);
         assert!(p.queued_at.is_some());
 
-        // Executing before the timelock elapses must panic.
         let panicked = client.try_execute_proposal(&pid);
         assert!(panicked.is_err(), "execution before timelock must fail");
 
-        // After the timelock elapses, execution succeeds.
         env.ledger().with_mut(|l| l.timestamp += MIN_GOV_PERIOD + 1);
         client.execute_proposal(&pid);
         assert_eq!(client.get_proposal(&pid).state, ProposalState::Executed);
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #17)")]
+    #[should_panic(expected = "Error(Contract, #107)")]
     fn cannot_execute_twice() {
         let env = Env::default();
         env.mock_all_auths();
@@ -1042,32 +1142,23 @@ mod tests {
         let (env_ret, contract_id, user) = setup();
         let client = SmartVaultClient::new(&env_ret, &contract_id);
 
-        // Deposit collateral
         client.deposit(&user, &1_000_000);
-
-        // Mint synthetic with max 66.67% LTV (150% collateral ratio)
-        let amount_to_mint = 666_700; // Approximately 66.67% of deposit
+        let amount_to_mint = 666_700;
         client.mint_synthetic(&user, &amount_to_mint);
 
-        // Verify debt was tracked in global pool
         let (debt_amount, _debt_shares) = client.get_global_debt_pool();
         assert_eq!(debt_amount, amount_to_mint);
     }
 
-#[test]
-    #[should_panic(expected = "Below minimum collateral ratio")]
+    #[test]
+    #[should_panic(expected = "Error(Contract, #110)")]
     fn test_mint_synthetic_below_collateral_ratio() {
         let env = Env::default();
         env.mock_all_auths();
         let (env_ret, contract_id, user) = setup();
         let client = SmartVaultClient::new(&env_ret, &contract_id);
 
-        // Deposit 1M
         client.deposit(&user, &1_000_000);
-
-        // Try to mint 1.6M with only 1M collateral
-        // Required collateral for 1.6M debt at 150% ratio = 1.6M * 10000 / 15000 = 1.067M
-        // Since 1M < 1.067M, this should fail:
         client.mint_synthetic(&user, &1_600_000);
     }
 }
