@@ -78,7 +78,7 @@ importers:
         specifier: ^6.2.1
         version: 6.3.0(graphql@16.14.2)(ws@8.21.3)
       ioredis:
-        specifier: ^5.10.1
+        specifier: ^5.11.1
         version: 5.11.1(supports-color@8.1.1)
       json2csv:
         specifier: ^6.0.0-alpha.2
