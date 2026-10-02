@@ -63,19 +63,32 @@ coverage/
 # Jest / Vitest snapshots
 **/__snapshots__/
 **/*.snap
+<<<<<<< HEAD
 # Test snapshot directories (any variant)
 **/testsnapshot/
 **/test-snapshot/
 **/testSnapshots/
+=======
+# Insta / cargo-insta snapshots (Rust)
+**/*.snap.new
+contracts/**/*.snap
+contracts/**/*.snap.new
+>>>>>>> 8a48bd83 (feat(contracts): SC-HARD-13/14/15/16 peer review, quadratic funding, ZK verifier, TTL manager)
 # Playwright
 playwright-report/
 test-results/
 # E2E output
 frontend/e2e/results/
+<<<<<<< HEAD
 # Vitest UI output
 .vitest-cache/
 # k6 / load-test output
 k6-results/
+=======
+# Cargo test / bench artefacts
+contracts/target/
+target/
+>>>>>>> 8a48bd83 (feat(contracts): SC-HARD-13/14/15/16 peer review, quadratic funding, ZK verifier, TTL manager)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Generated docs / summaries (do not commit generated docs)

@@ -42,6 +42,14 @@ members = [
     "zk_proof_verifier",
     "certificate",
     "storage_ttl_manager",
+<<<<<<< HEAD
+=======
+    "peer_review",
+    "contract_events",
+]
+# Incomplete or non-crate directories under contracts/ must not be listed as members.
+exclude = [
+>>>>>>> 8a48bd83 (feat(contracts): SC-HARD-13/14/15/16 peer review, quadratic funding, ZK verifier, TTL manager)
     "automated_testing_suite",
     "cicd_pipeline",
     "contract_events",

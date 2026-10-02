@@ -265,5 +265,138 @@ impl DaoGovernance {
     }
 }
 
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
 #[cfg(test)]
-mod tests;
+mod tests {
+    use super::*;
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger as _},
+        Env, String,
+    };
+
+    fn setup() -> (Env, DaoGovernanceClient<'static>, Address) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register(DaoGovernance, ());
+        let client = DaoGovernanceClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+        (env, client, admin)
+    }
+
+    #[test]
+    fn quadratic_cost_deducted_correctly() {
+        let (env, client, admin) = setup();
+        let voter = Address::generate(&env);
+        client.grant_credits(&voter, &100u128);
+
+        let pid = client.create_proposal(
+            &admin,
+            &String::from_str(&env, "Test"),
+            &String::from_str(&env, "Desc"),
+            &3600,
+        );
+
+        // 3 votes → cost = 9
+        client.vote(&voter, &pid, &3i64);
+        assert_eq!(client.credits_of(&voter), 91);
+
+        let p = client.get_proposal(&pid).unwrap();
+        assert_eq!(p.tally, 3);
+        assert_eq!(p.credits_spent, 9);
+    }
+
+    #[test]
+    fn proposal_passes_when_tally_positive() {
+        let (env, client, admin) = setup();
+        let voter = Address::generate(&env);
+        client.grant_credits(&voter, &1_000u128);
+
+        let pid = client.create_proposal(
+            &admin,
+            &String::from_str(&env, "Upgrade"),
+            &String::from_str(&env, "Details"),
+            &100,
+        );
+        client.vote(&voter, &pid, &5i64);
+
+        env.ledger().with_mut(|l| l.timestamp += 200);
+        client.finalize(&pid);
+
+        assert_eq!(
+            client.get_proposal(&pid).unwrap().status,
+            ProposalStatus::Passed
+        );
+    }
+
+    #[test]
+    fn proposal_fails_when_tally_non_positive() {
+        let (env, client, admin) = setup();
+        let voter = Address::generate(&env);
+        client.grant_credits(&voter, &1_000u128);
+
+        let pid = client.create_proposal(
+            &admin,
+            &String::from_str(&env, "Bad idea"),
+            &String::from_str(&env, "No"),
+            &100,
+        );
+        client.vote(&voter, &pid, &-4i64);
+
+        env.ledger().with_mut(|l| l.timestamp += 200);
+        client.finalize(&pid);
+
+        assert_eq!(
+            client.get_proposal(&pid).unwrap().status,
+            ProposalStatus::Failed
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #7)")]
+    fn cannot_vote_twice() {
+        let (env, client, admin) = setup();
+        let voter = Address::generate(&env);
+        client.grant_credits(&voter, &1_000u128);
+
+        let pid = client.create_proposal(
+            &admin,
+            &String::from_str(&env, "D"),
+            &String::from_str(&env, "D"),
+            &3600,
+        );
+        client.vote(&voter, &pid, &1i64);
+        client.vote(&voter, &pid, &1i64); // panic
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #8)")]
+    fn insufficient_credits_rejected() {
+        let (env, client, admin) = setup();
+        let voter = Address::generate(&env);
+        client.grant_credits(&voter, &3u128); // only 3 credits
+
+        let pid = client.create_proposal(
+            &admin,
+            &String::from_str(&env, "Big"),
+            &String::from_str(&env, "Big"),
+            &3600,
+        );
+        client.vote(&voter, &pid, &5i64); // cost = 25 > 3 → panic
+    }
+}
+
+// ── Storage TTL (SC-HARD-16) ─────────────────────────────────────────────────
+// Bump instance storage lifetime on every contract execution to prevent
+// automatic archival. Target: > 100,000 ledgers per acceptance criteria.
+
+const SC16_TTL_THRESHOLD: u32 = 10_000;
+const SC16_INSTANCE_BUMP: u32 = 100_000;
+
+#[inline(always)]
+fn sc16_bump_instance(env: &Env) {
+    env.storage()
+        .instance()
+        .extend_ttl(SC16_TTL_THRESHOLD, SC16_INSTANCE_BUMP);
+}
