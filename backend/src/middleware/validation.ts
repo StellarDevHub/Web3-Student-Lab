@@ -22,7 +22,7 @@ function sanitizeString(value: string): string {
  * Non-string primitives (numbers, booleans, null) are returned unchanged.
  * Unknown object types that are not plain objects or arrays are returned as-is.
  */
-function deepSanitize(value: unknown): unknown {
+export function deepSanitize(value: unknown): unknown {
   if (typeof value === 'string') {
     return sanitizeString(value);
   }
@@ -43,23 +43,121 @@ function deepSanitize(value: unknown): unknown {
 }
 
 // ---------------------------------------------------------------------------
+// Prototype pollution prevention
+// ---------------------------------------------------------------------------
+
+/** Keys that are dangerous to set on any plain object or its prototype */
+const PROTOTYPE_POLLUTING_KEYS = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+  'toString',
+  'valueOf',
+  'hasOwnProperty',
+  '__defineGetter__',
+  '__defineSetter__',
+  '__lookupGetter__',
+  '__lookupSetter__',
+]);
+
+/**
+ * Recursively strip keys that could enable prototype-pollution attacks.
+ * Returns a new plain object with dangerous keys removed at every depth.
+ *
+ * @example
+ * // Input:  { "__proto__": { "admin": true }, "name": "Alice" }
+ * // Output: { "name": "Alice" }
+ */
+export function stripPrototypePollutingKeys(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stripPrototypePollutingKeys);
+  }
+
+  if (value !== null && typeof value === 'object') {
+    const cleaned: Record<string, unknown> = Object.create(null);
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      if (PROTOTYPE_POLLUTING_KEYS.has(key)) {
+        continue; // silently drop the dangerous key
+      }
+      cleaned[key] = stripPrototypePollutingKeys(val);
+    }
+    // Return a true plain object (not the null-prototype one) for JSON serialisation
+    return Object.assign({}, cleaned);
+  }
+
+  return value;
+}
+
+// ---------------------------------------------------------------------------
+// Schema-driven key whitelisting (mass-assignment protection)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the set of keys declared at the top level of a Zod object schema.
+ * Works with z.object(), z.object().strict(), and common wrapped forms
+ * (z.optional(), z.nullable(), z.default(), z.preprocess()).
+ */
+function extractSchemaKeys(schema: z.ZodSchema): Set<string> | null {
+  let s: any = schema;
+
+  // Unwrap modifiers that wrap an inner type
+  while (
+    s instanceof z.ZodOptional ||
+    s instanceof z.ZodNullable ||
+    s instanceof z.ZodDefault ||
+    s instanceof z.ZodEffects
+  ) {
+    s = s._def?.innerType ?? s._def?.schema ?? null;
+    if (!s) return null;
+  }
+
+  if (s instanceof z.ZodObject) {
+    return new Set(Object.keys(s.shape as Record<string, unknown>));
+  }
+
+  return null;
+}
+
+/**
+ * Strip any keys from `body` that are not declared in `allowedKeys`.
+ * This prevents mass-assignment vulnerabilities where an attacker adds
+ * undeclared fields (e.g. `isAdmin: true`) that bypass downstream guards.
+ */
+function stripUnwhitelistedKeys(
+  body: Record<string, unknown>,
+  allowedKeys: Set<string>,
+): Record<string, unknown> {
+  const stripped: Record<string, unknown> = {};
+  for (const key of allowedKeys) {
+    if (Object.prototype.hasOwnProperty.call(body, key)) {
+      stripped[key] = body[key];
+    }
+  }
+  return stripped;
+}
+
+// ---------------------------------------------------------------------------
 // General-purpose validateInput middleware
 // ---------------------------------------------------------------------------
 
 /**
- * General input validation guard applied globally or on individual routes.
+ * Universal request validation guard — applied globally or on individual routes.
  *
  * Responsibilities:
- *  1. Body size / type guard  – rejects non-object bodies so downstream
- *     handlers always receive a plain object (prevents prototype-pollution
- *     vectors and crashes caused by unexpected primitives).
- *  2. String sanitization     – strips HTML from every string value in
- *     req.body, req.params, and req.query before they reach route handlers.
- *  3. Parameter type coercion – numeric-looking URL params are coerced to
+ *  1. Body type guard          — rejects non-object bodies so downstream
+ *     handlers always receive a plain object.
+ *  2. Prototype pollution guard — strips __proto__, constructor, and other
+ *     dangerous keys before any handler or schema sees the data.
+ *  3. String sanitization      — strips HTML from every string in
+ *     req.body, req.params, and req.query.
+ *  4. Parameter type coercion  — numeric-looking URL params are coerced to
  *     numbers so route-level Zod schemas with z.number() work consistently.
  *
- * Route-specific schema validation is handled by the `validate()` factory
- * below; this middleware provides a baseline defence-in-depth layer.
+ * Route-specific schema validation and key whitelisting are handled by the
+ * `validate()` factory below; this middleware provides a baseline defence-in-
+ * depth layer that operates even on routes without per-route schemas.
+ *
+ * Closes #1385
  */
 export function validateInput(req: Request, res: Response, next: NextFunction): void {
   // 1. Body type guard
@@ -72,11 +170,14 @@ export function validateInput(req: Request, res: Response, next: NextFunction): 
       return;
     }
 
-    // 2. Sanitize body strings
+    // 2. Prototype pollution prevention (must run before sanitization)
+    req.body = stripPrototypePollutingKeys(req.body) as Record<string, unknown>;
+
+    // 3. Sanitize body strings
     req.body = deepSanitize(req.body) as Record<string, unknown>;
   }
 
-  // 2b. Sanitize URL params strings
+  // 3b. Sanitize URL params strings
   if (req.params && typeof req.params === 'object') {
     for (const key of Object.keys(req.params)) {
       if (typeof req.params[key] === 'string') {
@@ -85,7 +186,7 @@ export function validateInput(req: Request, res: Response, next: NextFunction): 
     }
   }
 
-  // 2c. Sanitize query-string values
+  // 3c. Sanitize query-string values
   if (req.query && typeof req.query === 'object') {
     for (const key of Object.keys(req.query)) {
       const val = req.query[key];
@@ -103,9 +204,20 @@ export function validateInput(req: Request, res: Response, next: NextFunction): 
 // ---------------------------------------------------------------------------
 
 /**
- * Middleware factory that validates req.params + req.body against a Zod
- * schema.  On success the merged, parsed value is written back to req.body
- * so downstream handlers receive type-safe, coerced data.
+ * Middleware factory that validates req.params + req.body against a Zod schema.
+ *
+ * Advanced features (Issue #1385):
+ *   1. Key whitelisting — any key in req.body that is not declared in the Zod
+ *      schema is silently stripped before the data reaches the handler.  This
+ *      eliminates mass-assignment vulnerabilities (e.g. `isAdmin: true` injected
+ *      into a registration body).
+ *   2. Prototype pollution stripping — runs a second pass after merging params
+ *      to ensure no dangerous keys slipped through from the URL layer.
+ *   3. Versioned error envelope — validation errors are emitted in the project's
+ *      standardised `ApiError` format, never leaking submitted values.
+ *
+ * On success, the merged, Zod-parsed value is written back to req.body so
+ * downstream handlers receive type-safe, coerced data.
  *
  * @example
  * router.post('/vesting', validate(createVestingScheduleSchema), handler);
@@ -123,11 +235,27 @@ export const toFieldErrors = (error: z.ZodError): ApiFieldError[] =>
 
 // Validation middleware factory — emits the versioned error envelope.
 export const validate = (schema: z.ZodSchema) => {
+  // Pre-compute allowed keys once per route registration (not per request)
+  const allowedKeys = extractSchemaKeys(schema);
+
   return (req: Request, res: Response, next: NextFunction) => {
     try {
-      // Route params and body are validated together; the merged result
-      // replaces req.body so handlers read one typed object.
-      const validatedData = schema.parse({ ...req.params, ...req.body });
+      const merged = { ...req.params, ...req.body };
+
+      // Strip unwhitelisted keys before parsing (mass-assignment protection).
+      // If the schema is not a ZodObject we skip stripping (e.g. z.string() for
+      // path-only schemas) to avoid breaking non-object schema use-cases.
+      const sanitizedInput =
+        allowedKeys && typeof merged === 'object' && merged !== null
+          ? stripUnwhitelistedKeys(
+              // Run prototype pollution guard on the merged input too
+              stripPrototypePollutingKeys(merged) as Record<string, unknown>,
+              allowedKeys,
+            )
+          : (stripPrototypePollutingKeys(merged) as Record<string, unknown>);
+
+      // Parse + coerce through the Zod schema
+      const validatedData = schema.parse(sanitizedInput);
       req.body = validatedData;
       next();
     } catch (error) {

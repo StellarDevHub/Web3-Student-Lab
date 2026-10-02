@@ -290,4 +290,50 @@ export const learningAPI = {
       console.error('Failed to save progress locally');
     }
   },
+
+  getOverallProgress: async (): Promise<{ completedLessons: string[]; bookmarks: string[] } | null> => {
+    try {
+      const response = await apiClient.get('/learning/progress');
+      const data = response.data;
+      if (!data) return null;
+      const completedLessons: string[] = Array.isArray(data.completedLessons)
+        ? data.completedLessons
+        : Array.isArray(data.progress?.completedLessons)
+        ? data.progress.completedLessons
+        : [];
+      const bookmarks: string[] = Array.isArray(data.bookmarks)
+        ? data.bookmarks
+        : Array.isArray(data.progress?.bookmarks)
+        ? data.progress.bookmarks
+        : [];
+      return { completedLessons, bookmarks };
+    } catch {
+      return null;
+    }
+  },
+
+  syncOverallProgress: async (payload: {
+    completedLessons?: string[];
+    bookmarks?: string[];
+  }): Promise<{ completedLessons: string[]; bookmarks: string[] } | null> => {
+    try {
+      const response = await apiClient.post('/learning/progress', payload);
+      const data = response.data;
+      if (!data) return null;
+      const completedLessons: string[] = Array.isArray(data.completedLessons)
+        ? data.completedLessons
+        : Array.isArray(data.progress?.completedLessons)
+        ? data.progress.completedLessons
+        : [];
+      const bookmarks: string[] = Array.isArray(data.bookmarks)
+        ? data.bookmarks
+        : Array.isArray(data.progress?.bookmarks)
+        ? data.progress.bookmarks
+        : [];
+      return { completedLessons, bookmarks };
+    } catch {
+      return null;
+    }
+  },
 };
+

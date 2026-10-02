@@ -2,43 +2,40 @@
 
 import { useI18n } from '@/i18n';
 import { Course, CourseDataSource, coursesAPI } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, BookOpen, Search, Sparkles } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState, useCallback } from 'react';
+import { useState } from 'react';
 import { ErrorBoundary, ErrorFallback, CourseListSkeleton, DemoDataBanner } from '@/components/ui';
 
 export default function CoursesPage() {
   const { t } = useI18n();
-  const [courses, setCourses] = useState<Course[]>([]);
   const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [dataSource, setDataSource] = useState<CourseDataSource>('live');
-  const [demoMessage, setDemoMessage] = useState<string | undefined>(undefined);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await coursesAPI.getAllWithSource();
-      setCourses(Array.isArray(result.courses) ? result.courses : []);
-      setDataSource(result.dataSource);
-      setDemoMessage(result.message);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load courses');
-      setCourses([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: ['courses'],
+    queryFn: () => coursesAPI.getAllWithSource(),
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
 
-  useEffect(() => {
-    let mounted = true;
-    load();
-    return () => {
-      mounted = false;
-    };
-  }, [load]);
+  const courses: Course[] = Array.isArray(data?.courses) ? data!.courses : [];
+  const dataSource: CourseDataSource = data?.dataSource ?? 'live';
+  const demoMessage: string | undefined = data?.message;
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : 'Failed to load courses'
+    : null;
+  const load = () => {
+    void refetch();
+  };
 
   const filteredCourses = courses.filter((course) => {
     const haystack =

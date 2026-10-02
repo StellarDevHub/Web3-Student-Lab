@@ -723,9 +723,8 @@ impl LendingPool {
     }
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
+mod tests;
 mod tests {
     use super::*;
     use soroban_sdk::{testutils::Address as _, Env};

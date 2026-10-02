@@ -1,7 +1,15 @@
 'use client';
 
-import dynamic from 'next/dynamic';
+import { registerSorobanCompletion } from '@/lib/editor/SorobanCompletion';
+import { registerSorobanHover } from '@/lib/editor/SorobanHover';
+import {
+    SOROBAN_LANGUAGE_ID,
+    registerSorobanCodeActions,
+    registerSorobanLanguage,
+} from '@/lib/editor/SorobanLanguage';
 import type { DiffOnMount } from '@monaco-editor/react';
+import dynamic from 'next/dynamic';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const DiffEditor = dynamic(() => import('@monaco-editor/react').then((mod) => mod.DiffEditor), {
   ssr: false,
@@ -14,14 +22,6 @@ const DiffEditor = dynamic(() => import('@monaco-editor/react').then((mod) => mo
     </div>
   ),
 });
-import { useMemo, useState } from 'react';
-import {
-  SOROBAN_LANGUAGE_ID,
-  registerSorobanLanguage,
-  registerSorobanCodeActions,
-} from '@/lib/editor/SorobanLanguage';
-import { registerSorobanCompletion } from '@/lib/editor/SorobanCompletion';
-import { registerSorobanHover } from '@/lib/editor/SorobanHover';
 
 interface ReviewComment {
   id: string;
@@ -30,6 +30,21 @@ interface ReviewComment {
   summary: string;
   details: string;
   rebuttals: string[];
+}
+
+const RUBRIC_CRITERIA = [
+  { key: 'security', label: 'Security', weight: 35 },
+  { key: 'correctness', label: 'Correctness', weight: 30 },
+  { key: 'validation', label: 'Input validation', weight: 20 },
+  { key: 'maintainability', label: 'Maintainability', weight: 15 },
+] as const;
+
+type RubricKey = (typeof RUBRIC_CRITERIA)[number]['key'];
+
+interface GradeCheck {
+  criterion: RubricKey;
+  label: string;
+  passed: boolean;
 }
 
 const currentCode = `use soroban_sdk::{contractimpl, Env, Symbol};
@@ -117,19 +132,99 @@ const initialComments: ReviewComment[] = [
   },
 ];
 
+function evaluateSubmission(code: string): GradeCheck[] {
+  return [
+    { criterion: 'security', label: 'Avoids panic-based control flow', passed: !/\bpanic!\s*\(/.test(code) },
+    { criterion: 'security', label: 'Uses checked arithmetic', passed: /checked_(mul|add|sub)/.test(code) },
+    { criterion: 'correctness', label: 'Bounds the maximum score', passed: /if\s+adjusted\s*>\s*100[\s\S]*?return\s+100/.test(code) },
+    { criterion: 'correctness', label: 'Rejects invalid submissions', passed: /if\s+code\.(trim\(\)\.)?is_empty\(\)[\s\S]*?return\s+false/.test(code) },
+    { criterion: 'validation', label: 'Trims input before empty checks', passed: /code\.trim\(\)\.is_empty\(\)/.test(code) },
+    { criterion: 'validation', label: 'Validates before storing input', passed: /is_empty\(\)[\s\S]*?storage\(\)\.set/.test(code) },
+    { criterion: 'maintainability', label: 'Uses descriptive function names', passed: /fn\s+(grade_submission|submit_code)\b/.test(code) },
+    { criterion: 'maintainability', label: 'Documents public entry points', passed: /\/\/\/[^\n]*\n\s*pub\s+fn/.test(code) },
+  ];
+}
+
 export default function PeerReviewDashboard() {
   const [comments, setComments] = useState(initialComments);
   const [activeCommentId, setActiveCommentId] = useState(initialComments[0].id);
   const [draftReply, setDraftReply] = useState('');
+  const [submissionCode, setSubmissionCode] = useState(currentCode);
+  const [scores, setScores] = useState<Record<RubricKey, number>>({
+    security: 8,
+    correctness: 7,
+    validation: 7,
+    maintainability: 9,
+  });
+  const [gradeChecks, setGradeChecks] = useState<GradeCheck[] | null>(null);
+  const [newCommentLine, setNewCommentLine] = useState<number | null>(null);
+  const [newCommentSummary, setNewCommentSummary] = useState('');
+  const [newCommentDetails, setNewCommentDetails] = useState('');
+  const [editorMounted, setEditorMounted] = useState(false);
+  const editorRef = useRef<Parameters<DiffOnMount>[0] | null>(null);
+  const monacoRef = useRef<Parameters<DiffOnMount>[1] | null>(null);
+  const gutterClickRef = useRef<{ dispose: () => void } | null>(null);
 
   const activeComment = comments.find((comment) => comment.id === activeCommentId) ?? comments[0];
 
   const averageScore = useMemo(() => {
-    const scores = { Security: 8, Efficiency: 7, Readability: 9 };
-    return Math.round(
-      Object.values(scores).reduce((sum, value) => sum + value, 0) / Object.values(scores).length
+    const weightedScore = RUBRIC_CRITERIA.reduce(
+      (sum, criterion) => sum + scores[criterion.key] * criterion.weight,
+      0
     );
-  }, []);
+    return Math.round(weightedScore) / 100;
+  }, [scores]);
+
+  useEffect(() => {
+    const modifiedModel = editorRef.current?.getModel()?.modified;
+    if (!modifiedModel || !monacoRef.current) return;
+
+    monacoRef.current.editor.setModelMarkers(
+      modifiedModel,
+      'peer-review-comments',
+      comments
+        .filter((comment) => comment.line <= modifiedModel.getLineCount())
+        .map((comment) => ({
+          startLineNumber: comment.line,
+          endLineNumber: comment.line,
+          message: comment.summary,
+          severity: monacoRef.current!.MarkerSeverity.Warning,
+        }))
+    );
+  }, [comments, editorMounted]);
+
+  useEffect(() => () => gutterClickRef.current?.dispose(), []);
+
+  const runAutomatedGrade = () => {
+    const checks = evaluateSubmission(submissionCode);
+    setGradeChecks(checks);
+    setScores(
+      Object.fromEntries(
+        RUBRIC_CRITERIA.map((criterion) => {
+          const criterionChecks = checks.filter((check) => check.criterion === criterion.key);
+          const passedChecks = criterionChecks.filter((check) => check.passed).length;
+          return [criterion.key, Math.round((passedChecks / criterionChecks.length) * 10)];
+        })
+      ) as Record<RubricKey, number>
+    );
+  };
+
+  const addInlineComment = () => {
+    if (newCommentLine === null || !newCommentSummary.trim() || !newCommentDetails.trim()) return;
+    const comment: ReviewComment = {
+      id: `comment-${Date.now()}`,
+      author: 'Stellar Lead',
+      line: newCommentLine,
+      summary: newCommentSummary.trim(),
+      details: newCommentDetails.trim(),
+      rebuttals: [],
+    };
+    setComments((current) => [...current, comment]);
+    setActiveCommentId(comment.id);
+    setNewCommentLine(null);
+    setNewCommentSummary('');
+    setNewCommentDetails('');
+  };
 
   const handlePublishReply = () => {
     if (!draftReply.trim()) return;
@@ -144,6 +239,8 @@ export default function PeerReviewDashboard() {
   };
 
   const handleDiffMount: DiffOnMount = (editor, monaco) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
     monaco.editor.defineTheme('web3-lab-diff', {
       base: 'vs-dark',
       inherit: true,
@@ -165,19 +262,29 @@ export default function PeerReviewDashboard() {
     monaco.editor.setTheme('web3-lab-diff');
 
     const modifiedEditor = editor.getModifiedEditor();
-    const modifiedModel = modifiedEditor.getModel();
-    if (modifiedModel) {
-      monaco.editor.setModelMarkers(
-        modifiedModel,
-        'peer-review-comments',
-        comments.map((comment) => ({
-          startLineNumber: comment.line,
-          endLineNumber: comment.line,
-          message: comment.summary,
-          severity: monaco.MarkerSeverity.Warning,
-        }))
-      );
-    }
+    const gutterClick = modifiedEditor.onMouseDown(({ target, event }) => {
+      const line = target.position?.lineNumber;
+      if (
+        !line ||
+        (target.type !== monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS &&
+          target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN)
+      ) {
+        return;
+      }
+      setNewCommentLine(line);
+      setNewCommentSummary('');
+      setNewCommentDetails('');
+    });
+    const modelChange = modifiedEditor.onDidChangeModelContent(() => {
+      setSubmissionCode(modifiedEditor.getValue());
+    });
+    gutterClickRef.current = {
+      dispose: () => {
+        gutterClick.dispose();
+        modelChange.dispose();
+      },
+    };
+    setEditorMounted(true);
   };
 
   return (
@@ -203,35 +310,61 @@ export default function PeerReviewDashboard() {
               </p>
               <div className="flex items-center gap-3">
                 <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-red-500/10 text-2xl font-black text-red-300">
-                  {averageScore}
+                  {averageScore.toFixed(1)}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white">Average Review</p>
+                  <p className="text-sm font-semibold text-white">Weighted grade / 10</p>
                   <p className="text-xs tracking-[0.35em] text-gray-500 uppercase">
-                    Security · Efficiency · Readability
+                    Automated rubric
                   </p>
                 </div>
               </div>
             </div>
 
-            {[
-              { label: 'Security', score: 8 },
-              { label: 'Efficiency', score: 7 },
-              { label: 'Readability', score: 9 },
-            ].map((item) => (
+            {RUBRIC_CRITERIA.map((item) => (
               <div key={item.label} className="mb-4">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-sm text-gray-300">{item.label}</span>
-                  <span className="text-sm font-bold text-white">{item.score}/10</span>
+                  <span className="text-sm font-bold text-white">{scores[item.key]}/10</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full bg-red-500"
-                    style={{ width: `${item.score * 10}%` }}
-                  />
-                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="10"
+                  step="1"
+                  value={scores[item.key]}
+                  aria-label={`${item.label} score`}
+                  onChange={(event) =>
+                    setScores((current) => ({ ...current, [item.key]: Number(event.target.value) }))
+                  }
+                  className="h-2 w-full cursor-pointer accent-red-500"
+                />
+                <div className="text-right text-[10px] text-gray-500">{item.weight}% weight</div>
               </div>
             ))}
+
+            <button
+              type="button"
+              onClick={runAutomatedGrade}
+              className="w-full rounded-lg bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-500"
+            >
+              Run automated grade
+            </button>
+            {gradeChecks && (
+              <div className="mt-4 space-y-2 border-t border-white/10 pt-4" aria-live="polite">
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                  Static checks
+                </p>
+                {gradeChecks.map((check) => (
+                  <p key={check.label} className="flex items-center gap-2 text-xs text-gray-300">
+                    <span className={check.passed ? 'text-green-400' : 'text-red-400'}>
+                      {check.passed ? 'Pass' : 'Flag'}
+                    </span>
+                    {check.label}
+                  </p>
+                ))}
+              </div>
+            )}
 
             <div className="mt-6 border-t border-white/10 pt-6">
               <p className="mb-3 text-xs font-black tracking-[0.35em] text-gray-500 uppercase">
@@ -257,18 +390,18 @@ export default function PeerReviewDashboard() {
                 <div>
                   <h2 className="text-2xl font-black text-white">Code Comparison</h2>
                   <p className="text-sm text-gray-400">
-                    View a diff between the student submission and the master branch.
+                    Edit the submission, compare it with the master, and select a modified line gutter to comment.
                   </p>
                 </div>
                 <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs tracking-[0.35em] text-gray-400 uppercase">
-                  Inline diff mode
+                  Split diff
                 </span>
               </div>
 
               <div className="h-[560px] overflow-hidden rounded-3xl border border-white/10">
                 <DiffEditor
                   original={masterCode}
-                  modified={currentCode}
+                  modified={submissionCode}
                   language={SOROBAN_LANGUAGE_ID}
                   beforeMount={(monaco) => {
                     registerSorobanLanguage(monaco);
@@ -279,15 +412,60 @@ export default function PeerReviewDashboard() {
                   theme="web3-lab-diff"
                   options={{
                     renderSideBySide: true,
-                    readOnly: true,
+                    originalEditable: false,
+                    readOnly: false,
                     minimap: { enabled: false },
                     lineNumbers: 'on',
+                    glyphMargin: true,
                     scrollBeyondLastLine: false,
                     automaticLayout: true,
                   }}
                   onMount={handleDiffMount}
                 />
               </div>
+              {newCommentLine !== null && (
+                <form
+                  className="mt-4 space-y-3 border-l-2 border-red-500 pl-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    addInlineComment();
+                  }}
+                >
+                  <p className="text-sm font-semibold text-white">Comment on line {newCommentLine}</p>
+                  <input
+                    value={newCommentSummary}
+                    onChange={(event) => setNewCommentSummary(event.target.value)}
+                    placeholder="Finding summary"
+                    aria-label="Finding summary"
+                    className="w-full rounded border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-red-500"
+                    required
+                  />
+                  <textarea
+                    value={newCommentDetails}
+                    onChange={(event) => setNewCommentDetails(event.target.value)}
+                    placeholder="Explain the issue or suggestion"
+                    aria-label="Comment details"
+                    className="w-full resize-y rounded border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-red-500"
+                    rows={3}
+                    required
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewCommentLine(null)}
+                      className="rounded border border-white/15 px-3 py-2 text-sm text-gray-300 hover:bg-white/5"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="rounded bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500"
+                    >
+                      Add comment
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
 
             <div className="rounded-3xl border border-white/10 bg-zinc-950/90 p-6 shadow-[0_25px_80px_rgba(15,23,42,0.55)]">
@@ -304,7 +482,10 @@ export default function PeerReviewDashboard() {
                 {comments.map((comment) => (
                   <button
                     key={comment.id}
-                    onClick={() => setActiveCommentId(comment.id)}
+                    onClick={() => {
+                      setActiveCommentId(comment.id);
+                      editorRef.current?.getModifiedEditor().revealLineInCenter(comment.line);
+                    }}
                     className={`w-full rounded-3xl border px-5 py-4 text-left transition-all ${
                       comment.id === activeCommentId
                         ? 'border-red-500/40 bg-red-500/10 shadow-[0_0_30px_rgba(248,113,113,0.12)]'

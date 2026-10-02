@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { LanguageSelector } from '@/components/common/LanguageSelector';
+import { ConnectionHealthBadge } from '@/components/common/ConnectionHealthBadge';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { useWallet } from '@/contexts/WalletContext';
 import { useWalletProfileCompletion } from '@/lib/profile-completion';
@@ -107,7 +108,8 @@ export default function Navbar() {
             </div>
           </nav>
 
-          <div className="hidden items-center gap-6 xl:flex">
+          <div className="hidden items-center gap-4 xl:flex">
+            <ConnectionHealthBadge />
             <LanguageSelector />
             {user ? (
               <>

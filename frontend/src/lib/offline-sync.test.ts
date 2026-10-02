@@ -44,12 +44,19 @@ describe('offline-sync', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await flushQueuedRequests();
-    expect(fetchMock).toHaveBeenCalledWith('/test-sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: request.body,
-      credentials: 'same-origin',
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/test-sync',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          'Idempotency-Key': expect.any(String),
+          'X-Client-Timestamp': expect.any(String),
+        }),
+        body: request.body,
+        credentials: 'same-origin',
+      })
+    );
 
     queuedRequests = await getQueuedRequests();
     expect(queuedRequests.length).toBe(0);
@@ -78,22 +85,29 @@ describe('offline-sync', () => {
 
     await flushQueuedLessonProgress();
 
-    expect(fetchMock).toHaveBeenCalledWith('/learning/courses/course-1/progress', {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer test-token',
-      },
-      credentials: 'same-origin',
-      body: JSON.stringify({
-        lessonId: 'lesson-1',
-        status: 'completed',
-        completedLessons: ['lesson-1'],
-        currentModuleId: 'mod-1',
-        percentage: 50,
-        completedAt: '2026-06-25T00:00:00.000Z',
-      }),
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/learning/courses/course-1/progress',
+      expect.objectContaining({
+        method: 'PATCH',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test-token',
+          'Idempotency-Key': expect.any(String),
+          'X-Client-Timestamp': expect.any(String),
+          'X-Client-Score': '0',
+        }),
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          lessonId: 'lesson-1',
+          status: 'completed',
+          completedLessons: ['lesson-1'],
+          currentModuleId: 'mod-1',
+          percentage: 50,
+          completedAt: '2026-06-25T00:00:00.000Z',
+          idempotencyKey: 'course-1:lesson-1:2026-06-25T00:00:00.000Z',
+        }),
+      })
+    );
 
     queuedProgress = await getQueuedLessonProgress();
     expect(queuedProgress).toHaveLength(0);

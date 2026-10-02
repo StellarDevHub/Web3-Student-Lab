@@ -1,8 +1,78 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
+    contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error, Address,
     Env, Symbol, Vec,
 };
+
+// ---------------------------------------------------------------------------
+// Typed event schemas — SC-HARD-02 migration
+// ---------------------------------------------------------------------------
+
+/// Emitted when a new developer profile is registered.
+#[contractevent]
+pub struct DeveloperRegistered {
+    pub developer: Address,
+}
+
+/// Emitted when a new team is created.
+#[contractevent]
+pub struct TeamCreated {
+    pub creator: Address,
+    pub team_id: u64,
+    pub name: Symbol,
+}
+
+/// Emitted when a developer submits a join request.
+#[contractevent]
+pub struct JoinRequested {
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a join request is accepted.
+#[contractevent]
+pub struct JoinAccepted {
+    pub creator: Address,
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a developer is invited to a team.
+#[contractevent]
+pub struct DeveloperInvited {
+    pub creator: Address,
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a developer accepts a team invitation.
+#[contractevent]
+pub struct InvitationAccepted {
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a developer leaves a team.
+#[contractevent]
+pub struct TeamLeft {
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a member is removed from a team.
+#[contractevent]
+pub struct MemberRemoved {
+    pub creator: Address,
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a team is closed.
+#[contractevent]
+pub struct TeamClosed {
+    pub creator: Address,
+    pub team_id: u64,
+}
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -132,7 +202,7 @@ impl HackathonTeamMatching {
             .set(&DataKey::AllDevelopers, &all_devs);
 
         env.events()
-            .publish((symbol_short!("dev_reg"), developer), ());
+            .publish((DeveloperRegistered { developer },), ());
     }
 
     /// Retrieve a developer profile
@@ -201,7 +271,7 @@ impl HackathonTeamMatching {
             .set(&DataKey::Developer(creator.clone()), &creator_dev);
 
         env.events()
-            .publish((symbol_short!("team_new"), creator), (team_id, name));
+            .publish((TeamCreated { creator, team_id, name },), ());
         team_id
     }
 
@@ -260,7 +330,7 @@ impl HackathonTeamMatching {
         }
 
         env.events()
-            .publish((symbol_short!("join_req"), developer), team_id);
+            .publish((JoinRequested { developer, team_id },), ());
     }
 
     /// Accept a developer's join request (team creator only)
@@ -329,7 +399,7 @@ impl HackathonTeamMatching {
             .set(&DataKey::Team(team_id), &team);
 
         env.events()
-            .publish((symbol_short!("join_acc"), creator), (developer, team_id));
+            .publish((JoinAccepted { creator, developer, team_id },), ());
     }
 
     /// Invite a developer to join the team (team creator only)
@@ -385,7 +455,7 @@ impl HackathonTeamMatching {
         }
 
         env.events()
-            .publish((symbol_short!("invite_d"), creator), (developer, team_id));
+            .publish((DeveloperInvited { creator, developer, team_id },), ());
     }
 
     /// Accept a team's invitation (developer only)
@@ -451,7 +521,7 @@ impl HackathonTeamMatching {
             .set(&DataKey::Team(team_id), &team);
 
         env.events()
-            .publish((symbol_short!("invite_a"), developer), team_id);
+            .publish((InvitationAccepted { developer, team_id },), ());
     }
 
     /// Leave the current team (non-creator member only)
@@ -505,7 +575,7 @@ impl HackathonTeamMatching {
             .set(&DataKey::Team(team_id), &team);
 
         env.events()
-            .publish((symbol_short!("team_lv"), developer), team_id);
+            .publish((TeamLeft { developer, team_id },), ());
     }
 
     /// Remove a member from the team (team creator only)
@@ -561,7 +631,7 @@ impl HackathonTeamMatching {
             .set(&DataKey::Team(team_id), &team);
 
         env.events()
-            .publish((symbol_short!("team_rm"), creator), (developer, team_id));
+            .publish((MemberRemoved { creator, developer, team_id },), ());
     }
 
     /// Close the team, finalizing members (team creator only)
@@ -585,7 +655,7 @@ impl HackathonTeamMatching {
             .set(&DataKey::Team(team_id), &team);
 
         env.events()
-            .publish((symbol_short!("team_cls"), creator), team_id);
+            .publish((TeamClosed { creator, team_id },), ());
     }
 
     /// Find matching teams for a developer

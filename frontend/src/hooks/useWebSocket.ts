@@ -1,135 +1,96 @@
-import { useEffect, useRef, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ConnectionStatus,
+  WebSocketMessage,
+  getWebSocketClient,
+} from '@/lib/websocket';
 
-interface WebSocketMessage {
-  type: string;
-  data: any;
-  timestamp: string;
+export interface UseWebSocketOptions {
+  url?: string;
+  token?: string | null;
+  autoConnect?: boolean;
+  channels?: string[];
+  heartbeatIntervalMs?: number;
+  heartbeatTimeoutMs?: number;
+  maxReconnectAttempts?: number;
+  baseReconnectDelayMs?: number;
+  maxReconnectDelayMs?: number;
+  maxBufferSize?: number;
 }
 
-export const useWebSocket = (url?: string) => {
+export const useWebSocket = (urlOrOptions?: string | UseWebSocketOptions) => {
+  const options = typeof urlOrOptions === 'string' ? { url: urlOrOptions } : urlOrOptions ?? {};
+  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const socketRef = useRef<Socket | null>(null);
+  const [bufferedCount, setBufferedCount] = useState(0);
+  const clientRef = useRef(getWebSocketClient());
 
-  useEffect(() => {
-    const token = localStorage.getItem('auth_token');
+  const sendMessage = useCallback((type: string, data: any) => {
+    clientRef.current.send(type, data);
+    setBufferedCount(clientRef.current.getBufferedCount());
+  }, []);
+
+  const subscribe = useCallback((channel: string, payload?: Record<string, unknown>) => {
+    clientRef.current.subscribe(channel, payload);
+  }, []);
+
+  const unsubscribe = useCallback((channel: string) => {
+    clientRef.current.unsubscribe(channel);
+  }, []);
+
+  const disconnect = useCallback(() => {
+    clientRef.current.disconnect();
+  }, []);
+
+  const reconnect = useCallback(() => {
+    clientRef.current.connect();
+  }, []);
+
+  useEffect() {
+    const client = clientRef.current;
+    const token = options.token ?? localStorage.getItem('auth_token');
     if (!token) {
-      return;
+      return undefined;
     }
 
-    const socketUrl = url || process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080';
-
-    socketRef.current = io(socketUrl, {
-      auth: {
-        token,
-      },
-      transports: ['websocket', 'polling'],
+    const unsubscribeStatus = client.onStatusChange((nextStatus) => {
+      setStatus(nextStatus);
+      setIsConnected(nextStatus === 'connected');
     });
 
-    const socket = socketRef.current;
-
-    socket.on('connect', () => {
-      setIsConnected(true);
-      setError(null);
-      console.log('WebSocket connected');
-    });
-
-    socket.on('disconnect', () => {
-      setIsConnected(false);
-      console.log('WebSocket disconnected');
-    });
-
-    socket.on('connect_error', (error) => {
-      setError(error.message);
-      console.error('WebSocket connection error:', error);
-    });
-
-    socket.on('message', (message: WebSocketMessage) => {
+    const unsubscribeMessage = client.onMessage((message) => {
       setLastMessage(message);
+      setBufferedCount(client.getBufferedCount());
     });
 
-    socket.on('subscription_created', (data) => {
-      setLastMessage({
-        type: 'subscription_created',
-        data,
-        timestamp: new Date().toISOString(),
-      });
+    const unsubscribeError = client.onError((err) => {
+      setError(err.message);
     });
 
-    socket.on('subscription_cancelled', (data) => {
-      setLastMessage({
-        type: 'subscription_cancelled',
-        data,
-        timestamp: new Date().toISOString(),
-      });
-    });
+    options.channels.forEach((channel) => client.subscribe(channel));
 
-    socket.on('subscription_renewed', (data) => {
-      setLastMessage({
-        type: 'subscription_renewed',
-        data,
-        timestamp: new Date().toISOString(),
-      });
-    });
-
-    socket.on('plan_updated', (data) => {
-      setLastMessage({
-        type: 'plan_updated',
-        data,
-        timestamp: new Date().toISOString(),
-      });
-    });
-
-    socket.on('contract_paused', (data) => {
-      setLastMessage({
-        type: 'contract_paused',
-        data,
-        timestamp: new Date().toISOString(),
-      });
-    });
-
-    socket.on('contract_unpaused', (data) => {
-      setLastMessage({
-        type: 'contract_unpaused',
-        data,
-        timestamp: new Date().toISOString(),
-      });
-    });
+    if (options.autoConnect ?? true) {
+      client.connect();
+    }
 
     return () => {
-      socket.disconnect();
+      unsubscribeStatus();
+      unsubscribeMessage();
+      unsubscribeError();
     };
-  }, [url]);
-
-  const sendMessage = (type: string, data: any) => {
-    if (socketRef.current && isConnected) {
-      socketRef.current.emit('message', {
-        type,
-        data,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  };
-
-  const disconnect = () => {
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-    }
-  };
-
-  const reconnect = () => {
-    if (socketRef.current) {
-      socketRef.current.connect();
-    }
-  };
+  }, [options.token, options.autoConnect, options.channels?.join(',')]);
 
   return {
+    status,
     isConnected,
     lastMessage,
     error,
+    bufferedCount,
     sendMessage,
+    subscribe,
+    unsubscribe,
     disconnect,
     reconnect,
   };

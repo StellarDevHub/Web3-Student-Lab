@@ -1,34 +1,38 @@
-// Decentralized Identity (DID) Registry Contract — `did:stellar` method
-// Language: Rust (Soroban)
-//
-// This contract is the on-chain anchor for the `did:stellar` DID method. It
-// implements the W3C DID Core 1.0 write/control model:
-//
-//   * The DID identifier is the 32-byte Stellar Ed25519 account id
-//     (`did:stellar:<hex>`).
-//   * The registry stores the controller `Address`, an off-chain GitHub
-//     handle binding, the Ed25519 *verification key* used to sign contributor
-//     proofs, and the set of verified contributor claims.
-//
-// Cryptographic *verification* of Ed25519 signatures over contributor proofs
-// is performed by the off-chain resolver (see backend `didResolver`), which
-// reads this on-chain state. On-chain we only store the binding so the
-// resolver can fetch the trusted public key.
+//! # SC-HARD-11 — Decentralized Identity (DID) Registry & Cryptographic Key Rotation
+//!
+//! On-chain registry for the `did:stellar` DID method implementing the
+//! W3C DID Core 1.0 write/control model:
+//!
+//! - **DID document storage**: owner, verification key, service endpoints,
+//!   social handles, and signed contributor proof claims.
+//! - **Multi-key rotation**: owner may transfer control to a new key via
+//!   `rotate_key`.
+//! - **Service endpoint updates**: arbitrary `Symbol → Bytes` attributes
+//!   updated via `update`.
+//! - **Controller delegation**: owner may add/remove delegate controllers that
+//!   can append proofs and update attributes.
+//! - **Deactivation (revoke)**: once revoked, all subsequent mutations are
+//!   rejected.
+//! - **Cryptographic verification** of Ed25519 signatures is performed by the
+//!   off-chain resolver; on-chain we store the trusted public key so the
+//!   resolver can fetch it deterministically.
 
 #![no_std]
 use soroban_sdk::{
     contract, contractimpl, contracttype, Address, Bytes, BytesN, Env, Map, String, Symbol, Vec,
 };
 
+// ── Data types ────────────────────────────────────────────────────────────────
+
 /// A single signed contributor proof claim (PR or issue milestone).
 #[derive(Clone)]
 #[contracttype]
 pub struct ContributorProof {
-    /// Kind of contribution: "pr" or "issue".
+    /// Kind of contribution: `"pr"` or `"issue"`.
     pub claim_type: String,
-    /// GitHub repository, e.g. "StellarDevHub/Web3-Student-Lab".
+    /// GitHub repository, e.g. `"StellarDevHub/Web3-Student-Lab"`.
     pub repo: String,
-    /// Identifier of the PR/issue (number or node id).
+    /// PR / issue number or node ID.
     pub item_id: String,
     /// GitHub handle of the contributor (must match the bound handle).
     pub github_handle: String,
@@ -38,35 +42,52 @@ pub struct ContributorProof {
     pub signature: Bytes,
 }
 
+/// W3C-aligned DID document stored on-chain.
 #[derive(Clone)]
 #[contracttype]
 pub struct DIDDocument {
+    /// Address that controls this DID.
     pub owner: Address,
     /// Off-chain GitHub handle bound to this DID.
     pub github_handle: Option<String>,
-    /// Social handles keyed by provider symbol (github or discord).
+    /// Social handles keyed by provider symbol (`"github"` or `"discord"`).
     pub social_identities: Map<Symbol, String>,
     /// Ed25519 verification key (32 bytes) used to sign contributor proofs.
     pub verification_key: Option<BytesN<32>>,
+    /// Arbitrary service-endpoint / attribute bag.
     pub attributes: Map<Symbol, Bytes>,
+    /// Delegate controllers (can append proofs and update attributes).
     pub controllers: Vec<Address>,
+    /// Whether this DID has been deactivated.
     pub revoked: bool,
-    /// Stored contributor proofs (mirror of on-chain claims).
+    /// Stored contributor proofs (populated during `resolve`).
     pub proofs: Vec<ContributorProof>,
 }
 
+// ── Storage keys ──────────────────────────────────────────────────────────────
+
 #[contracttype]
 pub enum DataKey {
+    /// `Map<BytesN<32>, DIDDocument>` — all registered DID documents.
     DIDs,
-    /// Map<BytesN<32>, Vec<ContributorProof>> — claims per DID.
+    /// `Map<BytesN<32>, Vec<ContributorProof>>` — claims per DID.
     Proofs,
 }
+
+// ── Contract ──────────────────────────────────────────────────────────────────
 
 #[contract]
 pub struct DIDRegistryContract;
 
 #[contractimpl]
 impl DIDRegistryContract {
+    // ── Registration ──────────────────────────────────────────────────────────
+
+    /// Register a new DID.  The 32-byte `did` is the Ed25519 public key of the
+    /// account, encoded as bytes (`did:stellar:<hex>`).
+    ///
+    /// # Panics
+    /// - DID already registered.
     pub fn register(env: Env, owner: Address, did: BytesN<32>, attributes: Map<Symbol, Bytes>) {
         owner.require_auth();
         let mut dids: Map<BytesN<32>, DIDDocument> = env
@@ -76,7 +97,7 @@ impl DIDRegistryContract {
             .unwrap_or_else(|| Map::new(&env));
         assert!(!dids.contains_key(did.clone()), "DID already registered");
         let doc = DIDDocument {
-            owner: owner.clone(),
+            owner,
             github_handle: None,
             social_identities: Map::new(&env),
             verification_key: None,
@@ -96,7 +117,9 @@ impl DIDRegistryContract {
         env.storage().persistent().set(&DataKey::Proofs, &proofs);
     }
 
-    /// Bind an off-chain GitHub handle to the DID. Only the owner may bind.
+    // ── Identity bindings ─────────────────────────────────────────────────────
+
+    /// Bind an off-chain GitHub handle to the DID (owner only).
     pub fn bind_github(env: Env, sender: Address, did: BytesN<32>, handle: String) {
         sender.require_auth();
         let mut dids: Map<BytesN<32>, DIDDocument> =
@@ -104,15 +127,14 @@ impl DIDRegistryContract {
         let mut doc = dids.get(did.clone()).unwrap();
         assert!(!doc.revoked, "DID revoked");
         assert!(doc.owner == sender, "Only owner can bind github handle");
-        doc.github_handle = Some(handle);
+        doc.github_handle = Some(handle.clone());
         doc.social_identities
-            .set(Symbol::new(&env, "github"), doc.github_handle.clone().unwrap());
-        dids.set(did.clone(), doc);
+            .set(Symbol::new(&env, "github"), handle);
+        dids.set(did, doc);
         env.storage().persistent().set(&DataKey::DIDs, &dids);
     }
 
-    /// Bind a social handle to the DID. Only the owner may bind; verifiers must
-    /// separately validate the provider proof associated with the handle.
+    /// Bind a social handle for a given provider (`"github"` or `"discord"`).
     pub fn bind_social(
         env: Env,
         sender: Address,
@@ -147,12 +169,16 @@ impl DIDRegistryContract {
         assert!(!doc.revoked, "DID revoked");
         assert!(doc.owner == sender, "Only owner can set verification key");
         doc.verification_key = Some(key);
-        dids.set(did.clone(), doc);
+        dids.set(did, doc);
         env.storage().persistent().set(&DataKey::DIDs, &dids);
     }
 
-    /// Append a signed contributor proof claim. Only the owner may add; the
-    /// resolver performs the cryptographic verification off-chain.
+    // ── Contributor proofs ────────────────────────────────────────────────────
+
+    /// Append a signed contributor proof claim.
+    ///
+    /// Only the owner (or a delegate controller) may call this.  The GitHub
+    /// handle in the proof must match the bound handle.
     pub fn add_contributor_proof(
         env: Env,
         sender: Address,
@@ -181,10 +207,13 @@ impl DIDRegistryContract {
             .unwrap_or_else(|| Map::new(&env));
         let mut list = proofs.get(did.clone()).unwrap_or_else(|| Vec::new(&env));
         list.push_back(proof);
-        proofs.set(did.clone(), list);
+        proofs.set(did, list);
         env.storage().persistent().set(&DataKey::Proofs, &proofs);
     }
 
+    // ── Document mutation ─────────────────────────────────────────────────────
+
+    /// Update the service-endpoint / attribute bag (owner or controller).
     pub fn update(env: Env, sender: Address, did: BytesN<32>, attributes: Map<Symbol, Bytes>) {
         sender.require_auth();
         let mut dids: Map<BytesN<32>, DIDDocument> =
@@ -200,6 +229,9 @@ impl DIDRegistryContract {
         env.storage().persistent().set(&DataKey::DIDs, &dids);
     }
 
+    /// Transfer ownership to `new_owner` (cryptographic key rotation).
+    ///
+    /// Only the current owner may rotate.  Revoked DIDs cannot rotate.
     pub fn rotate_key(env: Env, sender: Address, did: BytesN<32>, new_owner: Address) {
         sender.require_auth();
         let mut dids: Map<BytesN<32>, DIDDocument> =
@@ -212,6 +244,9 @@ impl DIDRegistryContract {
         env.storage().persistent().set(&DataKey::DIDs, &dids);
     }
 
+    /// Deactivate (permanently revoke) the DID.
+    ///
+    /// After revocation no mutations are possible.
     pub fn revoke(env: Env, sender: Address, did: BytesN<32>) {
         sender.require_auth();
         let mut dids: Map<BytesN<32>, DIDDocument> =
@@ -223,6 +258,9 @@ impl DIDRegistryContract {
         env.storage().persistent().set(&DataKey::DIDs, &dids);
     }
 
+    // ── Controller management ─────────────────────────────────────────────────
+
+    /// Add a delegate controller (owner only).
     pub fn add_controller(env: Env, sender: Address, did: BytesN<32>, controller: Address) {
         sender.require_auth();
         let mut dids: Map<BytesN<32>, DIDDocument> =
@@ -236,20 +274,23 @@ impl DIDRegistryContract {
         env.storage().persistent().set(&DataKey::DIDs, &dids);
     }
 
+    /// Remove a delegate controller (owner only).
     pub fn remove_controller(env: Env, sender: Address, did: BytesN<32>, controller: Address) {
         sender.require_auth();
         let mut dids: Map<BytesN<32>, DIDDocument> =
             env.storage().persistent().get(&DataKey::DIDs).unwrap();
         let mut doc = dids.get(did.clone()).unwrap();
         assert!(doc.owner == sender, "Only owner can remove controller");
-        let idx = doc.controllers.iter().position(|c| c == controller);
-        if let Some(i) = idx {
+        if let Some(i) = doc.controllers.iter().position(|c| c == controller) {
             doc.controllers.remove(i as u32);
         }
         dids.set(did, doc);
         env.storage().persistent().set(&DataKey::DIDs, &dids);
     }
 
+    // ── Queries ───────────────────────────────────────────────────────────────
+
+    /// Resolve a DID document (proofs are populated inline).
     pub fn resolve(env: Env, did: BytesN<32>) -> Option<DIDDocument> {
         let dids: Map<BytesN<32>, DIDDocument> = env
             .storage()
@@ -276,14 +317,15 @@ impl DIDRegistryContract {
         dids.get(did).and_then(|d| d.github_handle)
     }
 
-    /// Returns a verified social handle for a DID and provider, if any.
+    /// Returns a social handle for a given DID and provider, if any.
     pub fn get_social_handle(env: Env, did: BytesN<32>, provider: Symbol) -> Option<String> {
         let dids: Map<BytesN<32>, DIDDocument> = env
             .storage()
             .persistent()
             .get(&DataKey::DIDs)
             .unwrap_or_else(|| Map::new(&env));
-        dids.get(did).and_then(|doc| doc.social_identities.get(provider))
+        dids.get(did)
+            .and_then(|doc| doc.social_identities.get(provider))
     }
 
     /// Returns the Ed25519 verification key for a DID, if set.
@@ -308,79 +350,4 @@ impl DIDRegistryContract {
 }
 
 #[cfg(test)]
-mod test {
-    use super::*;
-    use soroban_sdk::{symbol_short, testutils::Address as _, BytesN, Env};
-
-    #[test]
-    fn test_did_registry_flow() {
-        let env = Env::default();
-        env.mock_all_auths();
-        let contract_id = env.register(DIDRegistryContract, ());
-        let client = DIDRegistryContractClient::new(&env, &contract_id);
-        let owner = Address::generate(&env);
-        let did = BytesN::from_array(&env, &[1u8; 32]);
-        let mut attrs = Map::new(&env);
-        attrs.set(symbol_short!("name"), Bytes::from_slice(&env, b"Alice"));
-
-        client.register(&owner, &did, &attrs);
-        let doc = client.resolve(&did).unwrap();
-        assert_eq!(doc.owner, owner);
-
-        // Bind github + verification key
-        let handle = String::from_str(&env, "alice");
-        client.bind_github(&owner, &did, &handle);
-        let discord_handle = String::from_str(&env, "alice#1234");
-        client.bind_social(
-            &owner,
-            &did,
-            &Symbol::new(&env, "discord"),
-            &discord_handle,
-        );
-        let key = BytesN::from_array(&env, &[9u8; 32]);
-        client.set_verification_key(&owner, &did, &key);
-
-        let doc = client.resolve(&did).unwrap();
-        assert_eq!(doc.github_handle, Some(handle));
-        assert_eq!(
-            client.get_social_handle(&did, &Symbol::new(&env, "discord")),
-            Some(discord_handle)
-        );
-        assert_eq!(doc.verification_key, Some(key));
-
-        // Add a contributor proof
-        let proof = ContributorProof {
-            claim_type: String::from_str(&env, "pr"),
-            repo: String::from_str(&env, "StellarDevHub/Web3-Student-Lab"),
-            item_id: String::from_str(&env, "123"),
-            github_handle: String::from_str(&env, "alice"),
-            issued_at: 1_700_000_000,
-            signature: Bytes::from_slice(&env, &[0u8; 64]),
-        };
-        client.add_contributor_proof(&owner, &did, &proof);
-        assert_eq!(client.get_proofs(&did).len(), 1);
-
-        // Handle mismatch must be rejected
-        let bad_proof = ContributorProof {
-            claim_type: String::from_str(&env, "pr"),
-            repo: String::from_str(&env, "x/y"),
-            item_id: String::from_str(&env, "1"),
-            github_handle: String::from_str(&env, "mallory"),
-            issued_at: 1,
-            signature: Bytes::from_slice(&env, &[0u8; 64]),
-        };
-        let result = client.try_add_contributor_proof(&owner, &did, &bad_proof);
-        assert!(result.is_err(), "proof with wrong handle must be rejected");
-
-        // Key rotation
-        let new_owner = Address::generate(&env);
-        client.rotate_key(&owner, &did, &new_owner);
-        let doc = client.resolve(&did).unwrap();
-        assert_eq!(doc.owner, new_owner);
-
-        // Revoke
-        client.revoke(&new_owner, &did);
-        let doc = client.resolve(&did).unwrap();
-        assert!(doc.revoked);
-    }
-}
+mod tests;

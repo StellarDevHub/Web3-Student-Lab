@@ -1,7 +1,9 @@
 'use client';
 
 import { useWallet, WALLET_PROVIDERS } from '@/contexts/WalletContext';
-import { CheckCircle2, Copy, Wallet } from 'lucide-react';
+import { CheckCircle2, Copy, RefreshCw, Wallet } from 'lucide-react';
+import { detectWalletNetwork, getAccountBalance, fundTestnetAccount, waitForTestnetFunding } from '@/lib/stellar/network';
+import { useNetworkStore } from '@/stores/networkStore';
 import { useEffect, useState } from 'react';
 
 interface WalletConnectCardProps {
@@ -21,7 +23,59 @@ export function WalletConnectCard({
 }: WalletConnectCardProps) {
   const { publicKey, activeWallet, isConnecting, error, connect, disconnect } = useWallet();
   const [localError, setLocalError] = useState<string | null>(null);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [isFunding, setIsFunding] = useState(false);
+  const [isCheckingBalance, setIsCheckingBalance] = useState(false);
+  const [walletNetwork, setWalletNetwork] = useState<'testnet' | 'mainnet' | 'unknown'>('unknown');
+  const networkType = useNetworkStore((state) => state.networkType);
+  const setNetworkType = useNetworkStore((state) => state.setNetworkType);
   const [, setRefreshTick] = useState(0);
+
+  useEffect(() => {
+    if (!publicKey) {
+      setBalance(null);
+      setWalletNetwork('unknown');
+      return;
+    }
+
+    let cancelled = false;
+    const checkBalance = async () => {
+      setIsCheckingBalance(true);
+      try {
+        const detectedNetwork = await detectWalletNetwork(activeWallet || '');
+        const network = detectedNetwork || 'testnet';
+        const accountBalance = await getAccountBalance(publicKey, network);
+        if (cancelled) return;
+        setWalletNetwork(detectedNetwork || 'unknown');
+        setBalance(accountBalance);
+      } catch (err) {
+        if (!cancelled) setLocalError(err instanceof Error ? err.message : 'Unable to check wallet balance');
+      } finally {
+        if (!cancelled) setIsCheckingBalance(false);
+      }
+    };
+
+    void checkBalance();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWallet, publicKey]);
+
+  const handleFundTestnet = async () => {
+    if (!publicKey) return;
+    setLocalError(null);
+    setIsFunding(true);
+    try {
+      await fundTestnetAccount(publicKey);
+      const fundedBalance = await waitForTestnetFunding(publicKey);
+      setWalletNetwork('testnet');
+      setBalance(fundedBalance);
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : 'Unable to fund testnet account');
+    } finally {
+      setIsFunding(false);
+    }
+  };
 
   useEffect(() => {
     const refresh = () => setRefreshTick((value) => value + 1);
@@ -71,6 +125,41 @@ export function WalletConnectCard({
                 <p className="mt-1 text-sm text-emerald-100">{connectedDescription}</p>
               </div>
             </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wider">
+              <span className="rounded-full border border-white/15 bg-black/30 px-3 py-1 text-gray-200">App network: {networkType}</span>
+              <span className="rounded-full border border-white/15 bg-black/30 px-3 py-1 text-gray-200">Wallet network: {walletNetwork}</span>
+            </div>
+            {networkType !== 'testnet' && (
+              <div className="mt-4 rounded-xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
+                This flow targets Stellar Testnet, but the app is set to {networkType}.
+                <button type="button" onClick={() => setNetworkType('testnet')} className="mt-3 block rounded-lg bg-amber-300 px-3 py-2 font-bold text-black hover:bg-amber-200">
+                  Switch app to Testnet
+                </button>
+              </div>
+            )}
+            {walletNetwork === 'mainnet' && (
+              <div className="mt-4 rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-100">
+                Wallet network mismatch: this action requires Testnet. Switch the wallet network in its extension before signing.
+              </div>
+            )}
+            {(walletNetwork === 'testnet' || walletNetwork === 'unknown') && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/30 p-4">
+                <div className="text-sm text-gray-200">
+                  <span className="font-semibold">Testnet balance:</span>{' '}
+                  {isCheckingBalance ? 'Checking…' : balance === null ? 'Account not funded' : `${balance.toFixed(2)} XLM`}
+                  {(balance ?? 0) < 2 && !isCheckingBalance && ' · 2 XLM needed'}
+                </div>
+                {(balance ?? 0) < 2 && !isCheckingBalance && (
+                  <button type="button" onClick={handleFundTestnet} disabled={isFunding} className="inline-flex items-center gap-2 rounded-lg bg-emerald-400 px-3 py-2 text-sm font-bold text-black hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60">
+                    <RefreshCw className={`h-4 w-4 ${isFunding ? 'animate-spin' : ''}`} />
+                    {isFunding ? 'Funding and checking…' : 'Fund with Friendbot'}
+                  </button>
+                )}
+              </div>
+            )}
+            {(error || localError) && (
+              <div className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300">{error || localError}</div>
+            )}
             <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-4">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-gray-500">
                 {activeWallet || 'Connected wallet'}

@@ -6,6 +6,8 @@ const withBundleAnalyzer = process.env.ANALYZE === 'true'
   : (config: NextConfig) => config;
 
 const nextConfig: NextConfig = {
+  // Enable standalone output for minimal Docker images — FE-HARD-50
+  output: 'standalone',
   outputFileTracingRoot: path.join(__dirname, '../'),
   reactCompiler: true,
   transpilePackages: ['recharts'],
@@ -66,6 +68,41 @@ const nextConfig: NextConfig = {
   images: {
     formats: ['image/webp', 'image/avif'],
     minimumCacheTTL: 60 * 60 * 24 * 30,
+  },
+  // Immutable CDN cache headers for static assets — FE-HARD-50
+  async headers() {
+    return [
+      {
+        // Next.js hashed static chunks — safe to cache forever
+        source: '/_next/static/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
+        // Public folder assets (images, fonts, manifest)
+        source: '/static/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
+      {
+        // Fonts — long-lived
+        source: '/:path*.woff2',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+    ];
   },
   experimental: {
     optimizePackageImports: ['@stellar/stellar-sdk', 'd3', 'lucide-react'],

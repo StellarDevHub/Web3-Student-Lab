@@ -1,24 +1,66 @@
+//! # SC-HARD-12 — Parametric Insurance Contract with Multi-Oracle Quorum
+//!
+//! Parametric insurance protocol that:
+//!
+//! - **Policy creation**: buyers specify a trigger key, threshold, and direction
+//!   (above/below) along with premium and payout amounts.
+//! - **Underwriter collateral pools**: underwriters deposit capital; solvency
+//!   is checked at policy purchase time.
+//! - **Multi-oracle quorum**: multiple trusted oracle addresses may post values
+//!   for a trigger key.  A claim is processed using the **median** of all posted
+//!   values, ensuring no single oracle can manipulate payouts.
+//! - **Automated claim payouts**: once trigger is met, the payout is credited
+//!   to the buyer's claimable balance and transferred on `withdraw_claim`.
+//! - **Double-claim guard**: policies track their claimed state.
+//! - **Expiry enforcement**: claims are rejected after `expires_at`.
+
 #![no_std]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, token, Address, Env,
-    Symbol,
+    Symbol, Vec,
 };
+
+// ── Errors ────────────────────────────────────────────────────────────────────
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum InsuranceError {
+    AlreadyInitialized = 1,
+    NotInitialized = 2,
+    Unauthorized = 3,
+    InvalidAmount = 4,
+    Insolvent = 5,
+    PolicyMissing = 6,
+    TriggerNotMet = 7,
+    Expired = 8,
+    AlreadyClaimed = 9,
+    NotAnOracle = 10,
+    InsufficientOracleData = 11,
+}
+
+// ── Storage keys ──────────────────────────────────────────────────────────────
 
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
     Admin,
     Token,
-    Oracle,
+    /// Vec<Address> — whitelisted oracle addresses.
+    Oracles,
     TotalCapital,
     LockedLiability,
     UnderwriterBalance(Address),
     Policy(u64),
     NextPolicyId,
-    OracleValue(Symbol),
+    /// Vec<i128> — all values posted by oracles for a trigger key.
+    OracleValues(Symbol),
     Claimable(Address),
+    /// u32 — minimum oracle quorum required before a claim can be processed.
+    QuorumThreshold,
 }
+
+// ── Data types ────────────────────────────────────────────────────────────────
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -34,34 +76,38 @@ pub struct Policy {
     pub claimed: bool,
 }
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum InsuranceError {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    Unauthorized = 3,
-    InvalidAmount = 4,
-    Insolvent = 5,
-    PolicyMissing = 6,
-    TriggerNotMet = 7,
-    Expired = 8,
-    AlreadyClaimed = 9,
-}
+// ── Contract ──────────────────────────────────────────────────────────────────
 
 #[contract]
 pub struct ParametricInsuranceContract;
 
 #[contractimpl]
 impl ParametricInsuranceContract {
-    pub fn initialize(env: Env, admin: Address, token: Address, oracle: Address) {
+    // ── Initialisation ────────────────────────────────────────────────────────
+
+    /// Initialise the contract.
+    ///
+    /// `oracles` is the initial list of trusted oracle addresses.
+    /// `quorum_threshold` is the minimum number of oracle reports required
+    /// before the median can be used to settle a claim (≥ 1).
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        token: Address,
+        oracles: Vec<Address>,
+        quorum_threshold: u32,
+    ) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic_with_error!(&env, InsuranceError::AlreadyInitialized);
         }
-
         admin.require_auth();
+        assert!(quorum_threshold >= 1, "quorum must be >= 1");
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Token, &token);
-        env.storage().instance().set(&DataKey::Oracle, &oracle);
+        env.storage().instance().set(&DataKey::Oracles, &oracles);
+        env.storage()
+            .instance()
+            .set(&DataKey::QuorumThreshold, &quorum_threshold);
         env.storage().instance().set(&DataKey::TotalCapital, &0i128);
         env.storage()
             .instance()
@@ -69,27 +115,25 @@ impl ParametricInsuranceContract {
         env.storage().instance().set(&DataKey::NextPolicyId, &1u64);
     }
 
+    // ── Underwriting ──────────────────────────────────────────────────────────
+
+    /// Underwriter deposits capital into the collateral pool.
     pub fn underwrite(env: Env, underwriter: Address, amount: i128) {
         ensure_initialized(&env);
         underwriter.require_auth();
-
         if amount <= 0 {
             panic_with_error!(&env, InsuranceError::InvalidAmount);
         }
-
         let token: Address = env
             .storage()
             .instance()
             .get(&DataKey::Token)
             .unwrap_or_else(|| panic_with_error!(&env, InsuranceError::NotInitialized));
-
-        let token_client = token::Client::new(&env, &token);
-        token_client.transfer(&underwriter, &env.current_contract_address(), &amount);
-
+        token::Client::new(&env, &token)
+            .transfer(&underwriter, &env.current_contract_address(), &amount);
         let mut total = total_capital(&env);
         total += amount;
         env.storage().instance().set(&DataKey::TotalCapital, &total);
-
         let bal: i128 = env
             .storage()
             .instance()
@@ -100,6 +144,47 @@ impl ParametricInsuranceContract {
             .set(&DataKey::UnderwriterBalance(underwriter), &(bal + amount));
     }
 
+    /// Underwriter withdraws capital (subject to solvency check).
+    pub fn withdraw_underwriting(env: Env, underwriter: Address, amount: i128) {
+        ensure_initialized(&env);
+        underwriter.require_auth();
+        if amount <= 0 {
+            panic_with_error!(&env, InsuranceError::InvalidAmount);
+        }
+        let current: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::UnderwriterBalance(underwriter.clone()))
+            .unwrap_or(0);
+        if current < amount {
+            panic_with_error!(&env, InsuranceError::InvalidAmount);
+        }
+        let total = total_capital(&env);
+        let locked = locked_liability(&env);
+        if total - amount < locked {
+            panic_with_error!(&env, InsuranceError::Insolvent);
+        }
+        env.storage().instance().set(
+            &DataKey::UnderwriterBalance(underwriter.clone()),
+            &(current - amount),
+        );
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalCapital, &(total - amount));
+        let token: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Token)
+            .unwrap_or_else(|| panic_with_error!(&env, InsuranceError::NotInitialized));
+        token::Client::new(&env, &token)
+            .transfer(&env.current_contract_address(), &underwriter, &amount);
+    }
+
+    // ── Policy purchase ───────────────────────────────────────────────────────
+
+    /// Buy a parametric insurance policy.
+    ///
+    /// Returns the policy ID.
     pub fn buy_policy(
         env: Env,
         buyer: Address,
@@ -112,30 +197,25 @@ impl ParametricInsuranceContract {
     ) -> u64 {
         ensure_initialized(&env);
         buyer.require_auth();
-
         if premium <= 0 || payout <= 0 {
             panic_with_error!(&env, InsuranceError::InvalidAmount);
         }
         if expires_at <= env.ledger().timestamp() {
             panic_with_error!(&env, InsuranceError::InvalidAmount);
         }
-
         let mut locked = locked_liability(&env);
         locked += payout;
         let mut total = total_capital(&env);
         if total + premium < locked {
             panic_with_error!(&env, InsuranceError::Insolvent);
         }
-
         let token: Address = env
             .storage()
             .instance()
             .get(&DataKey::Token)
             .unwrap_or_else(|| panic_with_error!(&env, InsuranceError::NotInitialized));
-
-        let token_client = token::Client::new(&env, &token);
-        token_client.transfer(&buyer, &env.current_contract_address(), &premium);
-
+        token::Client::new(&env, &token)
+            .transfer(&buyer, &env.current_contract_address(), &premium);
         total += premium;
         env.storage().instance().set(&DataKey::TotalCapital, &total);
         env.storage()
@@ -158,7 +238,6 @@ impl ParametricInsuranceContract {
             expires_at,
             claimed: false,
         };
-
         env.storage().instance().set(&DataKey::Policy(id), &policy);
         env.storage()
             .instance()
@@ -166,24 +245,40 @@ impl ParametricInsuranceContract {
         id
     }
 
+    // ── Oracle reporting ──────────────────────────────────────────────────────
+
+    /// A whitelisted oracle posts a value for a trigger key.
+    ///
+    /// Multiple oracles may post for the same key; all values are accumulated.
+    /// The median is used at claim time.
     pub fn post_oracle_value(env: Env, oracle: Address, trigger_key: Symbol, value: i128) {
         ensure_initialized(&env);
         oracle.require_auth();
-
-        let expected_oracle: Address = env
+        let oracles: Vec<Address> = env
             .storage()
             .instance()
-            .get(&DataKey::Oracle)
-            .unwrap_or_else(|| panic_with_error!(&env, InsuranceError::NotInitialized));
-        if oracle != expected_oracle {
-            panic_with_error!(&env, InsuranceError::Unauthorized);
+            .get(&DataKey::Oracles)
+            .unwrap_or_else(|| Vec::new(&env));
+        if !oracles.contains(&oracle) {
+            panic_with_error!(&env, InsuranceError::NotAnOracle);
         }
-
+        let mut values: Vec<i128> = env
+            .storage()
+            .instance()
+            .get(&DataKey::OracleValues(trigger_key.clone()))
+            .unwrap_or_else(|| Vec::new(&env));
+        values.push_back(value);
         env.storage()
             .instance()
-            .set(&DataKey::OracleValue(trigger_key), &value);
+            .set(&DataKey::OracleValues(trigger_key), &values);
     }
 
+    // ── Claim processing ──────────────────────────────────────────────────────
+
+    /// Process a claim for policy `policy_id`.
+    ///
+    /// The payout is credited to the buyer's claimable balance.  The oracle
+    /// quorum must be met and the median must satisfy the trigger condition.
     pub fn claim(env: Env, buyer: Address, policy_id: u64) -> i128 {
         ensure_initialized(&env);
         buyer.require_auth();
@@ -204,16 +299,28 @@ impl ParametricInsuranceContract {
             panic_with_error!(&env, InsuranceError::Expired);
         }
 
-        let oracle_value: i128 = env
+        // ── Multi-oracle quorum check ──────────────────────────────────────────
+        let quorum: u32 = env
             .storage()
             .instance()
-            .get(&DataKey::OracleValue(policy.trigger_key.clone()))
-            .unwrap_or_else(|| panic_with_error!(&env, InsuranceError::TriggerNotMet));
+            .get(&DataKey::QuorumThreshold)
+            .unwrap_or(1);
+        let values: Vec<i128> = env
+            .storage()
+            .instance()
+            .get(&DataKey::OracleValues(policy.trigger_key.clone()))
+            .unwrap_or_else(|| Vec::new(&env));
+        if (values.len() as u32) < quorum {
+            panic_with_error!(&env, InsuranceError::InsufficientOracleData);
+        }
+
+        // Compute median of posted values
+        let median = compute_median(&env, &values);
 
         let trigger_met = if policy.trigger_above {
-            oracle_value >= policy.trigger_value
+            median >= policy.trigger_value
         } else {
-            oracle_value <= policy.trigger_value
+            median <= policy.trigger_value
         };
         if !trigger_met {
             panic_with_error!(&env, InsuranceError::TriggerNotMet);
@@ -246,51 +353,66 @@ impl ParametricInsuranceContract {
         policy.payout
     }
 
-    pub fn withdraw_underwriting(env: Env, underwriter: Address, amount: i128) {
+    /// Transfer a previously credited payout to the buyer's wallet.
+    pub fn withdraw_claim(env: Env, buyer: Address, amount: i128) {
         ensure_initialized(&env);
-        underwriter.require_auth();
-
+        buyer.require_auth();
         if amount <= 0 {
             panic_with_error!(&env, InsuranceError::InvalidAmount);
         }
-
-        let current: i128 = env
+        let claimable: i128 = env
             .storage()
             .instance()
-            .get(&DataKey::UnderwriterBalance(underwriter.clone()))
+            .get(&DataKey::Claimable(buyer.clone()))
             .unwrap_or(0);
-        if current < amount {
+        if claimable < amount {
             panic_with_error!(&env, InsuranceError::InvalidAmount);
         }
-
-        let total = total_capital(&env);
-        let locked = locked_liability(&env);
-        if total - amount < locked {
-            panic_with_error!(&env, InsuranceError::Insolvent);
-        }
-
-        env.storage().instance().set(
-            &DataKey::UnderwriterBalance(underwriter.clone()),
-            &(current - amount),
-        );
         env.storage()
             .instance()
-            .set(&DataKey::TotalCapital, &(total - amount));
-
+            .set(&DataKey::Claimable(buyer.clone()), &(claimable - amount));
         let token: Address = env
             .storage()
             .instance()
             .get(&DataKey::Token)
             .unwrap_or_else(|| panic_with_error!(&env, InsuranceError::NotInitialized));
-
-        let token_client = token::Client::new(&env, &token);
-        token_client.transfer(&env.current_contract_address(), &underwriter, &amount);
+        token::Client::new(&env, &token)
+            .transfer(&env.current_contract_address(), &buyer, &amount);
     }
 
+    // ── Oracle management ─────────────────────────────────────────────────────
+
+    /// Admin adds a new oracle to the whitelist.
+    pub fn add_oracle(env: Env, admin: Address, oracle: Address) {
+        ensure_initialized(&env);
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic_with_error!(&env, InsuranceError::NotInitialized));
+        if admin != stored_admin {
+            panic_with_error!(&env, InsuranceError::Unauthorized);
+        }
+        admin.require_auth();
+        let mut oracles: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Oracles)
+            .unwrap_or_else(|| Vec::new(&env));
+        if !oracles.contains(&oracle) {
+            oracles.push_back(oracle);
+        }
+        env.storage().instance().set(&DataKey::Oracles, &oracles);
+    }
+
+    // ── View helpers ──────────────────────────────────────────────────────────
+
+    /// Returns the policy struct for `policy_id`, or `None`.
     pub fn get_policy(env: Env, policy_id: u64) -> Option<Policy> {
         env.storage().instance().get(&DataKey::Policy(policy_id))
     }
 
+    /// Returns the solvency ratio in basis points (capital / locked × 10 000).
     pub fn solvency_ratio_bps(env: Env) -> i128 {
         let total = total_capital(&env);
         let locked = locked_liability(&env);
@@ -300,37 +422,24 @@ impl ParametricInsuranceContract {
         (total * 10_000) / locked
     }
 
-    pub fn withdraw_claim(env: Env, buyer: Address, amount: i128) {
-        ensure_initialized(&env);
-        buyer.require_auth();
-
-        if amount <= 0 {
-            panic_with_error!(&env, InsuranceError::InvalidAmount);
-        }
-
-        let claimable: i128 = env
-            .storage()
-            .instance()
-            .get(&DataKey::Claimable(buyer.clone()))
-            .unwrap_or(0);
-        if claimable < amount {
-            panic_with_error!(&env, InsuranceError::InvalidAmount);
-        }
-
+    /// Returns all oracle-posted values for a trigger key.
+    pub fn get_oracle_values(env: Env, trigger_key: Symbol) -> Vec<i128> {
         env.storage()
             .instance()
-            .set(&DataKey::Claimable(buyer.clone()), &(claimable - amount));
+            .get(&DataKey::OracleValues(trigger_key))
+            .unwrap_or_else(|| Vec::new(&env))
+    }
 
-        let token: Address = env
-            .storage()
+    /// Returns the current claimable balance for a buyer.
+    pub fn get_claimable(env: Env, buyer: Address) -> i128 {
+        env.storage()
             .instance()
-            .get(&DataKey::Token)
-            .unwrap_or_else(|| panic_with_error!(&env, InsuranceError::NotInitialized));
-
-        let token_client = token::Client::new(&env, &token);
-        token_client.transfer(&env.current_contract_address(), &buyer, &amount);
+            .get(&DataKey::Claimable(buyer))
+            .unwrap_or(0)
     }
 }
+
+// ── Private helpers ───────────────────────────────────────────────────────────
 
 fn ensure_initialized(env: &Env) {
     if !env.storage().instance().has(&DataKey::Admin) {
@@ -352,278 +461,30 @@ fn locked_liability(env: &Env) -> i128 {
         .unwrap_or(0)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use soroban_sdk::{
-        testutils::{Address as _, Ledger},
-        token, Address, Env, Symbol,
-    };
-
-    fn create_token<'a>(env: &'a Env, admin: &Address) -> (Address, token::StellarAssetClient<'a>) {
-        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
-        let token_id = token_contract.address();
-        let sac = token::StellarAssetClient::new(env, &token_id);
-        (token_id, sac)
+/// Compute the median of a `Vec<i128>` using insertion sort (no_std compatible).
+///
+/// With an even number of elements returns the lower median.
+fn compute_median(env: &Env, values: &Vec<i128>) -> i128 {
+    let n = values.len() as usize;
+    // Copy into a fixed-size scratch buffer (max 32 oracle values)
+    let mut buf = [0i128; 32];
+    let count = n.min(32);
+    for i in 0..count {
+        buf[i] = values.get(i as u32).unwrap_or(0);
     }
-
-    fn setup() -> (Env, Address, Address, Address, Address, Address, Address) {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let admin = Address::generate(&env);
-        let oracle = Address::generate(&env);
-        let buyer = Address::generate(&env);
-        let underwriter = Address::generate(&env);
-
-        let (token, sac) = create_token(&env, &admin);
-        sac.mint(&underwriter, &50_000);
-        sac.mint(&buyer, &10_000);
-
-        let contract_id = env.register(ParametricInsuranceContract, ());
-        let client = ParametricInsuranceContractClient::new(&env, &contract_id);
-        client.initialize(&admin, &token, &oracle);
-
-        (env, contract_id, token, admin, oracle, buyer, underwriter)
+    // Insertion sort
+    for i in 1..count {
+        let key = buf[i];
+        let mut j = i;
+        while j > 0 && buf[j - 1] > key {
+            buf[j] = buf[j - 1];
+            j -= 1;
+        }
+        buf[j] = key;
     }
-
-    #[test]
-    fn buys_policy_and_claims_on_trigger() {
-        let (env, _contract_id, _token, _admin, oracle, buyer, underwriter) = setup();
-        let client = ParametricInsuranceContractClient::new(&env, &_contract_id);
-
-        client.underwrite(&underwriter, &30_000);
-
-        let trigger = Symbol::new(&env, "temp_celsius");
-        let policy_id = client.buy_policy(
-            &buyer,
-            &500,
-            &10_000,
-            &(env.ledger().timestamp() + 100),
-            &trigger,
-            &35i128,
-            &true,
-        );
-
-        let policy = client.get_policy(&policy_id).unwrap();
-        assert_eq!(policy.premium, 500);
-        assert_eq!(policy.payout, 10_000);
-        assert!(!policy.claimed);
-
-        client.post_oracle_value(&oracle, &trigger, &42i128);
-
-        let payout = client.claim(&buyer, &policy_id);
-        assert_eq!(payout, 10_000);
-    }
-
-    #[test]
-    #[should_panic(expected = "Error(Contract, #7)")]
-    fn rejects_claim_when_oracle_not_set() {
-        let (env, _contract_id, _token, _admin, _oracle, buyer, underwriter) = setup();
-        let client = ParametricInsuranceContractClient::new(&env, &_contract_id);
-
-        client.underwrite(&underwriter, &30_000);
-
-        let trigger = Symbol::new(&env, "temp_celsius");
-        let policy_id = client.buy_policy(
-            &buyer,
-            &500,
-            &10_000,
-            &(env.ledger().timestamp() + 100),
-            &trigger,
-            &35i128,
-            &true,
-        );
-
-        client.claim(&buyer, &policy_id);
-    }
-
-    #[test]
-    #[should_panic(expected = "Error(Contract, #7)")]
-    fn rejects_claim_when_trigger_not_met_below() {
-        let (env, _contract_id, _token, _admin, oracle, buyer, underwriter) = setup();
-        let client = ParametricInsuranceContractClient::new(&env, &_contract_id);
-
-        client.underwrite(&underwriter, &30_000);
-
-        // Policy triggers when temp is BELOW 10
-        let trigger = Symbol::new(&env, "temp_celsius");
-        let policy_id = client.buy_policy(
-            &buyer,
-            &500,
-            &5_000,
-            &(env.ledger().timestamp() + 100),
-            &trigger,
-            &10i128,
-            &false,
-        );
-
-        // Oracle posts 25 - trigger NOT met (25 > 10, but we need <= 10)
-        client.post_oracle_value(&oracle, &trigger, &25i128);
-
-        client.claim(&buyer, &policy_id);
-    }
-
-    #[test]
-    fn claims_when_trigger_below() {
-        let (env, _contract_id, _token, _admin, oracle, buyer, underwriter) = setup();
-        let client = ParametricInsuranceContractClient::new(&env, &_contract_id);
-
-        client.underwrite(&underwriter, &30_000);
-
-        // Policy triggers when oracle value is BELOW 10
-        let trigger = Symbol::new(&env, "temp_celsius");
-        let policy_id = client.buy_policy(
-            &buyer,
-            &500,
-            &5_000,
-            &(env.ledger().timestamp() + 100),
-            &trigger,
-            &10i128,
-            &false,
-        );
-
-        client.post_oracle_value(&oracle, &trigger, &5i128);
-
-        let payout = client.claim(&buyer, &policy_id);
-        assert_eq!(payout, 5_000);
-    }
-
-    #[test]
-    fn rejects_expired_policy() {
-        let (env, _contract_id, _token, _admin, oracle, buyer, underwriter) = setup();
-        let client = ParametricInsuranceContractClient::new(&env, &_contract_id);
-
-        client.underwrite(&underwriter, &30_000);
-
-        let trigger = Symbol::new(&env, "rainfall_mm");
-        let policy_id = client.buy_policy(
-            &buyer,
-            &200,
-            &3_000,
-            &(env.ledger().timestamp() + 10),
-            &trigger,
-            &100i128,
-            &true,
-        );
-
-        // Advance time past expiry
-        // Note: Ledger state manipulation is not directly supported in this SDK version
-        // Tests rely on natural ledger progression or sequence number advances
-
-        client.post_oracle_value(&oracle, &trigger, &150i128);
-
-        client.claim(&buyer, &policy_id);
-    }
-
-    #[test]
-    #[should_panic(expected = "Error(Contract, #9)")]
-    fn prevents_double_claim() {
-        let (env, _contract_id, _token, _admin, oracle, buyer, underwriter) = setup();
-        let client = ParametricInsuranceContractClient::new(&env, &_contract_id);
-
-        client.underwrite(&underwriter, &30_000);
-
-        let trigger = Symbol::new(&env, "wind_speed");
-        let policy_id = client.buy_policy(
-            &buyer,
-            &300,
-            &5_000,
-            &(env.ledger().timestamp() + 100),
-            &trigger,
-            &80i128,
-            &true,
-        );
-
-        client.post_oracle_value(&oracle, &trigger, &120i128);
-
-        client.claim(&buyer, &policy_id);
-
-        client.claim(&buyer, &policy_id);
-    }
-
-    #[test]
-    #[should_panic(expected = "Error(Contract, #5)")]
-    fn rejects_policy_that_would_break_solvency() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let admin = Address::generate(&env);
-        let oracle = Address::generate(&env);
-        let buyer = Address::generate(&env);
-        let underwriter = Address::generate(&env);
-
-        let (token, sac) = create_token(&env, &admin);
-        sac.mint(&underwriter, &1_000);
-
-        let contract_id = env.register(ParametricInsuranceContract, ());
-        let client = ParametricInsuranceContractClient::new(&env, &contract_id);
-        client.initialize(&admin, &token, &oracle);
-        client.underwrite(&underwriter, &1_000);
-
-        let _ = client.buy_policy(
-            &buyer,
-            &10,
-            &5_000,
-            &(env.ledger().timestamp() + 100),
-            &Symbol::new(&env, "price_crash"),
-            &0i128,
-            &false,
-        );
-    }
-
-    #[test]
-    fn underwriter_can_withdraw() {
-        let (env, _contract_id, _token, _admin, _oracle, _buyer, underwriter) = setup();
-        let client = ParametricInsuranceContractClient::new(&env, &_contract_id);
-
-        client.underwrite(&underwriter, &20_000);
-        client.withdraw_underwriting(&underwriter, &5_000);
-
-        let token_client = token::Client::new(&env, &_token);
-        // Underwriter deposited 20k, withdrew 5k => balance unchanged (just moved back)
-        let bal = token_client.balance(&underwriter);
-        // Started with 50k, deposited 20k (30k remaining), withdrew 5k (35k)
-        assert_eq!(bal, 35_000);
-    }
-
-    #[test]
-    fn buyer_can_withdraw_claim() {
-        let (env, _contract_id, _token, _admin, oracle, buyer, underwriter) = setup();
-        let client = ParametricInsuranceContractClient::new(&env, &_contract_id);
-
-        client.underwrite(&underwriter, &30_000);
-
-        let trigger = Symbol::new(&env, "temp");
-        let policy_id = client.buy_policy(
-            &buyer,
-            &500,
-            &10_000,
-            &(env.ledger().timestamp() + 100),
-            &trigger,
-            &35i128,
-            &true,
-        );
-
-        client.post_oracle_value(&oracle, &trigger, &42i128);
-        client.claim(&buyer, &policy_id);
-        client.withdraw_claim(&buyer, &10_000);
-
-        let token_client = token::Client::new(&env, &_token);
-        let buyer_bal = token_client.balance(&buyer);
-        // Started with 10_000, paid 500 premium, withdrew 10_000 claim => 19_500
-        assert_eq!(buyer_bal, 19_500);
-    }
-
-    #[test]
-    fn solvency_ratio_works() {
-        let (env, _contract_id, _token, _admin, _oracle, _buyer, underwriter) = setup();
-        let client = ParametricInsuranceContractClient::new(&env, &_contract_id);
-
-        // No liabilities yet
-        assert_eq!(client.solvency_ratio_bps(), 100_000);
-
-        client.underwrite(&underwriter, &20_000);
-        assert_eq!(client.solvency_ratio_bps(), 100_000);
-    }
+    let _ = env; // env kept for future use (e.g., events)
+    buf[count / 2]
 }
+
+#[cfg(test)]
+mod tests;

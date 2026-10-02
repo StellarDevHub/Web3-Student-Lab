@@ -1,3 +1,5 @@
+import { requestBackgroundSync } from './service-worker-sync';
+
 const DB_NAME = 'web3-student-lab-offline-sync';
 const DB_VERSION = 2;
 const REQUEST_STORE = 'queued-requests';
@@ -117,6 +119,11 @@ export async function queueOfflineRequest(request: Omit<QueuedRequest, 'id' | 'c
     idempotencyKey: request.idempotencyKey ?? createId(),
     clientTimestamp: request.clientTimestamp ?? Date.now(),
   });
+
+  // Fire-and-forget: if Background Sync is available the worker replays this
+  // queue on restoration even when the `online` event was missed. Failures
+  // fall back to the `online` listener in `registerOnlineSync`.
+  requestBackgroundSync().catch(() => undefined);
 }
 
 export async function queueLessonProgressCompletion(input: {
@@ -147,6 +154,10 @@ export async function queueLessonProgressCompletion(input: {
     clientTimestamp: Date.now(),
     score: input.score,
   });
+
+  // Same Background Sync safety net as `queueOfflineRequest` — progress must
+  // survive a missed `online` event and sync on restoration.
+  requestBackgroundSync().catch(() => undefined);
 }
 
 export async function getQueuedRequests(): Promise<QueuedRequest[]> {
@@ -282,10 +293,7 @@ export async function flushQueuedLessonProgress() {
 /** Count of items still pending sync — drives local progress indicators. */
 export async function getPendingSyncCount(): Promise<number> {
   if (typeof window === 'undefined') return 0;
-  const [requests, progress] = await Promise.all([
-    getQueuedRequests(),
-    getQueuedLessonProgress(),
-  ]);
+  const [requests, progress] = await Promise.all([getQueuedRequests(), getQueuedLessonProgress()]);
   return requests.length + progress.filter((p) => !p.syncedAt).length;
 }
 
@@ -298,15 +306,29 @@ export function registerOnlineSync() {
     return () => undefined;
   }
 
-  const handleOnline = () => {
+  const flush = () => {
     flushOfflineSyncQueue().catch((error) => {
       console.error('[OfflineSync] Error flushing queued work:', error);
     });
   };
 
+  const handleOnline = () => {
+    flush();
+  };
+
+  // Background Sync wake-up from `public/sw.js`: the worker cannot replay the
+  // queue itself (no localStorage token), so it asks clients to flush.
+  const handleWorkerMessage = (event: MessageEvent) => {
+    if (event.data?.type === 'FLUSH_QUEUE') {
+      flush();
+    }
+  };
+
   window.addEventListener('online', handleOnline);
+  navigator.serviceWorker?.addEventListener('message', handleWorkerMessage);
 
   return () => {
     window.removeEventListener('online', handleOnline);
+    navigator.serviceWorker?.removeEventListener('message', handleWorkerMessage);
   };
 }

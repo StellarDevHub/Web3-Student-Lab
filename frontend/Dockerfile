@@ -1,24 +1,29 @@
-# Stage 1: Dependencies
+# ── Stage 1: Dependency installer ─────────────────────────────────────────────
+# Install only production-relevant node_modules using the lockfile.
 FROM node:22-alpine AS deps
-RUN apk add --no-libc-compat libc6-compat
+# libc6-compat is required for some native bindings on Alpine
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY frontend/package.json frontend/pnpm-lock.yaml* ./
-RUN npm install -g pnpm && pnpm i --frozen-lockfile || npm install --legacy-peer-deps
+RUN npm install -g pnpm@latest --ignore-scripts && \
+    pnpm install --frozen-lockfile --ignore-scripts
 
-# Stage 2: Builder
+# ── Stage 2: Builder ──────────────────────────────────────────────────────────
 FROM node:22-alpine AS builder
 WORKDIR /app
-
-COPY --from=deps /app/node_modules ./node_modules
-COPY frontend/ ./
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
-RUN npm run build || npx next build --webpack
+COPY --from=deps /app/node_modules ./node_modules
+COPY frontend/ ./
 
-# Stage 3: Runner (Production minimal non-root image)
+RUN npm run build
+
+# ── Stage 3: Production runner ────────────────────────────────────────────────
+# Uses the Next.js standalone output — only includes the server bundle,
+# static assets and a minimal node_modules. Target image size < 150 MB.
 FROM node:22-alpine AS runner
 WORKDIR /app
 
@@ -27,20 +32,21 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Run as non-root for security — FE-HARD-50
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
+# Copy only what the standalone server needs
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
 USER nextjs
 
 EXPOSE 3000
 
+# Lightweight healthcheck — avoids pulling extra deps
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 0)})" || exit 0
+  CMD wget -qO- http://localhost:3000/api/health || exit 1
 
 CMD ["node", "server.js"]

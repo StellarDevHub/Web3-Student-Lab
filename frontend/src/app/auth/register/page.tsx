@@ -11,6 +11,7 @@ import { WalletConnectCard } from '@/components/wallet/WalletConnectCard';
 import { PasswordStrengthMeter } from '@/components/auth/PasswordStrengthMeter';
 import { calculatePasswordStrength } from '@/utils/passwordStrength';
 import { checkPasswordBreached } from '@/utils/pwnedPasswordCheck';
+import { getPublicEnv } from '@/lib/env';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -52,7 +53,7 @@ export default function RegisterPage() {
     if (!turnstileToken && typeof window !== 'undefined' && (window as any).turnstile) {
       try {
         (window as any).turnstile.render('#turnstile-container', {
-          sitekey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '',
+          sitekey: getPublicEnv().turnstileSiteKey || '',
           callback: onTurnstileSuccess,
         });
       } catch (error) {

@@ -1,4 +1,5 @@
 import HardwareWalletConnector from '@/components/hardware-wallet/HardwareWalletConnector';
+import LedgerSigningWorkflow from '@/components/hardware-wallet/LedgerSigningWorkflow';
 
 export default function HardwareWalletPage() {
   return (
@@ -11,6 +12,7 @@ export default function HardwareWalletPage() {
           </p>
         </header>
         <HardwareWalletConnector />
+        <LedgerSigningWorkflow />
       </div>
     </main>
   );

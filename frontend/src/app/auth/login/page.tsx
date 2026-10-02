@@ -8,8 +8,9 @@ import { WalletConnectCard } from '@/components/wallet/WalletConnectCard';
 import { useWalletProfileCompletion } from '@/lib/profile-completion';
 import { useEffect, useState } from 'react';
 import { getWorkspaceId } from '@/lib/api-config';
+import { getApiEndpoint, getPublicEnv } from '@/lib/env';
 
-const GITHUB_OAUTH_URL = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1'}/oauth/github`;
+const GITHUB_OAUTH_URL = getApiEndpoint('/oauth/github');
 
 export default function LoginPage() {
   const router = useRouter();
@@ -43,7 +44,7 @@ export default function LoginPage() {
     if (!turnstileToken && typeof window !== 'undefined' && (window as any).turnstile) {
       try {
         (window as any).turnstile.render('#turnstile-login-container', {
-          sitekey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '',
+          sitekey: getPublicEnv().turnstileSiteKey || '',
           callback: (token: string) => setTurnstileToken(token),
         });
       } catch (error) {

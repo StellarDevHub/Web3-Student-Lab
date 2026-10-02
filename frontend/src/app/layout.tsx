@@ -1,3 +1,4 @@
+import { QueryProvider } from '@/lib/query/QueryProvider';
 import { CommandPalette } from '@/components/common/CommandPalette';
 import { KeyboardShortcutsProvider } from '@/components/keyboard/KeyboardShortcutsProvider';
 import Navbar from '@/components/layout/Navbar';
@@ -44,7 +45,8 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-background text-foreground min-h-screen antialiased overflow-x-hidden" suppressHydrationWarning>
-        <ThemeProvider>
+        <QueryProvider>
+          <ThemeProvider>
           <WalletProvider>
             <AuthProvider>
               <I18nProvider>
@@ -76,7 +78,8 @@ export default function RootLayout({
               </I18nProvider>
             </AuthProvider>
           </WalletProvider>
-        </ThemeProvider>
+          </ThemeProvider>
+        </QueryProvider>
       </body>
     </html>
   );

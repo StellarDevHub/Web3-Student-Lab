@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 const NONCE_HEADER = 'x-nonce';
 const ADMIN_ROUTE_PREFIX = '/admin';
@@ -105,6 +105,12 @@ function isValidRedirectUrl(url: string, requestUrl: URL): boolean {
 }
 
 export async function middleware(request: NextRequest) {
+  if (request.nextUrl.pathname === '/peer-review-new' || request.nextUrl.pathname === '/peer-review-new/') {
+    const destination = request.nextUrl.clone();
+    destination.pathname = '/peer-review';
+    return NextResponse.redirect(destination, 301);
+  }
+
   const ip = request.ip || request.headers.get('x-forwarded-for') || '127.0.0.1';
   const userAgent = request.headers.get('user-agent') || '';
 
@@ -134,8 +140,8 @@ export async function middleware(request: NextRequest) {
 
     // JWT and Session Validation
     const authHeader = request.headers.get('authorization');
-    const token = authHeader?.startsWith('Bearer ') 
-      ? authHeader.substring(7) 
+    const token = authHeader?.startsWith('Bearer ')
+      ? authHeader.substring(7)
       : request.cookies.get('admin_token')?.value;
 
     let unauthorized = true;
@@ -154,7 +160,7 @@ export async function middleware(request: NextRequest) {
     if (unauthorized) {
       const loginUrl = new URL(LOGIN_ROUTE, request.url);
       const returnPath = request.nextUrl.pathname + request.nextUrl.search;
-      
+
       if (isValidRedirectUrl(returnPath, request.nextUrl)) {
         loginUrl.searchParams.set('returnTo', returnPath);
       }
@@ -171,38 +177,68 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // 5. Existing CSP Logic
+  // 5. Strict CSP with nonce — FE-HARD-49
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const response = NextResponse.next();
   response.headers.set(NONCE_HEADER, nonce);
 
-  const cspDirectives = {
-    'default-src': ["'self'"],
-    'script-src': [`'nonce-${nonce}'`, "'strict-dynamic'", "'self'"],
-    'style-src': ["'self'", "'unsafe-inline'"],
-    'img-src': ["'self'", 'data:', 'blob:', 'https:'],
-    'font-src': ["'self'", 'data:'],
-    'connect-src': [
-      "'self'",
-      process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080',
-      process.env.NEXT_PUBLIC_WS_URL?.replace(/^ws/, 'wss') || 'wss://localhost:8080',
-      'https://soroban-testnet.stellar.org',
-      'https://soroban-test.stellar.org:443',
-      'https://horizon-testnet.stellar.org',
-      'https://stellar.expert',
-    ],
-    'frame-src': ["'none'"],
-    'object-src': ["'none'"],
-    'base-uri': ["'self'"],
-    'form-action': ["'self'"],
-    'frame-ancestors': ["'none'"],
-    ...(process.env.VERCEL_ENV === 'production' ? {
-      'block-all-mixed-content': [],
-      'upgrade-insecure-requests': [],
-    } : {}),
-    'worker-src': ["'self'", 'blob:'],
-    'manifest-src': ["'self'"],
-  };
+  const isDev = process.env.NODE_ENV === 'development';
+
+  const cspDirectives: Record<string, string[]> = isDev
+    ? {
+        // Development: allow unsafe-eval for HMR / source maps only
+        'default-src': ["'self'"],
+        'script-src': ["'self'", "'unsafe-eval'", "'unsafe-inline'"],
+        'style-src': ["'self'", "'unsafe-inline'"],
+        'img-src': ["'self'", 'data:', 'blob:', 'https:', 'http:'],
+        'font-src': ["'self'", 'data:'],
+        'connect-src': [
+          "'self'",
+          process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080',
+          process.env.NEXT_PUBLIC_WS_URL?.replace(/^wss?/, 'ws') || 'ws://localhost:8080',
+          process.env.NEXT_PUBLIC_WS_URL?.replace(/^wss?/, 'wss') || 'wss://localhost:8080',
+          'https://soroban-testnet.stellar.org',
+          'https://soroban-test.stellar.org:443',
+          'https://horizon-testnet.stellar.org',
+          'https://stellar.expert',
+          'ws:', 'wss:', 'https:', 'http:',
+        ],
+        'frame-src': ["'none'"],
+        'object-src': ["'none'"],
+        'base-uri': ["'self'"],
+        'form-action': ["'self'"],
+        'frame-ancestors': ["'none'"],
+        'worker-src': ["'self'", 'blob:'],
+        'manifest-src': ["'self'"],
+      }
+    : {
+        // Production: nonce-based, no unsafe-inline / unsafe-eval
+        'default-src': ["'self'"],
+        'script-src': [`'nonce-${nonce}'`, "'strict-dynamic'", "'self'"],
+        // No unsafe-inline in production — CSS modules and CSS vars only
+        'style-src': ["'self'"],
+        'img-src': ["'self'", 'data:', 'blob:', 'https:'],
+        'font-src': ["'self'", 'data:'],
+        'connect-src': [
+          "'self'",
+          process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080',
+          (process.env.NEXT_PUBLIC_WS_URL || 'wss://localhost:8080').replace(/^https/, 'wss').replace(/^http/, 'ws'),
+          (process.env.NEXT_PUBLIC_WS_URL || 'wss://localhost:8080').replace(/^wss?/, 'wss'),
+          'https://soroban-testnet.stellar.org',
+          'https://soroban-test.stellar.org:443',
+          'https://horizon-testnet.stellar.org',
+          'https://stellar.expert',
+        ],
+        'frame-src': ["'none'"],
+        'object-src': ["'none'"],
+        'base-uri': ["'self'"],
+        'form-action': ["'self'"],
+        'frame-ancestors': ["'none'"],
+        'block-all-mixed-content': [],
+        'upgrade-insecure-requests': [],
+        'worker-src': ["'self'", 'blob:'],
+        'manifest-src': ["'self'"],
+      };
 
   const cspValue = Object.entries(cspDirectives)
     .map(([directive, values]) => {
@@ -212,7 +248,27 @@ export async function middleware(request: NextRequest) {
     .join('; ');
 
   response.headers.set('Content-Security-Policy', cspValue);
-  response.headers.set('Content-Security-Policy-Report-Only', `${cspValue}; report-uri ${process.env.NEXT_PUBLIC_CSP_REPORT_URI || '/api/security/csp-report'}`);
+  response.headers.set(
+    'Content-Security-Policy-Report-Only',
+    `${cspValue}; report-uri ${process.env.NEXT_PUBLIC_CSP_REPORT_URI || '/api/security/csp-report'}`,
+  );
+
+  // HSTS — FE-HARD-49: enforce HTTPS in production
+  if (!isDev) {
+    response.headers.set(
+      'Strict-Transport-Security',
+      'max-age=63072000; includeSubDomains; preload',
+    );
+  }
+
+  // Additional hardening headers
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=()',
+  );
 
   return response;
 }

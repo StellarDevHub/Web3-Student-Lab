@@ -11,7 +11,7 @@ import React, {
   useRef,
 } from 'react';
 import { markWalletProfileComplete } from '@/lib/profile-completion';
-import { authAPI, User } from '@/lib/api';
+import { authAPI, normalizeAuthResponse, User } from '@/lib/api';
 import { useWallet } from './WalletContext';
 
 interface AuthContextType {
@@ -41,14 +41,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const lastProfileCheckRef = useRef<Map<string, number>>(new Map());
   const profileCheckInFlightRef = useRef<Map<string, Promise<void>>>(new Map());
 
+  const persistSession = useCallback((response: unknown) => {
+    const session = normalizeAuthResponse(response);
+    const nextToken = session.token ?? session.accessToken;
+
+    if (!session.user && !nextToken) {
+      return false;
+    }
+
+    if (session.user) {
+      setUser(session.user);
+      localStorage.setItem('user', JSON.stringify(session.user));
+    }
+
+    if (nextToken) {
+      setToken(nextToken);
+      localStorage.setItem('token', nextToken);
+      localStorage.setItem('accessToken', nextToken);
+    }
+
+    if (session.refreshToken) {
+      localStorage.setItem('refreshToken', session.refreshToken);
+    }
+
+    return true;
+  }, []);
+
   const loginWithWallet = async (providerName: string) => {
     try {
       setError(null);
       setIsLoading(true);
       const res = await authenticateWithWallet(providerName);
-      if (res?.user && res?.token) {
-        setUser(res.user);
-        setToken(res.token);
+      if (!persistSession(res)) {
+        throw new Error('Wallet login failed: Invalid response from server');
       }
     } catch (err: any) {
       const msg = err instanceof Error ? err.message : 'Wallet login failed';
@@ -130,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true;
     const initAuth = async () => {
-      const storedToken = localStorage.getItem('token');
+      const storedToken = localStorage.getItem('token') ?? localStorage.getItem('accessToken');
       const storedUser = localStorage.getItem('user');
 
       if (storedToken || storedUser) {
@@ -153,6 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } catch (err) {
             if (axios.isAxiosError(err) && err.response?.status === 401) {
               localStorage.removeItem('token');
+              localStorage.removeItem('accessToken');
               localStorage.removeItem('user');
               if (isMounted) {
                 setUser(null);
@@ -191,16 +217,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
       const response = await authAPI.login({ email, password, turnstileToken });
 
-      const userObj = response?.user || (response as any)?.data?.user;
-      const tokenObj = response?.token || response?.accessToken || (response as any)?.data?.token || (response as any)?.data?.accessToken;
-
-      if (userObj && tokenObj) {
-        setUser(userObj);
-        setToken(tokenObj);
-        localStorage.setItem('token', tokenObj);
-        localStorage.setItem('user', JSON.stringify(userObj));
-        if (publicKey && userObj.email) {
-          markWalletProfileComplete(publicKey, userObj.email);
+      const session = normalizeAuthResponse(response);
+      if (session.user && session.token) {
+        persistSession(session);
+        if (publicKey && session.user.email) {
+          markWalletProfileComplete(publicKey, session.user.email);
         }
         return response;
       }
@@ -234,16 +255,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         turnstileToken,
       });
 
-      const userObj = response?.user || (response as any)?.data?.user;
-      const tokenObj = response?.token || response?.accessToken || (response as any)?.data?.token || (response as any)?.data?.accessToken;
-
-      if (userObj && tokenObj) {
-        setUser(userObj);
-        setToken(tokenObj);
-        localStorage.setItem('token', tokenObj);
-        localStorage.setItem('user', JSON.stringify(userObj));
-        if (publicKey && userObj.email) {
-          markWalletProfileComplete(publicKey, userObj.email);
+      const session = normalizeAuthResponse(response);
+      if (session.user && session.token) {
+        persistSession(session);
+        if (publicKey && session.user.email) {
+          markWalletProfileComplete(publicKey, session.user.email);
         }
         return response;
       }
@@ -271,6 +287,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setToken(null);
     localStorage.removeItem('token');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
     disconnect();
     window.location.href = '/auth/login';

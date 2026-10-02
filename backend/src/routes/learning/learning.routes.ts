@@ -223,6 +223,288 @@ router.get(
 
 /**
  * @openapi
+ * /api/v1/learning/progress:
+ *   get:
+ *     summary: Get overall learning progress and bookmarks
+ *     description: Returns the authenticated student's completed lessons and bookmarked lessons across all courses.
+ *     tags: [Learning]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Student overall progress and bookmarks
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 completedLessons:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                 bookmarks:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                 progress:
+ *                   type: object
+ *       401:
+ *         description: Missing or invalid authentication token
+ *       500:
+ *         description: Internal server error
+ */
+router.get(
+  '/progress',
+  authenticate,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const studentId = req.user!.id;
+      const progressRecords = await prisma.learningProgress.findMany({
+        where: { studentId },
+      });
+
+      const completedLessons: string[] = [];
+      const bookmarks: string[] = [];
+
+      for (const record of progressRecords) {
+        if (record.courseId === '_bookmarks' || record.courseId === 'bookmarks') {
+          const raw = record.completedLessons;
+          if (Array.isArray(raw)) {
+            bookmarks.push(...(raw as string[]));
+          } else if (typeof raw === 'string') {
+            try {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) bookmarks.push(...parsed);
+            } catch {}
+          }
+        } else {
+          const raw = record.completedLessons;
+          let lessons: string[] = [];
+          if (Array.isArray(raw)) {
+            lessons = raw as string[];
+          } else if (typeof raw === 'string') {
+            try {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) lessons = parsed;
+            } catch {}
+          }
+
+          for (const lessonId of lessons) {
+            if (typeof lessonId === 'string' && lessonId.trim()) {
+              if (lessonId.includes(':')) {
+                completedLessons.push(lessonId);
+              } else {
+                completedLessons.push(`${record.courseId}:${lessonId}`);
+              }
+            }
+          }
+        }
+      }
+
+      const uniqueCompleted = Array.from(new Set(completedLessons));
+      const uniqueBookmarks = Array.from(new Set(bookmarks));
+
+      res.json({
+        completedLessons: uniqueCompleted,
+        bookmarks: uniqueBookmarks,
+        progress: {
+          completedLessons: uniqueCompleted,
+          bookmarks: uniqueBookmarks,
+        },
+        records: progressRecords,
+        dataSource: 'live',
+      });
+    } catch (error) {
+      console.error('Failed to get student overall progress:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/learning/progress:
+ *   post:
+ *     summary: Sync overall learning progress and bookmarks
+ *     description: Bi-directionally syncs lesson completion and bookmarks for the authenticated student.
+ *     tags: [Learning]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               completedLessons:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               bookmarks:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Progress and bookmarks synced
+ *       401:
+ *         description: Missing or invalid authentication token
+ *       500:
+ *         description: Internal server error
+ */
+const syncOverallProgressHandler = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const studentId = req.user!.id;
+    const { completedLessons, bookmarks } = req.body || {};
+
+    // 1. Sync bookmarks
+    if (Array.isArray(bookmarks)) {
+      await prisma.course.upsert({
+        where: { id: '_bookmarks' },
+        update: {},
+        create: {
+          id: '_bookmarks',
+          title: 'Student Bookmarks',
+          instructor: 'System',
+        },
+      });
+
+      await prisma.learningProgress.upsert({
+        where: {
+          studentId_courseId: {
+            studentId,
+            courseId: '_bookmarks',
+          },
+        },
+        update: {
+          completedLessons: bookmarks,
+          lastAccessedAt: new Date(),
+        },
+        create: {
+          studentId,
+          courseId: '_bookmarks',
+          completedLessons: bookmarks,
+          status: 'in_progress',
+          lastAccessedAt: new Date(),
+        },
+      });
+    }
+
+    // 2. Sync completed lessons
+    if (Array.isArray(completedLessons)) {
+      const courseLessonsMap = new Map<string, string[]>();
+      for (const item of completedLessons) {
+        if (typeof item !== 'string' || !item.trim()) continue;
+        const [cId, lId] = item.includes(':') ? item.split(':') : ['default', item];
+        const current = courseLessonsMap.get(cId) || [];
+        if (!current.includes(item)) {
+          current.push(item);
+        }
+        courseLessonsMap.set(cId, current);
+      }
+
+      for (const [courseId, lessons] of courseLessonsMap.entries()) {
+        await prisma.course.upsert({
+          where: { id: courseId },
+          update: {},
+          create: {
+            id: courseId,
+            title: courseId,
+            instructor: 'Web3 Student Lab',
+          },
+        });
+
+        await prisma.learningProgress.upsert({
+          where: {
+            studentId_courseId: {
+              studentId,
+              courseId,
+            },
+          },
+          update: {
+            completedLessons: lessons,
+            status: lessons.length > 0 ? 'in_progress' : 'not_started',
+            lastAccessedAt: new Date(),
+          },
+          create: {
+            studentId,
+            courseId,
+            completedLessons: lessons,
+            status: lessons.length > 0 ? 'in_progress' : 'not_started',
+            lastAccessedAt: new Date(),
+          },
+        });
+      }
+    }
+
+    // Query all records to return the authoritative synced state
+    const progressRecords = await prisma.learningProgress.findMany({
+      where: { studentId },
+    });
+
+    const allCompleted: string[] = [];
+    const allBookmarks: string[] = [];
+
+    for (const record of progressRecords) {
+      if (record.courseId === '_bookmarks' || record.courseId === 'bookmarks') {
+        const raw = record.completedLessons;
+        if (Array.isArray(raw)) {
+          allBookmarks.push(...(raw as string[]));
+        } else if (typeof raw === 'string') {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) allBookmarks.push(...parsed);
+          } catch {}
+        }
+      } else {
+        const raw = record.completedLessons;
+        let lessons: string[] = [];
+        if (Array.isArray(raw)) {
+          lessons = raw as string[];
+        } else if (typeof raw === 'string') {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) lessons = parsed;
+          } catch {}
+        }
+
+        for (const lessonId of lessons) {
+          if (typeof lessonId === 'string' && lessonId.trim()) {
+            if (lessonId.includes(':')) {
+              allCompleted.push(lessonId);
+            } else {
+              allCompleted.push(`${record.courseId}:${lessonId}`);
+            }
+          }
+        }
+      }
+    }
+
+    const uniqueCompleted = Array.from(new Set(allCompleted));
+    const uniqueBookmarks = Array.from(new Set(allBookmarks));
+
+    res.json({
+      completedLessons: uniqueCompleted,
+      bookmarks: uniqueBookmarks,
+      progress: {
+        completedLessons: uniqueCompleted,
+        bookmarks: uniqueBookmarks,
+      },
+      dataSource: 'live',
+    });
+  } catch (error) {
+    console.error('Failed to sync student progress:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+router.post('/progress', authenticate, syncOverallProgressHandler);
+router.patch('/progress', authenticate, syncOverallProgressHandler);
+router.put('/progress', authenticate, syncOverallProgressHandler);
+
+/**
+ * @openapi
  * /api/v1/learning/courses/{courseId}/progress:
  *   get:
  *     summary: Get student progress for a course
@@ -248,10 +530,6 @@ router.get(
  *                   $ref: '#/components/schemas/Progress'
  *       401:
  *         description: Missing or invalid authentication token
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  *       404:
  *         description: Course not found
  *         content:

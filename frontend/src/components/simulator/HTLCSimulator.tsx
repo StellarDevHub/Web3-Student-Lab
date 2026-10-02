@@ -27,7 +27,7 @@ export const HTLCSimulator: React.FC = () => {
   return (
     <div className="p-6 max-w-5xl mx-auto font-sans bg-gray-50 rounded-xl shadow-lg border border-gray-100">
       <h2 className="text-3xl font-bold mb-4 text-gray-800">Cross-Chain Atomic Swap & HTLC Demo</h2>
-      
+
       <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
         <p className="text-blue-700">{explainText[step]}</p>
         <p className="mt-2 text-sm text-blue-600 font-semibold">Trustless Guarantee: No centralized escrow intermediaries are used. Math and cryptography secure the swap.</p>
@@ -51,11 +51,11 @@ export const HTLCSimulator: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-2 gap-8 mb-8">
-        <div className={\`p-4 rounded-lg border-2 \${['ALICE_DEPLOY_STELLAR', 'BOB_DEPLOY_ETH', 'ALICE_REDEEM_ETH', 'BOB_REDEEM_STELLAR'].includes(step) ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white'}\`}>
+        <div className={`p-4 rounded-lg border-2 ${['ALICE_DEPLOY_STELLAR', 'BOB_DEPLOY_ETH', 'ALICE_REDEEM_ETH', 'BOB_REDEEM_STELLAR'].includes(step) ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white'}`}>
           <h4 className="font-bold text-lg mb-2 text-green-700">Stellar Network (XLM)</h4>
           <p className="text-sm">Contract: {['ALICE_DEPLOY_STELLAR', 'BOB_DEPLOY_ETH', 'ALICE_REDEEM_ETH'].includes(step) ? 'Locked with Hash' : step === 'BOB_REDEEM_STELLAR' ? 'Unlocked by Bob' : step === 'REFUND_TIMEOUT' ? 'Refunded to Alice' : 'Empty'}</p>
         </div>
-        <div className={\`p-4 rounded-lg border-2 \${['BOB_DEPLOY_ETH', 'ALICE_REDEEM_ETH', 'BOB_REDEEM_STELLAR'].includes(step) ? 'border-purple-400 bg-purple-50' : 'border-gray-200 bg-white'}\`}>
+        <div className={`p-4 rounded-lg border-2 ${['BOB_DEPLOY_ETH', 'ALICE_REDEEM_ETH', 'BOB_REDEEM_STELLAR'].includes(step) ? 'border-purple-400 bg-purple-50' : 'border-gray-200 bg-white'}`}>
           <h4 className="font-bold text-lg mb-2 text-purple-700">Ethereum Network (ETH)</h4>
           <p className="text-sm">Contract: {step === 'BOB_DEPLOY_ETH' ? 'Locked with Hash' : ['ALICE_REDEEM_ETH', 'BOB_REDEEM_STELLAR'].includes(step) ? 'Unlocked by Alice' : step === 'REFUND_TIMEOUT' ? 'Refunded to Bob' : 'Empty'}</p>
         </div>
@@ -66,11 +66,11 @@ export const HTLCSimulator: React.FC = () => {
         {step === 'ALICE_DEPLOY_STELLAR' && <button onClick={() => setStep('BOB_DEPLOY_ETH')} className="bg-indigo-600 text-white px-6 py-2 rounded shadow hover:bg-indigo-700">2. Bob Deploys on ETH</button>}
         {step === 'BOB_DEPLOY_ETH' && <button onClick={() => setStep('ALICE_REDEEM_ETH')} className="bg-indigo-600 text-white px-6 py-2 rounded shadow hover:bg-indigo-700">3. Alice Redeems ETH</button>}
         {step === 'ALICE_REDEEM_ETH' && <button onClick={() => setStep('BOB_REDEEM_STELLAR')} className="bg-green-600 text-white px-6 py-2 rounded shadow hover:bg-green-700">4. Bob Redeems XLM (Complete!)</button>}
-        
+
         {step !== 'INIT' && step !== 'BOB_REDEEM_STELLAR' && step !== 'REFUND_TIMEOUT' && (
           <button onClick={() => setStep('REFUND_TIMEOUT')} className="bg-red-500 text-white px-6 py-2 rounded shadow hover:bg-red-600">Simulate Timeout</button>
         )}
-        
+
         {(step === 'BOB_REDEEM_STELLAR' || step === 'REFUND_TIMEOUT') && (
           <button onClick={() => {setStep('INIT'); setSecret(''); setHash('');}} className="bg-gray-600 text-white px-6 py-2 rounded shadow hover:bg-gray-700">Reset Demo</button>
         )}

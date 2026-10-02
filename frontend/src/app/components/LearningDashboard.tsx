@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { allLessons, courses, storageKeys } from "../curriculum-data";
 import { CompletionModal, launchCompletionConfetti } from "./CompletionCelebration";
 import { ProgressRing } from "./ProgressRing";
 import { SocialIdentityPanel } from "@/components/social/SocialIdentityPanel";
+import { useAuth } from "@/contexts/AuthContext";
+import { learningAPI } from "@/lib/learning-api";
 
 const readList = (key: string) => {
   if (typeof window === "undefined") return [] as string[];
@@ -20,12 +22,27 @@ const saveList = (key: string, value: string[]) => {
   if (typeof window !== "undefined") window.localStorage.setItem(key, JSON.stringify(value));
 };
 
+function useSafeAuth() {
+  try {
+    return useAuth();
+  } catch {
+    return {
+      user: null,
+      token: typeof window !== "undefined" ? localStorage.getItem("token") : null,
+      isAuthenticated: typeof window !== "undefined" && Boolean(localStorage.getItem("token")),
+      isLoading: false,
+    };
+  }
+}
+
 export function LearningDashboard() {
+  const { user, isAuthenticated } = useSafeAuth();
   const [courseId, setCourseId] = useState(courses[0].id);
   const [lessonId, setLessonId] = useState(courses[0].lessons[0].id);
   const [completed, setCompleted] = useState<string[]>([]);
   const [bookmarks, setBookmarks] = useState<string[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const course = courses.find((item) => item.id === courseId) || courses[0];
   const lesson = course.lessons.find((item) => item.id === lessonId) || course.lessons[0];
@@ -36,15 +53,89 @@ export function LearningDashboard() {
   const percent = Math.round((completedSet.size / allLessons.length) * 100);
   const savedLessons = allLessons.filter((item) => bookmarkSet.has(`${item.courseId}:${item.id}`));
 
+  // Bi-directional synchronization layer syncing lesson completion and bookmarks
+  // between localStorage and PostgreSQL Prisma backend.
+  const syncProgress = useCallback(async () => {
+    // 1. Easy: Read from local storage fallback
+    const localCompleted = readList(storageKeys.completed);
+    const localBookmarks = readList(storageKeys.bookmarks);
+
+    // Initial render / fallback
+    setCompleted(localCompleted);
+    setBookmarks(localBookmarks);
+
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token && !isAuthenticated) {
+      return;
+    }
+
+    try {
+      setIsSyncing(true);
+      // 2. Medium: Connect to GET /api/v1/learning/progress
+      const backendData = await learningAPI.getOverallProgress();
+      if (backendData) {
+        // 3. Advanced: Bi-directional synchronization
+        const backendCompleted = backendData.completedLessons || [];
+        const backendBookmarks = backendData.bookmarks || [];
+
+        // Union merge between local storage and backend records
+        const mergedCompleted = Array.from(new Set([...localCompleted, ...backendCompleted]));
+        const mergedBookmarks = Array.from(new Set([...localBookmarks, ...backendBookmarks]));
+
+        setCompleted(mergedCompleted);
+        saveList(storageKeys.completed, mergedCompleted);
+
+        setBookmarks(mergedBookmarks);
+        saveList(storageKeys.bookmarks, mergedBookmarks);
+
+        // Sync local additions back to database if any
+        const hasLocalAdditions =
+          mergedCompleted.some((item) => !backendCompleted.includes(item)) ||
+          mergedBookmarks.some((item) => !backendBookmarks.includes(item));
+
+        if (hasLocalAdditions) {
+          await learningAPI.syncOverallProgress({
+            completedLessons: mergedCompleted,
+            bookmarks: mergedBookmarks,
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("Backend progress sync failed, falling back to local storage:", err);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [isAuthenticated]);
+
   useEffect(() => {
-    setCompleted(readList(storageKeys.completed));
-    setBookmarks(readList(storageKeys.bookmarks));
-  }, []);
+    syncProgress();
+  }, [syncProgress, user?.id]);
+
+  // Sync on online event
+  useEffect(() => {
+    const handleOnline = () => {
+      syncProgress();
+    };
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [syncProgress]);
 
   function toggleBookmark() {
-    const next = bookmarkSet.has(lessonKey) ? bookmarks.filter((item) => item !== lessonKey) : [...bookmarks, lessonKey];
+    const next = bookmarkSet.has(lessonKey)
+      ? bookmarks.filter((item) => item !== lessonKey)
+      : [...bookmarks, lessonKey];
     setBookmarks(next);
     saveList(storageKeys.bookmarks, next);
+
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (token || isAuthenticated) {
+      learningAPI
+        .syncOverallProgress({
+          completedLessons: completed,
+          bookmarks: next,
+        })
+        .catch((err) => console.warn("Background bookmark sync failed:", err));
+    }
   }
 
   function completeLesson() {
@@ -57,6 +148,16 @@ export function LearningDashboard() {
       window.localStorage.setItem(storageKeys.celebrated, "true");
       launchCompletionConfetti();
       setModalOpen(true);
+    }
+
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (token || isAuthenticated) {
+      learningAPI
+        .syncOverallProgress({
+          completedLessons: next,
+          bookmarks,
+        })
+        .catch((err) => console.warn("Background lesson completion sync failed:", err));
     }
   }
 
@@ -71,9 +172,26 @@ export function LearningDashboard() {
       <section className="relative mx-auto max-w-6xl space-y-8 px-6 py-8">
         <header className="relative overflow-hidden rounded-3xl border border-red-500/20 bg-black/60 backdrop-blur-2xl p-8 shadow-[0_20px_60px_rgba(220,38,38,0.1)]">
           <div className="absolute top-0 right-0 -mr-20 -mt-20 h-64 w-64 rounded-full bg-red-600/10 blur-[100px]" />
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-500 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> Web3 Student Lab
-          </p>
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-500 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> Web3 Student Lab
+            </p>
+            <div>
+              {isSyncing ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-orange-400 border border-orange-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" /> Syncing...
+                </span>
+              ) : isAuthenticated ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400 border border-emerald-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Cloud Synced
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 border border-white/10">
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-500" /> Local Storage
+                </span>
+              )}
+            </div>
+          </div>
           <h1 className="mt-3 text-4xl font-black tracking-tight">Curriculum Progress Dashboard</h1>
           <p className="mt-3 max-w-2xl text-gray-400">Track lessons, save study routes, and celebrate full course completion.</p>
           <div className="mt-6 h-2 overflow-hidden rounded-full bg-white/5">

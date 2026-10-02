@@ -7,7 +7,7 @@ import {
   signTransaction as signFreighterTransaction,
 } from '@stellar/freighter-api';
 import { useMachine } from '@xstate/react';
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   web3TransactionMachine,
   type Web3TransactionContext,
@@ -385,6 +385,32 @@ export const WALLET_PROVIDERS: WalletProvider[] = [
   mockAdapter,
 ];
 
+// ---------------------------------------------------------------------------
+// Session Persistence Helpers
+//
+// The public key is stored in sessionStorage so it survives same-tab page
+// reloads but is automatically cleared when the browser tab is closed.
+// The full wallet record (wallet name + network preference) stays in
+// localStorage so long-lived preferences are preserved across sessions.
+// ---------------------------------------------------------------------------
+export const SESSION_PK_KEY = 'stellar_session_pk';
+const WATCHDOG_INTERVAL_MS = 3_000;
+
+function saveSessionKey(pk: string): void {
+  if (typeof window === 'undefined') return;
+  sessionStorage.setItem(SESSION_PK_KEY, pk);
+}
+
+function loadSessionKey(): string | null {
+  if (typeof window === 'undefined') return null;
+  return sessionStorage.getItem(SESSION_PK_KEY);
+}
+
+function clearSessionKey(): void {
+  if (typeof window === 'undefined') return;
+  sessionStorage.removeItem(SESSION_PK_KEY);
+}
+
 interface WalletContextType {
   publicKey: string | null;
   activeWallet: string | null;
@@ -428,6 +454,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     FUTURENET: '1000.0000000 XLM (Futurenet)',
   });
 
+  // Refs used by the watchdog so closures always read the latest values without
+  // re-scheduling the interval on every render.
+  const activeWalletRef = useRef<string | null>(null);
+  const publicKeyRef = useRef<string | null>(null);
+  const activeNetworkRef = useRef<StellarNetwork>('TESTNET');
+  const walletNetworkRef = useRef<StellarNetwork | null>(null);
+
+  activeWalletRef.current = activeWallet;
+  publicKeyRef.current = publicKey;
+  activeNetworkRef.current = activeNetwork;
+  walletNetworkRef.current = walletNetwork;
+
   const scanWallets = useCallback(() => {
     const installed = WALLET_PROVIDERS.filter((p) => p.isInstalled());
     setDetectedWallets(installed);
@@ -446,21 +484,152 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, []);
 
+  // ---------------------------------------------------------------------------
+  // Session Restore: on mount, attempt to rehydrate wallet state without
+  // blocking the UI. Priority order:
+  //   1. sessionStorage public key — still valid for this browser tab
+  //   2. localStorage wallet record — for full context (wallet name, network)
+  //
+  // After rehydrating from storage we validate the persisted key against the
+  // live extension to detect a key rotation that happened while the page was
+  // closed.  If the keys diverge we evict the stale entry rather than silently
+  // operating with the wrong account.
+  // ---------------------------------------------------------------------------
   useEffect(() => {
-    const saved = localStorage.getItem('stellar_wallet');
-    if (saved) {
+    const restoreSession = async () => {
+      const sessionPk = loadSessionKey();
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('stellar_wallet') : null;
+
+      if (!saved) return;
+
+      let walletName: string | undefined;
+      let storedPk: string | undefined;
+      let network: string | undefined;
+
       try {
-        const { wallet, pk, network } = JSON.parse(saved);
-        setActiveWallet(wallet);
-        setPublicKey(pk);
-        if (network && ['PUBLIC', 'TESTNET', 'FUTURENET'].includes(network)) {
-          setActiveNetwork(network);
-        }
-        sendTransaction({ type: 'WALLET_CONNECTED', walletName: wallet, publicKey: pk });
+        ({ wallet: walletName, pk: storedPk, network } = JSON.parse(saved));
       } catch {
         localStorage.removeItem('stellar_wallet');
+        clearSessionKey();
+        return;
       }
-    }
+
+      if (!walletName || !storedPk) return;
+
+      // Use the sessionStorage key if available (it's the most recent tab value).
+      const restoredPk = sessionPk ?? storedPk;
+
+      if (network && ['PUBLIC', 'TESTNET', 'FUTURENET'].includes(network)) {
+        setActiveNetwork(network as StellarNetwork);
+      }
+
+      // Optimistically restore state so the UI is responsive immediately.
+      setActiveWallet(walletName);
+      setPublicKey(restoredPk);
+      saveSessionKey(restoredPk);
+      sendTransaction({ type: 'WALLET_CONNECTED', walletName, publicKey: restoredPk });
+
+      // ---------------------------------------------------------------------------
+      // Key Validation: query the live extension in the background.
+      // Only Freighter supports this check; other adapters are trusted as-is.
+      // ---------------------------------------------------------------------------
+      if (walletName.toLowerCase() === 'freighter') {
+        try {
+          const liveAddress = await freighterAdapter.getPublicKey();
+          if (liveAddress && liveAddress !== restoredPk) {
+            // The user rotated their key while the tab was closed — update everything.
+            setPublicKey(liveAddress);
+            saveSessionKey(liveAddress);
+            localStorage.setItem(
+              'stellar_wallet',
+              JSON.stringify({ wallet: walletName, pk: liveAddress, network })
+            );
+            sendTransaction({
+              type: 'WALLET_CONNECTED',
+              walletName,
+              publicKey: liveAddress,
+            });
+          } else if (!liveAddress) {
+            // Extension is locked / disconnected — evict stale session.
+            setPublicKey(null);
+            setActiveWallet(null);
+            clearSessionKey();
+            localStorage.removeItem('stellar_wallet');
+            sendTransaction({ type: 'DISCONNECT_WALLET' });
+          }
+        } catch {
+          // Extension unavailable — keep the restored state; watchdog will reconcile later.
+        }
+      }
+    };
+
+    restoreSession();
+  }, [sendTransaction]);
+
+  // ---------------------------------------------------------------------------
+  // Background Watchdog
+  //
+  // Polls Freighter every WATCHDOG_INTERVAL_MS milliseconds. When the active
+  // account or network inside the extension changes (key rotation, network
+  // switch) we update the React state in-place so all consuming components
+  // re-render without requiring a page reload.
+  //
+  // The watchdog is only active while a Freighter wallet session is live.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const tick = async () => {
+      // Only watch Freighter sessions.
+      if (activeWalletRef.current?.toLowerCase() !== 'freighter') return;
+      if (!publicKeyRef.current) return;
+
+      try {
+        // --- Account change detection ---
+        const liveAddress = await freighterAdapter.getPublicKey();
+        if (liveAddress && liveAddress !== publicKeyRef.current) {
+          setPublicKey(liveAddress);
+          saveSessionKey(liveAddress);
+          const saved = localStorage.getItem('stellar_wallet');
+          if (saved) {
+            try {
+              const parsed = JSON.parse(saved);
+              localStorage.setItem(
+                'stellar_wallet',
+                JSON.stringify({ ...parsed, pk: liveAddress })
+              );
+            } catch {}
+          }
+          sendTransaction({
+            type: 'WALLET_CONNECTED',
+            walletName: activeWalletRef.current,
+            publicKey: liveAddress,
+          });
+        } else if (!liveAddress) {
+          // Extension was locked or disconnected.
+          setPublicKey(null);
+          setActiveWallet(null);
+          setWalletNetwork(null);
+          clearSessionKey();
+          localStorage.removeItem('stellar_wallet');
+          sendTransaction({ type: 'DISCONNECT_WALLET' });
+          return;
+        }
+
+        // --- Network change detection ---
+        if (freighterAdapter.getNetwork) {
+          const liveNet = (await freighterAdapter.getNetwork()) as StellarNetwork | null;
+          if (liveNet && liveNet !== walletNetworkRef.current) {
+            setWalletNetwork(liveNet);
+          }
+        }
+      } catch {
+        // Extension temporarily unavailable; continue polling.
+      }
+    };
+
+    const id = setInterval(tick, WATCHDOG_INTERVAL_MS);
+    return () => clearInterval(id);
+    // All latest values are read via refs; no reactive deps needed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sendTransaction]);
 
   const updateWalletNetwork = useCallback(async (provider: WalletProvider) => {
@@ -490,6 +659,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         setPublicKey(pk);
         setActiveWallet(provider.name);
         await updateWalletNetwork(provider);
+        saveSessionKey(pk);
         localStorage.setItem(
           'stellar_wallet',
           JSON.stringify({ wallet: provider.name, pk, network: activeNetwork })
@@ -520,6 +690,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         const pk = await provider.connect();
         setPublicKey(pk);
         setActiveWallet(providerName);
+        saveSessionKey(pk);
         localStorage.setItem('stellar_wallet', JSON.stringify({ wallet: providerName, pk }));
         sendTransaction({ type: 'WALLET_CONNECTED', walletName: providerName, publicKey: pk });
 
@@ -561,6 +732,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setPublicKey(null);
     setActiveWallet(null);
     setWalletNetwork(null);
+    clearSessionKey();
     localStorage.removeItem('stellar_wallet');
     sendTransaction({ type: 'DISCONNECT_WALLET' });
   }, [activeWallet, sendTransaction]);

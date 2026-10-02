@@ -1,0 +1,53 @@
+# Dependencies — reinstalled inside the image
+node_modules/
+.pnpm-store/
+
+# Next.js build artefacts (copied selectively from builder stage)
+.next/
+out/
+
+# Development & test files
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__/
+__snapshots__/
+*.snap
+e2e/
+playwright-report/
+test-results/
+coverage/
+
+# Local environment overrides
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs & README files
+*.md
+LICENSE
+
+# Git
+.git/
+.gitignore
+
+# Husky / lint-staged
+.husky/
+
+# Sentry source maps (optional — sent separately via Sentry CLI)
+.sentryclirc
+sentry.*.config.ts

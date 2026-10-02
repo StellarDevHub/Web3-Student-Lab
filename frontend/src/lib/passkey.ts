@@ -49,17 +49,18 @@ export interface AuthenticationResult {
   error?: string;
 }
 
+import { normalizeApiUrl, getPublicEnv } from './env';
+
 // ---------------------------------------------------------------------------
 // API Client
 // ---------------------------------------------------------------------------
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 
 async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const url = normalizeApiUrl(getPublicEnv().apiUrl, endpoint);
+  const response = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

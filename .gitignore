@@ -63,11 +63,19 @@ coverage/
 # Jest / Vitest snapshots
 **/__snapshots__/
 **/*.snap
+# Test snapshot directories (any variant)
+**/testsnapshot/
+**/test-snapshot/
+**/testSnapshots/
 # Playwright
 playwright-report/
 test-results/
 # E2E output
 frontend/e2e/results/
+# Vitest UI output
+.vitest-cache/
+# k6 / load-test output
+k6-results/
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Generated docs / summaries (do not commit generated docs)
@@ -170,6 +178,7 @@ backend/prisma/*.db-journal
 # ──────────────────────────────────────────────────────────────────────────────
 *.pid
 backend/*.pid
+backend/server.pid
 
 # ──────────────────────────────────────────────────────────────────────────────
 # OS / editor artefacts
@@ -239,6 +248,7 @@ backend/dist/
 !eslint.config.mjs
 !commitlint.config.js
 !commitlint.config.cjs
+!frontend/public/sw.js
 
 
 # temp error logs
@@ -258,8 +268,12 @@ contracts/check_errors.txt
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Soroban / Stellar build artifacts (SC-HARD-17/18/19/20)
+# Rust / Soroban property-based testing regressions
 # ──────────────────────────────────────────────────────────────────────────────
-.soroban/
-*.wasm
-contracts/.soroban/
+contracts/proptest-regressions/
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Kiro / Kilo editor internal files
+# ──────────────────────────────────────────────────────────────────────────────
+.kiro/
+.kilo/

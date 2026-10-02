@@ -3,6 +3,10 @@ import { getRateLimitProfile } from '../config/rateLimit.config.js';
 import redis from '../utils/redis.js';
 import logger from '../utils/logger.js';
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
 interface TierResult {
   limit: number;
   remaining: number;
@@ -16,6 +20,100 @@ interface RateLimitOptions {
   limit: number;
   keyPrefix: string;
 }
+
+/**
+ * API key tier configuration.
+ * Higher-tier keys receive larger burst and sustained quotas.
+ * Loaded from RATE_LIMIT_API_KEY_TIERS_JSON env var at startup.
+ *
+ * Example value:
+ *   [
+ *     { "prefix": "pk_premium_", "burstMax": 100, "sustainedMax": 2000 },
+ *     { "prefix": "pk_standard_", "burstMax": 30,  "sustainedMax": 600  }
+ *   ]
+ */
+interface ApiKeyTierConfig {
+  prefix: string;
+  burstMax: number;
+  sustainedMax: number;
+}
+
+// ---------------------------------------------------------------------------
+// API key tier registry
+// ---------------------------------------------------------------------------
+
+const API_KEY_TIERS: ApiKeyTierConfig[] = (() => {
+  try {
+    const raw = process.env.RATE_LIMIT_API_KEY_TIERS_JSON;
+    if (raw) return JSON.parse(raw) as ApiKeyTierConfig[];
+  } catch {
+    logger.warn('[rateLimiter] Could not parse RATE_LIMIT_API_KEY_TIERS_JSON — using defaults');
+  }
+  return [];
+})();
+
+/**
+ * Resolve API key tier overrides.
+ * Returns the matching tier's multipliers or null for no override.
+ */
+function resolveApiKeyTier(apiKey: string | undefined): ApiKeyTierConfig | null {
+  if (!apiKey) return null;
+  return API_KEY_TIERS.find((tier) => apiKey.startsWith(tier.prefix)) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Trusted-proxy IP extraction (spoofing-resistant)
+// ---------------------------------------------------------------------------
+
+/**
+ * Number of trusted reverse proxy hops in front of this service.
+ * Set TRUSTED_PROXY_DEPTH=1 for a single load balancer, 2 for two layers, etc.
+ * Defaults to 0 (no trusted proxy — use socket remote address directly).
+ */
+const TRUSTED_PROXY_DEPTH = parseInt(process.env.TRUSTED_PROXY_DEPTH || '0', 10);
+
+/**
+ * Parse the X-Forwarded-For header safely, returning only the hop that is
+ * exactly `depth` positions from the right (i.e. the last untrusted IP before
+ * the first trusted proxy hop).
+ *
+ * Example: depth=1, X-Forwarded-For: "1.2.3.4, 10.0.0.1, 10.0.0.2"
+ *   → Right-to-left: [10.0.0.2 (proxy), 10.0.0.1 (proxy), 1.2.3.4 (client)]
+ *   → Returns "1.2.3.4"
+ *
+ * If depth=0 or the header is absent we fall back to the socket address, which
+ * cannot be spoofed by the client.
+ */
+function extractClientIp(req: Request): string {
+  const socketAddr = req.socket?.remoteAddress || 'unknown';
+
+  if (TRUSTED_PROXY_DEPTH <= 0) {
+    return socketAddr;
+  }
+
+  const xffHeader = req.headers['x-forwarded-for'];
+  if (!xffHeader) return socketAddr;
+
+  const xff = Array.isArray(xffHeader) ? xffHeader.join(',') : xffHeader;
+  const parts = xff
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  // Walk back from the right by TRUSTED_PROXY_DEPTH hops
+  const clientIndex = parts.length - TRUSTED_PROXY_DEPTH - 1;
+  if (clientIndex < 0) {
+    // Fewer IPs in the header than expected trusted hops — suspicious; use socket addr
+    logger.warn(`[rateLimiter] X-Forwarded-For hop count (${parts.length}) < TRUSTED_PROXY_DEPTH (${TRUSTED_PROXY_DEPTH}); using socket address`);
+    return socketAddr;
+  }
+
+  return parts[clientIndex];
+}
+
+// ---------------------------------------------------------------------------
+// Redis sliding-window core
+// ---------------------------------------------------------------------------
 
 function tierKey(prefix: string, identifier: string, windowMs: number): string {
   return `rl:${prefix}:${identifier}:${windowMs}`;
@@ -55,12 +153,23 @@ async function checkTier(
   };
 }
 
-function getIdentifier(req: Request): { userKey: string; ipKey: string } {
-  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+// ---------------------------------------------------------------------------
+// Identifier extraction (spoofing-resistant)
+// ---------------------------------------------------------------------------
+
+function getIdentifier(req: Request): { userKey: string; ipKey: string; apiKey: string | undefined } {
+  const ip = extractClientIp(req);
   const userId = (req as any).user?.id;
+  // API keys may arrive via Authorization: ApiKey <key> or X-API-Key header
+  const authHeader = req.headers['authorization'] || '';
+  const apiKey =
+    (req.headers['x-api-key'] as string | undefined) ||
+    (authHeader.toLowerCase().startsWith('apikey ') ? authHeader.slice(7) : undefined);
+
   return {
     userKey: userId || ip,
     ipKey: ip,
+    apiKey,
   };
 }
 
@@ -108,6 +217,18 @@ function enforceTier(
 
 // --- New config-driven middleware (used globally) ---
 
+/**
+ * Distributed Redis token-bucket rate limiter.
+ *
+ * Advanced features (Issue #1384):
+ *   - Spoofing-resistant IP extraction using TRUSTED_PROXY_DEPTH
+ *   - API key tier quotas: keys matching configured prefixes receive higher limits
+ *   - Tiered burst + sustained windows enforced via Redis sorted sets
+ *   - Standard RateLimit-* headers (RFC 6585 draft-7) on every response
+ *   - Fails open on Redis errors (logs warn, never blocks legitimate traffic)
+ *
+ * Closes #1384
+ */
 export async function rateLimiter(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (process.env.NODE_ENV === 'test') {
     return next();
@@ -120,31 +241,32 @@ export async function rateLimiter(req: Request, res: Response, next: NextFunctio
   const profile = getRateLimitProfile(path, method, user);
   const identifier = getIdentifier(req);
 
+  // Apply API key tier multiplier if present
+  const apiKeyTier = resolveApiKeyTier(identifier.apiKey);
+  const effectiveBurstMax = apiKeyTier ? apiKeyTier.burstMax : profile.burst.max;
+  const effectiveSustainedMax = apiKeyTier ? apiKeyTier.sustainedMax : profile.sustained.max;
+
+  // Prefer user ID for API key holders so their quota is tied to their account
+  // rather than the originating IP (which may be a shared egress IP).
+  const rateLimitKey = identifier.apiKey
+    ? `apikey:${identifier.apiKey.slice(0, 24)}` // truncate for Redis key safety
+    : profile.isAuthenticated
+    ? identifier.userKey
+    : identifier.ipKey;
+
+  const rateLimitPrefix = profile.isAuthenticated || identifier.apiKey ? 'user' : 'ip';
+
   try {
-    if (profile.isAuthenticated) {
-      const burstKey = tierKey('user', identifier.userKey, profile.burst.windowMs);
-      const sustainedKey = tierKey('user', identifier.userKey, profile.sustained.windowMs);
+    const burstKey = tierKey(rateLimitPrefix, rateLimitKey, profile.burst.windowMs);
+    const sustainedKey = tierKey(rateLimitPrefix, rateLimitKey, profile.sustained.windowMs);
 
-      const [burst, sustained] = await Promise.all([
-        checkTier(burstKey, profile.burst.windowMs, profile.burst.max, now),
-        checkTier(sustainedKey, profile.sustained.windowMs, profile.sustained.max, now),
-      ]);
+    const [burst, sustained] = await Promise.all([
+      checkTier(burstKey, profile.burst.windowMs, effectiveBurstMax, now),
+      checkTier(sustainedKey, profile.sustained.windowMs, effectiveSustainedMax, now),
+    ]);
 
-      if (!enforceTier(burst, sustained, identifier.userKey, 'user', method, path, res)) {
-        return;
-      }
-    } else {
-      const burstKey = tierKey('ip', identifier.ipKey, profile.burst.windowMs);
-      const sustainedKey = tierKey('ip', identifier.ipKey, profile.sustained.windowMs);
-
-      const [burst, sustained] = await Promise.all([
-        checkTier(burstKey, profile.burst.windowMs, profile.burst.max, now),
-        checkTier(sustainedKey, profile.sustained.windowMs, profile.sustained.max, now),
-      ]);
-
-      if (!enforceTier(burst, sustained, identifier.ipKey, 'IP', method, path, res)) {
-        return;
-      }
+    if (!enforceTier(burst, sustained, rateLimitKey, rateLimitPrefix, method, path, res)) {
+      return;
     }
 
     next();

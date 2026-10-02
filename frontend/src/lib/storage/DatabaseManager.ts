@@ -20,11 +20,20 @@ export interface RoadmapNodeRecord {
   updatedAt: number;
 }
 
+export interface RevisionRecord {
+  id: string;
+  path: string;
+  content: string;
+  parentId: string | null;
+  createdAt: number;
+}
+
 const DB_NAME = 'web3-student-lab';
-const DB_VERSION = 2; // Incremented version for new store
+const DB_VERSION = 3;
 const FILES_STORE = 'files';
 const METADATA_STORE = 'metadata';
 const ROADMAP_STORE = 'roadmap_nodes';
+const REVISIONS_STORE = 'revisions';
 
 export class DatabaseManager {
   private dbPromise: Promise<IDBDatabase> | null = null;
@@ -58,6 +67,11 @@ export class DatabaseManager {
           const roadmapStore = db.createObjectStore(ROADMAP_STORE, { keyPath: 'id' });
           roadmapStore.createIndex('status', 'status', { unique: false });
           roadmapStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+        }
+        if (!db.objectStoreNames.contains(REVISIONS_STORE)) {
+          const revisionsStore = db.createObjectStore(REVISIONS_STORE, { keyPath: 'id' });
+          revisionsStore.createIndex('path', 'path', { unique: false });
+          revisionsStore.createIndex('createdAt', 'createdAt', { unique: false });
         }
       };
 
@@ -97,6 +111,61 @@ export class DatabaseManager {
       request.onsuccess = () => resolve((request.result as StoredFileRecord[]) ?? []);
       request.onerror = () => reject(request.error ?? new Error('Failed to list files'));
     });
+  }
+
+  async createRevision(path: string, content: string): Promise<RevisionRecord> {
+    const db = await this.openDb();
+    const tx = db.transaction([REVISIONS_STORE, METADATA_STORE], 'readwrite');
+    const revisions = tx.objectStore(REVISIONS_STORE);
+    const metadata = tx.objectStore(METADATA_STORE);
+    const headKey = `playground:revision-head:${path}`;
+    const record: RevisionRecord = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      path,
+      content,
+      parentId: null,
+      createdAt: Date.now(),
+    };
+    const headRequest = metadata.get(headKey);
+
+    headRequest.onsuccess = () => {
+      const currentHead = headRequest.result as StoredMetadataRecord | undefined;
+      record.parentId = currentHead?.value ?? null;
+      revisions.put(record);
+      metadata.put({ key: headKey, value: record.id, updatedAt: record.createdAt });
+    };
+
+    await this.awaitTransaction(tx);
+    return record;
+  }
+
+  async listRevisions(path: string): Promise<RevisionRecord[]> {
+    const db = await this.openDb();
+    const tx = db.transaction(REVISIONS_STORE, 'readonly');
+    const request = tx.objectStore(REVISIONS_STORE).index('path').getAll(path);
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () =>
+        resolve(
+          ((request.result as RevisionRecord[]) ?? []).sort((left, right) =>
+            right.createdAt - left.createdAt
+          )
+        );
+      request.onerror = () => reject(request.error ?? new Error('Failed to list revisions'));
+    });
+  }
+
+  async getRevision(id: string): Promise<RevisionRecord | null> {
+    const db = await this.openDb();
+    const tx = db.transaction(REVISIONS_STORE, 'readonly');
+    const request = tx.objectStore(REVISIONS_STORE).get(id);
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve((request.result as RevisionRecord | undefined) ?? null);
+      request.onerror = () => reject(request.error ?? new Error('Failed to read revision'));
+    });
+  }
+
+  async setRevisionHead(path: string, revisionId: string): Promise<void> {
+    await this.setMetadata(`playground:revision-head:${path}`, revisionId);
   }
 
   async setMetadata(key: string, value: string) {

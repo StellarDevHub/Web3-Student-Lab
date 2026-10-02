@@ -1007,6 +1007,7 @@ fn share_balance_internal(env: &Env, owner: &Address) -> i128 {
 }
 
 #[cfg(test)]
+mod tests;
 mod tests {
     use super::*;
     use soroban_sdk::{

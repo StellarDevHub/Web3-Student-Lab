@@ -20,14 +20,27 @@
  */
 
 import { type ExecutionState } from '@/lib/compiler/cancellationTypes';
-import { X } from 'lucide-react';
+import { X, Cpu, HardDrive, Database, Zap, AlertTriangle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+
+export interface SimulationResult {
+  cpuInstructions: number;
+  cpuLimit: number;
+  ramFootprintBytes: number;
+  ramLimitBytes: number;
+  ledgerReadCount: number;
+  ledgerWriteCount: number;
+  ledgerLimit: number;
+  feeXlm: number;
+  warning?: string;
+}
 
 interface ExecutionStatusBarProps {
   state: ExecutionState;
   onCancel: () => void;
   onReset?: () => void;
   className?: string;
+  simulation?: SimulationResult | null;
 }
 
 /** Elapsed time counter — re-renders every second while running. */
@@ -57,13 +70,14 @@ export function ExecutionStatusBar({
   onCancel,
   onReset,
   className = '',
+  simulation = null,
 }: ExecutionStatusBarProps) {
   const { phase, statusMessage, queuePosition, enteredAt } = state;
   const isActive = phase === 'queued' || phase === 'running';
   const elapsed = useElapsedSeconds(isActive, enteredAt);
 
-  // Don't render anything in the idle state — the compile button itself is enough.
-  if (phase === 'idle') return null;
+  // Don't render anything in the idle state UNLESS there is simulation result to show.
+  if (phase === 'idle' && !simulation) return null;
 
   const isError = phase === 'error';
   const isCancelled = phase === 'cancelled';
@@ -198,6 +212,115 @@ export function ExecutionStatusBar({
           Review the compile output for details. Correct the error and click{' '}
           <span className="font-bold">Execute Logic</span> to try again.
         </p>
+      )}
+
+      {/* ── Pre-Flight Simulation Engine, Resource Profiler & Gas Visualizer ── */}
+      {simulation && (
+        <div className="mt-2 flex flex-col gap-3 rounded-lg border border-white/10 bg-black/40 p-3 text-xs text-zinc-300">
+          <div className="flex items-center justify-between border-b border-white/10 pb-2">
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-amber-400" />
+              <span className="font-semibold text-white tracking-wide uppercase text-[11px]">
+                Pre-Flight Simulation & Gas Profiler
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] text-amber-400 border border-amber-500/25">
+                Fee: {simulation.feeXlm.toFixed(4)} XLM
+              </span>
+            </div>
+          </div>
+
+          {simulation.warning && (
+            <div className="flex items-center gap-2 rounded bg-yellow-500/10 p-2 text-[11px] text-yellow-400 border border-yellow-500/20">
+              <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+              <span>{simulation.warning}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* CPU Instructions */}
+            <div className="flex flex-col gap-1 rounded bg-white/5 p-2.5">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="flex items-center gap-1.5 text-zinc-400">
+                  <Cpu className="h-3.5 w-3.5 text-blue-400" /> CPU Instructions
+                </span>
+                <span className="font-mono text-zinc-200">
+                  {simulation.cpuInstructions.toLocaleString()} / {simulation.cpuLimit.toLocaleString()}
+                </span>
+              </div>
+              <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    simulation.cpuInstructions / simulation.cpuLimit > 0.8
+                      ? 'bg-red-500'
+                      : simulation.cpuInstructions / simulation.cpuLimit > 0.6
+                      ? 'bg-yellow-500'
+                      : 'bg-blue-500'
+                  }`}
+                  style={{
+                    width: `${Math.min(100, (simulation.cpuInstructions / simulation.cpuLimit) * 100)}%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* RAM Footprint */}
+            <div className="flex flex-col gap-1 rounded bg-white/5 p-2.5">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="flex items-center gap-1.5 text-zinc-400">
+                  <HardDrive className="h-3.5 w-3.5 text-purple-400" /> RAM Footprint
+                </span>
+                <span className="font-mono text-zinc-200">
+                  {(simulation.ramFootprintBytes / 1024).toFixed(1)} KB / {(simulation.ramLimitBytes / 1024).toFixed(1)} KB
+                </span>
+              </div>
+              <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    simulation.ramFootprintBytes / simulation.ramLimitBytes > 0.8
+                      ? 'bg-red-500'
+                      : simulation.ramFootprintBytes / simulation.ramLimitBytes > 0.6
+                      ? 'bg-yellow-500'
+                      : 'bg-purple-500'
+                  }`}
+                  style={{
+                    width: `${Math.min(100, (simulation.ramFootprintBytes / simulation.ramLimitBytes) * 100)}%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Ledger Reads/Writes */}
+            <div className="flex flex-col gap-1 rounded bg-white/5 p-2.5">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="flex items-center gap-1.5 text-zinc-400">
+                  <Database className="h-3.5 w-3.5 text-emerald-400" /> Ledger R/W
+                </span>
+                <span className="font-mono text-zinc-200">
+                  R: {simulation.ledgerReadCount} | W: {simulation.ledgerWriteCount} ({simulation.ledgerLimit} max)
+                </span>
+              </div>
+              <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    (simulation.ledgerReadCount + simulation.ledgerWriteCount) / simulation.ledgerLimit > 0.8
+                      ? 'bg-red-500'
+                      : (simulation.ledgerReadCount + simulation.ledgerWriteCount) / simulation.ledgerLimit > 0.6
+                      ? 'bg-yellow-500'
+                      : 'bg-emerald-500'
+                  }`}
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      ((simulation.ledgerReadCount + simulation.ledgerWriteCount) / simulation.ledgerLimit) * 100
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

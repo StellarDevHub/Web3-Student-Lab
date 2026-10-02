@@ -42,13 +42,12 @@ members = [
     "zk_proof_verifier",
     "certificate",
     "storage_ttl_manager",
-    "access_control",
-]
-# Incomplete or non-crate directories under contracts/ must not be listed as members.
-exclude = [
     "automated_testing_suite",
     "cicd_pipeline",
+    "contract_events",
+    "peer_review",
 ]
+# All contract crates are now fully reconciled into the workspace.
 
 [profile.release]
 opt-level = "z"
@@ -66,6 +65,6 @@ soroban-sdk = "27.0.6"
 
 [dev-dependencies]
 soroban-sdk = { version = "27.0.6", features = ["testutils"] }
-rand = { version = "0.8", features = ["small_rng"] }
+rand = { version = "0.9", features = ["small_rng"] }
 ed25519-dalek = { version = "2", default-features = false, features = ["std", "rand_core"] }
 proptest = "1"

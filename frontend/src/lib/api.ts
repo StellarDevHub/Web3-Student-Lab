@@ -1,6 +1,7 @@
 import { apiRequestCache } from './api-cache';
 import apiClient from './api-client';
 import { API_BASE_URL } from './api-config';
+import { getPublicEnv } from './env';
 
 export interface User {
   id: string;
@@ -695,7 +696,7 @@ export const analyticsAPI = {
     const token = localStorage.getItem('token');
     if (!token) return null;
 
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080';
+    const wsUrl = getPublicEnv().wsUrl || 'ws://localhost:8080';
     const ws = new WebSocket(`${wsUrl}/analytics/stream?token=${token}`);
 
     ws.onmessage = (event) => {

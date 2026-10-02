@@ -347,6 +347,7 @@ pub fn publish_transfer(env: &Env, from: &Address, to: &Address, amount: i128) {
 // ---------------------------------------------------------------------------
 
 /// Decoded [`topic::TRADE`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TradeEvent {
     pub trader: Address,
@@ -360,6 +361,7 @@ pub struct TradeEvent {
 }
 
 /// Decoded [`topic::PAUSE`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PauseEvent {
     pub admin: Address,
@@ -368,6 +370,7 @@ pub struct PauseEvent {
 }
 
 /// Decoded [`topic::FEE_WITHDRAW`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FeeWithdrawEvent {
     pub admin: Address,
@@ -377,6 +380,7 @@ pub struct FeeWithdrawEvent {
 }
 
 /// Decoded [`topic::VAULT_LOCK`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VaultLockEvent {
     pub party: Address,
@@ -387,6 +391,7 @@ pub struct VaultLockEvent {
 }
 
 /// Decoded [`topic::SHARES_MINTED`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SharesMintedEvent {
     pub recipient: Address,
@@ -396,6 +401,7 @@ pub struct SharesMintedEvent {
 }
 
 /// Decoded [`topic::BID`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BidEvent {
     pub bidder: Address,
@@ -405,6 +411,7 @@ pub struct BidEvent {
 }
 
 /// Decoded [`topic::AUCTION`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuctionEvent {
     pub winner: Address,
@@ -415,6 +422,7 @@ pub struct AuctionEvent {
 }
 
 /// Decoded [`topic::PAYOUT`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PayoutEvent {
     pub holder: Address,
@@ -423,6 +431,7 @@ pub struct PayoutEvent {
 }
 
 /// Decoded [`topic::SUBMISSION`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubmissionEvent {
     pub creator: Address,
@@ -434,6 +443,7 @@ pub struct SubmissionEvent {
 }
 
 /// Decoded [`topic::STAKE`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StakeEvent {
     pub reviewer: Address,
@@ -444,6 +454,7 @@ pub struct StakeEvent {
 }
 
 /// Decoded [`topic::COMMIT`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommitEvent {
     pub reviewer: Address,
@@ -453,6 +464,7 @@ pub struct CommitEvent {
 }
 
 /// Decoded [`topic::REVEAL`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RevealEvent {
     pub reviewer: Address,
@@ -462,6 +474,7 @@ pub struct RevealEvent {
 }
 
 /// Decoded [`topic::REVIEW_DONE`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReviewDoneEvent {
     pub submission_id: u64,
@@ -472,6 +485,7 @@ pub struct ReviewDoneEvent {
 }
 
 /// Decoded [`topic::SLASH`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SlashEvent {
     pub reviewer: Address,
@@ -481,6 +495,7 @@ pub struct SlashEvent {
 }
 
 /// Decoded [`topic::ENROLL`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EnrollmentEvent {
     pub student: Address,
@@ -490,6 +505,7 @@ pub struct EnrollmentEvent {
 }
 
 /// Decoded [`topic::MILESTONE`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MilestoneEvent {
     pub student: Address,
@@ -499,6 +515,7 @@ pub struct MilestoneEvent {
 }
 
 /// Decoded [`topic::CERT_MINT`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CertificateMintEvent {
     pub student: Address,
@@ -507,6 +524,7 @@ pub struct CertificateMintEvent {
 }
 
 /// Decoded [`topic::TRANSFER`] event.
+#[soroban_sdk::contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TransferEvent {
     pub from: Address,

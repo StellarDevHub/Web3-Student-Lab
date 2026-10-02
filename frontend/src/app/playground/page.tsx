@@ -18,6 +18,7 @@ import { FilePresenceManager } from '@/lib/explorer/FilePresence';
 import { DatabaseManager } from '@/lib/storage/DatabaseManager';
 import { SyncManager } from '@/lib/storage/SyncManager';
 import { Settings, X } from 'lucide-react';
+import BatchComposer from '@/components/playground/BatchComposer';
 import { DependencyUpdatePanel } from '@/components/playground/DependencyUpdatePanel';
 import { AccessibilityAuditPanel } from '@/components/playground/AccessibilityAuditPanel';
 import { ContractSearch } from '@/components/playground/ContractSearch';
@@ -470,6 +471,8 @@ impl HelloContract {
                 <CompileOutputTerminal logs={compileLogs} isCompiling={isCompiling} />
 
                 <TerminalPanel />
+
+                <BatchComposer />
 
                 <DependencyUpdatePanel cargoToml={DEFAULT_CARGO_TOML} />
                 <AccessibilityAuditPanel

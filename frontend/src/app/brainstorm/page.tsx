@@ -4,9 +4,8 @@ import { CollaborativeCanvas } from '@/components/CollaborativeCanvas';
 import { EncryptedRoomChat } from '@/components/collaboration/EncryptedRoomChat';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
-
-import { Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
+import { getApiEndpoint } from '@/lib/env';
 
 function BrainstormContent() {
   const searchParams = useSearchParams();
@@ -41,11 +40,10 @@ function BrainstormContent() {
 
     const syncCanvas = async () => {
       setIsLoading(true);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
       const token = localStorage.getItem('token');
 
       try {
-        const response = await fetch(`${apiUrl}/canvas/room/${roomId}`, {
+        const response = await fetch(getApiEndpoint(`/canvas/room/${roomId}`), {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -97,11 +95,10 @@ function BrainstormContent() {
 
   const handleDownloadJSON = async () => {
     setIsLoading(true);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
     const token = localStorage.getItem('token');
 
     try {
-      const response = await fetch(`${apiUrl}/canvas/room/${roomId}`, {
+      const response = await fetch(getApiEndpoint(`/canvas/room/${roomId}`), {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,

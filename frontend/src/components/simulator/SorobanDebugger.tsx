@@ -17,7 +17,7 @@ const MOCK_TRACES: TraceEvent[] = [
   { id: 5, type: 'contract_event', cpuCost: 400, memCost: 80, line: 20, details: 'Emitted Transfer event' },
 ];
 
-const MOCK_CODE = \`// lib.rs
+const MOCK_CODE = `// lib.rs
 #![no_std]
 use soroban_sdk::{contract, contractimpl, symbol_short, Env, Address};
 
@@ -31,30 +31,30 @@ impl TokenContract {
         let symbol = symbol_short!("TOKEN");
         // Line 13
         from.require_auth();
-        
+
         // Line 15
         let mut data_keys = soroban_sdk::vec![&env];
-        
+
         // Line 18
         env.storage().persistent().set(&from, &(balance - amount));
-        
+
         // Line 20
         env.events().publish((symbol, symbol_short!("transfer")), (from, to, amount));
     }
-}\`;
+}`;
 
 export const SorobanDebugger: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<number>(0);
 
   const activeTraces = MOCK_TRACES.slice(0, currentStep + 1);
   const currentTrace = activeTraces[activeTraces.length - 1];
-  
+
   const totalCpu = activeTraces.reduce((sum, t) => sum + t.cpuCost, 0);
   const totalMem = activeTraces.reduce((sum, t) => sum + t.memCost, 0);
 
   const exportJSON = () => {
     const dataStr = JSON.stringify(activeTraces, null, 2);
-    alert(\`Exported Trace:\\n\${dataStr}\`);
+    alert(`Exported Trace:\n${dataStr}`);
   };
 
   return (
@@ -67,7 +67,7 @@ export const SorobanDebugger: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-3 gap-6 flex-grow overflow-hidden">
-        
+
         {/* Source Code View */}
         <div className="col-span-1 bg-gray-800 rounded-lg border border-gray-600 overflow-hidden flex flex-col">
           <div className="bg-gray-700 px-4 py-2 font-mono text-xs text-gray-300 border-b border-gray-600">lib.rs</div>
@@ -76,7 +76,7 @@ export const SorobanDebugger: React.FC = () => {
               const lineNum = idx + 1;
               const isHighlighted = currentTrace?.line === lineNum;
               return (
-                <div key={lineNum} className={\`px-2 py-0.5 rounded \${isHighlighted ? 'bg-teal-900 border-l-4 border-teal-500 text-teal-100' : 'text-gray-400'}\`}>
+                <div key={lineNum} className={`px-2 py-0.5 rounded ${isHighlighted ? 'bg-teal-900 border-l-4 border-teal-500 text-teal-100' : 'text-gray-400'}`}>
                   <span className="inline-block w-8 text-right mr-4 opacity-50 select-none">{lineNum}</span>
                   {line}
                 </div>
@@ -87,18 +87,18 @@ export const SorobanDebugger: React.FC = () => {
 
         {/* Trace Log and Budgets */}
         <div className="col-span-2 flex flex-col gap-6 overflow-hidden">
-          
+
           {/* Controls & Budgets */}
           <div className="bg-gray-800 rounded-lg border border-gray-600 p-4 flex gap-8 items-center">
             <div className="flex gap-2">
-              <button 
+              <button
                 onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
                 disabled={currentStep === 0}
                 className="bg-gray-700 disabled:opacity-50 text-white px-4 py-2 rounded hover:bg-gray-600"
               >
                 &larr; Step Back
               </button>
-              <button 
+              <button
                 onClick={() => setCurrentStep(Math.min(MOCK_TRACES.length - 1, currentStep + 1))}
                 disabled={currentStep === MOCK_TRACES.length - 1}
                 className="bg-teal-600 disabled:opacity-50 text-white px-4 py-2 rounded hover:bg-teal-500 font-bold"
@@ -106,7 +106,7 @@ export const SorobanDebugger: React.FC = () => {
                 Step Forward &rarr;
               </button>
             </div>
-            
+
             <div className="flex-grow flex gap-4 justify-end">
               <div className="bg-gray-900 px-4 py-2 rounded border border-gray-700 text-center">
                 <div className="text-xs text-gray-400 uppercase">CPU Budget (Instr)</div>
@@ -129,7 +129,7 @@ export const SorobanDebugger: React.FC = () => {
             </div>
             <div className="overflow-y-auto p-2">
               {activeTraces.map((trace, idx) => (
-                <div key={trace.id} className={\`grid grid-cols-5 px-2 py-3 rounded mb-1 border-b border-gray-700/50 \${idx === activeTraces.length - 1 ? 'bg-gray-700/80 border-l-4 border-teal-500' : ''}\`}>
+                <div key={trace.id} className={`grid grid-cols-5 px-2 py-3 rounded mb-1 border-b border-gray-700/50 ${idx === activeTraces.length - 1 ? 'bg-gray-700/80 border-l-4 border-teal-500' : ''}`}>
                   <div className="col-span-1 font-mono text-sm text-pink-400">{trace.type}</div>
                   <div className="col-span-2 text-sm text-gray-300">{trace.details}</div>
                   <div className="col-span-1 text-right font-mono text-sm text-yellow-500">+{trace.cpuCost}</div>
@@ -138,7 +138,7 @@ export const SorobanDebugger: React.FC = () => {
               ))}
             </div>
           </div>
-          
+
           {/* Budget Graph Approximation */}
           <div className="bg-gray-800 rounded-lg border border-gray-600 p-4 h-48">
              <div className="text-xs text-gray-400 mb-2 uppercase">Cumulative Budget Consumption Graph</div>
@@ -150,12 +150,12 @@ export const SorobanDebugger: React.FC = () => {
                     const thisTotalCpu = MOCK_TRACES.slice(0, idx + 1).reduce((s, x) => s + x.cpuCost, 0);
                     const maxCpu = MOCK_TRACES.reduce((s, x) => s + x.cpuCost, 0);
                     const heightPct = (thisTotalCpu / maxCpu) * 100;
-                    
+
                     return (
                       <div key={t.id} className="flex-1 flex flex-col justify-end items-center h-full group">
-                        <div 
-                          className={\`w-full transition-all duration-300 rounded-t \${isFuture ? 'bg-gray-700' : 'bg-yellow-500/80'}\`} 
-                          style={{height: \`\${heightPct}%\`}}
+                        <div
+                          className={`w-full transition-all duration-300 rounded-t ${isFuture ? 'bg-gray-700' : 'bg-yellow-500/80'}`}
+                          style={{height: `${heightPct}%`}}
                         ></div>
                         <div className="text-[10px] text-gray-500 mt-1 font-mono">Step {idx+1}</div>
                       </div>

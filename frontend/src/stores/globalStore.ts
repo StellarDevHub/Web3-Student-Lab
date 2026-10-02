@@ -4,6 +4,7 @@ import { useEditorStore } from './editorStore';
 import { devtools, logger } from './middleware';
 import { useNetworkStore } from './networkStore';
 import { useUserStore } from './userStore';
+import { getPublicEnv } from '@/lib/env';
 
 export interface GlobalState {
   // Global UI state
@@ -56,8 +57,8 @@ export type GlobalStore = GlobalState & GlobalActions;
 
 const initialState: GlobalState = {
   isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
-  appVersion: process.env.NEXT_PUBLIC_APP_VERSION ?? '1.0.0',
-  buildNumber: process.env.NEXT_PUBLIC_BUILD_NUMBER ?? 'dev',
+  appVersion: getPublicEnv().appVersion,
+  buildNumber: getPublicEnv().buildNumber,
   environment: (process.env.NODE_ENV as 'development' | 'staging' | 'production') || 'development',
 
   globalLoading: false,

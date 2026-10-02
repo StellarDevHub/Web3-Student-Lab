@@ -1,10 +1,10 @@
 'use client';
 
-import { useWallet, StellarNetwork } from '@/contexts/WalletContext';
-import { AlertCircle, CheckCircle2, Download, ExternalLink, Globe, RefreshCw, ShieldAlert, Wallet } from 'lucide-react';
+import { StellarNetwork, useWallet } from '@/contexts/WalletContext';
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { AlertCircle, CheckCircle2, Download, ExternalLink, Globe, RefreshCw, ShieldAlert, Wallet } from 'lucide-react';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export default function WalletGate({ children }: { children: React.ReactNode }) {
   const {
@@ -19,6 +19,7 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
     blockHeight,
     switchNetwork,
     setAppNetwork,
+    detectedWallets,
   } = useWallet();
 
   const pathname = usePathname();
@@ -116,7 +117,7 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
             Available & Detected Wallets
           </h2>
           {availableWallets.map((wallet) => {
-            const installed = wallet.isInstalled();
+            const installed = detectedWallets.some((detected) => detected.id === wallet.id);
             return (
               <div
                 key={wallet.id}
@@ -131,7 +132,7 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-sm">{wallet.name}</span>
-                      {wallet.name === 'Freighter' && (
+                      {wallet.recommended && installed && (
                         <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full font-semibold">
                           Recommended
                         </span>

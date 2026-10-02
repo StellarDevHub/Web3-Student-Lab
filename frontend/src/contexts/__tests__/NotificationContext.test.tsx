@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { NotificationProvider, useNotifications, groupNotifications } from '../NotificationContext';
+import {
+  NotificationProvider,
+  useNotifications,
+  groupNotifications,
+  getStellarExpertUrl,
+  getDedupeKey,
+} from '../NotificationContext';
 import type { ReactNode } from 'react';
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -41,37 +47,113 @@ describe('NotificationContext', () => {
       expect(result.current.unreadCount).toBe(1);
     });
 
-    it('should support all new notification types', () => {
+    it('should support priority ordering in toast queue', () => {
       const { result } = renderHook(() => useNotifications(), { wrapper });
 
       act(() => {
         result.current.push({
-          type: 'course_update',
-          title: 'Course Update',
-          message: 'Updated content.',
+          type: 'system',
+          title: 'Low priority',
+          message: 'Low info',
+          priority: 'low',
+        });
+        result.current.push({
+          type: 'error',
+          title: 'Urgent Error',
+          message: 'Critical error occurred',
+          priority: 'urgent',
+        });
+        result.current.push({
+          type: 'signature',
+          title: 'High priority tx',
+          message: 'Signature required',
+          priority: 'high',
         });
       });
+
+      expect(result.current.toasts[0].title).toBe('Urgent Error');
+      expect(result.current.toasts[1].title).toBe('High priority tx');
+      expect(result.current.toasts[2].title).toBe('Low priority');
+    });
+
+    it('should deduplicate identical error/notification toasts', () => {
+      const { result } = renderHook(() => useNotifications(), { wrapper });
 
       act(() => {
         result.current.push({
-          type: 'announcement',
-          title: 'Platform Announcement',
-          message: 'New features!',
+          type: 'error',
+          title: 'Network Timeout',
+          message: 'Failed to connect to RPC node',
+        });
+        result.current.push({
+          type: 'error',
+          title: 'Network Timeout',
+          message: 'Failed to connect to RPC node',
         });
       });
+
+      expect(result.current.toasts).toHaveLength(1);
+      expect(result.current.toasts[0].count).toBe(2);
+    });
+
+    it('should support multi-step transaction live progress updates', () => {
+      const { result } = renderHook(() => useNotifications(), { wrapper });
+      let txId = '';
 
       act(() => {
-        result.current.push({
-          type: 'learning_opportunity',
-          title: 'Workshop',
-          message: 'Join the workshop.',
+        txId = result.current.push({
+          type: 'signature',
+          title: 'Mint Certificate',
+          message: 'Initiating transaction...',
+          step: 1,
+          totalSteps: 3,
+          stepName: 'Signing XDR',
         });
       });
 
-      expect(result.current.notifications).toHaveLength(3);
-      expect(result.current.notifications[0].type).toBe('learning_opportunity');
-      expect(result.current.notifications[1].type).toBe('announcement');
-      expect(result.current.notifications[2].type).toBe('course_update');
+      expect(result.current.toasts[0].progress).toBe(33);
+
+      act(() => {
+        result.current.updateProgress(txId, {
+          step: 2,
+          totalSteps: 3,
+          stepName: 'Submitting to Horizon',
+          txHash: 'abc123def456',
+        });
+      });
+
+      expect(result.current.toasts[0].step).toBe(2);
+      expect(result.current.toasts[0].progress).toBe(67);
+      expect(result.current.toasts[0].txHash).toBe('abc123def456');
+      expect(result.current.toasts[0].explorerUrl).toBe(
+        'https://stellar.expert/explorer/public/tx/abc123def456'
+      );
+    });
+
+    it('should generate correct Stellar Expert URLs', () => {
+      const publicUrl = getStellarExpertUrl('12345', 'public');
+      const testnetUrl = getStellarExpertUrl('12345', 'testnet');
+
+      expect(publicUrl).toBe('https://stellar.expert/explorer/public/tx/12345');
+      expect(testnetUrl).toBe('https://stellar.expert/explorer/testnet/tx/12345');
+    });
+
+    it('should clear all toasts using clearToasts', () => {
+      const { result } = renderHook(() => useNotifications(), { wrapper });
+
+      act(() => {
+        result.current.push({ type: 'system', title: 'T1', message: 'M1' });
+        result.current.push({ type: 'error', title: 'T2', message: 'M2' });
+      });
+
+      expect(result.current.toasts.length).toBeGreaterThan(0);
+
+      act(() => {
+        result.current.clearToasts();
+      });
+
+      expect(result.current.toasts).toHaveLength(0);
+      expect(result.current.notifications.length).toBeGreaterThan(0);
     });
 
     it('should mark a notification as read', () => {
@@ -145,23 +227,6 @@ describe('NotificationContext', () => {
       expect(result.current.toasts).toHaveLength(0);
       expect(result.current.notifications).toHaveLength(1);
       expect(result.current.notifications[0].id).toBe(notifId);
-    });
-
-    it('should cap toasts at max 3', () => {
-      const { result } = renderHook(() => useNotifications(), { wrapper });
-
-      act(() => {
-        result.current.push({ type: 'course_update', title: 'A', message: '1' });
-        vi.advanceTimersByTime(300);
-        result.current.push({ type: 'course_update', title: 'B', message: '2' });
-        vi.advanceTimersByTime(300);
-        result.current.push({ type: 'course_update', title: 'C', message: '3' });
-        vi.advanceTimersByTime(300);
-        result.current.push({ type: 'course_update', title: 'D', message: '4' });
-      });
-
-      expect(result.current.toasts).toHaveLength(3);
-      expect(result.current.notifications).toHaveLength(4);
     });
 
     it('should throw when used outside provider', () => {

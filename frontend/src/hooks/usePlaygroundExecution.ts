@@ -12,13 +12,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CompileLogEntry } from '../lib/compiler/compileTypes';
-import type {
-  CancellableWorkerResponse,
-  CancellationId,
-  ExecutionPhase,
-  ExecutionState,
+import {
+  CANCELLATION_ID_HEADER,
+  type CancellableWorkerResponse,
+  type CancellationId,
+  type ExecutionPhase,
+  type ExecutionState,
 } from '../lib/compiler/cancellationTypes';
-import { CANCELLATION_ID_HEADER } from '../lib/compiler/cancellationTypes';
+import { getApiEndpoint } from '../lib/env';
 
 /** Shape returned by the hook. */
 export interface UsePlaygroundExecutionReturn {
@@ -71,10 +72,12 @@ function transition(
   };
 }
 
-/** Base URL for backend contract API — falls back to relative when not set. */
-const API_BASE = process.env.NEXT_PUBLIC_API_URL
-  ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1/contracts`
-  : '/api/v1/contracts';
+/**
+ * Base URL for backend contract API — strictly normalized via getApiEndpoint to prevent
+ * duplicate /api/v1 prefix bugs regardless of whether NEXT_PUBLIC_API_URL includes /api/v1.
+ */
+const getContractsApiBase = (): string => getApiEndpoint('/contracts');
+const API_BASE = getApiEndpoint('/contracts');
 
 export function usePlaygroundExecution(): UsePlaygroundExecutionReturn {
   const [executionState, setExecutionState] = useState<ExecutionState>(makeIdleState);
@@ -168,7 +171,8 @@ export function usePlaygroundExecution(): UsePlaygroundExecutionReturn {
     // We send the ID so the server can register it in its registry and allow
     // the /cancel endpoint to short-circuit backend execution for future operations.
     const signal = abortControllerRef.current.signal;
-    fetch(`${API_BASE}/compile`, {
+    const contractsApiBase = getContractsApiBase();
+    fetch(`${contractsApiBase}/compile`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -200,7 +204,7 @@ export function usePlaygroundExecution(): UsePlaygroundExecutionReturn {
     abortControllerRef.current?.abort();
 
     // 3. Notify the backend (fire and forget).
-    fetch(`${API_BASE}/cancel`, {
+    fetch(`${contractsApiBase}/cancel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cancellationId: id }),
