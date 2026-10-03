@@ -3,7 +3,11 @@
 import type { CollaborationProvider } from '@/lib/collaboration/YjsProvider';
 import { registerSorobanCompletion } from '@/lib/editor/SorobanCompletion';
 import { registerSorobanHover } from '@/lib/editor/SorobanHover';
-import { extendRustLanguage } from '@/lib/editor/SorobanLanguage';
+import { 
+  extendRustLanguage, 
+  registerSorobanDocumentFormattingEditProvider,
+  initializeRustfmtWasm,
+} from '@/lib/editor/SorobanLanguage';
 import type { SorobanLinterInstance } from '@/lib/editor/SorobanLinter';
 import { createSorobanLinter } from '@/lib/editor/SorobanLinter';
 import { THEME_COLORS } from '@/lib/theme/themeColors';
@@ -202,7 +206,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   }, []);
 
   const handleEditorDidMount: OnMount = useCallback(
-    (mountedEditor, monaco) => {
+    async (mountedEditor, monaco) => {
       setEditorInstance(mountedEditor);
       compileActionRef.current?.dispose();
       compileActionRef.current = mountedEditor.addAction({
@@ -214,9 +218,21 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         },
       });
 
+      const formatActionRef = mountedEditor.addAction({
+        id: 'web3-lab.format-document',
+        label: 'Format Document',
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
+        run: () => {
+          mountedEditor.trigger('web3-lab', 'editor.action.formatDocument', null);
+        },
+      });
+
       extendRustLanguage(monaco);
       registerSorobanCompletion(monaco);
       registerSorobanHover(monaco);
+      registerSorobanDocumentFormattingEditProvider(monaco);
+
+      await initializeRustfmtWasm();
 
       const baseTheme = theme === 'light' ? 'vs' : 'hc-black';
       monaco.editor.defineTheme('web3-lab-premium', {
@@ -271,8 +287,12 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
           debounceMs: 300,
         });
       }
+
+      return () => {
+        formatActionRef.dispose();
+      };
     },
-    [settings.tabSize]
+    [settings.tabSize, theme, colors]
   );
 
   useEffect(() => {
