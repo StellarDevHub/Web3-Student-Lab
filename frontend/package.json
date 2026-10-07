@@ -57,7 +57,7 @@
     "react-chartjs-2": "^5.3.1",
     "react-dom": "19.2.3",
     "react-is": "^19.2.8",
-    "react-joyride": "^3.1.0",
+    "react-joyride": "^3.2.0",
     "react-loading-skeleton": "^3.5.0",
     "react-window": "^2.3.1",
     "reactflow": "^11.11.4",
