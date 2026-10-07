@@ -88,7 +88,7 @@
     "@types/d3": "^7.4.3",
     "@types/diff-match-patch": "^1.0.36",
     "@types/jest-axe": "3.5.9",
-    "@types/node": "^20",
+    "@types/node": "^26",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
