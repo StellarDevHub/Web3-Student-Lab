@@ -70,7 +70,7 @@
     "y-websocket": "^3.1.0",
     "yaml": "^2.0.0",
     "yjs": "^13.6.32",
-    "zod": "^4.3.6"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@as-integrations/express4": "^1.1.2",
