@@ -50,7 +50,7 @@
     "express-validator": "^7.2.1",
     "graphql": "^16.14.2",
     "graphql-depth-limit": "^1.1.0",
-    "graphql-ws": "^6.2.1",
+    "graphql-ws": "^6.3.0",
     "ioredis": "^5.11.1",
     "json2csv": "^6.0.0-alpha.2",
     "jsonwebtoken": "^9.0.2",
