@@ -68,7 +68,7 @@
     "vscode-languageserver-protocol": "^3.17.5",
     "vscode-ws-jsonrpc": "^3.5.0",
     "wabt": "^1.0.39",
-    "xstate": "^5.31.1",
+    "xstate": "^5.33.2",
     "y-monaco": "^0.1.6",
     "y-webrtc": "^10.3.0",
     "y-websocket": "^3.0.0",
