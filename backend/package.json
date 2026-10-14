@@ -40,7 +40,7 @@
     "@types/ioredis": "^4.28.10",
     "@types/json2csv": "^5.0.7",
     "bcryptjs": "^3.0.2",
-    "bullmq": "^5.76.1",
+    "bullmq": "^6.3.12",
     "cors": "^2.8.6",
     "dataloader": "^2.2.3",
     "dotenv": "^17.3.1",
