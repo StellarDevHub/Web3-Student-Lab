@@ -63,7 +63,7 @@
     "reactflow": "^11.11.4",
     "recharts": "^3.10.1",
     "socket.io-client": "^4.8.3",
-    "tailwind-merge": "^3.5.0",
+    "tailwind-merge": "^3.7.0",
     "tldraw": "^5.3.2",
     "vscode-languageserver-protocol": "^3.17.5",
     "vscode-ws-jsonrpc": "^3.5.0",
