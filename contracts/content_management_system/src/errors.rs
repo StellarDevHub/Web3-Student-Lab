@@ -21,4 +21,11 @@ pub enum Error {
     EnrollmentNotAllowed = 15,
     AlreadyEnrolled = 16,
     NotEnrolled = 17,
+    CopyrightAlreadyRegistered = 18,
+    LicenseNotFound = 19,
+    LicenseExpired = 20,
+    LicenseTermsNotSet = 21,
+    InvalidLicenseDuration = 22,
+    InvalidLicensePrice = 23,
+    LicenseAlreadyRevoked = 24,
 }

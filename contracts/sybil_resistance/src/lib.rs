@@ -31,6 +31,7 @@ pub enum SybilError {
 pub enum DataKey {
     Admin,
     VerifiedUser(Address),
+    Reputation(Address),
 }
 
 #[contract]
@@ -93,7 +94,43 @@ impl SybilResistanceContract {
             panic_with_error!(&env, SybilError::NotVerified);
         }
     }
+
+    /// Retrieves current reputation score after applying exponential time decay.
+    pub fn get_reputation(env: Env, user: Address) -> u64 {
+        reputation::get_reputation(&env, &user)
+    }
+
+    /// Adjusts user reputation score according to an action, capping at MAX_REPUTATION_SCORE
+    /// and emitting a transparent adjustment event with a reasoning code.
+    pub fn adjust_reputation(
+        env: Env,
+        user: Address,
+        delta: i64,
+        reason: reputation::ReputationReason,
+    ) -> u64 {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic_with_error!(&env, SybilError::NotInitialized));
+        admin.require_auth();
+
+        reputation::adjust_reputation(&env, user, delta, reason)
+    }
+
+    /// Applies time decay and commits the settled reputation score on-chain.
+    pub fn settle_decay(env: Env, user: Address) -> u64 {
+        reputation::settle_decay(&env, user)
+    }
+
+    /// Retrieves raw reputation record without auto-decay settlement.
+    pub fn get_reputation_record(env: Env, user: Address) -> Option<reputation::ReputationRecord> {
+        reputation::get_reputation_record(&env, &user)
+    }
 }
+
+pub mod decay;
+pub mod reputation;
 
 #[cfg(test)]
 mod test;

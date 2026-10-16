@@ -1,7 +1,9 @@
 #![no_std]
 
+pub mod drm;
 mod errors;
 mod events;
+pub mod licensing;
 mod storage;
 mod types;
 
@@ -10,7 +12,7 @@ mod test;
 
 use errors::Error;
 use events::*;
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Vec};
 use storage::*;
 use types::{AccessPolicy, ContentItem, ContentMetadata, ContentStatus};
 
@@ -390,5 +392,62 @@ impl ContentManagementSystem {
     /// Check if student is enrolled
     pub fn is_enrolled(env: Env, content_id: u64, student: Address) -> bool {
         is_enrolled(&env, content_id, &student)
+    }
+
+    /// Register curriculum copyright hash for a content item
+    pub fn register_copyright(
+        env: Env,
+        author: Address,
+        content_id: u64,
+        copyright_hash: BytesN<32>,
+    ) -> Result<drm::CopyrightRecord, Error> {
+        drm::register_copyright(&env, author, content_id, copyright_hash)
+    }
+
+    /// Get registered curriculum copyright record
+    pub fn get_copyright(env: Env, content_id: u64) -> Result<drm::CopyrightRecord, Error> {
+        drm::get_copyright(&env, content_id)
+    }
+
+    /// Set commercial licensing terms for a content item
+    pub fn set_license_terms(
+        env: Env,
+        author: Address,
+        content_id: u64,
+        payment_token: Address,
+        price: i128,
+        duration_seconds: u64,
+    ) -> Result<licensing::LicenseTerms, Error> {
+        licensing::set_license_terms(&env, author, content_id, payment_token, price, duration_seconds)
+    }
+
+    /// Get licensing terms for a content item
+    pub fn get_license_terms(env: Env, content_id: u64) -> Result<licensing::LicenseTerms, Error> {
+        licensing::get_license_terms(&env, content_id)
+    }
+
+    /// Purchase a time-limited commercial license voucher, forwarding royalties to course author
+    pub fn purchase_license(
+        env: Env,
+        institution: Address,
+        content_id: u64,
+        signature: BytesN<64>,
+    ) -> Result<u64, Error> {
+        licensing::purchase_license(&env, institution, content_id, signature)
+    }
+
+    /// Assert whether an institution holds an active valid license
+    pub fn is_license_valid(env: Env, institution: Address, content_id: u64) -> bool {
+        licensing::is_license_valid(&env, institution, content_id)
+    }
+
+    /// Get license voucher details
+    pub fn get_license(env: Env, license_id: u64) -> Result<licensing::LicenseVoucher, Error> {
+        licensing::get_license(&env, license_id)
+    }
+
+    /// Revoke an active license voucher (author only)
+    pub fn revoke_license(env: Env, author: Address, license_id: u64) -> Result<(), Error> {
+        licensing::revoke_license(&env, author, license_id)
     }
 }

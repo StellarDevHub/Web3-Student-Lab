@@ -566,3 +566,144 @@ fn test_content_versioning() {
     let v2_hash = client.get_content_version(&content_id, &2, &instructor);
     assert_eq!(v2_hash, String::from_str(&env, "QmHashV2"));
 }
+
+#[test]
+fn test_drm_copyright_registration() {
+    let env = create_test_env();
+    env.mock_all_auths();
+
+    let (_, client) = setup_contract(&env);
+    let author = Address::generate(&env);
+    client.add_instructor(&author);
+
+    let content_id = client.create_content(
+        &author,
+        &String::from_str(&env, "Advanced Cryptography"),
+        &String::from_str(&env, "Curriculum details"),
+        &String::from_str(&env, "QmContentHash123"),
+        &String::from_str(&env, "course"),
+        &vec![&env],
+        &AccessPolicy::Public,
+    );
+
+    let copyright_hash = BytesN::from_array(&env, &[42u8; 32]);
+    let record = client.register_copyright(&author, &content_id, &copyright_hash);
+    assert_eq!(record.content_id, content_id);
+    assert_eq!(record.author, author);
+    assert_eq!(record.copyright_hash, copyright_hash);
+
+    let fetched = client.get_copyright(&content_id);
+    assert_eq!(fetched.copyright_hash, copyright_hash);
+}
+
+#[test]
+fn test_dynamic_licensing_purchase_and_validation() {
+    let env = create_test_env();
+    env.mock_all_auths();
+
+    let (_, client) = setup_contract(&env);
+    let author = Address::generate(&env);
+    client.add_instructor(&author);
+
+    let content_id = client.create_content(
+        &author,
+        &String::from_str(&env, "Blockchain Engineering 101"),
+        &String::from_str(&env, "Comprehensive bootcamp curriculum"),
+        &String::from_str(&env, "QmCurriculumHash"),
+        &String::from_str(&env, "course"),
+        &vec![&env],
+        &AccessPolicy::Restricted,
+    );
+
+    // Setup payment token
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_client = soroban_sdk::token::Client::new(&env, &token_contract.address());
+    let token_admin_client = soroban_sdk::token::StellarAssetClient::new(&env, &token_contract.address());
+
+    let institution = Address::generate(&env);
+    token_admin_client.mint(&institution, &5000);
+    assert_eq!(token_client.balance(&institution), 5000);
+    assert_eq!(token_client.balance(&author), 0);
+
+    // Set licensing terms: 1500 tokens for 3600 seconds (1 hour)
+    let terms = client.set_license_terms(
+        &author,
+        &content_id,
+        &token_contract.address(),
+        &1500,
+        &3600,
+    );
+    assert_eq!(terms.price, 1500);
+    assert_eq!(terms.duration_seconds, 3600);
+
+    // Initially institution does not hold a valid license
+    assert!(!client.is_license_valid(&institution, &content_id));
+
+    // Institution purchases license voucher
+    let voucher_sig = BytesN::from_array(&env, &[1u8; 64]);
+    let license_id = client.purchase_license(&institution, &content_id, &voucher_sig);
+
+    // Check royalty payment forwarded directly to author
+    assert_eq!(token_client.balance(&institution), 3500);
+    assert_eq!(token_client.balance(&author), 1500);
+
+    // Voucher validation is active
+    assert!(client.is_license_valid(&institution, &content_id));
+
+    let voucher = client.get_license(&license_id);
+    assert_eq!(voucher.licensee, institution);
+    assert_eq!(voucher.author, author);
+    assert_eq!(voucher.signature, voucher_sig);
+
+    // Advance time past expiration (3601 seconds)
+    env.ledger().with_mut(|li| {
+        li.timestamp += 3601;
+    });
+
+    // License is no longer valid after expiration
+    assert!(!client.is_license_valid(&institution, &content_id));
+}
+
+#[test]
+fn test_license_revocation() {
+    let env = create_test_env();
+    env.mock_all_auths();
+
+    let (_, client) = setup_contract(&env);
+    let author = Address::generate(&env);
+    client.add_instructor(&author);
+
+    let content_id = client.create_content(
+        &author,
+        &String::from_str(&env, "Web3 Security"),
+        &String::from_str(&env, "Security curriculum"),
+        &String::from_str(&env, "QmSecHash"),
+        &String::from_str(&env, "course"),
+        &vec![&env],
+        &AccessPolicy::Restricted,
+    );
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_admin_client = soroban_sdk::token::StellarAssetClient::new(&env, &token_contract.address());
+
+    let institution = Address::generate(&env);
+    token_admin_client.mint(&institution, &1000);
+
+    client.set_license_terms(
+        &author,
+        &content_id,
+        &token_contract.address(),
+        &500,
+        &10000,
+    );
+
+    let sig = BytesN::from_array(&env, &[2u8; 64]);
+    let license_id = client.purchase_license(&institution, &content_id, &sig);
+    assert!(client.is_license_valid(&institution, &content_id));
+
+    // Author revokes license early
+    client.revoke_license(&author, &license_id);
+    assert!(!client.is_license_valid(&institution, &content_id));
+}

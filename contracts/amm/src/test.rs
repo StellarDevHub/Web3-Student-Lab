@@ -255,3 +255,77 @@ fn test_twap_resistant_to_single_block_flash_manipulation() {
     assert_eq!(twap_before_flash, twap_during_flash);
 }
 
+#[test]
+fn test_swap_with_deadline_succeeds_before_deadline() {
+    let env = Env::default();
+    let (admin, client, token_a, _, _) = setup(&env);
+    client.add_liquidity(&admin, &100_000, &100_000, &0);
+
+    let user = Address::generate(&env);
+    let token_a_client = token::StellarAssetClient::new(&env, &token_a);
+    token_a_client.mint(&user, &1000);
+
+    env.ledger().with_mut(|li| li.timestamp = 100);
+    let out = client.swap_a_for_b_with_deadline(&user, &1000, &0, &200);
+    assert!(out > 0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #405)")]
+fn test_swap_with_deadline_reverts_if_expired() {
+    let env = Env::default();
+    let (admin, client, token_a, _, _) = setup(&env);
+    client.add_liquidity(&admin, &100_000, &100_000, &0);
+
+    let user = Address::generate(&env);
+    let token_a_client = token::StellarAssetClient::new(&env, &token_a);
+    token_a_client.mint(&user, &1000);
+
+    env.ledger().with_mut(|li| li.timestamp = 201);
+    // User deadline is 200, current timestamp is 201 -> should panic with 405
+    client.swap_a_for_b_with_deadline(&user, &1000, &0, &200);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #406)")]
+fn test_same_block_bidirectional_trade_rejected() {
+    let env = Env::default();
+    let (admin, client, token_a, token_b, _) = setup(&env);
+    client.add_liquidity(&admin, &100_000, &100_000, &0);
+
+    let attacker = Address::generate(&env);
+    let token_a_client = token::StellarAssetClient::new(&env, &token_a);
+    let token_b_client = token::StellarAssetClient::new(&env, &token_b);
+    token_a_client.mint(&attacker, &5000);
+    token_b_client.mint(&attacker, &5000);
+
+    // Swap A -> B
+    client.swap_a_for_b(&attacker, &1000, &0);
+
+    // In the exact same block/sequence, attempt reverse swap B -> A (sandwich backrun) -> should panic with 406
+    client.swap_b_for_a(&attacker, &500, &0);
+}
+
+#[test]
+fn test_bidirectional_trade_allowed_in_different_blocks() {
+    let env = Env::default();
+    let (admin, client, token_a, token_b, _) = setup(&env);
+    client.add_liquidity(&admin, &100_000, &100_000, &0);
+
+    let user = Address::generate(&env);
+    let token_a_client = token::StellarAssetClient::new(&env, &token_a);
+    let token_b_client = token::StellarAssetClient::new(&env, &token_b);
+    token_a_client.mint(&user, &5000);
+    token_b_client.mint(&user, &5000);
+
+    // Block 1: Swap A -> B
+    env.ledger().with_mut(|li| li.sequence_number = 10);
+    let out1 = client.swap_a_for_b(&user, &1000, &0);
+    assert!(out1 > 0);
+
+    // Block 2: Advance block sequence -> reverse swap B -> A is allowed
+    env.ledger().with_mut(|li| li.sequence_number = 11);
+    let out2 = client.swap_b_for_a(&user, &500, &0);
+    assert!(out2 > 0);
+}
+

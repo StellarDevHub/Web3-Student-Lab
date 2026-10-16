@@ -8,7 +8,7 @@
 use amm::{AMMContract, AMMContractClient};
 use proptest::prelude::*;
 use soroban_sdk::{
-    testutils::Address as _,
+    testutils::{Address as _, Ledger as _},
     token, Address, Env,
 };
 
@@ -84,6 +84,7 @@ fn test_fuzz_amm_k_invariant_one_million_continuous_actions() {
 
     // 1. In-contract trades to verify live state consistency and event emission
     for _ in 0..100 {
+        env.ledger().with_mut(|li| li.sequence_number += 1);
         let trade_a_to_b = (next_rand() % 2) == 0;
         let amount_in = ((next_rand() % 50_000) + 1_000) as i128;
 

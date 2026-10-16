@@ -23,6 +23,13 @@ pub enum FreelanceError {
     AutoReleaseNotReady = 14,
     NotArbiter = 15,
     DisputeAlreadyResolved = 16,
+    BountyNotFound = 17,
+    BountyNotOpen = 18,
+    BountyExpired = 19,
+    BountyNotExpired = 20,
+    InvalidSplit = 21,
+    NoEvidenceSubmitted = 22,
+    BountyAlreadyCompleted = 23,
 }
 
 #[contracttype]
@@ -55,6 +62,8 @@ pub enum DataKey {
     Job(u64),
     Worker(Address),
     Applications(u64),
+    NextBountyId,
+    Bounty(u64),
 }
 
 #[contract]
@@ -557,9 +566,58 @@ impl FreelancePlatform {
     pub fn get_dispute(env: Env, job_id: u64, milestone_index: u32) -> Option<arbitration::DisputeRecord> {
         arbitration::ArbitrationManager::get_dispute(&env, job_id, milestone_index)
     }
+
+    /// Create a bounty board offering with locked escrow
+    pub fn create_bounty(
+        env: Env,
+        funder: Address,
+        title: Symbol,
+        amount: i128,
+        expiration: u64,
+    ) -> u64 {
+        bounty::create_bounty(&env, funder, title, amount, expiration)
+    }
+
+    /// Claim a bounty with proof evidence hash
+    pub fn claim_bounty(
+        env: Env,
+        claimant: Address,
+        bounty_id: u64,
+        evidence_hash: BytesN<32>,
+    ) {
+        bounty::claim_bounty(&env, claimant, bounty_id, evidence_hash)
+    }
+
+    /// Claim a bounty collaboratively with multiple contributors and split bps
+    pub fn claim_bounty_collaborative(
+        env: Env,
+        submitter: Address,
+        bounty_id: u64,
+        claimants: Vec<Address>,
+        split_bps: Vec<u32>,
+        evidence_hash: BytesN<32>,
+    ) {
+        bounty::claim_bounty_collaborative(&env, submitter, bounty_id, claimants, split_bps, evidence_hash)
+    }
+
+    /// Funder verifies PR evidence and triggers release of funds (single or split)
+    pub fn verify_and_payout(env: Env, funder: Address, bounty_id: u64) {
+        bounty::verify_and_payout(&env, funder, bounty_id)
+    }
+
+    /// Funder claims 100% refund if bounty expired
+    pub fn claim_refund(env: Env, funder: Address, bounty_id: u64) {
+        bounty::claim_refund(&env, funder, bounty_id)
+    }
+
+    /// Query bounty details
+    pub fn get_bounty(env: Env, bounty_id: u64) -> Option<bounty::Bounty> {
+        bounty::get_bounty(&env, bounty_id)
+    }
 }
 
 pub mod arbitration;
+pub mod bounty;
 pub mod escrow;
 pub mod reputation_system;
 

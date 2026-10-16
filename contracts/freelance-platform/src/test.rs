@@ -307,3 +307,117 @@ fn test_arbiter_registration_and_binding_multisig_arbitration() {
     assert_eq!(token_client.balance(&freelancer), 1000);
     assert_eq!(token_client.balance(&employer), 0);
 }
+
+#[test]
+fn test_bounty_creation_and_single_claim_payout() {
+    let (env, _, token_client, token_admin, contract_addr, client) = setup();
+
+    let funder = Address::generate(&env);
+    let contributor = Address::generate(&env);
+
+    token_admin.mint(&funder, &2000);
+    assert_eq!(token_client.balance(&funder), 2000);
+
+    let expiration = env.ledger().timestamp() + 1000;
+    let bounty_id = client.create_bounty(
+        &funder,
+        &Symbol::new(&env, "Fix_Issue_123"),
+        &1500,
+        &expiration,
+    );
+    assert_eq!(bounty_id, 1);
+    assert_eq!(token_client.balance(&contract_addr), 1500);
+    assert_eq!(token_client.balance(&funder), 500);
+
+    let bounty = client.get_bounty(&bounty_id).unwrap();
+    assert_eq!(bounty.amount, 1500);
+    assert_eq!(bounty.status, bounty::BountyStatus::Open);
+
+    // Contributor submits pull request proof hash
+    let evidence_hash = BytesN::from_array(&env, &[7u8; 32]);
+    client.claim_bounty(&contributor, &bounty_id, &evidence_hash);
+
+    let bounty = client.get_bounty(&bounty_id).unwrap();
+    assert_eq!(bounty.status, bounty::BountyStatus::Claimed);
+    assert_eq!(bounty.evidence_hash, Some(evidence_hash));
+
+    // Funder verifies PR and approves payout
+    client.verify_and_payout(&funder, &bounty_id);
+
+    let bounty = client.get_bounty(&bounty_id).unwrap();
+    assert_eq!(bounty.status, bounty::BountyStatus::Completed);
+    assert_eq!(token_client.balance(&contributor), 1500);
+    assert_eq!(token_client.balance(&contract_addr), 0);
+}
+
+#[test]
+fn test_bounty_collaborative_split_payout() {
+    let (env, _, token_client, token_admin, contract_addr, client) = setup();
+
+    let funder = Address::generate(&env);
+    let dev1 = Address::generate(&env);
+    let dev2 = Address::generate(&env);
+    let dev3 = Address::generate(&env);
+
+    token_admin.mint(&funder, &10000);
+    let expiration = env.ledger().timestamp() + 500;
+    let bounty_id = client.create_bounty(
+        &funder,
+        &Symbol::new(&env, "Multi_Dev_Feature"),
+        &10000,
+        &expiration,
+    );
+
+    let evidence_hash = BytesN::from_array(&env, &[9u8; 32]);
+    let claimants = vec![&env, dev1.clone(), dev2.clone(), dev3.clone()];
+    // 50% (5000 bps), 30% (3000 bps), 20% (2000 bps)
+    let split_bps = vec![&env, 5000u32, 3000u32, 2000u32];
+
+    client.claim_bounty_collaborative(
+        &dev1,
+        &bounty_id,
+        &claimants,
+        &split_bps,
+        &evidence_hash,
+    );
+
+    client.verify_and_payout(&funder, &bounty_id);
+
+    assert_eq!(token_client.balance(&dev1), 5000);
+    assert_eq!(token_client.balance(&dev2), 3000);
+    assert_eq!(token_client.balance(&dev3), 2000);
+    assert_eq!(token_client.balance(&contract_addr), 0);
+}
+
+#[test]
+fn test_bounty_expired_refund() {
+    let (env, _, token_client, token_admin, contract_addr, client) = setup();
+
+    let funder = Address::generate(&env);
+    token_admin.mint(&funder, &3000);
+
+    let expiration = env.ledger().timestamp() + 100;
+    let bounty_id = client.create_bounty(
+        &funder,
+        &Symbol::new(&env, "Unfinished_Task"),
+        &3000,
+        &expiration,
+    );
+
+    // Attempting refund before expiration should fail
+    let refund_early = client.try_claim_refund(&funder, &bounty_id);
+    assert!(refund_early.is_err());
+
+    // Advance ledger timestamp beyond expiration
+    env.ledger().with_mut(|li| {
+        li.timestamp += 200;
+    });
+
+    // Now refund succeeds 100%
+    client.claim_refund(&funder, &bounty_id);
+    assert_eq!(token_client.balance(&funder), 3000);
+    assert_eq!(token_client.balance(&contract_addr), 0);
+
+    let bounty = client.get_bounty(&bounty_id).unwrap();
+    assert_eq!(bounty.status, bounty::BountyStatus::Refunded);
+}
