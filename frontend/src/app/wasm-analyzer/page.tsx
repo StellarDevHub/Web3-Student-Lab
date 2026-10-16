@@ -24,6 +24,8 @@ import type { WatResponse } from '@/workers/wat.worker';
 export default function WasmAnalyzerPage() {
   const [info, setInfo] = useState<WasmModuleInfo | null>(null);
   const [fileName, setFileName] = useState<string>('');
+  const [sha256, setSha256] = useState<string>('');
+  const [isDragging, setIsDragging] = useState(false);
   const [wat, setWat] = useState<string>('');
   const [watError, setWatError] = useState<string | null>(null);
   const [disassembling, setDisassembling] = useState(false);
@@ -40,10 +42,25 @@ export default function WasmAnalyzerPage() {
     };
   }, []);
 
+  const computeSha256 = async (bytes: ArrayBuffer): Promise<string> => {
+    try {
+      const hashBuffer = await crypto.subtle.digest('SHA-256', bytes);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+    } catch {
+      return '';
+    }
+  };
+
   const disassemble = useCallback((bytes: ArrayBuffer) => {
     setDisassembling(true);
     setWat('');
     setWatError(null);
+
+    if (typeof Worker === 'undefined') {
+      setDisassembling(false);
+      return;
+    }
 
     if (!workerRef.current) {
       workerRef.current = new Worker(new URL('../../workers/wat.worker.ts', import.meta.url));
@@ -67,10 +84,27 @@ export default function WasmAnalyzerPage() {
     worker.postMessage({ id, bytes }, [bytes]);
   }, []);
 
+  const readFileBuffer = async (file: File): Promise<ArrayBuffer> => {
+    if (typeof file.arrayBuffer === 'function') {
+      return await file.arrayBuffer();
+    }
+    return new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (reader.result instanceof ArrayBuffer) resolve(reader.result);
+        else reject(new Error('Failed to read file as ArrayBuffer'));
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
   const onFile = useCallback(
     async (file: File) => {
       setFileName(file.name);
-      const buffer = await file.arrayBuffer();
+      const buffer = await readFileBuffer(file);
+      const hash = await computeSha256(buffer.slice(0));
+      setSha256(hash);
 
       // Analyse before transferring the buffer to the worker, which neuters it.
       setInfo(analyzeWasm(new Uint8Array(buffer.slice(0))));
@@ -109,24 +143,46 @@ export default function WasmAnalyzerPage() {
           </p>
         </div>
 
-        {/* File input */}
-        <label className="mb-8 flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-700 bg-zinc-950 px-6 py-10 text-center transition hover:border-red-500/50">
-          <span className="text-xs tracking-widest text-zinc-400 uppercase">
-            {fileName || 'Select a .wasm contract'}
-          </span>
-          <span className="mt-2 text-[10px] text-zinc-600">
-            Parsed entirely in your browser — nothing is uploaded
-          </span>
-          <input
-            type="file"
-            accept=".wasm,application/wasm"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void onFile(file);
-            }}
-          />
-        </label>
+        {/* File drag-and-drop input zone */}
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) void onFile(file);
+          }}
+          className={`mb-8 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-10 text-center transition ${
+            isDragging
+              ? 'border-red-500 bg-red-950/20'
+              : 'border-zinc-700 bg-zinc-950 hover:border-red-500/50'
+          }`}
+        >
+          <label className="flex cursor-pointer flex-col items-center justify-center w-full">
+            <span className="text-xs tracking-widest text-zinc-300 font-semibold uppercase">
+              {fileName ? `File: ${fileName}` : 'Drop .wasm contract binary here or click to browse'}
+            </span>
+            <span className="mt-2 text-[11px] text-zinc-500">
+              Accepts compiled WebAssembly bytecode (.wasm) · Disassembles and analyzes locally
+            </span>
+            <input
+              type="file"
+              accept=".wasm,application/wasm"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void onFile(file);
+              }}
+            />
+          </label>
+        </div>
 
         {info && !info.valid && (
           <div className="mb-8 rounded-2xl border border-red-600/40 bg-red-950/20 p-6">
@@ -138,10 +194,11 @@ export default function WasmAnalyzerPage() {
         {info?.valid && (
           <div className="space-y-8">
             {/* Summary */}
-            <section className="grid grid-cols-2 gap-4 rounded-2xl border border-white/10 bg-zinc-950 p-6 md:grid-cols-4">
+            <section className="grid grid-cols-2 gap-4 rounded-2xl border border-white/10 bg-zinc-950 p-6 md:grid-cols-5">
               <div>
                 <p className="text-[10px] tracking-[0.2em] text-zinc-500 uppercase">Size</p>
                 <p className="font-mono text-xl">{formatBytes(info.totalBytes)}</p>
+                <p className="text-[10px] text-zinc-500">{info.totalBytes.toLocaleString()} B</p>
               </div>
               <div>
                 <p className="text-[10px] tracking-[0.2em] text-zinc-500 uppercase">Sections</p>
@@ -155,7 +212,27 @@ export default function WasmAnalyzerPage() {
                 <p className="text-[10px] tracking-[0.2em] text-zinc-500 uppercase">Exports</p>
                 <p className="font-mono text-xl">{info.exports.length}</p>
               </div>
+              <div className="col-span-2 md:col-span-1">
+                <p className="text-[10px] tracking-[0.2em] text-zinc-500 uppercase">SHA-256 Hash</p>
+                <p className="font-mono text-xs text-zinc-300 truncate" title={sha256}>
+                  {sha256 ? `${sha256.slice(0, 16)}…` : 'Calculating…'}
+                </p>
+              </div>
             </section>
+
+            {/* SHA-256 Hash Banner */}
+            {sha256 && (
+              <section className="rounded-xl border border-white/10 bg-zinc-950/80 px-6 py-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="text-[10px] tracking-widest text-zinc-500 uppercase">
+                    Bytecode Digest (SHA-256)
+                  </span>
+                  <span className="font-mono text-xs text-red-400 select-all break-all">
+                    {sha256}
+                  </span>
+                </div>
+              </section>
+            )}
 
             {/* Sections */}
             <section className="rounded-2xl border border-white/10 bg-zinc-950 p-6">
@@ -179,6 +256,60 @@ export default function WasmAnalyzerPage() {
                 ))}
               </ul>
             </section>
+
+            {/* Exported symbols & functions */}
+            {info.exports.length > 0 && (
+              <section className="rounded-2xl border border-white/10 bg-zinc-950 p-6">
+                <h2 className="mb-4 text-xs tracking-widest text-zinc-400 uppercase">
+                  Exported functions & symbols ({info.exports.length})
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {info.exports.map((exp) => (
+                    <div
+                      key={exp.name}
+                      className="flex items-center justify-between rounded-lg border border-white/10 bg-black/60 px-3 py-2 text-xs"
+                    >
+                      <span className="font-mono text-zinc-200 truncate">{exp.name}</span>
+                      <span className="ml-2 rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400 uppercase">
+                        {exp.kindName}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Memory limits & sections */}
+            {info.memories.length > 0 && (
+              <section className="rounded-2xl border border-white/10 bg-zinc-950 p-6">
+                <h2 className="mb-4 text-xs tracking-widest text-zinc-400 uppercase">
+                  Linear memory limits ({info.memories.length})
+                </h2>
+                <div className="space-y-2">
+                  {info.memories.map((mem, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between rounded-lg border border-white/10 bg-black/60 px-4 py-2.5 text-xs"
+                    >
+                      <span className="text-zinc-300 font-mono">Memory #{idx}</span>
+                      <div className="flex gap-4 text-zinc-400">
+                        <span>
+                          Min Pages: <strong className="text-white font-mono">{mem.min}</strong> (
+                          {formatBytes(mem.min * 65536)})
+                        </span>
+                        <span>
+                          Max Pages:{' '}
+                          <strong className="text-white font-mono">
+                            {mem.max !== undefined ? mem.max : 'unlimited'}
+                          </strong>{' '}
+                          {mem.max !== undefined && `(${formatBytes(mem.max * 65536)})`}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* Host functions */}
             {info.hostFunctions.length > 0 && (

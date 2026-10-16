@@ -42,7 +42,9 @@ use soroban_sdk::{
     Address, Env, IntoVal, Symbol,
 };
 
+pub mod flash_loan;
 pub mod math;
+pub mod staking_rewards;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -476,6 +478,65 @@ impl LendingPool {
         env.events().publish((symbol_short!("lp_pause"),), paused);
     }
 
+    // ── Flash Loan (SC-031) ───────────────────────────────────────────────────
+
+    /// Executes an uncollateralized flash loan requiring 0.09% fee and full repayment.
+    pub fn flash_loan(
+        env: Env,
+        receiver: Address,
+        token: Address,
+        amount: i128,
+        params: soroban_sdk::Bytes,
+    ) -> i128 {
+        Self::check_not_paused(&env);
+        Self::check_supported(&env, &token);
+        flash_loan::FlashLoan::execute_flash_loan(&env, receiver, token, amount, params)
+    }
+
+    // ── Continuous Staking Rewards (SC-032) ───────────────────────────────────
+
+    /// Initialize continuous yield farming rewards.
+    pub fn init_staking(
+        env: Env,
+        staking_token: Address,
+        reward_token: Address,
+        reward_rate: u128,
+        duration_seconds: u64,
+    ) {
+        Self::only_admin(&env);
+        staking_rewards::StakingRewards::initialize(
+            &env,
+            staking_token,
+            reward_token,
+            reward_rate,
+            duration_seconds,
+        );
+    }
+
+    /// Stake tokens into the yield farming pool.
+    pub fn stake(env: Env, user: Address, amount: u128) {
+        user.require_auth();
+        Self::check_not_paused(&env);
+        staking_rewards::StakingRewards::stake(&env, user, amount);
+    }
+
+    /// Unstake tokens from the yield farming pool.
+    pub fn unstake(env: Env, user: Address, amount: u128) {
+        user.require_auth();
+        staking_rewards::StakingRewards::unstake(&env, user, amount);
+    }
+
+    /// Claim accumulated yield farming rewards.
+    pub fn claim_reward(env: Env, user: Address) -> u128 {
+        user.require_auth();
+        staking_rewards::StakingRewards::claim_reward(&env, user)
+    }
+
+    /// View earned rewards for a user.
+    pub fn earned(env: Env, user: Address) -> u128 {
+        staking_rewards::StakingRewards::earned(&env, &user)
+    }
+
     // ── Views ─────────────────────────────────────────────────────────────────
 
     pub fn collateral_of(env: Env, user: Address, token: Address) -> i128 {
@@ -723,7 +784,7 @@ impl LendingPool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Env};
+    use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Env};
 
     /// Minimal mock oracle: always returns SCALE for any token.
     #[contract]
@@ -735,12 +796,20 @@ mod tests {
         }
     }
 
-    /// Minimal mock token: transfer is a no-op (avoids balance accounting).
+    /// Mock token tracking balances.
     #[contract]
     struct MockToken;
     #[contractimpl]
     impl MockToken {
-        pub fn transfer(_env: Env, _from: Address, _to: Address, _amount: i128) {}
+        pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
+            let from_bal: i128 = env.storage().instance().get(&from).unwrap_or(10_000_000_000);
+            let to_bal: i128 = env.storage().instance().get(&to).unwrap_or(10_000_000_000);
+            env.storage().instance().set(&from, &(from_bal - amount));
+            env.storage().instance().set(&to, &(to_bal + amount));
+        }
+        pub fn balance(env: Env, id: Address) -> i128 {
+            env.storage().instance().get(&id).unwrap_or(10_000_000_000)
+        }
     }
 
     fn setup(env: &Env) -> (LendingPoolClient<'static>, Address, Address) {
@@ -857,6 +926,65 @@ mod tests {
 
         client.set_paused(&admin, &true);
         client.deposit_collateral(&user, &token, &1_000);
+    }
+
+    #[contract]
+    struct MockReceiver;
+    #[contractimpl]
+    impl MockReceiver {
+        pub fn execute_operation(
+            env: Env,
+            caller: Address,
+            token: Address,
+            amount: i128,
+            fee: i128,
+            _params: soroban_sdk::Bytes,
+        ) {
+            token::Client::new(&env, &token).transfer(&env.current_contract_address(), &caller, &(amount + fee));
+        }
+    }
+
+    #[test]
+    fn flash_loan_executes_and_charges_fee() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _, _) = setup(&env);
+        let token = add_token(&env, &client);
+        let receiver = env.register(MockReceiver, ());
+
+        let fee = client.flash_loan(&receiver, &token, &10_000, &soroban_sdk::Bytes::new(&env));
+        // 10_000 * 9 / 10_000 = 9
+        assert_eq!(fee, 9);
+    }
+
+    #[test]
+    fn staking_pool_accumulates_rewards() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, _) = setup(&env);
+        let staking_token = add_token(&env, &client);
+        let reward_token = add_token(&env, &client);
+        let user1 = Address::generate(&env);
+
+        let reward_rate: u128 = 100_000_000_000_000_000; // 0.1 tokens/sec
+        client.init_staking(&staking_token, &reward_token, &reward_rate, &3600);
+
+        client.stake(&user1, &100_000_000_000_000_000_000); // 100 tokens
+        assert_eq!(client.earned(&user1), 0);
+
+        // Advance ledger timestamp by 10 seconds
+        let current_time = env.ledger().timestamp();
+        env.ledger().set_timestamp(current_time + 10);
+
+        let earned = client.earned(&user1);
+        // 10s * 0.1 = 1 token (1e18)
+        assert_eq!(earned, 1_000_000_000_000_000_000);
+
+        let claimed = client.claim_reward(&user1);
+        assert_eq!(claimed, 1_000_000_000_000_000_000);
+        assert_eq!(client.earned(&user1), 0);
+
+        client.unstake(&user1, &100_000_000_000_000_000_000);
     }
 
     use proptest::prelude::*;
