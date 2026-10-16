@@ -47,7 +47,7 @@
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.14.0",
-    "monaco-editor": "^0.55.1",
+    "monaco-editor": "^0.57.0",
     "monaco-languageclient": "^10.7.0",
     "nanoid": "^5.1.9",
     "next": "16.3.5",
