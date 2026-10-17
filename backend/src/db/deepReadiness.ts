@@ -19,6 +19,7 @@ import { Horizon } from '@stellar/stellar-sdk';
 import prisma from '../db/index.js';
 import redisClient from '../cache/RedisClient.js';
 import { HORIZON_URL, SOROBAN_RPC_URL } from '../config/rpcConfig.js';
+import metricsCollector from '../metrics/MetricsCollector.js';
 import logger from '../utils/logger.js';
 
 const DEFAULT_PROBE_TIMEOUT_MS = 3000;
@@ -128,12 +129,14 @@ async function probeSorobanRpc(timeout: number): Promise<DeepProbeResult> {
       timeout
     );
     const latest = ledgers.records?.[0]?.sequence ?? null;
+    metricsCollector.recordProbe('horizon_ledger', latest != null);
     return {
       status: latest != null ? 'ready' : 'unavailable',
       latencyMs: Date.now() - start,
       detail: { latestLedgerHeight: latest },
     };
   } catch (error) {
+    metricsCollector.recordProbe('horizon_ledger', false);
     logger.error('Deep readiness: Soroban/Horizon probe failed', error);
     return {
       status: 'unavailable',
