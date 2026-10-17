@@ -19,8 +19,9 @@
 //!    ([`PeerReviewContract::reveal_review`]); the hash must match.
 //! 4. Anyone finalizes after the reveal deadline
 //!    ([`PeerReviewContract::finalize_submission`]): the **median** grade
-//!    is the consensus, reviewers within `tolerance` of it share the reward
-//!    pool, and outlier grades are **slashed** into the community treasury.
+//!    is the consensus and its population standard deviation is recorded.
+//!    Reviewers within `tolerance` of the median share the reward pool;
+//!    outlier grades are **slashed** into the community treasury.
 //!
 //! ## Storage TTL (SC-HARD-16)
 //!
@@ -39,6 +40,9 @@ use soroban_sdk::{
     BytesN, Env, Vec,
 };
 
+pub mod consensus;
+pub mod slashing;
+
 // ── TTL constants (SC-HARD-16) ───────────────────────────────────────────────
 /// Bump persistent / instance storage beyond this remaining TTL.
 pub const TTL_THRESHOLD: u32 = 10_000;
@@ -46,6 +50,7 @@ pub const TTL_THRESHOLD: u32 = 10_000;
 pub const INSTANCE_BUMP: u32 = 100_000;
 /// Target TTL for persistent entries (reviewer state, submissions, reviews).
 pub const PERSISTENT_BUMP: u32 = 518_400; // 30 days
+pub const MAX_REVIEWERS_PER_SUBMISSION: u32 = 100;
 
 // ── Storage keys ─────────────────────────────────────────────────────────────
 
@@ -93,6 +98,8 @@ pub struct Submission {
     pub slashed_count: u32,
     /// Reviewers that committed to this submission (revealed or not).
     pub reviewers: Vec<Address>,
+    /// Population standard deviation of revealed grades, rounded down.
+    pub standard_deviation: i128,
 }
 
 /// A single reviewer's participation in a submission.
@@ -125,6 +132,8 @@ pub enum ReviewError {
     StakeLocked = 14,
     NoReviews = 15,
     InvalidConfig = 16,
+    ArithmeticOverflow = 17,
+    ReviewerLimitReached = 18,
 }
 
 // ── Contract ──────────────────────────────────────────────────────────────────
@@ -156,7 +165,7 @@ impl PeerReviewContract {
         if env.storage().instance().has(&DataKey::Admin) {
             panic_with_error!(&env, ReviewError::AlreadyInitialized);
         }
-        if !(0..=1_000).contains(&slash_bps) {
+        if tolerance < 0 || !(0..=1_000).contains(&slash_bps) {
             panic_with_error!(&env, ReviewError::InvalidConfig);
         }
 
@@ -225,6 +234,7 @@ impl PeerReviewContract {
             accurate_count: 0,
             slashed_count: 0,
             reviewers: Vec::new(&env),
+            standard_deviation: 0,
         };
         env.storage()
             .instance()
@@ -288,6 +298,9 @@ impl PeerReviewContract {
         }
         if reviewer_state_internal(&env, &reviewer).stake <= 0 {
             panic_with_error!(&env, ReviewError::NotStaked);
+        }
+        if submission.reviewers.len() >= MAX_REVIEWERS_PER_SUBMISSION {
+            panic_with_error!(&env, ReviewError::ReviewerLimitReached);
         }
         if env
             .storage()
@@ -430,6 +443,8 @@ impl PeerReviewContract {
         }
 
         let median = median_of(&grades);
+        let standard_deviation = consensus::standard_deviation(&grades)
+            .unwrap_or_else(|| panic_with_error!(&env, ReviewError::ArithmeticOverflow));
         let tolerance = read_tolerance(&env);
         let slash_bps = read_slash_bps(&env);
         let token = read_token(&env);
@@ -440,7 +455,7 @@ impl PeerReviewContract {
         let mut idx = 0u32;
         while idx < revealed.len() {
             let grade = grades.get(idx).unwrap();
-            if (grade - median).abs() <= tolerance {
+            if slashing::is_acceptable(grade, median, tolerance) {
                 accurate_count += 1;
             }
             idx += 1;
@@ -458,7 +473,7 @@ impl PeerReviewContract {
         while idx < revealed.len() {
             let reviewer = revealed.get(idx).unwrap();
             let grade = grades.get(idx).unwrap();
-            if (grade - median).abs() <= tolerance {
+            if slashing::is_acceptable(grade, median, tolerance) {
                 if reward > 0 {
                     token_client.transfer(&env.current_contract_address(), &reviewer, &reward);
                 }
@@ -486,6 +501,7 @@ impl PeerReviewContract {
 
         submission.finalized = true;
         submission.median = median;
+        submission.standard_deviation = standard_deviation;
         submission.accurate_count = accurate_count;
         submission.slashed_count = slashed_count;
         env.storage()
@@ -601,33 +617,7 @@ pub(crate) fn hash_grade_salt(env: &Env, grade: i128, salt: &BytesN<32>) -> Byte
 /// Median of a (possibly unsorted) grade vector, using insertion sort on a
 /// copy so the caller's vector stays aligned with its reviewer list.
 pub(crate) fn median_of(grades: &Vec<i128>) -> i128 {
-    let n = grades.len();
-    if n == 0 {
-        return 0;
-    }
-    // Insertion sort on a copy.
-    let mut sorted = grades.clone();
-    let mut i = 1u32;
-    while i < n {
-        let key = sorted.get(i).unwrap();
-        let mut j = i;
-        while j > 0 {
-            let prev = sorted.get(j - 1).unwrap();
-            if prev <= key {
-                break;
-            }
-            sorted.set(j, prev);
-            j -= 1;
-        }
-        sorted.set(j, key);
-        i += 1;
-    }
-    if n % 2 == 1 {
-        sorted.get(n / 2).unwrap()
-    } else {
-        // Even count: average the two middle values (rounds down).
-        (sorted.get(n / 2 - 1).unwrap() + sorted.get(n / 2).unwrap()) / 2
-    }
+    consensus::median(grades).unwrap_or(0)
 }
 
 fn ensure_initialized(env: &Env) {

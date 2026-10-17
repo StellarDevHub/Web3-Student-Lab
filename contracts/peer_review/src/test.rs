@@ -135,6 +135,7 @@ fn outlier_is_slashed_and_accurate_reviewers_paid() {
     let sub = client.submission(&2);
     // sorted grades: [10, 80, 85] → median = 80 (middle of 3)
     assert_eq!(sub.median, 80);
+    assert_eq!(sub.standard_deviation, 34);
     assert_eq!(sub.accurate_count, 2);
     assert_eq!(sub.slashed_count, 1);
 
@@ -233,6 +234,21 @@ fn no_reviews_refunds_reward_pool() {
     env.ledger().with_mut(|li| li.timestamp = deadline + 201);
     client.finalize_submission(&creator, &6);
     assert_eq!(sac.balance(&creator), 10_000_000);
+}
+
+#[test]
+fn consensus_reports_population_standard_deviation() {
+    let env = Env::default();
+    let grades = soroban_sdk::Vec::from_array(&env, [0i128, 0, 100]);
+    assert_eq!(consensus::median(&grades), Some(0));
+    assert_eq!(consensus::standard_deviation(&grades), Some(47));
+}
+
+#[test]
+fn consensus_handles_extreme_even_median_without_overflow() {
+    let env = Env::default();
+    let grades = soroban_sdk::Vec::from_array(&env, [i128::MAX, i128::MAX]);
+    assert_eq!(consensus::median(&grades), Some(i128::MAX));
 }
 
 // ── Event emission tests ──────────────────────────────────────────────────────

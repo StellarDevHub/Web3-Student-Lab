@@ -1,30 +1,20 @@
 #![no_std]
 
-//! # Continuous Exponential Bonding Curve
+//! # Continuous Polynomial Bonding Curve
 //!
 //! A Bancor-style automated market maker that mints and burns a project's
-//! token against a reserve asset along a **continuous exponential price
-//! curve**:
+//! token against a reserve asset along a **linear price curve**:
 //!
-//! ```text
-//! price(s) = base_price * e^(slope * s)
-//! ```
-//!
-//! where `s` is the current token supply. The reserve required to mint `x`
-//! tokens from supply `s` is the exact integral:
-//!
-//! ```text
-//! cost(s, x) = base_price / slope * (e^(slope * (s + x)) - e^(slope * s))
-//! ```
-//!
-//! All price math runs on a precision-safe fixed-point representation
-//! (`1e9` scaling) with hand-rolled `exp`, `ln` and `pow` approximations so
-//! the contract stays dependency-free and auditable.
+//! `price(s) = base_price + slope * s`, where `s` is current token supply.
+//! Buys and sells use the exact integral of this polynomial, with fixed-point
+//! parameters scaled by `1e9`.
+//! For a trade of `x` tokens from supply `s`, the reserve amount is
+//! `base_price * x / FP + slope * x * (2 * s +/- x) / (2 * FP)`; buys round
+//! up and sells round down to the reserve token's smallest unit.
 //!
 //! Features:
-//! * Exact reserve-ratio accounting — the reserve balance is always the
-//!   integral of the curve, so buy/sell executions preserve mathematical
-//!   reserve invariance.
+//! * Reserve collateral is checked against curve liabilities and accrued
+//!   fees before trades and fee withdrawals.
 //! * Slippage protection (`max_reserve_in` on buys, `min_reserve_out` on
 //!   sells) and deadline checks.
 //! * Emergency pause switches (admin-only).
@@ -35,20 +25,18 @@
 extern crate std;
 
 use contract_events::{publish_fee_withdraw, publish_pause, publish_trade};
+use pricing::{apply_buy_fee, apply_sell_fee, curve_cost, curve_payout, solve_tokens_for_reserve};
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, token,
     Address, Env,
 };
 
 pub mod math;
+mod pricing;
+mod reserves;
 
 /// Fixed-point scale: 1 unit == 10^9.
 pub const FP: i128 = 1_000_000_000;
-/// `ln(2)` in fixed-point.
-pub const LN2: i128 = 693_147_180;
-/// Maximum `exp` argument (in fixed-point) before we refuse to compute:
-/// `e^15 ≈ 3.27e6`, which keeps every intermediate well inside `i128`.
-pub const MAX_EXP_ARG: i128 = 15 * FP;
 /// Maximum allowed protocol fee in basis points (10%).
 pub const MAX_FEE_BPS: i128 = 1_000;
 
@@ -57,6 +45,7 @@ pub const MAX_FEE_BPS: i128 = 1_000;
 pub enum DataKey {
     Admin,
     ReserveToken,
+    CurveToken,
     BasePrice,
     Slope,
     FeeBps,
@@ -95,6 +84,10 @@ pub enum CurveError {
     DivisionByZero = 211,
     /// `212` — Contract is paused by the circuit-breaker (SC-HARD-19).
     ContractPaused = 212,
+    /// `213` — Pool assets do not cover reserve and fee liabilities.
+    Insolvent = 213,
+    /// `214` — Curve token is not controlled by this contract.
+    InvalidCurveToken = 214,
 }
 
 // ── Fixed-point math helpers at 18-decimal precision (SC-HARD-18) ─────────────
@@ -130,13 +123,17 @@ impl ContinuousBondingCurveContract {
     /// * `admin` — owner; can pause the pool, change fees, withdraw fees.
     /// * `reserve_token` — the reserve asset deposited on buys and paid out
     ///   on sells.
+    /// * `curve_token` — an unissued Stellar Asset Contract whose admin is
+    ///   this contract.
     /// * `base_price` — fixed-point price at zero supply (`1_000_000_000` == 1).
-    /// * `slope` — fixed-point exponential growth rate.
+    /// * `slope` — fixed-point linear price increase per token, both parameters
+    ///   using `FP` scaling.
     /// * `fee_bps` — protocol fee in basis points (`50` == 0.5%).
     pub fn initialize(
         env: Env,
         admin: Address,
         reserve_token: Address,
+        curve_token: Address,
         base_price: i128,
         slope: i128,
         fee_bps: i128,
@@ -147,6 +144,12 @@ impl ContinuousBondingCurveContract {
         if base_price <= 0 || slope <= 0 {
             panic_with_error!(&env, CurveError::InvalidAmount);
         }
+        if reserve_token == curve_token
+            || token::StellarAssetClient::new(&env, &curve_token).admin()
+                != env.current_contract_address()
+        {
+            panic_with_error!(&env, CurveError::InvalidCurveToken);
+        }
         if !(0..=MAX_FEE_BPS).contains(&fee_bps) {
             panic_with_error!(&env, CurveError::InvalidFee);
         }
@@ -156,6 +159,9 @@ impl ContinuousBondingCurveContract {
         env.storage()
             .instance()
             .set(&DataKey::ReserveToken, &reserve_token);
+        env.storage()
+            .instance()
+            .set(&DataKey::CurveToken, &curve_token);
         env.storage()
             .instance()
             .set(&DataKey::BasePrice, &base_price);
@@ -208,26 +214,38 @@ impl ContinuousBondingCurveContract {
         if tokens_out <= 0 || max_reserve_in <= 0 {
             panic_with_error!(&env, CurveError::InvalidAmount);
         }
+        ensure_solvent(&env);
 
         let supply = read_i128(&env, DataKey::Supply);
         let cost = curve_cost(supply, tokens_out, read_base(&env), read_slope(&env))
             .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow));
-        let (total_in, fee) = apply_buy_fee(cost, read_fee_bps(&env));
+        let (total_in, fee) = apply_buy_fee(cost, read_fee_bps(&env))
+            .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow));
 
         if total_in > max_reserve_in {
             panic_with_error!(&env, CurveError::SlippageExceeded);
         }
 
-        write_i128(&env, DataKey::Supply, supply + tokens_out);
+        write_i128(
+            &env,
+            DataKey::Supply,
+            supply
+                .checked_add(tokens_out)
+                .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow)),
+        );
         write_i128(
             &env,
             DataKey::Reserve,
-            read_i128(&env, DataKey::Reserve) + cost,
+            read_i128(&env, DataKey::Reserve)
+                .checked_add(cost)
+                .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow)),
         );
         write_i128(
             &env,
             DataKey::FeePool,
-            read_i128(&env, DataKey::FeePool) + fee,
+            read_i128(&env, DataKey::FeePool)
+                .checked_add(fee)
+                .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow)),
         );
 
         token::Client::new(&env, &read_reserve_token(&env)).transfer(
@@ -235,6 +253,8 @@ impl ContinuousBondingCurveContract {
             env.current_contract_address(),
             &total_in,
         );
+        token::StellarAssetClient::new(&env, &read_curve_token(&env)).mint(&buyer, &tokens_out);
+        ensure_solvent(&env);
 
         publish_trade(
             &env,
@@ -268,6 +288,7 @@ impl ContinuousBondingCurveContract {
         if reserve_in <= 0 || min_tokens_out < 0 {
             panic_with_error!(&env, CurveError::InvalidAmount);
         }
+        ensure_solvent(&env);
 
         let supply = read_i128(&env, DataKey::Supply);
         let tokens_out = solve_tokens_for_reserve(
@@ -288,18 +309,29 @@ impl ContinuousBondingCurveContract {
 
         let cost = curve_cost(supply, tokens_out, read_base(&env), read_slope(&env))
             .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow));
-        let (total_in, fee) = apply_buy_fee(cost, read_fee_bps(&env));
+        let (total_in, fee) = apply_buy_fee(cost, read_fee_bps(&env))
+            .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow));
 
-        write_i128(&env, DataKey::Supply, supply + tokens_out);
+        write_i128(
+            &env,
+            DataKey::Supply,
+            supply
+                .checked_add(tokens_out)
+                .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow)),
+        );
         write_i128(
             &env,
             DataKey::Reserve,
-            read_i128(&env, DataKey::Reserve) + cost,
+            read_i128(&env, DataKey::Reserve)
+                .checked_add(cost)
+                .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow)),
         );
         write_i128(
             &env,
             DataKey::FeePool,
-            read_i128(&env, DataKey::FeePool) + fee,
+            read_i128(&env, DataKey::FeePool)
+                .checked_add(fee)
+                .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow)),
         );
 
         token::Client::new(&env, &read_reserve_token(&env)).transfer(
@@ -307,6 +339,8 @@ impl ContinuousBondingCurveContract {
             env.current_contract_address(),
             &total_in,
         );
+        token::StellarAssetClient::new(&env, &read_curve_token(&env)).mint(&buyer, &tokens_out);
+        ensure_solvent(&env);
 
         publish_trade(
             &env,
@@ -341,6 +375,7 @@ impl ContinuousBondingCurveContract {
         if tokens_in <= 0 || min_reserve_out < 0 {
             panic_with_error!(&env, CurveError::InvalidAmount);
         }
+        ensure_solvent(&env);
 
         let supply = read_i128(&env, DataKey::Supply);
         if supply < tokens_in {
@@ -349,7 +384,8 @@ impl ContinuousBondingCurveContract {
 
         let payout = curve_payout(supply, tokens_in, read_base(&env), read_slope(&env))
             .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow));
-        let (payout_net, fee) = apply_sell_fee(payout, read_fee_bps(&env));
+        let (payout_net, fee) = apply_sell_fee(payout, read_fee_bps(&env))
+            .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow));
 
         if payout_net < min_reserve_out {
             panic_with_error!(&env, CurveError::SlippageExceeded);
@@ -367,14 +403,18 @@ impl ContinuousBondingCurveContract {
         write_i128(
             &env,
             DataKey::FeePool,
-            read_i128(&env, DataKey::FeePool) + fee,
+            read_i128(&env, DataKey::FeePool)
+                .checked_add(fee)
+                .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow)),
         );
 
+        token::StellarAssetClient::new(&env, &read_curve_token(&env)).burn(&seller, &tokens_in);
         token::Client::new(&env, &read_reserve_token(&env)).transfer(
             &env.current_contract_address(),
             &seller,
             &payout_net,
         );
+        ensure_solvent(&env);
 
         publish_trade(
             &env,
@@ -399,6 +439,7 @@ impl ContinuousBondingCurveContract {
         let cost = curve_cost(supply, tokens_out, read_base(&env), read_slope(&env))
             .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow));
         apply_buy_fee(cost, read_fee_bps(&env))
+            .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow))
     }
 
     /// Quote the net payout (curve minus fee) of selling `tokens_in`.
@@ -414,6 +455,7 @@ impl ContinuousBondingCurveContract {
         let payout = curve_payout(supply, tokens_in, read_base(&env), read_slope(&env))
             .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow));
         apply_sell_fee(payout, read_fee_bps(&env))
+            .unwrap_or_else(|| panic_with_error!(&env, CurveError::Overflow))
     }
 
     /// Current pool state: `(supply, reserve, fee_pool)`.
@@ -448,6 +490,7 @@ impl ContinuousBondingCurveContract {
         if fee_pool < amount {
             panic_with_error!(&env, CurveError::InsufficientSupply);
         }
+        ensure_solvent(&env);
 
         write_i128(&env, DataKey::FeePool, fee_pool - amount);
         token::Client::new(&env, &read_reserve_token(&env)).transfer(
@@ -455,205 +498,9 @@ impl ContinuousBondingCurveContract {
             &treasury,
             &amount,
         );
+        ensure_solvent(&env);
         publish_fee_withdraw(&env, &admin, &treasury, amount);
     }
-}
-
-// ---------------------------------------------------------------------------
-// Fixed-point math
-// ---------------------------------------------------------------------------
-
-/// `exp(x)` for fixed-point `x`, returning a fixed-point value.
-///
-/// Range-reduces `x = k * ln2 + r` with `r ∈ [0, ln2)` and evaluates
-/// `e^r` with a 15-term Taylor series; `e^x = 2^k * e^r`.
-pub fn exp_fp(x: i128) -> i128 {
-    if x == 0 {
-        return FP;
-    }
-    let mut k = x / LN2;
-    let mut r = x - k * LN2;
-    if r < 0 {
-        r += LN2;
-        k -= 1;
-    }
-
-    // Taylor: e^r = sum_{n=0..} r^n / n!  (r in [0, ln2), converges fast)
-    let mut term = FP;
-    let mut acc = FP;
-    for n in 1..=15 {
-        term = term * r / (FP * n as i128);
-        acc += term;
-    }
-
-    if k >= 0 {
-        acc << (k as u32)
-    } else {
-        acc >> ((-k) as u32)
-    }
-}
-
-/// `ln(x)` for fixed-point `x > 0`, returning a fixed-point value.
-pub fn ln_fp(x: i128) -> i128 {
-    if x <= 0 {
-        return i128::MIN;
-    }
-    // Normalize x = m * 2^e with m in [1, 2).
-    let mut y = x;
-    let mut e: i128 = 0;
-    while y >= 2 * FP {
-        y /= 2;
-        e += 1;
-    }
-    while y < FP {
-        y *= 2;
-        e -= 1;
-    }
-    // ln(m) = 2 * (z + z^3/3 + z^5/5 + ...), z = (m - 1)/(m + 1) <= 1/3
-    let z = (y - FP) * FP / (y + FP);
-    let z2 = z * z / FP;
-    let mut term = z;
-    let mut acc = z;
-    let mut n: i128 = 3;
-    loop {
-        term = term * z2 / FP;
-        let next = acc + term / n;
-        if next == acc {
-            break;
-        }
-        acc = next;
-        n += 2;
-    }
-    e * LN2 + 2 * acc
-}
-
-/// `x^y` for fixed-point `x > 0` and fixed-point `y`, fixed-point result.
-pub fn pow_fp(x: i128, y: i128) -> i128 {
-    if x <= 0 {
-        return 0;
-    }
-    if y == 0 {
-        return FP;
-    }
-    exp_fp(y * ln_fp(x) / FP)
-}
-
-// ---------------------------------------------------------------------------
-// Curve math (pure, overflow-checked)
-// ---------------------------------------------------------------------------
-
-/// `E(u) = e^(slope * u)` in fixed-point, `None` if the exponent overflows
-/// the safe range. `slope` is fixed-point scaled, `u` is in raw token
-/// units, so `slope * u` is already the fixed-point exponent.
-fn exp_supply(u: i128, slope: i128) -> Option<i128> {
-    let arg = slope.checked_mul(u)?;
-    if arg > MAX_EXP_ARG {
-        return None;
-    }
-    Some(exp_fp(arg))
-}
-
-/// Reserve required to mint `x` tokens from supply `s`:
-/// `base / slope * (E(s + x) - E(s))`, rounded **up** (favors the pool).
-///
-/// Derivation with fixed-point scaling: `cost = base * (E(s+x) - E(s)) /
-/// (slope * FP)`.
-fn curve_cost(s: i128, x: i128, base: i128, slope: i128) -> Option<i128> {
-    if x <= 0 || base <= 0 || slope <= 0 {
-        return None;
-    }
-    let es = exp_supply(s, slope)?;
-    let esx = exp_supply(s.checked_add(x)?, slope)?;
-    let delta = esx.checked_sub(es)?;
-    if delta == 0 {
-        return Some(0);
-    }
-    let num = base.checked_mul(delta)?;
-    let denom = slope.checked_mul(FP)?;
-    // round up
-    num.checked_add(denom - 1)?.checked_div(denom)
-}
-
-/// Reserve paid out when burning `x` tokens from supply `s`:
-/// `base / slope * (E(s) - E(s - x))`, rounded **down** (favors the pool).
-fn curve_payout(s: i128, x: i128, base: i128, slope: i128) -> Option<i128> {
-    if x <= 0 || base <= 0 || slope <= 0 || s < x {
-        return None;
-    }
-    let es = exp_supply(s, slope)?;
-    let esx = exp_supply(s.checked_sub(x)?, slope)?;
-    let delta = es.checked_sub(esx)?;
-    if delta == 0 {
-        return Some(0);
-    }
-    let num = base.checked_mul(delta)?;
-    let denom = slope.checked_mul(FP)?;
-    Some(num.checked_div(denom)?)
-}
-
-/// Total buy price with fee: `cost * (1 + fee_bps / 10000)`, rounded up.
-fn apply_buy_fee(cost: i128, fee_bps: i128) -> (i128, i128) {
-    if fee_bps == 0 {
-        return (cost, 0);
-    }
-    let fee = (cost * fee_bps + 9_999) / 10_000;
-    (cost + fee, fee)
-}
-
-/// Net sell payout with fee: `payout * (1 - fee_bps / 10000)`, rounded up
-/// on the fee (favors the pool).
-fn apply_sell_fee(payout: i128, fee_bps: i128) -> (i128, i128) {
-    if fee_bps == 0 {
-        return (payout, 0);
-    }
-    let fee = (payout * fee_bps + 9_999) / 10_000;
-    (payout - fee, fee)
-}
-
-/// Bisect for the largest `x` with `total_cost(s, x) <= reserve_in`.
-fn solve_tokens_for_reserve(
-    s: i128,
-    reserve_in: i128,
-    base: i128,
-    slope: i128,
-    fee_bps: i128,
-) -> Option<i128> {
-    if reserve_in <= 0 {
-        return Some(0);
-    }
-    // Upper bound: double until the total cost exceeds the reserve. The
-    // curve saturates at MAX_EXP_ARG, so cap the search there.
-    let hi_max = (MAX_EXP_ARG / slope).saturating_sub(s).max(1);
-    let mut hi = 1i128;
-    loop {
-        if hi > hi_max {
-            hi = hi_max;
-        }
-        let cost = curve_cost(s, hi, base, slope)?;
-        let (total, _) = apply_buy_fee(cost, fee_bps);
-        if total >= reserve_in {
-            break;
-        }
-        if hi >= hi_max {
-            return None;
-        }
-        hi = hi.checked_mul(2)?;
-    }
-    let mut lo = 0i128;
-    for _ in 0..80 {
-        let mid = lo + (hi - lo) / 2;
-        let cost = curve_cost(s, mid, base, slope)?;
-        let (total, _) = apply_buy_fee(cost, fee_bps);
-        if total <= reserve_in {
-            lo = mid;
-        } else {
-            hi = mid;
-        }
-        if hi - lo <= 1 {
-            break;
-        }
-    }
-    Some(lo)
 }
 
 // ---------------------------------------------------------------------------
@@ -726,6 +573,22 @@ fn read_reserve_token(env: &Env) -> Address {
         .unwrap_or_else(|| panic_with_error!(env, CurveError::NotInitialized))
 }
 
+fn read_curve_token(env: &Env) -> Address {
+    env.storage()
+        .instance()
+        .get::<_, Address>(&DataKey::CurveToken)
+        .unwrap_or_else(|| panic_with_error!(env, CurveError::NotInitialized))
+}
+
+fn ensure_solvent(env: &Env) {
+    let liabilities = read_i128(env, DataKey::Reserve)
+        .checked_add(read_i128(env, DataKey::FeePool))
+        .unwrap_or_else(|| panic_with_error!(env, CurveError::Overflow));
+    if !reserves::is_fully_collateralized(env, &read_reserve_token(env), liabilities) {
+        panic_with_error!(env, CurveError::Insolvent);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -735,35 +598,94 @@ mod tests {
     };
 
     pub(super) fn setup(fee_bps: i128) -> (Env, Address, Address, Address, Address) {
+        let (env, admin, buyer, id, reserve_token, _) = setup_with_tokens(fee_bps);
+        (env, admin, buyer, id, reserve_token)
+    }
+
+    fn setup_with_tokens(fee_bps: i128) -> (Env, Address, Address, Address, Address, Address) {
         let env = Env::default();
         env.mock_all_auths();
         let admin = Address::generate(&env);
         let buyer = Address::generate(&env);
 
-        let token = env.register_stellar_asset_contract_v2(admin.clone());
-        let token_id = token.address();
-        token::StellarAssetClient::new(&env, &token_id).mint(&buyer, &10_000_000_000i128);
+        let reserve_asset = env.register_stellar_asset_contract_v2(admin.clone());
+        let reserve_token = reserve_asset.address();
+        token::StellarAssetClient::new(&env, &reserve_token).mint(&buyer, &10_000_000_000i128);
+
+        let curve_asset = env.register_stellar_asset_contract_v2(admin.clone());
+        let curve_token = curve_asset.address();
 
         let id = env.register(ContinuousBondingCurveContract, ());
+        token::StellarAssetClient::new(&env, &curve_token).set_admin(&id);
         let client = ContinuousBondingCurveContractClient::new(&env, &id);
-        client.initialize(&admin, &token_id, &(100 * FP), &(100_000), &fee_bps);
+        client.initialize(
+            &admin,
+            &reserve_token,
+            &curve_token,
+            &(100 * FP),
+            &(100_000),
+            &fee_bps,
+        );
 
-        (env, admin, buyer, id, token_id)
+        (env, admin, buyer, id, reserve_token, curve_token)
     }
 
     #[test]
-    fn fixed_point_exp_ln_round_trip() {
-        // e^0 = 1
-        assert_eq!(exp_fp(0), FP);
-        // e^1 ~= 2.718281828
-        let e = exp_fp(FP);
-        assert!((e - 2_718_281_828i128).abs() < 1_000, "e = {e}");
-        // ln(e^1) ~= 1
-        assert!((ln_fp(e) - FP).abs() < 1_000);
-        // ln(1) = 0
-        assert_eq!(ln_fp(FP), 0);
-        // 2^10 = 1024
-        assert!((pow_fp(2 * FP, 10 * FP) - 1024 * FP).abs() < 10_000);
+    fn polynomial_integral_matches_buy_and_sell_costs() {
+        assert_eq!(pricing::curve_cost(3, 2, 2 * FP, FP), Some(12));
+        assert_eq!(pricing::curve_payout(5, 2, 2 * FP, FP), Some(12));
+    }
+
+    #[test]
+    fn buys_mint_and_sells_burn_curve_tokens() {
+        let (env, _admin, buyer, id, _reserve_token, curve_token) = setup_with_tokens(0);
+        let client = ContinuousBondingCurveContractClient::new(&env, &id);
+        let curve_asset = token::StellarAssetClient::new(&env, &curve_token);
+        let deadline = env.ledger().timestamp() + 100;
+
+        client.buy_exact_tokens(&buyer, &1_000, &i128::MAX, &deadline);
+        assert_eq!(curve_asset.balance(&buyer), 1_000);
+
+        client.sell_exact_tokens(&buyer, &400, &0, &deadline);
+        assert_eq!(curve_asset.balance(&buyer), 600);
+        assert_eq!(client.state().0, 600);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #213)")]
+    fn rejects_trades_when_reserves_are_insolvent() {
+        let (env, _admin, buyer, id, _reserve_token) = setup(0);
+        env.as_contract(&id, || {
+            env.storage().instance().set(&DataKey::Reserve, &1i128);
+        });
+
+        let client = ContinuousBondingCurveContractClient::new(&env, &id);
+        client.buy_exact_tokens(&buyer, &1, &i128::MAX, &(env.ledger().timestamp() + 100));
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #214)")]
+    fn requires_curve_token_control() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let reserve_token = env
+            .register_stellar_asset_contract_v2(admin.clone())
+            .address();
+        let curve_token = env
+            .register_stellar_asset_contract_v2(admin.clone())
+            .address();
+        let id = env.register(ContinuousBondingCurveContract, ());
+        let client = ContinuousBondingCurveContractClient::new(&env, &id);
+
+        client.initialize(
+            &admin,
+            &reserve_token,
+            &curve_token,
+            &(100 * FP),
+            &100_000,
+            &0,
+        );
     }
 
     #[test]
@@ -951,12 +873,12 @@ mod proptests {
             x in 1i128..50_000i128,
             fee_bps in 0i128..1_000i128,
         ) {
-            if let (Some(cost), Some(payout)) = (
-                curve_cost(s, x, base, slope),
-                curve_payout(s + x, x, base, slope),
+            if let (Some((buy_total, _)), Some((sell_net, _))) = (
+                curve_cost(s, x, base, slope)
+                    .and_then(|cost| apply_buy_fee(cost, fee_bps)),
+                curve_payout(s + x, x, base, slope)
+                    .and_then(|payout| apply_sell_fee(payout, fee_bps)),
             ) {
-                let (buy_total, _) = apply_buy_fee(cost, fee_bps);
-                let (sell_net, _) = apply_sell_fee(payout, fee_bps);
                 // Selling back what you bought can never be profitable: the
                 // curve integral is identical, rounding favors the pool, and
                 // fees only widen the gap.
@@ -1009,14 +931,20 @@ mod proptests {
             }
         }
 
-        /// ln(exp(x)) == x within fixed-point precision.
         #[test]
-        fn exp_ln_round_trip(x in (-5 * FP)..(5 * FP)) {
-            let e = exp_fp(x);
-            let back = ln_fp(e);
-            let err = (back - x).abs();
-            proptest::prop_assert!(err <= 1_000_000,
-                "ln(exp({x})) = {back}, err {err}");
+        fn buy_integral_matches_reverse_sell(
+            base in 100_000_000i128..10_000_000_000i128,
+            slope in 1_000i128..1_000_000i128,
+            supply in 0i128..200_000i128,
+            amount in 1i128..50_000i128,
+        ) {
+            if let (Some(cost), Some(payout)) = (
+                curve_cost(supply, amount, base, slope),
+                curve_payout(supply + amount, amount, base, slope),
+            ) {
+                proptest::prop_assert!(cost >= payout);
+                proptest::prop_assert!(cost - payout <= 1);
+            }
         }
 
         /// Property test: Reserve invariants across randomized buy and sell operations.

@@ -10,16 +10,16 @@
 //!
 //! 1. **Custodially locks** the NFT (transferred into the vault) at
 //!    [`FractionalNftVaultContract::fractionalize`] time.
-//! 2. **Mints SEP-41 fractional shares** on a Stellar Asset Contract whose
-//!    admin is the vault (see [`FractionalNftVaultContract::initialize`]).
+//! 2. **Mints 1,000,000 SEP-41 fractional shares** on a Stellar Asset
+//!    Contract whose admin is the vault.
 //! 3. Runs a **buyout auction**: bidders escrow payment-token bids; the
 //!    highest bid at the deadline wins 100% redemption of the NFT.
 //! 4. Distributes the buyout proceeds **strictly pro-rata** to share
-//!    holders, and lets a 100% holder redeem the NFT directly.
+//!    holders by burning redeemed share tokens.
 //!
-//! Locked NFTs cannot be withdrawn until either the fractional shares are
-//! 100% redeemed ([`FractionalNftVaultContract::redeem_nft`]) or the buyout
-//! completes ([`FractionalNftVaultContract::finalize_buyout`]).
+//! The NFT can only leave custody when a buyout auction completes
+//! ([`FractionalNftVaultContract::finalize_buyout`] or
+//! [`FractionalNftVaultContract::finalize_commit_reveal_auction`]).
 
 #[cfg(test)]
 extern crate std;
@@ -59,8 +59,14 @@ pub enum DataKey {
     Soulbound,
     /// Commit-reveal (Vickrey) auction state.
     CrAuction,
+    /// Minimum permitted buyout valuation.
+    ValuationFloor,
+    /// Whether the admin has explicitly set a buyout valuation floor.
+    ValuationFloorSet,
 }
 
+/// Fixed fractional share supply minted when the NFT enters the vault.
+pub const TOTAL_SHARE_SUPPLY: i128 = 1_000_000;
 /// Cap on the configurable royalty cut: 50% (5_000 bps).
 pub const MAX_ROYALTY_BPS: u32 = 5_000;
 pub const BPS_DENOMINATOR: i128 = 10_000;
@@ -146,6 +152,11 @@ pub enum VaultError {
     SoulboundNonTransferable = 15,
     AlreadyCommitted = 16,
     InvalidCommitment = 17,
+    BidBelowValuationFloor = 18,
+    InvalidNftOwner = 19,
+    InvalidShareToken = 20,
+    Overflow = 21,
+    ValuationFloorNotSet = 22,
 }
 
 #[contract]
@@ -164,6 +175,9 @@ impl FractionalNftVaultContract {
     /// * `share_token` — a Stellar Asset Contract used for fractional
     ///   shares; **the vault must be its admin** so it can mint/burn.
     /// * `payment_token` — the asset used for buyout bids and payouts.
+    ///
+    /// Set the valuation floor with [`Self::set_valuation_floor`] before
+    /// starting either auction type.
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -174,6 +188,12 @@ impl FractionalNftVaultContract {
     ) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic_with_error!(&env, VaultError::AlreadyInitialized);
+        }
+        if share_token == payment_token
+            || token::StellarAssetClient::new(&env, &share_token).admin()
+                != env.current_contract_address()
+        {
+            panic_with_error!(&env, VaultError::InvalidShareToken);
         }
 
         admin.require_auth();
@@ -199,6 +219,36 @@ impl FractionalNftVaultContract {
         // Fractional shares are freely transferable by default; the admin
         // can opt into soulbound (non-transferable) mode explicitly.
         env.storage().instance().set(&DataKey::Soulbound, &false);
+    }
+
+    /// Set the minimum buyout amount. The floor cannot be changed while an
+    /// auction is present; cancel it first to start a new valuation period.
+    pub fn set_valuation_floor(env: Env, admin: Address, floor: i128) {
+        ensure_initialized(&env);
+        admin.require_auth();
+        require_admin(&env, &admin);
+
+        if floor <= 0 {
+            panic_with_error!(&env, VaultError::InvalidAmount);
+        }
+        if env.storage().instance().has(&DataKey::Auction)
+            || env.storage().instance().has(&DataKey::CrAuction)
+        {
+            panic_with_error!(&env, VaultError::AuctionActive);
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::ValuationFloor, &floor);
+        env.storage()
+            .instance()
+            .set(&DataKey::ValuationFloorSet, &true);
+    }
+
+    pub fn valuation_floor(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::ValuationFloor)
+            .unwrap_or(0)
     }
 
     /// Set the SEP-0029 secondary-sale royalty cut (in basis points) and
@@ -249,11 +299,12 @@ impl FractionalNftVaultContract {
         read_bool(&env, DataKey::Soulbound)
     }
 
-    /// Lock the NFT into the vault and mint `total_shares` fractional
+    /// Lock the NFT into the vault and mint exactly 1,000,000 fractional
     /// shares to the `recipients`.
     ///
     /// `owner` must be the vault admin **and** the current NFT owner. The
-    /// sum of `recipients` amounts must equal `total_shares`.
+    /// The sum of recipient amounts and `total_shares` must both equal
+    /// [`TOTAL_SHARE_SUPPLY`].
     pub fn fractionalize(
         env: Env,
         owner: Address,
@@ -280,19 +331,23 @@ impl FractionalNftVaultContract {
             if amount <= 0 {
                 panic_with_error!(&env, VaultError::InvalidAmount);
             }
-            sum += amount;
+            sum = sum
+                .checked_add(amount)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::InvalidAmount));
         }
-        if sum != total_shares {
+        if sum != total_shares || total_shares != TOTAL_SHARE_SUPPLY {
             panic_with_error!(&env, VaultError::ShareMismatch);
         }
 
         // Custodial lock: pull the NFT into the vault.
         let nft_contract = read_nft_contract(&env);
         let token_id = read_token_id(&env);
-        NftClient::new(&env, &nft_contract).transfer(
+        transfer_nft(
+            &env,
+            &nft_contract,
+            &token_id,
             &owner,
             &env.current_contract_address(),
-            &token_id,
         );
         env.storage().instance().set(&DataKey::NftLocked, &true);
 
@@ -302,10 +357,10 @@ impl FractionalNftVaultContract {
         let share_token = read_share_token(&env);
         let share_client = token::StellarAssetClient::new(&env, &share_token);
         for (recipient, amount) in recipients.iter() {
-            let balance = share_balance_internal(&env, &recipient);
-            env.storage()
-                .instance()
-                .set(&DataKey::Share(recipient.clone()), &(balance + amount));
+            if recipient == env.current_contract_address() || share_client.balance(&recipient) != 0
+            {
+                panic_with_error!(&env, VaultError::ShareMismatch);
+            }
             share_client.mint(&recipient, &amount);
             publish_shares_minted(&env, &recipient, amount, total_shares);
         }
@@ -331,14 +386,9 @@ impl FractionalNftVaultContract {
         if from_balance < shares {
             panic_with_error!(&env, VaultError::NoShares);
         }
-
-        let to_balance = share_balance_internal(&env, &to);
-        env.storage()
-            .instance()
-            .set(&DataKey::Share(from.clone()), &(from_balance - shares));
-        env.storage()
-            .instance()
-            .set(&DataKey::Share(to.clone()), &(to_balance + shares));
+        if from == to {
+            panic_with_error!(&env, VaultError::InvalidAmount);
+        }
 
         let share_client = token::StellarAssetClient::new(&env, &read_share_token(&env));
         share_client.burn(&from, &shares);
@@ -357,6 +407,11 @@ impl FractionalNftVaultContract {
 
         if min_bid <= 0 || duration == 0 {
             panic_with_error!(&env, VaultError::InvalidAmount);
+        }
+        ensure_no_auction(&env);
+        ensure_valuation_floor_set(&env);
+        if min_bid < read_valuation_floor(&env) {
+            panic_with_error!(&env, VaultError::BidBelowValuationFloor);
         }
         if !read_bool(&env, DataKey::NftLocked) {
             panic_with_error!(&env, VaultError::NftNotLocked);
@@ -482,7 +537,8 @@ impl FractionalNftVaultContract {
             .instance()
             .get(&DataKey::RoyaltyBps)
             .unwrap_or(0);
-        let royalty_cut = (auction.current_bid * royalty_bps as i128) / BPS_DENOMINATOR;
+        let royalty_cut =
+            pro_rata_payout(auction.current_bid, royalty_bps as i128, BPS_DENOMINATOR);
         let treasury_amount = auction.current_bid - royalty_cut;
 
         if royalty_cut > 0 {
@@ -571,13 +627,14 @@ impl FractionalNftVaultContract {
         if min_bid <= 0 || deposit <= 0 || commit_duration == 0 || reveal_duration == 0 {
             panic_with_error!(&env, VaultError::InvalidAmount);
         }
+        ensure_no_auction(&env);
+        ensure_valuation_floor_set(&env);
+        if min_bid < read_valuation_floor(&env) {
+            panic_with_error!(&env, VaultError::BidBelowValuationFloor);
+        }
         if !read_bool(&env, DataKey::NftLocked) {
             panic_with_error!(&env, VaultError::NftNotLocked);
         }
-        if env.storage().instance().has(&DataKey::CrAuction) {
-            panic_with_error!(&env, VaultError::AuctionActive);
-        }
-
         let now = env.ledger().timestamp();
         let commit_deadline = now.saturating_add(commit_duration);
         let auction = CommitRevealAuction {
@@ -735,12 +792,16 @@ impl FractionalNftVaultContract {
         // Deposits still held belong to bidders who never revealed.
         let mut forfeited: i128 = 0;
         for (_, deposit) in auction.deposits.iter() {
-            forfeited = forfeited.saturating_add(deposit);
+            forfeited = forfeited
+                .checked_add(deposit)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow));
         }
         auction.forfeited_deposits = forfeited;
         auction.finalized = true;
 
-        let treasury = price.saturating_add(forfeited);
+        let treasury = price
+            .checked_add(forfeited)
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow));
         env.storage().instance().set(&DataKey::Treasury, &treasury);
         env.storage().instance().set(&DataKey::Finalized, &true);
         env.storage().instance().set(&DataKey::NftLocked, &false);
@@ -748,10 +809,12 @@ impl FractionalNftVaultContract {
 
         let nft_contract = read_nft_contract(&env);
         let token_id = read_token_id(&env);
-        NftClient::new(&env, &nft_contract).transfer(
+        transfer_nft(
+            &env,
+            &nft_contract,
+            &token_id,
             &env.current_contract_address(),
             &winner,
-            &token_id,
         );
 
         publish_auction(&env, &winner, treasury, read_total_shares(&env), true);
@@ -788,25 +851,18 @@ impl FractionalNftVaultContract {
         if !read_bool(&env, DataKey::Finalized) {
             panic_with_error!(&env, VaultError::NoBids);
         }
-        if env
-            .storage()
-            .instance()
-            .has(&DataKey::PayoutClaimed(holder.clone()))
-        {
-            panic_with_error!(&env, VaultError::AlreadyClaimed);
-        }
-
         let holder_shares = share_balance_internal(&env, &holder);
         if holder_shares <= 0 {
             panic_with_error!(&env, VaultError::NoShares);
+        }
+        if holder_shares > read_total_shares(&env) {
+            panic_with_error!(&env, VaultError::ShareMismatch);
         }
 
         let treasury = read_treasury(&env);
         let payout = pro_rata_payout(treasury, holder_shares, read_total_shares(&env));
 
-        env.storage()
-            .instance()
-            .set(&DataKey::PayoutClaimed(holder.clone()), &true);
+        token::StellarAssetClient::new(&env, &read_share_token(&env)).burn(&holder, &holder_shares);
         token::Client::new(&env, &read_payment_token(&env)).transfer(
             &env.current_contract_address(),
             &holder,
@@ -817,43 +873,12 @@ impl FractionalNftVaultContract {
         payout
     }
 
-    /// Redeem the NFT directly: only a holder of **100%** of the shares may
-    /// burn them all and withdraw the locked NFT.
-    pub fn redeem_nft(env: Env, holder: Address) {
-        ensure_initialized(&env);
-        ensure_not_finalized(&env);
-        holder.require_auth();
-
-        if !read_bool(&env, DataKey::NftLocked) {
-            panic_with_error!(&env, VaultError::NftNotLocked);
-        }
-        let total_shares = read_total_shares(&env);
-        let holder_shares = share_balance_internal(&env, &holder);
-        if holder_shares != total_shares {
-            panic_with_error!(&env, VaultError::NoShares);
-        }
-
-        // 100% redeemed: burn all shares and unlock the NFT.
-        token::StellarAssetClient::new(&env, &read_share_token(&env)).burn(&holder, &total_shares);
-        env.storage()
-            .instance()
-            .set(&DataKey::Share(holder.clone()), &0i128);
-        env.storage().instance().set(&DataKey::Finalized, &true);
-        env.storage().instance().set(&DataKey::NftLocked, &false);
-
-        let nft_contract = read_nft_contract(&env);
-        let token_id = read_token_id(&env);
-        NftClient::new(&env, &nft_contract).transfer(
-            &env.current_contract_address(),
-            &holder,
-            &token_id,
-        );
-
-        publish_vault_lock(&env, &holder, &nft_contract, &token_id, false);
-    }
-
     pub fn share_balance(env: Env, owner: Address) -> i128 {
         share_balance_internal(&env, &owner)
+    }
+
+    pub fn total_shares(env: Env) -> i128 {
+        read_total_shares(&env)
     }
 
     pub fn shareholders(env: Env, accounts: Vec<Address>) -> Vec<(Address, i128)> {
@@ -890,7 +915,7 @@ fn pro_rata_payout(treasury: i128, share: i128, total: i128) -> i128 {
     if total <= 0 || share <= 0 {
         return 0;
     }
-    treasury * share / total
+    (treasury / total) * share + (treasury % total) * share / total
 }
 
 /// Minimal client for the standard Soroban NFT interface
@@ -914,7 +939,6 @@ impl NftClient {
             .invoke_contract::<()>(&self.address, &symbol_short!("transfer"), args);
     }
 
-    #[allow(dead_code)]
     fn owner(&self, token_id: &BytesN<32>) -> Address {
         let args = (token_id.clone(),).into_val(&self.env);
         self.env
@@ -994,6 +1018,44 @@ fn read_bool(env: &Env, key: DataKey) -> bool {
     env.storage().instance().get(&key).unwrap_or(false)
 }
 
+fn read_valuation_floor(env: &Env) -> i128 {
+    env.storage()
+        .instance()
+        .get(&DataKey::ValuationFloor)
+        .unwrap_or(0)
+}
+
+fn ensure_valuation_floor_set(env: &Env) {
+    if !read_bool(env, DataKey::ValuationFloorSet) {
+        panic_with_error!(env, VaultError::ValuationFloorNotSet);
+    }
+}
+
+fn ensure_no_auction(env: &Env) {
+    if env.storage().instance().has(&DataKey::Auction)
+        || env.storage().instance().has(&DataKey::CrAuction)
+    {
+        panic_with_error!(env, VaultError::AuctionActive);
+    }
+}
+
+fn transfer_nft(
+    env: &Env,
+    nft_contract: &Address,
+    token_id: &BytesN<32>,
+    from: &Address,
+    to: &Address,
+) {
+    let nft = NftClient::new(env, nft_contract);
+    if nft.owner(token_id) != *from {
+        panic_with_error!(env, VaultError::InvalidNftOwner);
+    }
+    nft.transfer(from, to, token_id);
+    if nft.owner(token_id) != *to {
+        panic_with_error!(env, VaultError::InvalidNftOwner);
+    }
+}
+
 fn read_cr_auction(env: &Env) -> CommitRevealAuction {
     env.storage()
         .instance()
@@ -1002,10 +1064,7 @@ fn read_cr_auction(env: &Env) -> CommitRevealAuction {
 }
 
 fn share_balance_internal(env: &Env, owner: &Address) -> i128 {
-    env.storage()
-        .instance()
-        .get::<_, i128>(&DataKey::Share(owner.clone()))
-        .unwrap_or(0)
+    token::Client::new(env, &read_share_token(env)).balance(owner)
 }
 
 #[cfg(test)]
@@ -1097,13 +1156,15 @@ mod tests {
         let payment_token = env.register_stellar_asset_contract_v2(admin.clone());
         token::StellarAssetClient::new(&env, &payment_token.address()).mint(&bidder, &10_000_000);
 
-        FractionalNftVaultContractClient::new(&env, &vault_id).initialize(
+        let client = FractionalNftVaultContractClient::new(&env, &vault_id);
+        client.initialize(
             &admin,
             &nft_id,
             &token_id,
             &share_token.address(),
             &payment_token.address(),
         );
+        client.set_valuation_floor(&admin, &1_000);
 
         Vault {
             env,
@@ -1121,16 +1182,17 @@ mod tests {
 
     fn fractionalize(v: &Vault, shares_a: i128, shares_b: i128, shares_admin: i128) {
         let mut recipients = Vec::new(&v.env);
+        let scale = TOTAL_SHARE_SUPPLY / 1_000;
         if shares_a > 0 {
-            recipients.push_back((v.user_a.clone(), shares_a));
+            recipients.push_back((v.user_a.clone(), shares_a * scale));
         }
         if shares_b > 0 {
-            recipients.push_back((v.user_b.clone(), shares_b));
+            recipients.push_back((v.user_b.clone(), shares_b * scale));
         }
         if shares_admin > 0 {
-            recipients.push_back((v.admin.clone(), shares_admin));
+            recipients.push_back((v.admin.clone(), shares_admin * scale));
         }
-        let total = shares_a + shares_b + shares_admin;
+        let total = TOTAL_SHARE_SUPPLY;
         v.client().fractionalize(&v.admin, &recipients, &total);
     }
 
@@ -1148,15 +1210,16 @@ mod tests {
         assert!(v.client().nft_locked());
 
         // Internal share balances.
-        assert_eq!(v.client().share_balance(&v.user_a), 300);
-        assert_eq!(v.client().share_balance(&v.user_b), 200);
-        assert_eq!(v.client().share_balance(&v.admin), 500);
+        assert_eq!(v.client().share_balance(&v.user_a), 300_000);
+        assert_eq!(v.client().share_balance(&v.user_b), 200_000);
+        assert_eq!(v.client().share_balance(&v.admin), 500_000);
+        assert_eq!(v.client().total_shares(), TOTAL_SHARE_SUPPLY);
 
         // Share token actually minted.
         let sac = token::StellarAssetClient::new(&v.env, &v.share_token);
-        assert_eq!(sac.balance(&v.user_a), 300);
-        assert_eq!(sac.balance(&v.user_b), 200);
-        assert_eq!(sac.balance(&v.admin), 500);
+        assert_eq!(sac.balance(&v.user_a), 300_000);
+        assert_eq!(sac.balance(&v.user_b), 200_000);
+        assert_eq!(sac.balance(&v.admin), 500_000);
     }
 
     #[test]
@@ -1171,17 +1234,38 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "Error(Contract, #12)")]
+    fn fractionalize_requires_exact_fixed_supply() {
+        let v = setup();
+        let mut recipients = Vec::new(&v.env);
+        recipients.push_back((v.user_a.clone(), TOTAL_SHARE_SUPPLY - 1));
+        v.client()
+            .fractionalize(&v.admin, &recipients, &(TOTAL_SHARE_SUPPLY - 1));
+    }
+
+    #[test]
     fn transfer_shares_updates_balances_and_token() {
         let v = setup();
         fractionalize(&v, 300, 200, 500);
 
         v.client().transfer_shares(&v.user_a, &v.user_b, &100);
 
-        assert_eq!(v.client().share_balance(&v.user_a), 200);
-        assert_eq!(v.client().share_balance(&v.user_b), 300);
+        assert_eq!(v.client().share_balance(&v.user_a), 200_000);
+        assert_eq!(v.client().share_balance(&v.user_b), 300_000);
         let sac = token::StellarAssetClient::new(&v.env, &v.share_token);
-        assert_eq!(sac.balance(&v.user_a), 200);
-        assert_eq!(sac.balance(&v.user_b), 300);
+        assert_eq!(sac.balance(&v.user_a), 200_000);
+        assert_eq!(sac.balance(&v.user_b), 300_000);
+    }
+
+    #[test]
+    fn vault_reads_share_ownership_from_token_balances() {
+        let v = setup();
+        fractionalize(&v, 300, 200, 500);
+
+        token::Client::new(&v.env, &v.share_token).transfer(&v.user_a, &v.user_b, &100_000);
+
+        assert_eq!(v.client().share_balance(&v.user_a), 200_000);
+        assert_eq!(v.client().share_balance(&v.user_b), 300_000);
     }
 
     #[test]
@@ -1230,6 +1314,56 @@ mod tests {
         fractionalize(&v, 300, 200, 500);
         v.client().start_auction(&v.admin, &1_000, &100);
         v.client().bid(&v.bidder, &500);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #18)")]
+    fn auction_cannot_start_below_valuation_floor() {
+        let v = setup();
+        fractionalize(&v, 300, 200, 500);
+        v.client().set_valuation_floor(&v.admin, &2_000);
+        v.client().start_auction(&v.admin, &1_999, &100);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #22)")]
+    fn auction_requires_an_explicit_valuation_floor() {
+        let v = setup();
+        fractionalize(&v, 300, 200, 500);
+        v.env.as_contract(&v.vault_id, || {
+            v.env
+                .storage()
+                .instance()
+                .remove(&DataKey::ValuationFloorSet);
+        });
+        v.client().start_auction(&v.admin, &1_000, &100);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #6)")]
+    fn only_one_buyout_auction_can_be_open() {
+        let v = setup();
+        fractionalize(&v, 300, 200, 500);
+        v.client().start_auction(&v.admin, &1_000, &100);
+        v.client()
+            .start_commit_reveal_auction(&v.admin, &1_000, &100, &10, &10);
+    }
+
+    #[test]
+    fn buyout_claim_burns_current_share_balance() {
+        let v = setup();
+        fractionalize(&v, 300, 200, 500);
+        token::Client::new(&v.env, &v.share_token).transfer(&v.user_a, &v.user_b, &100_000);
+
+        v.client().start_auction(&v.admin, &1_000, &100);
+        v.client().bid(&v.bidder, &8_000);
+        v.env.ledger().with_mut(|li| li.timestamp += 101);
+        v.client().finalize_buyout(&v.bidder);
+
+        assert_eq!(v.client().claim_buyout_payout(&v.user_a), 1_600);
+        assert_eq!(v.client().claim_buyout_payout(&v.user_b), 4_000);
+        assert_eq!(v.client().share_balance(&v.user_a), 0);
+        assert_eq!(v.client().share_balance(&v.user_b), 0);
     }
 
     #[test]
@@ -1294,33 +1428,7 @@ mod tests {
     }
 
     #[test]
-    fn redeem_requires_100_percent_ownership() {
-        let v = setup();
-        // All shares to a single holder.
-        let mut recipients = Vec::new(&v.env);
-        recipients.push_back((v.user_a.clone(), 1_000));
-        v.client().fractionalize(&v.admin, &recipients, &1_000);
-
-        v.client().redeem_nft(&v.user_a);
-
-        // NFT unlocked back to the 100% holder; shares burned.
-        assert_eq!(nft_owner(&v), v.user_a);
-        assert!(!v.client().nft_locked());
-        assert!(v.client().finalized());
-        let sac = token::StellarAssetClient::new(&v.env, &v.share_token);
-        assert_eq!(sac.balance(&v.user_a), 0);
-    }
-
-    #[test]
     #[should_panic(expected = "Error(Contract, #11)")]
-    fn partial_holder_cannot_redeem_nft() {
-        let v = setup();
-        fractionalize(&v, 300, 200, 500);
-        v.client().redeem_nft(&v.user_a);
-    }
-
-    #[test]
-    #[should_panic(expected = "Error(Contract, #10)")]
     fn cannot_claim_payout_twice() {
         let v = setup();
         fractionalize(&v, 300, 200, 500);

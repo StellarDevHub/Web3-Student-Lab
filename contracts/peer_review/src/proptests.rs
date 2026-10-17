@@ -1,7 +1,7 @@
 //! # SC-HARD-13 — Property-based tests for median correctness and classifier
 //! exhaustiveness.
 
-use super::median_of;
+use super::{consensus, median_of};
 
 /// Reference median (std-based) for cross-checking the contract's median.
 /// For even-length inputs, averages the two middle values (rounds down).
@@ -14,6 +14,19 @@ fn std_median(grades: &[i128]) -> i128 {
     } else {
         (g[n / 2 - 1] + g[n / 2]) / 2
     }
+}
+
+fn std_deviation(grades: &[i128]) -> i128 {
+    let mean = grades.iter().sum::<i128>() / grades.len() as i128;
+    let variance = grades
+        .iter()
+        .map(|grade| {
+            let deviation = grade - mean;
+            deviation * deviation
+        })
+        .sum::<i128>()
+        / grades.len() as i128;
+    (variance as f64).sqrt().floor() as i128
 }
 
 proptest::proptest! {
@@ -34,6 +47,10 @@ proptest::proptest! {
         }
         let median = median_of(&vec);
         proptest::prop_assert_eq!(median, std_median(&grades));
+        proptest::prop_assert_eq!(
+            consensus::standard_deviation(&vec),
+            Some(std_deviation(&grades))
+        );
 
         // Every reviewer must be classified exactly once.
         let mut accurate = 0usize;
