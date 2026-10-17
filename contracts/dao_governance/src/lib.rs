@@ -1,25 +1,60 @@
-//! # DAO Governance Module with Quadratic Voting
+//! # DAO Governance Module with Quadratic Voting, Quorum and Timelock
 //!
-//! Closes issue #717.
+//! Closes issues #717 and #1625.
 //!
-//! A Soroban-native DAO where any token holder can:
-//!  - create proposals with a configurable voting window,
-//!  - cast votes whose *cost* scales quadratically (cost = votes²),
-//!    so large stakeholders cannot dominate by raw token weight,
-//!  - finalize proposals once the deadline passes,
-//!  - execute passed proposals (hook for downstream actions).
+//! A Soroban-native DAO where any voice-credit holder can:
+//!  - create proposals (creator must hold at least the proposal threshold),
+//!  - cast votes whose *cost* scales quadratically (cost = votes^2),
+//!  - finalize proposals once the voting period ends,
+//!  - execute passed proposals once the 48-hour timelock has elapsed.
+//!
+//! ## Parameters
+//! - Default voting period: 7 days (`DEFAULT_VOTING_PERIOD`). Custom periods
+//!   (set by admin, or passed as `duration` to `create_proposal`) must lie in
+//!   `[MIN_VOTING_PERIOD, MAX_VOTING_PERIOD]` = [1 day, 30 days].
+//! - Quorum: a proposal passes only if the voice credits spent on it
+//!   (`credits_spent`, i.e. participating voting power) reach
+//!   `QUORUM_BPS` (20%) of the circulating governance supply, where supply is
+//!   the running total of all credits ever granted (`TotalGranted`).
+//!   The quorum is fixed at proposal creation.
+//! - Timelock: finalize queues a passed proposal with `eta = now + 172800`
+//!   (48 hours). `execute` fails until `now >= eta`.
+//!
+//! ## Flash-loan protection (creation-time snapshot)
+//! Every grant is stamped with a monotonically increasing sequence number and
+//! appended to the member's grant log. Each proposal records the sequence
+//! number at creation (`created_seq`). When a member votes, credits granted
+//! with a sequence number greater than `created_seq` are NOT spendable on that
+//! proposal: spendable = current balance - (sum of grants after creation).
+//! Voting power therefore cannot increase because of grants made after the
+//! proposal was created. This is conservative: if a post-creation grant was
+//! already spent on another proposal, it is still subtracted here.
 //!
 //! ## Quadratic voting mechanics
-//! Each voter is allocated `voice_credits` upon joining.  Casting `v` votes
-//! on a proposal costs `v²` credits, forcing voters to spread influence
-//! across multiple proposals rather than concentrating on one.
+//! Casting `v` votes on a proposal costs `v^2` credits, forcing voters to spread
+//! influence across multiple proposals rather than concentrating on one.
 
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, panic_with_error, symbol_short, Address,
-    Env, String,
+    contract, contractimpl, contracttype, panic_with_error, symbol_short, Address, Env, String,
+    Vec,
 };
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+/// Default voting period: 7 days.
+pub const DEFAULT_VOTING_PERIOD: u64 = 604_800;
+/// Minimum allowed voting period: 1 day.
+pub const MIN_VOTING_PERIOD: u64 = 86_400;
+/// Maximum allowed voting period: 30 days.
+pub const MAX_VOTING_PERIOD: u64 = 2_592_000;
+/// Mandatory timelock between finalize (queue) and execute: 48 hours.
+pub const TIMELOCK_DELAY: u64 = 172_800;
+/// Quorum as basis points of circulating supply: 20%.
+pub const QUORUM_BPS: u128 = 2_000;
+/// Basis-point denominator.
+pub const BPS_DENOMINATOR: u128 = 10_000;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -27,6 +62,7 @@ use soroban_sdk::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ProposalStatus {
     Active,
+    /// Passed and queued in the timelock (`eta` set); executable once `now >= eta`.
     Passed,
     Failed,
     Executed,
@@ -43,8 +79,23 @@ pub struct Proposal {
     pub status: ProposalStatus,
     /// Net vote tally (positive = support, negative = against).
     pub tally: i128,
-    /// Total voice-credits spent across all voters on this proposal.
+    /// Total voice-credits spent across all voters on this proposal
+    /// (participating voting power used for quorum).
     pub credits_spent: u128,
+    /// Grant sequence number at creation. Later grants are not spendable here.
+    pub created_seq: u64,
+    /// Quorum in voice credits, fixed at creation (QUORUM_BPS of supply).
+    pub quorum_required: u128,
+    /// Timelock ETA (ledger timestamp) set when passed; 0 while not queued.
+    pub eta: u64,
+}
+
+/// One credit grant, stamped with its global sequence number.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GrantEntry {
+    pub seq: u64,
+    pub amount: u128,
 }
 
 #[contracttype]
@@ -56,37 +107,25 @@ pub enum Key {
     Proposal(u64),
     Vote(u64, Address),
     UsedNonce(Address, u64),
+    /// Running total of all credits granted (circulating supply).
+    TotalGranted,
+    /// Global grant/proposal sequence counter.
+    Seq,
+    /// Per-member list of grants with sequence numbers.
+    GrantLog(Address),
+    /// Admin-configured default voting period (seconds).
+    VotingPeriod,
+    /// Minimum credits a proposal creator must hold.
+    ProposalThreshold,
 }
 
+pub mod errors;
 pub mod ragequit;
 pub mod treasury;
 
+pub use errors::DaoError;
 use ragequit::Ragequit;
 use treasury::{Treasury, TreasuryState};
-
-// ── Errors ────────────────────────────────────────────────────────────────────
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum DaoError {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    Unauthorized = 3,
-    ProposalNotFound = 4,
-    ProposalClosed = 5,
-    VotingDeadlineLive = 6,
-    AlreadyVoted = 7,
-    InsufficientCredits = 8,
-    ZeroVotes = 9,
-    InvalidDeadline = 10,
-    ZeroShares = 11,
-    ProposalNotPassed = 12,
-    YesVoterCannotRagequit = 13,
-    InsufficientShares = 14,
-    InsufficientReserves = 15,
-}
-pub mod errors;
-pub use errors::DaoError;
 
 // ── Contract ──────────────────────────────────────────────────────────────────
 
@@ -106,18 +145,41 @@ impl DaoGovernance {
     }
 
     /// Grant `credits` voice-credits to `member`.  Admin only.
+    /// Updates the circulating supply and the member's grant log.
     pub fn grant_credits(env: Env, member: Address, credits: u128) {
         Self::only_admin(&env);
         let key = Key::Credits(member.clone());
         let prev: u128 = env.storage().persistent().get(&key).unwrap_or(0);
-        env.storage().persistent().set(&key, &(prev + credits));
+        env.storage()
+            .persistent()
+            .set(&key, &prev.saturating_add(credits));
+
+        let total = read_total_granted(&env).saturating_add(credits);
+        env.storage().instance().set(&Key::TotalGranted, &total);
+
+        let seq = next_seq(&env);
+        let log_key = Key::GrantLog(member.clone());
+        let mut log = env
+            .storage()
+            .persistent()
+            .get::<Key, Vec<GrantEntry>>(&log_key)
+            .unwrap_or_else(|| Vec::new(&env));
+        log.push_back(GrantEntry {
+            seq,
+            amount: credits,
+        });
+        env.storage().persistent().set(&log_key, &log);
+
         env.events()
             .publish((symbol_short!("credits"),), (member, credits));
     }
 
     /// Create a new proposal.  Returns the proposal ID.
     ///
-    /// * `duration` – voting window in seconds.
+    /// * `duration` - voting window in seconds. `0` selects the configured
+    ///   default voting period (7 days unless changed by admin). Any non-zero
+    ///   value must be within [1 day, 30 days], otherwise `InvalidVotingPeriod`.
+    /// * The creator must hold at least the proposal threshold (default 0).
     pub fn create_proposal(
         env: Env,
         creator: Address,
@@ -126,21 +188,36 @@ impl DaoGovernance {
         duration: u64,
     ) -> u64 {
         creator.require_auth();
-        if duration == 0 {
-            panic_with_error!(&env, DaoError::InvalidDeadline);
+
+        let period = if duration == 0 {
+            read_voting_period(&env)
+        } else {
+            check_voting_period(&env, duration);
+            duration
+        };
+
+        if credits_balance(&env, &creator) < read_proposal_threshold(&env) {
+            panic_with_error!(&env, DaoError::BelowProposalThreshold);
         }
+
         let id: u64 = env.storage().instance().get(&Key::NextId).unwrap_or(0);
         env.storage().instance().set(&Key::NextId, &(id + 1));
+
+        let quorum_required =
+            read_total_granted(&env).saturating_mul(QUORUM_BPS) / BPS_DENOMINATOR;
 
         let proposal = Proposal {
             id,
             creator: creator.clone(),
             title,
             description,
-            deadline: env.ledger().timestamp() + duration,
+            deadline: env.ledger().timestamp().saturating_add(period),
             status: ProposalStatus::Active,
             tally: 0,
             credits_spent: 0,
+            created_seq: next_seq(&env),
+            quorum_required,
+            eta: 0,
         };
         env.storage()
             .persistent()
@@ -153,13 +230,9 @@ impl DaoGovernance {
     /// Cast `votes` on proposal `id`.
     ///
     /// * Positive = support, negative = against.
-    /// * Cost = votes² credits (quadratic scaling).
+    /// * Cost = votes^2 credits (quadratic scaling).
     /// * Each address may vote at most once per proposal.
-    /// Cast `votes` on proposal `id`.
-    ///
-    /// * Positive = support, negative = against.
-    /// * Cost = votes² credits (quadratic scaling).
-    /// * Each address may vote at most once per proposal.
+    /// * Only credits not granted after the proposal was created are spendable.
     pub fn vote(env: Env, voter: Address, proposal_id: u64, votes: i64) {
         voter.require_auth();
         Self::internal_vote(&env, voter, proposal_id, votes);
@@ -204,16 +277,19 @@ impl DaoGovernance {
             panic_with_error!(env, DaoError::AlreadyVoted);
         }
 
-        // Quadratic cost: cost = |votes|²
+        // Quadratic cost: cost = |votes|^2
         let abs_v = votes.unsigned_abs() as u128;
         let cost: u128 = abs_v.saturating_mul(abs_v);
 
-        let credits_key = Key::Credits(voter.clone());
-        let bal: u128 = env.storage().persistent().get(&credits_key).unwrap_or(0);
-        if bal < cost {
+        let spendable = eligible_credits(env, &voter, proposal.created_seq);
+        if spendable < cost {
             panic_with_error!(env, DaoError::InsufficientCredits);
         }
-        env.storage().persistent().set(&credits_key, &(bal - cost));
+        let credits_key = Key::Credits(voter.clone());
+        let bal = credits_balance(env, &voter);
+        env.storage()
+            .persistent()
+            .set(&credits_key, &bal.saturating_sub(cost));
 
         proposal.tally += votes as i128;
         proposal.credits_spent = proposal.credits_spent.saturating_add(cost);
@@ -227,6 +303,11 @@ impl DaoGovernance {
     }
 
     /// Finalize a proposal after its deadline.  Anyone may call this.
+    ///
+    /// The proposal passes only if `credits_spent >= quorum_required` AND
+    /// `tally > 0`. A passing proposal is queued: status `Passed` with
+    /// `eta = now + TIMELOCK_DELAY`. Otherwise it is marked `Failed`
+    /// (including quorum failure); no panic is raised for that outcome.
     pub fn finalize(env: Env, proposal_id: u64) {
         let mut proposal: Proposal = env
             .storage()
@@ -237,15 +318,17 @@ impl DaoGovernance {
         if proposal.status != ProposalStatus::Active {
             panic_with_error!(&env, DaoError::ProposalClosed);
         }
-        if env.ledger().timestamp() <= proposal.deadline {
+        let now = env.ledger().timestamp();
+        if now <= proposal.deadline {
             panic_with_error!(&env, DaoError::VotingDeadlineLive);
         }
 
-        proposal.status = if proposal.tally > 0 {
-            ProposalStatus::Passed
+        if proposal.credits_spent >= proposal.quorum_required && proposal.tally > 0 {
+            proposal.status = ProposalStatus::Passed;
+            proposal.eta = now.saturating_add(TIMELOCK_DELAY);
         } else {
-            ProposalStatus::Failed
-        };
+            proposal.status = ProposalStatus::Failed;
+        }
         env.storage()
             .persistent()
             .set(&Key::Proposal(proposal_id), &proposal);
@@ -253,7 +336,10 @@ impl DaoGovernance {
             .publish((symbol_short!("finalize"),), (proposal_id, proposal.tally));
     }
 
-    /// Mark a passed proposal as executed.  Admin only.
+    /// Mark a queued (passed) proposal as executed.  Admin only.
+    ///
+    /// Fails with `ProposalClosed` unless the status is `Passed`, and with
+    /// `TimelockNotElapsed` until `now >= eta` (48 hours after finalize).
     pub fn execute(env: Env, caller: Address, proposal_id: u64) {
         Self::only_admin(&env);
         caller.require_auth();
@@ -267,12 +353,36 @@ impl DaoGovernance {
         if proposal.status != ProposalStatus::Passed {
             panic_with_error!(&env, DaoError::ProposalClosed);
         }
+        if env.ledger().timestamp() < proposal.eta {
+            panic_with_error!(&env, DaoError::TimelockNotElapsed);
+        }
         proposal.status = ProposalStatus::Executed;
         env.storage()
             .persistent()
             .set(&Key::Proposal(proposal_id), &proposal);
         env.events()
             .publish((symbol_short!("execute"),), (caller, proposal_id));
+    }
+
+    // ── Configuration (admin) ─────────────────────────────────────────────────
+
+    /// Set the default voting period. Must be within [1 day, 30 days]. Admin only.
+    pub fn set_voting_period(env: Env, period: u64) {
+        Self::only_admin(&env);
+        check_voting_period(&env, period);
+        env.storage().instance().set(&Key::VotingPeriod, &period);
+        env.events()
+            .publish((symbol_short!("vp_set"),), period);
+    }
+
+    /// Set the minimum credits a proposal creator must hold. Admin only.
+    pub fn set_proposal_threshold(env: Env, min_credits: u128) {
+        Self::only_admin(&env);
+        env.storage()
+            .instance()
+            .set(&Key::ProposalThreshold, &min_credits);
+        env.events()
+            .publish((symbol_short!("thr_set"),), min_credits);
     }
 
     // ── Views ─────────────────────────────────────────────────────────────────
@@ -282,16 +392,26 @@ impl DaoGovernance {
     }
 
     pub fn credits_of(env: Env, member: Address) -> u128 {
-        env.storage()
-            .persistent()
-            .get(&Key::Credits(member))
-            .unwrap_or(0)
+        credits_balance(&env, &member)
     }
 
     pub fn vote_of(env: Env, proposal_id: u64, voter: Address) -> Option<i64> {
         env.storage()
             .persistent()
             .get(&Key::Vote(proposal_id, voter))
+    }
+
+    /// Circulating governance supply: total credits ever granted.
+    pub fn total_granted(env: Env) -> u128 {
+        read_total_granted(&env)
+    }
+
+    pub fn get_voting_period(env: Env) -> u64 {
+        read_voting_period(&env)
+    }
+
+    pub fn get_proposal_threshold(env: Env) -> u128 {
+        read_proposal_threshold(&env)
     }
 
     // ── Treasury & Ragequit (SC-042) ──────────────────────────────────────────
@@ -340,218 +460,68 @@ impl DaoGovernance {
     }
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use soroban_sdk::{
-        testutils::{Address as _, Ledger as _},
-        Env, String,
-    };
+/// Advance and return the global grant/proposal sequence counter.
+fn next_seq(env: &Env) -> u64 {
+    let seq: u64 = env.storage().instance().get(&Key::Seq).unwrap_or(0) + 1;
+    env.storage().instance().set(&Key::Seq, &seq);
+    seq
+}
 
-    fn setup() -> (Env, DaoGovernanceClient<'static>, Address) {
-        let env = Env::default();
-        env.mock_all_auths();
-        let id = env.register(DaoGovernance, ());
-        let client = DaoGovernanceClient::new(&env, &id);
-        let admin = Address::generate(&env);
-        client.initialize(&admin);
-        (env, client, admin)
-    }
+fn read_total_granted(env: &Env) -> u128 {
+    env.storage()
+        .instance()
+        .get(&Key::TotalGranted)
+        .unwrap_or(0)
+}
 
-    #[test]
-    fn quadratic_cost_deducted_correctly() {
-        let (env, client, admin) = setup();
-        let voter = Address::generate(&env);
-        client.grant_credits(&voter, &100u128);
+fn read_voting_period(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&Key::VotingPeriod)
+        .unwrap_or(DEFAULT_VOTING_PERIOD)
+}
 
-        let pid = client.create_proposal(
-            &admin,
-            &String::from_str(&env, "Test"),
-            &String::from_str(&env, "Desc"),
-            &3600,
-        );
+fn read_proposal_threshold(env: &Env) -> u128 {
+    env.storage()
+        .instance()
+        .get(&Key::ProposalThreshold)
+        .unwrap_or(0)
+}
 
-        // 3 votes → cost = 9
-        client.vote(&voter, &pid, &3i64);
-        assert_eq!(client.credits_of(&voter), 91);
-
-        let p = client.get_proposal(&pid).unwrap();
-        assert_eq!(p.tally, 3);
-        assert_eq!(p.credits_spent, 9);
-    }
-
-    #[test]
-    fn proposal_passes_when_tally_positive() {
-        let (env, client, admin) = setup();
-        let voter = Address::generate(&env);
-        client.grant_credits(&voter, &1_000u128);
-
-        let pid = client.create_proposal(
-            &admin,
-            &String::from_str(&env, "Upgrade"),
-            &String::from_str(&env, "Details"),
-            &100,
-        );
-        client.vote(&voter, &pid, &5i64);
-
-        env.ledger().with_mut(|l| l.timestamp += 200);
-        client.finalize(&pid);
-
-        assert_eq!(
-            client.get_proposal(&pid).unwrap().status,
-            ProposalStatus::Passed
-        );
-    }
-
-    #[test]
-    fn proposal_fails_when_tally_non_positive() {
-        let (env, client, admin) = setup();
-        let voter = Address::generate(&env);
-        client.grant_credits(&voter, &1_000u128);
-
-        let pid = client.create_proposal(
-            &admin,
-            &String::from_str(&env, "Bad idea"),
-            &String::from_str(&env, "No"),
-            &100,
-        );
-        client.vote(&voter, &pid, &-4i64);
-
-        env.ledger().with_mut(|l| l.timestamp += 200);
-        client.finalize(&pid);
-
-        assert_eq!(
-            client.get_proposal(&pid).unwrap().status,
-            ProposalStatus::Failed
-        );
-    }
-
-    #[test]
-    #[should_panic(expected = "Error(Contract, #407)")]
-    fn cannot_vote_twice() {
-        let (env, client, admin) = setup();
-        let voter = Address::generate(&env);
-        client.grant_credits(&voter, &1_000u128);
-
-        let pid = client.create_proposal(
-            &admin,
-            &String::from_str(&env, "D"),
-            &String::from_str(&env, "D"),
-            &3600,
-        );
-        client.vote(&voter, &pid, &1i64);
-        client.vote(&voter, &pid, &1i64); // panic
-    }
-
-    #[test]
-    #[should_panic(expected = "Error(Contract, #408)")]
-    fn insufficient_credits_rejected() {
-        let (env, client, admin) = setup();
-        let voter = Address::generate(&env);
-        client.grant_credits(&voter, &3u128); // only 3 credits
-
-        let pid = client.create_proposal(
-            &admin,
-            &String::from_str(&env, "Big"),
-            &String::from_str(&env, "Big"),
-            &3600,
-        );
-        client.vote(&voter, &pid, &5i64); // cost = 25 > 3 → panic
-    }
-
-    #[test]
-    fn test_ragequit_dissenting_voter_burns_shares_and_receives_pro_rata() {
-        let (env, client, admin) = setup();
-        let voter_no = Address::generate(&env);
-        let voter_yes = Address::generate(&env);
-
-        client.grant_credits(&voter_no, &1_000u128);
-        client.grant_credits(&voter_yes, &1_000u128);
-
-        // Setup treasury: 1000 shares total (400 for voter_no, 600 for voter_yes), 50,000 reserves
-        client.grant_shares(&voter_no, &400u128);
-        client.grant_shares(&voter_yes, &600u128);
-        client.deposit_treasury(&admin, &50_000u128);
-
-        let pid = client.create_proposal(
-            &admin,
-            &String::from_str(&env, "Controversial proposal"),
-            &String::from_str(&env, "Details"),
-            &100,
-        );
-
-        // voter_no votes -2 (against), voter_yes votes +5 (for)
-        client.vote(&voter_no, &pid, &-2i64);
-        client.vote(&voter_yes, &pid, &5i64);
-
-        // Proposal passes after deadline
-        env.ledger().with_mut(|l| l.timestamp += 200);
-        client.finalize(&pid);
-        assert_eq!(client.get_proposal(&pid).unwrap().status, ProposalStatus::Passed);
-
-        // voter_no ragequits before proposal is executed: burns 400 shares
-        // Expected payout: 400 * 50,000 / 1000 = 20,000
-        let payout = client.ragequit(&voter_no, &pid, &400u128);
-        assert_eq!(payout, 20_000u128);
-
-        // Shares burned atomically
-        assert_eq!(client.treasury_shares_of(&voter_no), 0);
-        let treasury = client.get_treasury_state();
-        assert_eq!(treasury.total_shares, 600);
-        assert_eq!(treasury.total_reserves, 30_000);
-    }
-
-    #[test]
-    #[should_panic(expected = "Error(Contract, #13)")]
-    fn test_ragequit_prohibits_yes_voters() {
-        let (env, client, admin) = setup();
-        let voter_yes = Address::generate(&env);
-        client.grant_credits(&voter_yes, &1_000u128);
-        client.grant_shares(&voter_yes, &500u128);
-        client.deposit_treasury(&admin, &50_000u128);
-
-        let pid = client.create_proposal(
-            &admin,
-            &String::from_str(&env, "P"),
-            &String::from_str(&env, "D"),
-            &100,
-        );
-        client.vote(&voter_yes, &pid, &5i64);
-
-        env.ledger().with_mut(|l| l.timestamp += 200);
-        client.finalize(&pid);
-
-        // Should panic with YesVoterCannotRagequit (code 13)
-        client.ragequit(&voter_yes, &pid, &100u128);
-    fn test_vote_sep0010_and_replay_rejection() {
-        let (env, client, admin) = setup();
-        let voter = Address::generate(&env);
-        client.grant_credits(&voter, &100u128);
-
-        let pid = client.create_proposal(
-            &admin,
-            &String::from_str(&env, "SEP10 Prop"),
-            &String::from_str(&env, "Desc"),
-            &3600,
-        );
-
-        let nonce = 9999u64;
-        let domain = String::from_str(&env, "governance.studentlab.stellar.org");
-
-        // Cast SEP-0010 authenticated vote
-        client.vote_sep0010(&voter, &pid, &3i64, &nonce, &domain);
-
-        let prop = client.get_proposal(&pid).unwrap();
-        assert_eq!(prop.tally, 3);
-        assert_eq!(client.credits_of(&voter), 100 - 9);
-
-        // Replay attempt with same nonce is rejected
-        let res = client.try_vote_sep0010(&voter, &pid, &1i64, &nonce, &domain);
-        assert!(res.is_err());
+fn check_voting_period(env: &Env, period: u64) {
+    if period < MIN_VOTING_PERIOD || period > MAX_VOTING_PERIOD {
+        panic_with_error!(env, DaoError::InvalidVotingPeriod);
     }
 }
+
+fn credits_balance(env: &Env, member: &Address) -> u128 {
+    env.storage()
+        .persistent()
+        .get::<Key, u128>(&Key::Credits(member.clone()))
+        .unwrap_or(0)
+}
+
+/// Credits `voter` may spend on a proposal created at `created_seq`:
+/// current balance minus every grant received after that proposal was created.
+fn eligible_credits(env: &Env, voter: &Address, created_seq: u64) -> u128 {
+    let balance = credits_balance(env, voter);
+    let log = env
+        .storage()
+        .persistent()
+        .get::<Key, Vec<GrantEntry>>(&Key::GrantLog(voter.clone()))
+        .unwrap_or_else(|| Vec::new(env));
+    let mut late: u128 = 0;
+    for entry in log.iter() {
+        if entry.seq > created_seq {
+            late = late.saturating_add(entry.amount);
+        }
+    }
+    balance.saturating_sub(late)
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod test;
