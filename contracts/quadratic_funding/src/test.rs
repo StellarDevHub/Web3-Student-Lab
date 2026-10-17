@@ -13,7 +13,29 @@
 
 use super::*;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Bytes, Env};
+use soroban_sdk::{Bytes, BytesN, Env};
+
+// ── Mock sybil-resistance contracts ───────────────────────────────────────────
+
+#[contract]
+struct MockSybilOk;
+
+#[contractimpl]
+impl MockSybilOk {
+    pub fn is_verified(_env: Env, _user: Address) -> bool {
+        true
+    }
+}
+
+#[contract]
+struct MockSybilReject;
+
+#[contractimpl]
+impl MockSybilReject {
+    pub fn is_verified(_env: Env, _user: Address) -> bool {
+        false
+    }
+}
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 
@@ -362,4 +384,186 @@ fn test_slash_collusion_rejects_non_guilty_donor() {
     let colluders = soroban_sdk::vec![&env, colluder1, innocent];
     let res = client.try_slash_collusion(&investigator, &1, &colluders, &proof);
     assert_eq!(res, Err(Ok(SlasherError::DonorNotGuilty)));
+}
+
+// ── SC-005 tests ──────────────────────────────────────────────────────────────
+
+#[test]
+fn test_isqrt_boundaries_and_max() {
+    assert_eq!(QuadraticFunding::isqrt(0), 0);
+    assert_eq!(QuadraticFunding::isqrt(-7), 0);
+    assert_eq!(QuadraticFunding::isqrt(3), 1);
+    assert_eq!(QuadraticFunding::isqrt(99), 9);
+    assert_eq!(QuadraticFunding::isqrt(100), 10);
+    // Must not panic at the type boundary; floor(sqrt(MAX)) ≈ 1.3e19.
+    let r = QuadraticFunding::isqrt(i128::MAX);
+    assert!(r.checked_mul(r).unwrap() <= i128::MAX);
+}
+
+#[test]
+fn test_sybil_unverified_donor_rejected_in_donate() {
+    let (env, contract_id, admin) = setup();
+    let client = QuadraticFundingClient::new(&env, &contract_id);
+    let donor = Address::generate(&env);
+    let owner = Address::generate(&env);
+    let sybil = env.register(MockSybilReject, ());
+
+    client.init(&admin, &10_000);
+    client.set_sybil_contract(&admin, &sybil);
+    client.register_project(&admin, &1, &owner);
+    client.whitelist_donor(&admin, &donor);
+
+    let res = client.try_donate(&donor, &1, &100);
+    assert!(res.is_err(), "unverified sybil donor must be rejected");
+    assert_eq!(client.get_project(&1).total_donations, 0);
+}
+
+#[test]
+fn test_sybil_verified_donor_accepted_in_donate() {
+    let (env, contract_id, admin) = setup();
+    let client = QuadraticFundingClient::new(&env, &contract_id);
+    let donor = Address::generate(&env);
+    let owner = Address::generate(&env);
+    let sybil = env.register(MockSybilOk, ());
+
+    client.init(&admin, &10_000);
+    client.set_sybil_contract(&admin, &sybil);
+    client.register_project(&admin, &1, &owner);
+    client.whitelist_donor(&admin, &donor);
+    client.donate(&donor, &1, &100);
+    assert_eq!(client.get_project(&1).total_donations, 100);
+}
+
+#[test]
+fn test_distribute_sums_exactly_to_pool() {
+    let (env, contract_id, admin) = setup();
+    let client = QuadraticFundingClient::new(&env, &contract_id);
+    client.init(&admin, &10_000);
+    for id in 1u32..=3 {
+        let owner = Address::generate(&env);
+        client.register_project(&admin, &id, &owner);
+        let d = Address::generate(&env);
+        client.whitelist_donor(&admin, &d);
+        client.donate(&d, &id, &100);
+    }
+
+    let payouts = client.distribute(&admin);
+    assert_eq!(payouts.len(), 3);
+    let mut sum = 0i128;
+    for i in 0..payouts.len() {
+        sum += payouts.get(i).unwrap().1;
+    }
+    assert_eq!(sum, 10_000);
+    // Equal weights: 3333 each, remainder 1 goes to the first largest-weight project.
+    assert_eq!(payouts.get(0).unwrap(), (1, 3334));
+    assert_eq!(payouts.get(1).unwrap(), (2, 3333));
+    assert_eq!(payouts.get(2).unwrap(), (3, 3333));
+}
+
+#[test]
+fn test_distribute_uneven_weights_sums_exactly_to_pool() {
+    let (env, contract_id, admin) = setup();
+    let client = QuadraticFundingClient::new(&env, &contract_id);
+    client.init(&admin, &9_999);
+    let amounts = [7i128, 13, 29];
+    for (idx, amount) in amounts.iter().enumerate() {
+        let id = (idx as u32) + 1;
+        let owner = Address::generate(&env);
+        client.register_project(&admin, &id, &owner);
+        let d = Address::generate(&env);
+        client.whitelist_donor(&admin, &d);
+        client.donate(&d, &id, amount);
+    }
+
+    let payouts = client.distribute(&admin);
+    let mut sum = 0i128;
+    for i in 0..payouts.len() {
+        sum += payouts.get(i).unwrap().1;
+    }
+    assert_eq!(sum, 9_999);
+    // Round is closed: a second distribute must fail.
+    assert!(client.try_distribute(&admin).is_err());
+}
+
+#[test]
+fn test_commit_then_reveal_succeeds() {
+    let (env, contract_id, admin) = setup();
+    let client = QuadraticFundingClient::new(&env, &contract_id);
+    let donor = Address::generate(&env);
+    let owner = Address::generate(&env);
+
+    client.init(&admin, &10_000);
+    client.register_project(&admin, &1, &owner);
+    client.whitelist_donor(&admin, &donor);
+
+    let salt = BytesN::from_array(&env, &[7u8; 32]);
+    let hash = commitment_hash(&env, &donor, 1, 100, &salt);
+    client.commit_donation(&donor, &1, &hash);
+
+    client.open_reveal(&admin);
+    assert!(client.is_reveal_phase());
+    client.reveal_donation(&donor, &1, &100, &salt);
+
+    let project = client.get_project(&1);
+    assert_eq!(project.total_donations, 100);
+    assert!(project.donors.contains_key(donor));
+}
+
+#[test]
+fn test_reveal_with_wrong_salt_fails() {
+    let (env, contract_id, admin) = setup();
+    let client = QuadraticFundingClient::new(&env, &contract_id);
+    let donor = Address::generate(&env);
+    let owner = Address::generate(&env);
+
+    client.init(&admin, &10_000);
+    client.register_project(&admin, &1, &owner);
+    client.whitelist_donor(&admin, &donor);
+
+    let salt = BytesN::from_array(&env, &[7u8; 32]);
+    let wrong_salt = BytesN::from_array(&env, &[8u8; 32]);
+    let hash = commitment_hash(&env, &donor, 1, 100, &salt);
+    client.commit_donation(&donor, &1, &hash);
+    client.open_reveal(&admin);
+
+    let res = client.try_reveal_donation(&donor, &1, &100, &wrong_salt);
+    assert!(res.is_err(), "reveal with wrong salt must fail");
+    // The commitment is still intact and the correct reveal still works.
+    assert_eq!(client.get_project(&1).total_donations, 0);
+    client.reveal_donation(&donor, &1, &100, &salt);
+    assert_eq!(client.get_project(&1).total_donations, 100);
+}
+
+#[test]
+fn test_commit_after_reveal_opened_fails() {
+    let (env, contract_id, admin) = setup();
+    let client = QuadraticFundingClient::new(&env, &contract_id);
+    let donor = Address::generate(&env);
+    let owner = Address::generate(&env);
+
+    client.init(&admin, &10_000);
+    client.register_project(&admin, &1, &owner);
+    client.whitelist_donor(&admin, &donor);
+    client.open_reveal(&admin);
+
+    let salt = BytesN::from_array(&env, &[1u8; 32]);
+    let hash = commitment_hash(&env, &donor, 1, 100, &salt);
+    assert!(client.try_commit_donation(&donor, &1, &hash).is_err());
+}
+
+#[test]
+fn test_reveal_before_open_fails() {
+    let (env, contract_id, admin) = setup();
+    let client = QuadraticFundingClient::new(&env, &contract_id);
+    let donor = Address::generate(&env);
+    let owner = Address::generate(&env);
+
+    client.init(&admin, &10_000);
+    client.register_project(&admin, &1, &owner);
+    client.whitelist_donor(&admin, &donor);
+
+    let salt = BytesN::from_array(&env, &[1u8; 32]);
+    let hash = commitment_hash(&env, &donor, 1, 100, &salt);
+    client.commit_donation(&donor, &1, &hash);
+    assert!(client.try_reveal_donation(&donor, &1, &100, &salt).is_err());
 }

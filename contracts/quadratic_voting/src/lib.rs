@@ -6,6 +6,8 @@
 
 #![no_std]
 
+pub mod math;
+
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, Address, BytesN, Env,
     IntoVal, String, Symbol,
@@ -33,6 +35,8 @@ pub enum QVError {
     NotSybilVerified = 445,
     /// `446` — Proposal was not found.
     ProposalNotFound = 446,
+    /// `447` — Arithmetic overflow while computing votes or cost.
+    Overflow = 447,
 }
 
 #[contracttype]
@@ -129,7 +133,9 @@ impl QuadraticVotingContract {
             .instance()
             .get(&DataKey::ProposalCount)
             .unwrap_or(0);
-        count += 1;
+        count = count
+            .checked_add(1)
+            .unwrap_or_else(|| panic_with_error!(&env, QVError::Overflow));
 
         let proposal = Proposal {
             id: count,
@@ -187,19 +193,33 @@ impl QuadraticVotingContract {
             .persistent()
             .get(&DataKey::UserVotes(voter.clone(), proposal_id))
             .unwrap_or(0);
-        let new_total_votes = previous_votes + additional_votes;
+        let new_total_votes = previous_votes
+            .checked_add(additional_votes)
+            .unwrap_or_else(|| panic_with_error!(&env, QVError::Overflow));
 
-        // Quadratic cost logic: Total cost should be (total_votes)^2.
-        let total_cost = new_total_votes.pow(2);
-        let previous_cost = previous_votes.pow(2);
-        let incremental_cost = total_cost - previous_cost;
+        // Quadratic cost logic: incremental cost = (prev + add)^2 - prev^2,
+        // so that the total cost of V votes is V^2.
+        let incremental_cost = math::quadratic_cost(
+            u64::from(previous_votes),
+            u64::from(additional_votes),
+        )
+        .unwrap_or_else(|| panic_with_error!(&env, QVError::Overflow));
 
-        if current_credits < incremental_cost {
+        if i128::from(current_credits) < incremental_cost {
             panic_with_error!(&env, QVError::InsufficientCredits);
         }
 
-        current_credits -= incremental_cost;
-        proposal.votes_received += additional_votes;
+        let remaining = i128::from(current_credits)
+            .checked_sub(incremental_cost)
+            .unwrap_or_else(|| panic_with_error!(&env, QVError::InsufficientCredits));
+        // remaining <= current_credits <= u32::MAX, so this conversion succeeds.
+        current_credits = u32::try_from(remaining)
+            .unwrap_or_else(|_| panic_with_error!(&env, QVError::Overflow));
+
+        proposal.votes_received = proposal
+            .votes_received
+            .checked_add(additional_votes)
+            .unwrap_or_else(|| panic_with_error!(&env, QVError::Overflow));
 
         env.storage()
             .persistent()
@@ -280,6 +300,10 @@ impl QuadraticVotingContract {
     /// Returns the matching pool weight for a voter. Only voters with
     /// verified DID credentials (proof_count > 0) receive non-zero weight.
     /// Unverified voters (score = 0) always return 0 matching pool weight.
+    ///
+    /// NOTE: this weight is LINEAR in the humanity score (score * 10). It is
+    /// not the quadratic consensus weight used by `quadratic_funding::distribute`.
+    /// Kept unchanged for compatibility.
     pub fn get_matching_pool_weight(env: Env, voter: Address) -> u32 {
         let score: u32 = Self::get_humanity_score(env, voter.clone());
         // Unverified account: zero matching pool weight.
