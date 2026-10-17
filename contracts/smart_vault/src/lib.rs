@@ -34,12 +34,12 @@ use soroban_sdk::{
 };
 
 pub mod bitmap;
+pub mod circuit_breaker;
 pub mod merkle_distributor;
 
 pub use bitmap::BitMap;
 pub use merkle_distributor::{
-    DistributorError, MerkleDistributor, MerkleDistributorConfig,
-    AIRDROP_CLAWBACK_WINDOW_SECONDS,
+    DistributorError, MerkleDistributor, MerkleDistributorConfig, AIRDROP_CLAWBACK_WINDOW_SECONDS,
 };
 
 // ── Storage keys ────────────────────────────────────────────────────────────
@@ -60,9 +60,6 @@ const GOV_PERIOD: Symbol = symbol_short!("govper");
 const FREEZED: Symbol = symbol_short!("freezed");
 /// Minimum 48-hour delay (in seconds) between authorization and execution.
 const MIN_GOV_PERIOD: u64 = 172_800;
-
-// ── Circuit-breaker pause (SC-HARD-19) ──────────────────────────────────────
-const PAUSED_KEY: Symbol = symbol_short!("sv_pause");
 
 // ── Synthetic Asset Constants ────────────────────────────────────────────────
 const MIN_COLLATERAL_RATIO_BPS: i128 = 15_000; // 150% collateralization required
@@ -123,6 +120,8 @@ pub enum VaultError {
     TimelockNotElapsed = 121,
     /// `122` — Reserve conservation invariant violated.
     InvariantViolated = 122,
+    /// `123` — 24-hour withdrawal allowance has been exceeded.
+    WithdrawalLimitExceeded = 123,
 }
 
 // ── Data types ───────────────────────────────────────────────────────────────
@@ -178,7 +177,7 @@ impl SmartVault {
             panic_with_error!(&env, VaultError::ZeroAmount);
         }
         Self::assert_not_frozen(&env);
-        Self::assert_not_paused(&env);
+        circuit_breaker::assert_not_paused(&env);
         Self::lock(&env);
 
         let total_assets: i128 = env.storage().instance().get(&TOTAL_ASSETS).unwrap_or(0i128);
@@ -239,7 +238,7 @@ impl SmartVault {
             panic_with_error!(&env, VaultError::ZeroAmount);
         }
         Self::assert_not_frozen(&env);
-        Self::assert_not_paused(&env);
+        circuit_breaker::assert_not_paused(&env);
         Self::lock(&env);
 
         let mut pos = Self::get_position(&env, &user);
@@ -262,6 +261,7 @@ impl SmartVault {
             .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))
             .checked_div(total_shares)
             .unwrap_or_else(|| panic_with_error!(&env, VaultError::DivisionByZero));
+        circuit_breaker::record_withdrawal(&env, total_assets, assets_out);
 
         pos.shares = pos
             .shares
@@ -302,6 +302,7 @@ impl SmartVault {
     /// Mark vault assets as "staked".
     pub fn stake(env: Env, admin: Address) {
         admin.require_auth();
+        circuit_breaker::assert_not_paused(&env);
         let ledger = env.ledger().sequence();
         env.storage()
             .instance()
@@ -317,7 +318,7 @@ impl SmartVault {
     /// Enforces a `HARVEST_COOL` ledger cooldown to mitigate front-running.
     pub fn harvest(env: Env, user: Address) -> i128 {
         user.require_auth();
-        Self::assert_not_paused(&env);
+        circuit_breaker::assert_not_paused(&env);
         Self::lock(&env);
 
         let current_ledger = env.ledger().sequence();
@@ -606,6 +607,7 @@ impl SmartVault {
             panic_with_error!(&env, VaultError::Unauthorized);
         }
         env.storage().instance().set(&FREEZED, &true);
+        circuit_breaker::set_paused(&env, &guardian, true);
         env.events()
             .publish((symbol_short!("gov"), symbol_short!("freeze")), guardian);
     }
@@ -619,6 +621,7 @@ impl SmartVault {
             panic_with_error!(&env, VaultError::Unauthorized);
         }
         env.storage().instance().set(&FREEZED, &false);
+        circuit_breaker::set_paused(&env, &guardian, false);
         env.events()
             .publish((symbol_short!("gov"), symbol_short!("unfreeze")), guardian);
     }
@@ -645,16 +648,16 @@ impl SmartVault {
     /// caller via require_auth).
     pub fn set_paused(env: Env, caller: Address, paused: bool) {
         caller.require_auth();
-        // If governance is initialized, caller must be a guardian or the proposer;
-        // otherwise it acts as an admin-only pause.
-        if env.storage().instance().has(&GOV_INIT) {
-            let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
-            if !guardians.contains(&caller) {
-                panic_with_error!(&env, VaultError::Unauthorized);
-            }
+        Self::assert_governance(&env);
+        let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
+        if !guardians.contains(&caller) {
+            panic_with_error!(&env, VaultError::Unauthorized);
         }
-        env.storage().instance().set(&PAUSED_KEY, &paused);
-        env.events().publish((symbol_short!("sv_pause"),), paused);
+        circuit_breaker::set_paused(&env, &caller, paused);
+    }
+
+    pub fn is_paused(env: Env) -> bool {
+        circuit_breaker::is_paused(&env)
     }
 
     // ── View helpers ─────────────────────────────────────────────────────────
@@ -705,14 +708,7 @@ impl SmartVault {
     }
 
     fn assert_not_paused(env: &Env) {
-        let paused: bool = env
-            .storage()
-            .instance()
-            .get::<Symbol, bool>(&PAUSED_KEY)
-            .unwrap_or(false);
-        if paused {
-            panic_with_error!(env, VaultError::ContractPaused);
-        }
+        circuit_breaker::assert_not_paused(env);
     }
 
     fn load_proposal(env: &Env, proposals: &Map<u32, Proposal>, id: u32) -> Proposal {
@@ -793,7 +789,7 @@ impl SmartVault {
         if amount <= 0 {
             panic_with_error!(&env, VaultError::ZeroAmount);
         }
-        Self::assert_not_paused(&env);
+        circuit_breaker::assert_not_paused(&env);
 
         let pos = Self::get_position(&env, &user);
         let collateral = pos.shares;
@@ -911,6 +907,7 @@ impl SmartVault {
         amount: i128,
         proof: Vec<BytesN<32>>,
     ) {
+        circuit_breaker::assert_not_paused(&env);
         MerkleDistributor::claim(&env, index, account, amount, proof);
     }
 
@@ -921,6 +918,7 @@ impl SmartVault {
 
     /// Reclaim unclaimed tokens to `to` address after 90-day window expires.
     pub fn clawback_airdrop(env: Env, admin: Address, to: Address) -> i128 {
+        circuit_breaker::assert_not_paused(&env);
         MerkleDistributor::clawback(&env, admin, to)
     }
 
@@ -940,6 +938,8 @@ impl SmartVault {
     ) -> bool {
         let leaf = MerkleDistributor::compute_leaf(&env, index, &account, amount);
         MerkleDistributor::verify_proof(&env, &leaf, &proof, &root)
+    }
+
     // ── Vesting Schedule Endpoints (SC-028) ───────────────────────────────────
 
     /// Creates a new customizable linear vesting schedule for a beneficiary.
@@ -1015,6 +1015,7 @@ impl SmartVault {
     /// Claims unlocked tokens for `beneficiary`.
     pub fn claim_vesting(env: Env, beneficiary: Address, schedule_id: u64) -> i128 {
         beneficiary.require_auth();
+        circuit_breaker::assert_not_paused(&env);
         let mut schedule = Self::get_vesting_schedule(env.clone(), schedule_id);
         if schedule.beneficiary != beneficiary {
             panic_with_error!(&env, VaultError::Unauthorized);
@@ -1088,10 +1089,56 @@ mod tests {
         let (env, contract_id, user) = setup();
         let client = SmartVaultClient::new(&env, &contract_id);
 
-        client.deposit(&user, &1000);
+        client.deposit(&user, &10_000);
         let returned = client.withdraw(&user, &500);
         assert_eq!(returned, 500);
-        assert_eq!(client.shares_of(&user), 500);
+        assert_eq!(client.shares_of(&user), 9_500);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #123)")]
+    fn withdrawals_are_limited_to_ten_percent_per_day() {
+        let (env, contract_id, user) = setup();
+        let client = SmartVaultClient::new(&env, &contract_id);
+
+        client.deposit(&user, &1000);
+        client.withdraw(&user, &101);
+    }
+
+    #[test]
+    fn withdrawal_limit_accumulates_and_resets_after_24_hours() {
+        let (env, contract_id, user) = setup();
+        let client = SmartVaultClient::new(&env, &contract_id);
+
+        client.deposit(&user, &1000);
+        assert_eq!(client.withdraw(&user, &100), 100);
+        let blocked = client.try_withdraw(&user, &1);
+        assert!(blocked.is_err());
+
+        env.ledger()
+            .with_mut(|ledger| ledger.timestamp += circuit_breaker::WITHDRAWAL_WINDOW_SECONDS);
+        assert_eq!(client.withdraw(&user, &90), 90);
+    }
+
+    #[test]
+    fn guardian_can_pause_and_unpause_user_operations() {
+        let (env, contract_id, user) = setup();
+        let client = SmartVaultClient::new(&env, &contract_id);
+        let guardian = Address::generate(&env);
+        let mut guardians = Vec::new(&env);
+        guardians.push_back(guardian.clone());
+        client.init_governance(&guardians, &1);
+        client.deposit(&user, &100);
+
+        client.set_paused(&guardian, &true);
+        assert!(client.is_paused());
+        let blocked = client.try_deposit(&user, &100);
+        assert!(blocked.is_err());
+        assert!(client.try_withdraw(&user, &10).is_err());
+
+        client.set_paused(&guardian, &false);
+        assert!(!client.is_paused());
+        client.deposit(&user, &100);
     }
 
     #[test]
@@ -1191,10 +1238,10 @@ mod tests {
 
         client.deposit(&user, &1000);
         client.deposit(&user, &500);
-        let out = client.withdraw(&user, &300);
+        let out = client.withdraw(&user, &100);
 
-        assert_eq!(client.shares_of(&user), 1200);
-        assert_eq!(out, 300);
+        assert_eq!(client.shares_of(&user), 1400);
+        assert_eq!(out, 100);
         let total_assets: i128 = env.as_contract(&contract_id, || {
             env.storage().instance().get(&TOTAL_ASSETS).unwrap()
         });
@@ -1202,7 +1249,7 @@ mod tests {
             env.storage().instance().get(&RESERVES).unwrap()
         });
         assert_eq!(total_assets, reserves);
-        assert_eq!(total_assets, 1200);
+        assert_eq!(total_assets, 1400);
     }
 
     #[test]
@@ -1454,13 +1501,16 @@ mod tests {
 
         // Fast forward 90 days
         let current_timestamp = env.ledger().timestamp();
-        env.ledger().set_timestamp(current_timestamp + AIRDROP_CLAWBACK_WINDOW_SECONDS);
+        env.ledger()
+            .set_timestamp(current_timestamp + AIRDROP_CLAWBACK_WINDOW_SECONDS);
 
         let reclaimed = client.clawback_airdrop(&admin, &treasury);
         assert_eq!(reclaimed, 750);
 
         let config = client.get_airdrop_config();
         assert_eq!(config.claimed_amount, 1250);
+    }
+
     #[test]
     fn test_vesting_cliff_and_linear_prorata_unlock() {
         let (env, contract_id, _) = setup();
@@ -1469,14 +1519,8 @@ mod tests {
         let beneficiary = Address::generate(&env);
 
         // Schedule: 100,000 tokens, cliff = 100 ledgers, total = 1000 ledgers
-        let sched_id = client.create_vesting_schedule(
-            &admin,
-            &beneficiary,
-            &100_000,
-            &100,
-            &1000,
-            &true,
-        );
+        let sched_id =
+            client.create_vesting_schedule(&admin, &beneficiary, &100_000, &100, &1000, &true);
 
         // 1. Before cliff (sequence + 50 ledgers): ZERO tokens claimable
         env.ledger().with_mut(|li| li.sequence_number += 50);
@@ -1508,14 +1552,8 @@ mod tests {
         let teacher = Address::generate(&env);
 
         // Revocable grant: 200,000 tokens over 1000 ledgers with 200 ledger cliff
-        let sched_id = client.create_vesting_schedule(
-            &admin,
-            &teacher,
-            &200_000,
-            &200,
-            &1000,
-            &true,
-        );
+        let sched_id =
+            client.create_vesting_schedule(&admin, &teacher, &200_000, &200, &1000, &true);
 
         // Advance to ledger 400 (40% vested = 80,000 tokens)
         env.ledger().with_mut(|li| li.sequence_number += 400);

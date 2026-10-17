@@ -1,5 +1,7 @@
 #![no_std]
 
+pub mod events;
+
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, Address, Bytes, BytesN,
     Env, String, Vec,
@@ -68,6 +70,7 @@ impl CertificateContract {
     pub fn initialize(env: Env, admin: Address) {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::NextCertId, &0u64);
+        events::initialized(&env, &admin);
     }
 
     pub fn issue_certificate(
@@ -124,6 +127,14 @@ impl CertificateContract {
             String::from_str(&env, "ISSUED"),
             String::from_str(&env, ""),
         );
+        events::issued(
+            &env,
+            &owner,
+            &issuer,
+            &cert_id_bytes,
+            &course_id,
+            &record.content_hash,
+        );
 
         cert_id_bytes
     }
@@ -152,6 +163,13 @@ impl CertificateContract {
             &record.issuer,
             String::from_str(&env, "REVOKED"),
             reason_code,
+        );
+        events::revoked(
+            &env,
+            &record.owner,
+            &record.issuer,
+            &cert_id,
+            &record.revocation_reason,
         );
     }
 
@@ -210,7 +228,7 @@ impl CertificateContract {
         old_record.status = CertificateStatus::Reissued;
         env.storage()
             .persistent()
-            .set(&DataKey::Certificate(old_cert_id), &old_record);
+            .set(&DataKey::Certificate(old_cert_id.clone()), &old_record);
 
         Self::log_audit(
             &env,
@@ -218,6 +236,13 @@ impl CertificateContract {
             &old_record.issuer,
             String::from_str(&env, "REISSUED"),
             String::from_str(&env, ""),
+        );
+        events::reissued(
+            &env,
+            &new_record.owner,
+            &new_record.issuer,
+            &old_cert_id,
+            &new_cert_id_bytes,
         );
 
         new_cert_id_bytes
@@ -243,6 +268,7 @@ impl CertificateContract {
         env.storage()
             .persistent()
             .extend_ttl(&DataKey::MerkleRoot(cohort_id), 500_000, 500_000);
+        events::cohort_anchored(&env, &root.cohort_id, &root.issuer, &root.root_hash);
     }
 
     pub fn verify_merkle_inclusion(
@@ -304,7 +330,8 @@ impl CertificateContract {
         record.royalty_bps = royalty_bps;
         env.storage()
             .persistent()
-            .set(&DataKey::Certificate(cert_id), &record);
+            .set(&DataKey::Certificate(cert_id.clone()), &record);
+        events::royalty_updated(&env, &record.owner, &cert_id, &record.issuer, royalty_bps);
     }
 
     /// Compute the SEP-0029 royalty split for a secondary sale of

@@ -1,7 +1,11 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, Bytes, BytesN, Env, String, Vec};
+use contract_events::topic;
+use soroban_sdk::{
+    testutils::{Address as _, Events as _},
+    xdr, Address, Bytes, BytesN, Env, String, Symbol, TryFromVal, Val, Vec,
+};
 
 /// Helper harness to set up the Soroban environment, register the contract,
 /// initialize the admin, and generate mock participants.
@@ -86,6 +90,30 @@ fn test_issue_certificate_success() {
     assert_eq!(log.action, String::from_str(&env, "ISSUED"));
     assert_eq!(log.actor, issuer);
     assert_eq!(log.reason, String::from_str(&env, ""));
+}
+
+#[test]
+fn test_certificate_issue_event_indexes_owner() {
+    let (env, client, _admin, issuer, owner) = setup_test();
+    let course_id = String::from_str(&env, "SOROBAN-101");
+    let content_hash = BytesN::from_array(&env, &[0xCC; 32]);
+    client.issue_certificate(&owner, &issuer, &course_id, &content_hash);
+
+    let mut found = false;
+    for event in env.events().all().events() {
+        if let xdr::ContractEventBody::V0(v0) = &event.body {
+            let topics: Vec<Val> = Vec::try_from_val(&env, &v0.topics).unwrap();
+            if Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap() == topic::CERT_ISSUED {
+                assert_eq!(topics.len(), 2);
+                assert_eq!(
+                    Address::try_from_val(&env, &topics.get(1).unwrap()).unwrap(),
+                    owner
+                );
+                found = true;
+            }
+        }
+    }
+    assert!(found);
 }
 
 #[test]

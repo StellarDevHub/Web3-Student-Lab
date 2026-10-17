@@ -1,6 +1,7 @@
 use super::*;
-use soroban_sdk::testutils::{Address as _, Ledger as _};
-use soroban_sdk::{token, Address, Env};
+use contract_events::topic;
+use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
+use soroban_sdk::{token, xdr, Address, Env, Symbol, TryFromVal, Val, Vec};
 
 fn setup(
     env: &Env,
@@ -61,6 +62,31 @@ fn test_add_liquidity_initializes_pool() {
     assert_eq!(bal_a, 1_000_000);
     assert_eq!(bal_b, 1_000_000);
     assert_eq!(total, shares + DEAD_SHARES);
+}
+
+#[test]
+fn test_liquidity_event_indexes_provider() {
+    let env = Env::default();
+    let (admin, client, _, _, _) = setup(&env);
+    client.add_liquidity(&admin, &1_000_000, &1_000_000, &0);
+
+    let mut found = false;
+    for event in env.events().all().events() {
+        if let xdr::ContractEventBody::V0(v0) = &event.body {
+            let topics: Vec<Val> = Vec::try_from_val(&env, &v0.topics).unwrap();
+            if Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap()
+                == topic::LIQUIDITY_ADDED
+            {
+                assert_eq!(topics.len(), 2);
+                assert_eq!(
+                    Address::try_from_val(&env, &topics.get(1).unwrap()).unwrap(),
+                    admin
+                );
+                found = true;
+            }
+        }
+    }
+    assert!(found);
 }
 
 #[test]
@@ -137,8 +163,8 @@ fn test_remove_liquidity() {
 
     let shares_minted = client.add_liquidity(&admin, &1_000_000, &1_000_000, &0);
 
-    // Remove half of liquidity
-    let (amount_a, amount_b) = client.remove_liquidity(&admin, &(shares_minted / 2), &0, &0);
+    // Keep the withdrawal within the 10% daily outflow limit.
+    let (amount_a, amount_b) = client.remove_liquidity(&admin, &(shares_minted / 10), &0, &0);
 
     assert!(amount_a > 0);
     assert!(amount_b > 0);
@@ -243,10 +269,11 @@ fn test_twap_resistant_to_single_block_flash_manipulation() {
 
     let twap_before_flash = client.twap_consult_30m(&token_a, &1000);
 
-    // Attacker conducts a massive flash-swap in the EXACT same block (timestamp does not advance)
+    // The circuit breaker rejects an oversized flash-swap in the same window.
     let attacker = Address::generate(&env);
     token_a_client.mint(&attacker, &500_000);
-    client.swap_a_for_b(&attacker, &500_000, &0);
+    let result = client.try_swap_a_for_b(&attacker, &500_000, &0);
+    assert!(result.is_err());
 
     // Instantaneous spot price is heavily manipulated, but TWAP accumulator in same block does NOT move:
     let twap_during_flash = client.twap_consult_30m(&token_a, &1000);
@@ -255,3 +282,46 @@ fn test_twap_resistant_to_single_block_flash_manipulation() {
     assert_eq!(twap_before_flash, twap_during_flash);
 }
 
+#[test]
+fn test_guardian_pause_blocks_amm_operations() {
+    let env = Env::default();
+    let (admin, client, token_a, _, _) = setup(&env);
+    let shares = client.add_liquidity(&admin, &1_000_000, &1_000_000, &0);
+
+    let guardian = Address::generate(&env);
+    client.set_guardian(&admin, &guardian);
+    client.set_paused(&guardian, &true);
+    assert!(client.is_paused());
+
+    let user = Address::generate(&env);
+    token::StellarAssetClient::new(&env, &token_a).mint(&user, &1_000);
+    assert!(client.try_swap_a_for_b(&user, &1_000, &0).is_err());
+    assert!(client
+        .try_add_liquidity(&admin, &1_000, &1_000, &0)
+        .is_err());
+    assert!(client
+        .try_remove_liquidity(&admin, &shares, &0, &0)
+        .is_err());
+
+    assert!(client.try_set_paused(&user, &true).is_err());
+    client.set_paused(&admin, &false);
+    assert!(!client.is_paused());
+    assert!(client.swap_a_for_b(&user, &1_000, &0) > 0);
+}
+
+#[test]
+fn test_swap_outflow_limit_accumulates_and_resets_after_24_hours() {
+    let env = Env::default();
+    let (admin, client, token_a, _, _) = setup(&env);
+    client.add_liquidity(&admin, &1_000_000, &1_000_000, &0);
+
+    let user = Address::generate(&env);
+    let token_a_client = token::StellarAssetClient::new(&env, &token_a);
+    token_a_client.mint(&user, &180_000);
+    assert!(client.swap_a_for_b(&user, &60_000, &0) > 0);
+    assert!(client.try_swap_a_for_b(&user, &60_000, &0).is_err());
+
+    env.ledger()
+        .with_mut(|ledger| ledger.timestamp += circuit_breaker::WITHDRAWAL_WINDOW_SECONDS);
+    assert!(client.swap_a_for_b(&user, &60_000, &0) > 0);
+}

@@ -18,12 +18,15 @@ This document is automatically generated from `#[contracterror]` annotations acr
 
 | Code | Variant Name | Description |
 | :---: | :--- | :--- |
-| `300` | `Unauthorized` | `300` — The caller does not have the required role. |
+| `300` | `Unauthorized` | Caller does not hold the required role or is not the proposed admin. |
 | `301` | `ContractPaused` | `301` — The contract is in circuit-breaker pause mode. |
-| `302` | `TimelockNotExpired` | `302` — The role transfer timelock has not yet elapsed. |
-| `303` | `NoPendingTransfer` | `303` — No pending role transfer exists for this (role, address) pair. |
-| `304` | `AlreadyHasRole` | `304` — The address already holds the requested role. |
-| `305` | `Overflow` | `305` — Arithmetic overflow in timelock timestamp computation. |
+| `302` | `TimelockNotExpired` | The 48-hour admin handover delay has not elapsed. |
+| `303` | `NoPendingTransfer` | No admin handover is pending. |
+| `304` | `AlreadyHasRole` | The address already holds the requested role. |
+| `305` | `Overflow` | Arithmetic overflow while calculating the admin handover unlock time. |
+| `306` | `RoleNotGranted` | The address does not hold the role being revoked. |
+| `307` | `InvalidRole` | Admin cannot be granted or revoked through the direct role API. |
+| `308` | `InvalidAdminProposal` | The current admin cannot propose itself as the next admin. |
 
 ### `AmmError` (`amm/src/lib.rs`)
 
@@ -34,6 +37,10 @@ This document is automatically generated from `#[contracterror]` annotations acr
 | `402` | `InvalidFee` | `402` — Fee is outside the allowed range. |
 | `403` | `SlippageExceeded` | `403` — Slippage tolerance exceeded. |
 | `404` | `NotInitialized` | `404` — Contract has not been initialised. |
+| `405` | `ContractPaused` | `405` — AMM operations are paused by the circuit breaker. |
+| `406` | `Unauthorized` | `406` — Caller is not authorized to manage the circuit breaker. |
+| `407` | `WithdrawalLimitExceeded` | `407` — The 24-hour token outflow budget has been exceeded. |
+| `408` | `Overflow` | `408` — Arithmetic overflow. |
 
 ### `AuthError` (`auth_checker/src/lib.rs`)
 
@@ -430,6 +437,7 @@ This document is automatically generated from `#[contracterror]` annotations acr
 | `120` | `InvalidThreshold` | `120` — Threshold must be positive. |
 | `121` | `TimelockNotElapsed` | `121` — Timelock has not elapsed; proposal is not ready. |
 | `122` | `InvariantViolated` | `122` — Reserve conservation invariant violated. |
+| `123` | `WithdrawalLimitExceeded` | `123` — 24-hour withdrawal allowance has been exceeded. |
 
 ### `AuthError` (`src/errors.rs`)
 
@@ -546,6 +554,8 @@ This document is automatically generated from `#[contracterror]` annotations acr
 | :---: | :--- | :--- |
 | `1` | `AlreadyInitialized` | No description provided |
 | `2` | `NotInitialized` | No description provided |
-| `3` | `InvalidProof` | The provided proof does not match the expected binding hash. |
+| `3` | `InvalidProof` | The Groth16 pairing equation does not hold for the proof and public inputs. |
 | `4` | `NullifierAlreadyUsed` | This nullifier has already been consumed; replay detected. |
-| `5` | `Unauthorized` | No description provided |
+| `5` | `Unauthorized` | Caller is not the verifier administrator. |
+| `6` | `InvalidPublicInput` | Public input count or canonical BN254 scalar encoding is invalid. |
+| `7` | `InvalidVerifyingKey` | Verifying-key point encoding or public-input arity is invalid. |

@@ -1,9 +1,9 @@
 # On-Chain Event Schemas
 
-Standardized event vocabulary for the Web3-Student-Lab Soroban platform
-contracts. Every state-modifying function emits structured, searchable
-events so indexers, auditors, and frontend subscription streams consume a
-single, predictable schema.
+Canonical event vocabulary for the Web3-Student-Lab Soroban platform
+contracts. Event families listed here use structured, searchable topics and
+typed payloads. Legacy event families not listed here still need to be
+migrated before claiming workspace-wide conformance.
 
 The canonical topic `Symbol`s and typed decode helpers live in the shared
 [`contract-events`](../../contracts/contract_events/) crate (workspace
@@ -11,6 +11,19 @@ member `contract-events`). Contracts that want to standardize should depend
 on it and use its `publish_*` helpers; off-chain consumers can use the
 `decode_*` helpers to turn raw `(topics, data)` pairs back into typed
 values.
+
+## Indexed event envelope
+
+New and migrated state-transition events use exactly two topics:
+
+1. A canonical event-category `Symbol` (the first topic).
+2. The primary entity key (an address, identifier, or other stable key).
+
+The event payload is serialized as a typed tuple in Soroban event data. It
+contains the transition details and ends with the ledger timestamp. The shared
+`publish_standard_event` helper enforces this topic layout; event-specific
+helpers define the payload shape. This allows Horizon/RPC consumers to filter
+by category and entity without decoding the payload.
 
 ## Conventions
 
@@ -46,6 +59,19 @@ values.
 | `milestn` | course/content contracts | milestone achieved |
 | `cert` | `certificate-nft` | certificate minted |
 | `xfer` | platform contracts | fungible token transfer |
+| `amm_init` | `amm` | pool initialized |
+| `amm_guard` | `amm` | emergency guardian changed |
+| `paused` | `amm` | pool paused/unpaused |
+| `liq_add` | `amm` | liquidity added |
+| `liq_rm` | `amm` | liquidity removed |
+| `swap_a_b` | `amm` | token A swapped for B |
+| `swap_b_a` | `amm` | token B swapped for A |
+| `cert_iss` | `certificate` | certificate issued |
+| `cert_rev` | `certificate` | certificate revoked |
+| `cert_reis` | `certificate` | certificate reissued |
+| `cert_roy` | `certificate` | certificate royalty updated |
+| `cohort_rt` | `certificate` | Merkle cohort root anchored |
+| `cert_adm` | `certificate` | certificate contract initialized |
 
 ---
 
@@ -77,7 +103,7 @@ for event in events.filter_by_topic("trade") {
 
 ## `paused` — pool pause/unpause
 
-Topics: `(paused, admin)`
+Topics: `(paused, actor)` — actor is the authorized admin or guardian.
 
 Data: `(paused, ts)`
 
@@ -194,13 +220,43 @@ Topics: `(xfer, from)`
 
 Data: `(to, amount, ts)`
 
+## AMM lifecycle and trading events
+
+All AMM event categories index the acting admin, guardian, liquidity provider,
+or trader as their second topic.
+
+| Topic | Data payload |
+|---|---|
+| `amm_init` | `(token_a, token_b, pool_share, fee_collector, base_fee_bps, ts)` |
+| `amm_guard` | `(admin, ts)` |
+| `paused` | `(paused, ts)` |
+| `liq_add` | `(amount_a, amount_b, shares, reserve_a, reserve_b, ts)` |
+| `liq_rm` | `(amount_a, amount_b, shares, reserve_a, reserve_b, ts)` |
+| `swap_a_b` | `(amount_in, amount_out, fee, reserve_a, reserve_b, ts)` |
+| `swap_b_a` | `(amount_in, amount_out, fee, reserve_a, reserve_b, ts)` |
+
+## Certificate lifecycle events
+
+Certificate lifecycle events index the certificate owner as the second topic;
+`cohort_rt` instead indexes the cohort identifier.
+
+| Topic | Data payload |
+|---|---|
+| `cert_iss` | `(cert_id, issuer, course_id, content_hash, ts)` |
+| `cert_rev` | `(cert_id, issuer, reason, ts)` |
+| `cert_reis` | `(old_cert_id, new_cert_id, issuer, ts)` |
+| `cert_roy` | `(cert_id, issuer, royalty_bps, ts)` |
+| `cohort_rt` | `(issuer, root_hash, ts)` |
+| `cert_adm` | `(ts)` |
+
 ---
 
 ## Adding a new event
 
 1. Add the canonical topic `Symbol` in `contract-events` `topic` module.
-2. Add a `publish_*` helper (topics + payload layout) and a typed
+2. Emit through `publish_standard_event` or add a `publish_*` helper that
+   delegates to it, defining the indexed entity and payload layout.
+3. Add a typed
    `decode_*` helper plus its struct.
-3. Emit from the contract using the helper.
 4. Add a payload example above and a round-trip assertion in
    `contract-events` tests.

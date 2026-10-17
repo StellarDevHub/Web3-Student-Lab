@@ -20,7 +20,7 @@
 //!   (as returned by `env.events().all()`) back into structured values, for
 //!   indexers and integration tests.
 
-use soroban_sdk::{Address, BytesN, Env, Symbol, TryFromVal, Val, Vec};
+use soroban_sdk::{Address, BytesN, Env, IntoVal, Symbol, TryFromVal, Val, Vec};
 
 #[cfg(test)]
 extern crate std;
@@ -76,6 +76,35 @@ pub mod topic {
     pub const CERT_MINT: Symbol = symbol_short!("cert");
     /// A fungible token transfer executed by a platform contract.
     pub const TRANSFER: Symbol = symbol_short!("xfer");
+
+    // ---- AMM / liquidity ----
+    pub const AMM_INITIALIZED: Symbol = symbol_short!("amm_init");
+    pub const AMM_GUARDIAN: Symbol = symbol_short!("amm_guard");
+    pub const LIQUIDITY_ADDED: Symbol = symbol_short!("liq_add");
+    pub const LIQUIDITY_REMOVED: Symbol = symbol_short!("liq_rm");
+    pub const SWAP_A_FOR_B: Symbol = symbol_short!("swap_a_b");
+    pub const SWAP_B_FOR_A: Symbol = symbol_short!("swap_b_a");
+
+    // ---- certificate lifecycle ----
+    pub const CERT_ISSUED: Symbol = symbol_short!("cert_iss");
+    pub const CERT_REVOKED: Symbol = symbol_short!("cert_rev");
+    pub const CERT_REISSUED: Symbol = symbol_short!("cert_reis");
+    pub const CERT_ROYALTY: Symbol = symbol_short!("cert_roy");
+    pub const COHORT_ROOT: Symbol = symbol_short!("cohort_rt");
+    pub const CERT_ADMIN: Symbol = symbol_short!("cert_adm");
+}
+
+/// Publish a schema event with a category symbol and one directly indexed
+/// entity key. The payload should be a typed tuple and include its timestamp.
+pub fn publish_standard_event<I, D>(env: &Env, event_type: Symbol, entity_id: I, data: D)
+where
+    I: IntoVal<Env, Val>,
+    D: IntoVal<Env, Val>,
+{
+    let mut topics = Vec::new(env);
+    topics.push_back(event_type.into_val(env));
+    topics.push_back(entity_id.into_val(env));
+    env.events().publish(topics, data);
 }
 
 // ---------------------------------------------------------------------------
@@ -815,6 +844,15 @@ mod tests {
             publish_certificate_mint(&env, &admin, symbol_short!("cs101"));
             publish_transfer(&env, &admin, &user, 123);
         }
+
+        pub fn emit_standard(env: Env, user: Address) {
+            publish_standard_event(
+                &env,
+                topic::CERT_ISSUED,
+                user,
+                (42u64, env.ledger().timestamp()),
+            );
+        }
     }
 
     fn addr(env: &Env) -> Address {
@@ -848,6 +886,30 @@ mod tests {
             out.push((t, p));
         }
         out
+    }
+
+    #[test]
+    fn standard_events_index_category_and_entity() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let user = addr(&env);
+        let id = env.register(EventEmitter, ());
+        EventEmitterClient::new(&env, &id).emit_standard(&user);
+
+        let events = raw_events(&env);
+        assert_eq!(events.len(), 1);
+        let (topics, payload) = &events[0];
+        assert_eq!(topics.len(), 2);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::CERT_ISSUED
+        );
+        assert_eq!(Address::try_from_val(&env, &topics[1]).unwrap(), user);
+        assert_eq!(u64::try_from_val(&env, &payload[0]).unwrap(), 42);
+        assert_eq!(
+            u64::try_from_val(&env, &payload[1]).unwrap(),
+            env.ledger().timestamp()
+        );
     }
 
     #[test]
