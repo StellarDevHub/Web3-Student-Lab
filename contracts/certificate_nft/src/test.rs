@@ -39,7 +39,7 @@ fn test_mint_badge_and_soulbound_enforcement() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #402)")]
+#[should_panic(expected = "Error(Contract, #406)")]
 fn test_badge_transfer_fails_soulbound() {
     let (env, client, admin, student) = setup();
     let recipient = Address::generate(&env);
@@ -57,8 +57,26 @@ fn test_badge_transfer_fails_soulbound() {
         &milestone1,
     );
 
-    // Transfer must panic with SoulboundNonTransferable (402)
+    // Transfer must panic with NonTransferable (406)
     client.transfer(&student, &recipient, &badge_id);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #406)")]
+fn test_badge_transfer_from_fails_non_transferable() {
+    let (env, client, admin, student) = setup();
+    let recipient = Address::generate(&env);
+
+    let badge_id = client.mint_badge(
+        &admin,
+        &student,
+        &String::from_str(&env, "SORO-101"),
+        &RarityTier::Bronze,
+        &String::from_str(&env, "ipfs://cid1"),
+        &String::from_str(&env, "Milestone 1"),
+    );
+
+    client.transfer_from(&admin, &student, &recipient, &badge_id);
 }
 
 #[test]

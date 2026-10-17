@@ -116,6 +116,6 @@ impl AchievementBadge {
 
     /// Soulbound assertion: transferring this badge is strictly disallowed.
     pub fn assert_transfer_blocked(env: &Env) -> ! {
-        panic_with_error!(env, CertError::SoulboundNonTransferable);
+        panic_with_error!(env, CertError::NonTransferable);
     }
 }

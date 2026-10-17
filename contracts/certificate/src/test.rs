@@ -1,7 +1,10 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, Bytes, BytesN, Env, String, Vec};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger as _},
+    Bytes, BytesN, Env, String, Vec,
+};
 
 /// Helper harness to set up the Soroban environment, register the contract,
 /// initialize the admin, and generate mock participants.
@@ -62,8 +65,9 @@ fn test_issue_certificate_success() {
     let (env, client, _admin, issuer, owner) = setup_test();
     let course_id = String::from_str(&env, "SOROBAN-101");
     let content_hash = BytesN::from_array(&env, &[0xAA; 32]);
+    let uri = String::from_str(&env, "ipfs://bafy-cert-1");
 
-    let cert_id = client.issue_certificate(&owner, &issuer, &course_id, &content_hash);
+    let cert_id = client.issue_certificate(&owner, &issuer, &course_id, &content_hash, &uri, &None);
     let record = client.get_certificate(&cert_id);
 
     assert_eq!(record.cert_id, cert_id);
@@ -77,6 +81,8 @@ fn test_issue_certificate_success() {
         BytesN::from_array(&env, &[0u8; 32])
     );
     assert_eq!(record.content_hash, content_hash);
+    assert_eq!(record.metadata_uri, uri);
+    assert_eq!(record.expires_at, None);
     assert_eq!(record.royalty_bps, 0);
     assert!(record.soulbound);
 
@@ -93,10 +99,11 @@ fn test_issue_multiple_certificates_duplicate_prevention() {
     let (env, client, _admin, issuer, owner) = setup_test();
     let course_id = String::from_str(&env, "RUST-ADVANCED");
     let content_hash = BytesN::from_array(&env, &[0xBB; 32]);
+    let uri = String::from_str(&env, "ipfs://cid");
 
-    let cert_id_1 = client.issue_certificate(&owner, &issuer, &course_id, &content_hash);
-    let cert_id_2 = client.issue_certificate(&owner, &issuer, &course_id, &content_hash);
-    let cert_id_3 = client.issue_certificate(&owner, &issuer, &course_id, &content_hash);
+    let cert_id_1 = client.issue_certificate(&owner, &issuer, &course_id, &content_hash, &uri, &None);
+    let cert_id_2 = client.issue_certificate(&owner, &issuer, &course_id, &content_hash, &uri, &None);
+    let cert_id_3 = client.issue_certificate(&owner, &issuer, &course_id, &content_hash, &uri, &None);
 
     // Verify sequential unique IDs are generated for duplicate preventions
     assert_ne!(cert_id_1, cert_id_2);
@@ -121,8 +128,9 @@ fn test_revoke_certificate_success() {
     let (env, client, _admin, issuer, owner) = setup_test();
     let course_id = String::from_str(&env, "WEB3-BOOTCAMP");
     let content_hash = BytesN::from_array(&env, &[0x11; 32]);
+    let uri = String::from_str(&env, "ipfs://cid");
 
-    let cert_id = client.issue_certificate(&owner, &issuer, &course_id, &content_hash);
+    let cert_id = client.issue_certificate(&owner, &issuer, &course_id, &content_hash, &uri, &None);
     let reason = String::from_str(&env, "Academic dishonesty violation");
 
     client.revoke_certificate(&cert_id, &reason);
@@ -139,13 +147,32 @@ fn test_revoke_certificate_success() {
 }
 
 #[test]
+fn test_revoke_emits_structured_event() {
+    let (env, client, _admin, issuer, owner) = setup_test();
+    let cert_id = client.issue_certificate(
+        &owner,
+        &issuer,
+        &String::from_str(&env, "COURSE"),
+        &BytesN::from_array(&env, &[0x12; 32]),
+        &String::from_str(&env, "ipfs://cid"),
+        &None,
+    );
+    let before = env.events().all().events().len();
+
+    client.revoke_certificate(&cert_id, &String::from_str(&env, "R1"));
+
+    assert!(env.events().all().events().len() > before);
+}
+
+#[test]
 #[should_panic]
 fn test_revoke_already_revoked_fails() {
     let (env, client, _admin, issuer, owner) = setup_test();
     let course_id = String::from_str(&env, "WEB3-BOOTCAMP");
     let content_hash = BytesN::from_array(&env, &[0x11; 32]);
+    let uri = String::from_str(&env, "ipfs://cid");
 
-    let cert_id = client.issue_certificate(&owner, &issuer, &course_id, &content_hash);
+    let cert_id = client.issue_certificate(&owner, &issuer, &course_id, &content_hash, &uri, &None);
     let reason = String::from_str(&env, "First revocation");
 
     client.revoke_certificate(&cert_id, &reason);
@@ -162,6 +189,52 @@ fn test_revoke_nonexistent_certificate_fails() {
     client.revoke_certificate(&fake_id, &reason);
 }
 
+#[test]
+fn test_revoke_with_institution_sig_without_key_fails() {
+    let (env, client, _admin, issuer, owner) = setup_test();
+    let cert_id = client.issue_certificate(
+        &owner,
+        &issuer,
+        &String::from_str(&env, "COURSE"),
+        &BytesN::from_array(&env, &[0x13; 32]),
+        &String::from_str(&env, "ipfs://cid"),
+        &None,
+    );
+    let sig = BytesN::from_array(&env, &[0u8; 64]);
+
+    // No institution key registered: must be rejected.
+    let result = client.try_revoke_certificate_with_institution_sig(
+        &cert_id,
+        &String::from_str(&env, "R"),
+        &sig,
+    );
+    assert!(result.is_err());
+    assert_eq!(client.get_certificate(&cert_id).status, CertificateStatus::Active);
+}
+
+#[test]
+fn test_revoke_with_invalid_institution_sig_fails() {
+    let (env, client, _admin, issuer, owner) = setup_test();
+    let cert_id = client.issue_certificate(
+        &owner,
+        &issuer,
+        &String::from_str(&env, "COURSE"),
+        &BytesN::from_array(&env, &[0x14; 32]),
+        &String::from_str(&env, "ipfs://cid"),
+        &None,
+    );
+    client.set_institution_key(&BytesN::from_array(&env, &[0x21; 32]));
+    let sig = BytesN::from_array(&env, &[0u8; 64]);
+
+    let result = client.try_revoke_certificate_with_institution_sig(
+        &cert_id,
+        &String::from_str(&env, "R"),
+        &sig,
+    );
+    assert!(result.is_err());
+    assert_eq!(client.get_certificate(&cert_id).status, CertificateStatus::Active);
+}
+
 // ============================================================================
 // 3. REISSUE WORKFLOW TESTS
 // ============================================================================
@@ -172,12 +245,14 @@ fn test_reissue_certificate_success() {
     let course_id = String::from_str(&env, "MATH-201");
     let old_hash = BytesN::from_array(&env, &[0x10; 32]);
     let new_hash = BytesN::from_array(&env, &[0x20; 32]);
+    let uri = String::from_str(&env, "ipfs://old");
+    let new_uri = String::from_str(&env, "ipfs://new");
 
-    let old_cert_id = client.issue_certificate(&owner, &issuer, &course_id, &old_hash);
+    let old_cert_id = client.issue_certificate(&owner, &issuer, &course_id, &old_hash, &uri, &None);
     client.set_royalty_bps(&old_cert_id, &300u32); // 3%
     client.revoke_certificate(&old_cert_id, &String::from_str(&env, "Name misspelled"));
 
-    let new_cert_id = client.reissue_certificate(&old_cert_id, &new_hash);
+    let new_cert_id = client.reissue_certificate(&old_cert_id, &new_hash, &new_uri);
 
     let old_record = client.get_certificate(&old_cert_id);
     assert_eq!(old_record.status, CertificateStatus::Reissued);
@@ -188,6 +263,7 @@ fn test_reissue_certificate_success() {
     assert_eq!(new_record.issuer, issuer);
     assert_eq!(new_record.course_id, course_id);
     assert_eq!(new_record.content_hash, new_hash);
+    assert_eq!(new_record.metadata_uri, new_uri);
     assert_eq!(new_record.previous_cert_id, old_cert_id);
     assert_eq!(new_record.royalty_bps, 300);
     assert!(new_record.soulbound);
@@ -206,9 +282,16 @@ fn test_reissue_active_certificate_fails() {
     let old_hash = BytesN::from_array(&env, &[0x10; 32]);
     let new_hash = BytesN::from_array(&env, &[0x20; 32]);
 
-    let cert_id = client.issue_certificate(&owner, &issuer, &course_id, &old_hash);
+    let cert_id = client.issue_certificate(
+        &owner,
+        &issuer,
+        &course_id,
+        &old_hash,
+        &String::from_str(&env, "ipfs://cid"),
+        &None,
+    );
     // Reissuing an Active (non-revoked) cert must panic with Error::NotRevoked
-    client.reissue_certificate(&cert_id, &new_hash);
+    client.reissue_certificate(&cert_id, &new_hash, &String::from_str(&env, "ipfs://new"));
 }
 
 #[test]
@@ -217,7 +300,7 @@ fn test_reissue_nonexistent_certificate_fails() {
     let (env, client, _admin, _issuer, _owner) = setup_test();
     let fake_id = BytesN::from_array(&env, &[0x99; 32]);
     let new_hash = BytesN::from_array(&env, &[0x20; 32]);
-    client.reissue_certificate(&fake_id, &new_hash);
+    client.reissue_certificate(&fake_id, &new_hash, &String::from_str(&env, "ipfs://new"));
 }
 
 // ============================================================================
@@ -315,7 +398,14 @@ fn test_set_royalty_bps_and_calculate_royalty() {
     let (env, client, _admin, issuer, owner) = setup_test();
     let course_id = String::from_str(&env, "ART-101");
     let hash = BytesN::from_array(&env, &[0x55; 32]);
-    let cert_id = client.issue_certificate(&owner, &issuer, &course_id, &hash);
+    let cert_id = client.issue_certificate(
+        &owner,
+        &issuer,
+        &course_id,
+        &hash,
+        &String::from_str(&env, "ipfs://cid"),
+        &None,
+    );
 
     // Initial royalty is 0
     let (creator, seller) = client.calculate_royalty(&cert_id, &10_000i128);
@@ -344,6 +434,8 @@ fn test_calculate_royalty_zero_and_negative_amounts() {
         &issuer,
         &String::from_str(&env, "COURSE"),
         &BytesN::from_array(&env, &[0x01; 32]),
+        &String::from_str(&env, "ipfs://cid"),
+        &None,
     );
     client.set_royalty_bps(&cert_id, &500u32);
 
@@ -365,6 +457,8 @@ fn test_set_royalty_bps_above_cap_fails() {
         &issuer,
         &String::from_str(&env, "COURSE"),
         &BytesN::from_array(&env, &[0x01; 32]),
+        &String::from_str(&env, "ipfs://cid"),
+        &None,
     );
 
     // Setting royalty above MAX_ROYALTY_BPS (5000) should panic with Error::RoyaltyTooHigh
@@ -399,14 +493,15 @@ fn test_is_soulbound_returns_true() {
         &issuer,
         &String::from_str(&env, "COURSE"),
         &BytesN::from_array(&env, &[0x01; 32]),
+        &String::from_str(&env, "ipfs://cid"),
+        &None,
     );
 
     assert!(client.is_soulbound(&cert_id));
 }
 
 #[test]
-#[should_panic]
-fn test_transfer_certificate_always_panics() {
+fn test_transfer_certificate_panics_non_transferable() {
     let (env, client, _admin, issuer, owner) = setup_test();
     let recipient = Address::generate(&env);
     let cert_id = client.issue_certificate(
@@ -414,9 +509,37 @@ fn test_transfer_certificate_always_panics() {
         &issuer,
         &String::from_str(&env, "COURSE"),
         &BytesN::from_array(&env, &[0x01; 32]),
+        &String::from_str(&env, "ipfs://cid"),
+        &None,
     );
 
-    client.transfer_certificate(&cert_id, &recipient);
+    match client.try_transfer_certificate(&cert_id, &recipient) {
+        Err(Ok(e)) => assert_eq!(e, Error::NonTransferable),
+        _ => panic!("expected NonTransferable"),
+    }
+}
+
+#[test]
+fn test_transfer_and_transfer_from_panic_non_transferable() {
+    let (env, client, _admin, issuer, owner) = setup_test();
+    let recipient = Address::generate(&env);
+    let cert_id = client.issue_certificate(
+        &owner,
+        &issuer,
+        &String::from_str(&env, "COURSE"),
+        &BytesN::from_array(&env, &[0x01; 32]),
+        &String::from_str(&env, "ipfs://cid"),
+        &None,
+    );
+
+    match client.try_transfer(&owner, &recipient, &cert_id) {
+        Err(Ok(e)) => assert_eq!(e, Error::NonTransferable),
+        _ => panic!("expected NonTransferable from transfer"),
+    }
+    match client.try_transfer_from(&issuer, &owner, &recipient, &cert_id) {
+        Err(Ok(e)) => assert_eq!(e, Error::NonTransferable),
+        _ => panic!("expected NonTransferable from transfer_from"),
+    }
 }
 
 #[test]
@@ -446,4 +569,104 @@ fn test_audit_log_nonexistent_returns_empty_vector() {
     let fake_id = BytesN::from_array(&env, &[0xCC; 32]);
     let logs = client.get_audit_log(&fake_id);
     assert_eq!(logs.len(), 0);
+}
+
+// ============================================================================
+// 8. VERIFICATION, EXPIRATION & METADATA HASH TESTS
+// ============================================================================
+
+#[test]
+fn test_verify_valid_without_expiry() {
+    let (env, client, _admin, issuer, owner) = setup_test();
+    let cert_id = client.issue_certificate(
+        &owner,
+        &issuer,
+        &String::from_str(&env, "COURSE"),
+        &BytesN::from_array(&env, &[0x31; 32]),
+        &String::from_str(&env, "ipfs://cid"),
+        &None,
+    );
+
+    env.ledger().set_timestamp(1_000_000);
+    assert_eq!(client.verify_certificate(&cert_id), VerificationStatus::Valid);
+}
+
+#[test]
+fn test_verify_expires_at_boundary() {
+    let (env, client, _admin, issuer, owner) = setup_test();
+    env.ledger().set_timestamp(100);
+    let cert_id = client.issue_certificate(
+        &owner,
+        &issuer,
+        &String::from_str(&env, "COURSE"),
+        &BytesN::from_array(&env, &[0x32; 32]),
+        &String::from_str(&env, "ipfs://cid"),
+        &Some(200u64),
+    );
+
+    env.ledger().set_timestamp(199);
+    assert_eq!(client.verify_certificate(&cert_id), VerificationStatus::Valid);
+
+    // now >= expires_at means expired
+    env.ledger().set_timestamp(200);
+    assert_eq!(client.verify_certificate(&cert_id), VerificationStatus::Expired);
+    // Expiry does not alter the stored status
+    assert_eq!(client.get_certificate(&cert_id).status, CertificateStatus::Active);
+}
+
+#[test]
+fn test_verify_revoked_takes_precedence_over_expired() {
+    let (env, client, _admin, issuer, owner) = setup_test();
+    env.ledger().set_timestamp(100);
+    let cert_id = client.issue_certificate(
+        &owner,
+        &issuer,
+        &String::from_str(&env, "COURSE"),
+        &BytesN::from_array(&env, &[0x33; 32]),
+        &String::from_str(&env, "ipfs://cid"),
+        &Some(150u64),
+    );
+    client.revoke_certificate(&cert_id, &String::from_str(&env, "R"));
+
+    env.ledger().set_timestamp(500);
+    assert_eq!(client.verify_certificate(&cert_id), VerificationStatus::Revoked);
+}
+
+#[test]
+fn test_verify_revoked_status() {
+    let (env, client, _admin, issuer, owner) = setup_test();
+    let cert_id = client.issue_certificate(
+        &owner,
+        &issuer,
+        &String::from_str(&env, "COURSE"),
+        &BytesN::from_array(&env, &[0x34; 32]),
+        &String::from_str(&env, "ipfs://cid"),
+        &None,
+    );
+    client.revoke_certificate(&cert_id, &String::from_str(&env, "R"));
+    assert_eq!(client.verify_certificate(&cert_id), VerificationStatus::Revoked);
+}
+
+#[test]
+fn test_verify_not_found_for_unknown_id() {
+    let (env, client, _admin, _issuer, _owner) = setup_test();
+    let fake_id = BytesN::from_array(&env, &[0xDD; 32]);
+    assert_eq!(client.verify_certificate(&fake_id), VerificationStatus::NotFound);
+}
+
+#[test]
+fn test_verify_content_hash_match_and_mismatch() {
+    let (env, client, _admin, issuer, owner) = setup_test();
+    let hash = BytesN::from_array(&env, &[0x41; 32]);
+    let cert_id = client.issue_certificate(
+        &owner,
+        &issuer,
+        &String::from_str(&env, "COURSE"),
+        &hash,
+        &String::from_str(&env, "ipfs://cid"),
+        &None,
+    );
+
+    assert!(client.verify_content_hash(&cert_id, &hash));
+    assert!(!client.verify_content_hash(&cert_id, &BytesN::from_array(&env, &[0x42; 32])));
 }

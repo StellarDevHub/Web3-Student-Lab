@@ -10,7 +10,7 @@ use soroban_sdk::{
 pub use badges::{AchievementBadge, ProvenanceRecord};
 pub use rarity::RarityTier;
 
-// ── Errors (SC-HARD-20: range 400+) ──────────────────────────────────────────
+// ---- Errors (SC-HARD-20: range 400+) ----
 
 /// Typed contract errors for the certificate NFT contract.
 ///
@@ -19,18 +19,20 @@ pub use rarity::RarityTier;
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
 pub enum CertError {
-    /// `400` — A certificate has already been minted for this student and course.
+    /// `400` - A certificate has already been minted for this student and course.
     AlreadyMinted = 400,
-    /// `401` — Caller is not the admin.
+    /// `401` - Caller is not the admin.
     Unauthorized = 401,
-    /// `402` — Badge is soulbound and cannot be transferred.
+    /// `402` - Badge is soulbound and cannot be transferred.
     SoulboundNonTransferable = 402,
-    /// `403` — Requested tier upgrade is invalid or prerequisites unmet.
+    /// `403` - Requested tier upgrade is invalid or prerequisites unmet.
     InvalidTierUpgrade = 403,
-    /// `404` — Requested badge ID was not found.
+    /// `404` - Requested badge ID was not found.
     BadgeNotFound = 404,
-    /// `405` — Insufficient completed milestones for this tier.
+    /// `405` - Insufficient completed milestones for this tier.
     InsufficientMilestones = 405,
+    /// `406` - Badge transfer attempted; badges are non-transferable.
+    NonTransferable = 406,
 }
 
 #[contracttype]
@@ -114,50 +116,7 @@ impl CertificateNFTContract {
             (token_id, current_recipient, new_recipient),
         );
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use soroban_sdk::testutils::Address as _;
-
-    #[test]
-    fn test_e2e_mint_and_royalty_calculation() {
-        let env = Env::default();
-        env.mock_all_auths();
-        let contract_id = env.register(CertificateNFTContract, ());
-        let client = CertificateNFTContractClient::new(&env, &contract_id);
-
-        let admin = Address::generate(&env);
-        let student = Address::generate(&env);
-        let designer = Address::generate(&env);
-        let course_id = String::from_str(&env, "CS101");
-        let token_id = String::from_str(&env, "badge-cs101");
-
-        client.mint_certificate(
-            &admin,
-            &student,
-            &course_id,
-            &String::from_str(&env, "A"),
-            &String::from_str(&env, "ipfs://badge101"),
-        );
-
-        // Configure 5% (500 bps) royalty to designer
-        client.set_token_royalty(&admin, &token_id, &designer, &500u32);
-
-        // Check royalty on secondary sale of 10,000 stroops/units
-        // 5% of 10_000 = 500
-        let royalty = client.royalty_info(&token_id, &10_000u128);
-        assert_eq!(royalty.recipient, Some(designer.clone()));
-        assert_eq!(royalty.royalty_amount, 500u128);
-
-        // Test update payout address
-        let new_designer = Address::generate(&env);
-        client.update_royalty_recipient(&token_id, &designer, &new_designer);
-
-        let updated_royalty = client.royalty_info(&token_id, &20_000u128);
-        assert_eq!(updated_royalty.recipient, Some(new_designer));
-        assert_eq!(updated_royalty.royalty_amount, 1_000u128);
     /// Mints a new tiered achievement badge to a student.
     pub fn mint_badge(
         env: Env,
@@ -235,6 +194,51 @@ mod tests {
     /// Strictly enforces soulbound non-transferability.
     pub fn transfer_from(env: Env, _spender: Address, _from: Address, _to: Address, _badge_id: u64) {
         AchievementBadge::assert_transfer_blocked(&env);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+
+    #[test]
+    fn test_e2e_mint_and_royalty_calculation() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(CertificateNFTContract, ());
+        let client = CertificateNFTContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let student = Address::generate(&env);
+        let designer = Address::generate(&env);
+        let course_id = String::from_str(&env, "CS101");
+        let token_id = String::from_str(&env, "badge-cs101");
+
+        client.mint_certificate(
+            &admin,
+            &student,
+            &course_id,
+            &String::from_str(&env, "A"),
+            &String::from_str(&env, "ipfs://badge101"),
+        );
+
+        // Configure 5% (500 bps) royalty to designer
+        client.set_token_royalty(&admin, &token_id, &designer, &500u32);
+
+        // Check royalty on secondary sale of 10,000 stroops/units
+        // 5% of 10_000 = 500
+        let royalty = client.royalty_info(&token_id, &10_000u128);
+        assert_eq!(royalty.recipient, Some(designer.clone()));
+        assert_eq!(royalty.royalty_amount, 500u128);
+
+        // Test update payout address
+        let new_designer = Address::generate(&env);
+        client.update_royalty_recipient(&token_id, &designer, &new_designer);
+
+        let updated_royalty = client.royalty_info(&token_id, &20_000u128);
+        assert_eq!(updated_royalty.recipient, Some(new_designer));
+        assert_eq!(updated_royalty.royalty_amount, 1_000u128);
     }
 }
 
