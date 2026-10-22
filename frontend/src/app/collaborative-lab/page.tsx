@@ -1,12 +1,18 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import IdeaGeneratorPanel from '@/components/idea-generator/IdeaGeneratorPanel';
-import { CollaborativeCanvas } from '@/components/CollaborativeCanvas';
-import PeerReviewDashboard from '@/components/review/PeerReviewDashboard';
 import { ReputationDashboard } from '@/components/reputation/ReputationDashboard';
 import { EncryptedRoomChat } from '@/components/collaboration/EncryptedRoomChat';
 import { Users, Lightbulb, PenTool, Star, MessageSquare } from 'lucide-react';
+
+// Heavy tab bodies load only when their tab is opened.
+const CollaborativeCanvas = dynamic(
+  () => import('@/components/CollaborativeCanvas').then((mod) => mod.CollaborativeCanvas),
+  { ssr: false, loading: () => <div className="h-[480px] w-full animate-pulse rounded-2xl bg-zinc-900/40" aria-busy="true" />, },
+);
+const PeerReviewDashboard = dynamic(() => import('@/components/review/PeerReviewDashboard'), { ssr: false });
 
 export default function CollaborativeLab() {
   const [activeTab, setActiveTab] = useState('ideas');

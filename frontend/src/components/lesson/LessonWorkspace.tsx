@@ -1,7 +1,13 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useState } from 'react';
-import LessonCodeEditor from './LessonCodeEditor';
+
+// Keep Monaco out of the lesson's initial chunk; the prose renders first.
+const LessonCodeEditor = dynamic(() => import('./LessonCodeEditor'), {
+  ssr: false,
+  loading: () => <div className="h-[480px] w-full animate-pulse rounded-2xl bg-zinc-900/40" aria-busy="true" />,
+});
 
 /**
  * LessonWorkspace — pairs lesson content with the interactive code editor.

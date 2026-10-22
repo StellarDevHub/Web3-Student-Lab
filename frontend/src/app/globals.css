@@ -100,7 +100,7 @@
 }
 
 @theme inline {
-  --font-sans: 'Outfit', 'Inter', 'Sora', 'Segoe UI', sans-serif;
+  --font-sans: var(--font-outfit), var(--font-inter), 'Outfit', 'Inter', 'Sora', 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);

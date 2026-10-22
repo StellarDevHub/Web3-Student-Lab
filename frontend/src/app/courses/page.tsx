@@ -2,6 +2,7 @@
 
 import { useI18n } from '@/i18n';
 import { Course, CourseDataSource, coursesAPI } from '@/lib/api';
+import { usePrefetch } from '@/hooks/usePrefetch';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, BookOpen, Search, Sparkles } from 'lucide-react';
 import Link from 'next/link';
@@ -11,6 +12,8 @@ import { ErrorBoundary, ErrorFallback, CourseListSkeleton, DemoDataBanner } from
 export default function CoursesPage() {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
+  // Course grids can be long: skip viewport prefetching and prefetch on hover/focus intent instead.
+  const { prefetch, handleMouseEnter, handleMouseLeave } = usePrefetch();
 
   const {
     data,
@@ -113,6 +116,11 @@ export default function CoursesPage() {
                 <Link
                   key={course.id}
                   href={`/courses/${course.id}`}
+                  prefetch={false}
+                  onMouseEnter={() => handleMouseEnter(`/courses/${course.id}`)}
+                  onMouseLeave={handleMouseLeave}
+                  onFocus={() => prefetch(`/courses/${course.id}`)}
+                  onTouchStart={() => prefetch(`/courses/${course.id}`)}
                   className="group relative flex flex-col justify-between bg-zinc-900/40 border border-white/5 p-8 rounded-[2rem] overflow-hidden transition-all hover:-translate-y-2 hover:bg-zinc-900/80 hover:border-red-500/40 hover:shadow-[0_20px_40px_rgba(0,0,0,0.5)]"
                 >
                   <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity transform group-hover:scale-110">
