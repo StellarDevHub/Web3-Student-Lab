@@ -3,6 +3,7 @@ import config from '../config/env.config.js';
 import { encryptionMiddleware } from '../middleware/prismaEncryption.js';
 import { getWorkspaceId } from '../middleware/WorkspaceContext.js';
 import logger from '../utils/logger.js';
+import { rowLevelSecurityExtension, withWorkspaceTransaction } from './prismaMiddleware.js';
 import { getDatabaseRoleForOperation } from './requestContext.js';
 import { workspaceModels } from './workspaceModels.js';
 
@@ -114,8 +115,14 @@ const workspaceExtension = {
   },
 };
 
-const prisma = basePrisma.$extends(workspaceExtension);
-const readPrisma = baseReadPrisma.$extends(workspaceExtension);
+// The RLS extension must be applied last so it runs innermost: its `query(args)`
+// is then a lazy Prisma promise that can join the set_config batch transaction.
+const prisma = basePrisma
+  .$extends(workspaceExtension)
+  .$extends(rowLevelSecurityExtension(basePrisma as any));
+const readPrisma = baseReadPrisma
+  .$extends(workspaceExtension)
+  .$extends(rowLevelSecurityExtension(baseReadPrisma as any));
 
 // Read-replica health & circuit breaker state
 let readReplicaHealthy = true;
@@ -254,5 +261,13 @@ if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.readPrisma = baseReadPrisma;
 }
 
-export { prisma, readPrisma };
+/**
+ * Interactive transaction on the primary with the current workspace context
+ * applied for its whole duration (BE-005). Use this instead of
+ * `prisma.$transaction(async (tx) => ...)` for workspace-scoped work.
+ */
+const workspaceTransaction = <R>(fn: (tx: typeof prisma) => Promise<R>, options?: Record<string, unknown>) =>
+  withWorkspaceTransaction(prisma as any, fn as any, options) as Promise<R>;
+
+export { prisma, readPrisma, workspaceTransaction };
 export default routedPrisma as PrismaClient;
