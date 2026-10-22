@@ -38,6 +38,9 @@ app.use(securityHeadersMiddleware);
 
 app.use(createCorsMiddleware());
 
+// Contract evaluation submissions carry base64 WASM, so they may use the full
+// 1MB body ceiling enforced by jsonBodySizeLimit instead of the 100kb default.
+app.use('/api/v1/evaluations', express.json({ limit: '1mb' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(jsonBodySizeLimit);

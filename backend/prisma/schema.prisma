@@ -39,6 +39,7 @@ model Student {
   ideas            Idea[]
   votes            Vote[]
   passkeyCredentials PasskeyCredential[]
+  webauthnCredentials WebAuthnCredential[]
   hashSimulations  HashSimulation[]
   subscriptions    Subscription[]
 
@@ -66,6 +67,53 @@ model PasskeyCredential {
 
   @@index([userId])
   @@map("passkey_credentials")
+}
+
+/// FIDO2/WebAuthn passkey bound to a student (BE-008).
+model WebAuthnCredential {
+  id                String    @id @default(cuid())
+  studentId         String
+  /// base64url credential ID chosen by the authenticator
+  credentialId      String    @unique
+  /// COSE_Key-encoded credential public key
+  publicKey         Bytes
+  /// COSE algorithm identifier (-7 ES256, -8 EdDSA, -257 RS256, ...)
+  algorithm         Int
+  /// Authenticator signature counter (uint32, hence BigInt)
+  signCount         BigInt    @default(0)
+  transports        String[]  @default([])
+  aaguid            String?
+  attestationFormat String
+  /// none | self | basic
+  attestationType   String
+  userVerified      Boolean   @default(false)
+  backupEligible    Boolean   @default(false)
+  backedUp          Boolean   @default(false)
+  deviceName        String?
+  /// Set when a signature-counter regression indicates a cloned authenticator; the credential is then refused
+  cloneDetectedAt   DateTime?
+  createdAt         DateTime  @default(now())
+  lastUsedAt        DateTime?
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@map("webauthn_credentials")
+}
+
+/// Single-use WebAuthn challenge nonce with a 60-second TTL (BE-008).
+model WebAuthnChallenge {
+  id        String   @id @default(cuid())
+  /// base64url-encoded 32-byte random nonce
+  challenge String   @unique
+  /// registration | authentication
+  ceremony  String
+  studentId String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+  @@map("webauthn_challenges")
 }
 
 model OAuthState {
