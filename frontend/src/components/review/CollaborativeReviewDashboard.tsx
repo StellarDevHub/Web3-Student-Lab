@@ -2,11 +2,10 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { BarChart3, Code, FileText, Settings, Target, Users, X } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useState } from 'react';
 
 // Import our new collaborative components
-import CodeReview from './CodeReview';
-import CodeSuggestion from './CodeSuggestion';
 import CollaborativeCursors from './CollaborativeCursors';
 import MentionsNotifications from './MentionsNotifications';
 import PresenceIndicators from './PresenceIndicators';
@@ -19,6 +18,10 @@ import ReviewWorkflow from './ReviewWorkflow';
 // Import our review management system
 import { useCommentSync } from '../../lib/review/CommentSync';
 import { ReviewManager } from '../../lib/review/ReviewManager';
+
+// Monaco-backed panels are split out of the dashboard's initial chunk.
+const CodeReview = dynamic(() => import('./CodeReview'), { ssr: false });
+const CodeSuggestion = dynamic(() => import('./CodeSuggestion'), { ssr: false });
 
 const currentCode = `use soroban_sdk::{contractimpl, Env, Symbol};
 
