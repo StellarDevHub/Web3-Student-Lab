@@ -193,3 +193,71 @@ fn property_terminal_vote_state_is_consistent() {
     client.vote(&user, &1, &7);
     assert_eq!(client.get_user_credits(&user), 100 - 49);
 }
+
+#[test]
+fn isqrt_boundaries() {
+    assert_eq!(math::isqrt_u128(0), 0);
+    assert_eq!(math::isqrt_u128(1), 1);
+    assert_eq!(math::isqrt_u128(3), 1);
+    assert_eq!(math::isqrt_u128(4), 2);
+    assert_eq!(math::isqrt_u128(99), 9);
+    assert_eq!(math::isqrt_u128(100), 10);
+    assert_eq!(math::isqrt_u128(u128::MAX), u64::MAX as u128);
+
+    assert_eq!(math::isqrt_i128(0), 0);
+    assert_eq!(math::isqrt_i128(1), 1);
+    assert_eq!(math::isqrt_i128(3), 1);
+    assert_eq!(math::isqrt_i128(4), 2);
+    assert_eq!(math::isqrt_i128(99), 9);
+    assert_eq!(math::isqrt_i128(100), 10);
+    assert_eq!(math::isqrt_i128(-1), 0);
+    assert_eq!(math::isqrt_i128(i128::MIN), 0);
+}
+
+#[test]
+fn isqrt_i128_max_does_not_panic_and_is_floor() {
+    let r = math::isqrt_i128(i128::MAX);
+    // r is floor(sqrt(MAX)): r^2 <= MAX < (r+1)^2.
+    assert!(r.checked_mul(r).is_some());
+    assert!(r.checked_mul(r).unwrap() <= i128::MAX);
+    assert!((r + 1).checked_mul(r + 1).is_none());
+}
+
+#[test]
+fn isqrt_matches_exact_for_perfect_squares() {
+    for k in 0u128..=2_000 {
+        assert_eq!(math::isqrt_u128(k * k), k);
+        if k > 0 {
+            assert_eq!(math::isqrt_u128(k * k - 1), k - 1);
+        }
+    }
+}
+
+#[test]
+fn quadratic_cost_values() {
+    assert_eq!(math::quadratic_cost(0, 0), Some(0));
+    assert_eq!(math::quadratic_cost(0, 3), Some(9));
+    assert_eq!(math::quadratic_cost(3, 2), Some(16)); // 25 - 9
+    assert_eq!(math::quadratic_cost(3, 4), Some(40)); // 49 - 9
+    assert_eq!(math::quadratic_cost(u32::MAX as u64, 1), Some(
+        (u32::MAX as i128 + 1).pow(2) - (u32::MAX as i128).pow(2)
+    ));
+}
+
+#[test]
+fn quadratic_cost_overflow_returns_none() {
+    assert_eq!(math::quadratic_cost(u64::MAX, u64::MAX), None);
+}
+
+#[test]
+fn vote_incremental_cost_is_quadratic() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _) = setup(&env);
+    let user = Address::generate(&env);
+    client.create_proposal(&user, &String::from_str(&env, "p"));
+    client.vote(&user, &1, &3); // cost 9
+    client.vote(&user, &1, &2); // total 5 -> cost 25, incremental 16
+    assert_eq!(client.get_user_credits(&user), 100 - 25);
+    assert_eq!(client.get_proposal(&1).votes_received, 5);
+}

@@ -29,9 +29,13 @@ use soroban_sdk::{
 };
 
 pub mod ed25519_verify;
+pub mod entropy;
+pub mod slashing;
 pub mod vrf;
 
 pub use ed25519_verify::Ed25519Verifier;
+pub use entropy::{accumulate_entropy, finalize_entropy, hash_secret, xor_bytes32};
+pub use slashing::{get_deposit, redistribute_slashed_stake, slash_unrevealed};
 pub use vrf::{VrfConsumer, VrfError, VrfKey};
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -44,6 +48,8 @@ const COMMITS_KEY: Symbol = symbol_short!("COMMITS");
 const COMMIT_BLOCKS_KEY: Symbol = symbol_short!("CMTBLKS");
 const REVEALS_KEY: Symbol = symbol_short!("REVEALS");
 const SLASHED_KEY: Symbol = symbol_short!("SLASHED");
+const TOKEN_KEY: Symbol = symbol_short!("TOKEN");
+const DEPOSITS_KEY: Symbol = symbol_short!("DEPOSITS");
 
 // ── Data types ───────────────────────────────────────────────────────────────
 
@@ -109,7 +115,19 @@ impl CommitRevealRng {
     ///
     /// - `commit_duration`: ledgers the commit phase lasts.
     /// - `reveal_duration`: ledgers the reveal phase lasts after commit ends.
+    /// - `stake_token`: optional address of token required for deposit staking.
     pub fn init(env: Env, admin: Address, commit_duration: u32, reveal_duration: u32) {
+        Self::init_with_token(env, admin, commit_duration, reveal_duration, None);
+    }
+
+    /// Initialise a new RNG round with optional stake token support.
+    pub fn init_with_token(
+        env: Env,
+        admin: Address,
+        commit_duration: u32,
+        reveal_duration: u32,
+        stake_token: Option<Address>,
+    ) {
         admin.require_auth();
         assert!(
             !env.storage().instance().has(&PHASE_KEY),
@@ -137,6 +155,12 @@ impl CommitRevealRng {
         env.storage()
             .instance()
             .set(&SLASHED_KEY, &Vec::<Address>::new(&env));
+        env.storage()
+            .instance()
+            .set(&DEPOSITS_KEY, &Map::<Address, i128>::new(&env));
+        if let Some(token) = stake_token {
+            env.storage().instance().set(&TOKEN_KEY, &token);
+        }
     }
 
     // ── Commit ────────────────────────────────────────────────────────────────
@@ -147,6 +171,16 @@ impl CommitRevealRng {
     /// - If not in commit phase or commit window has closed.
     /// - If participant has already committed.
     pub fn commit(env: Env, participant: Address, commitment: BytesN<32>) {
+        Self::commit_with_deposit(env, participant, commitment, 0);
+    }
+
+    /// Submit a commitment with an attached stake deposit.
+    pub fn commit_with_deposit(
+        env: Env,
+        participant: Address,
+        commitment: BytesN<32>,
+        deposit_amount: i128,
+    ) {
         participant.require_auth();
         Self::assert_phase(&env, Phase::Commit);
 
@@ -162,6 +196,21 @@ impl CommitRevealRng {
             !commits.contains_key(participant.clone()),
             "already committed"
         );
+
+        if deposit_amount > 0 {
+            let token_addr: Address = env
+                .storage()
+                .instance()
+                .get(&TOKEN_KEY)
+                .expect("stake token not configured");
+            let token_client = soroban_sdk::token::Client::new(&env, &token_addr);
+            token_client.transfer(&participant, &env.current_contract_address(), &deposit_amount);
+
+            let mut deposits: Map<Address, i128> =
+                env.storage().instance().get(&DEPOSITS_KEY).unwrap();
+            deposits.set(participant.clone(), deposit_amount);
+            env.storage().instance().set(&DEPOSITS_KEY, &deposits);
+        }
 
         commits.set(participant.clone(), commitment);
         env.storage().instance().set(&COMMITS_KEY, &commits);
@@ -229,7 +278,7 @@ impl CommitRevealRng {
         }
 
         // Verify commitment: sha256(secret) must equal the stored hash.
-        let hash: BytesN<32> = env.crypto().sha256(&secret).into();
+        let hash = entropy::hash_secret(&env, &secret);
         assert!(hash == commitment, "secret does not match commitment");
 
         let mut reveals: Map<Address, bool> = env.storage().instance().get(&REVEALS_KEY).unwrap();
@@ -240,9 +289,21 @@ impl CommitRevealRng {
         reveals.set(participant.clone(), true);
         env.storage().instance().set(&REVEALS_KEY, &reveals);
 
+        // Refund participant's deposit upon honest reveal if deposit was made
+        let mut deposits: Map<Address, i128> = env.storage().instance().get(&DEPOSITS_KEY).unwrap();
+        if let Some(deposit) = deposits.get(participant.clone()) {
+            if deposit > 0 {
+                let token_addr: Address = env.storage().instance().get(&TOKEN_KEY).unwrap();
+                let token_client = soroban_sdk::token::Client::new(&env, &token_addr);
+                token_client.transfer(&env.current_contract_address(), &participant, &deposit);
+                deposits.set(participant.clone(), 0);
+                env.storage().instance().set(&DEPOSITS_KEY, &deposits);
+            }
+        }
+
         // XOR the new secret hash into the running entropy accumulator.
         let current_entropy: BytesN<32> = env.storage().instance().get(&ENTROPY_KEY).unwrap();
-        let new_entropy = Self::xor_bytes32(&env, &current_entropy, &hash);
+        let new_entropy = entropy::accumulate_entropy(&env, &current_entropy, &hash);
         env.storage().instance().set(&ENTROPY_KEY, &new_entropy);
 
         env.events()
@@ -252,8 +313,8 @@ impl CommitRevealRng {
     // ── Slash non-revealers ───────────────────────────────────────────────────
 
     /// After the reveal window closes, slash participants who committed but
-    /// did not reveal. In production their stake would be seized here.
-    pub fn slash_non_revealers(env: Env) {
+    /// did not reveal. Confiscates stakes and optionally redistributes to honest revealers.
+    pub fn slash_non_revealers(env: Env) -> i128 {
         Self::assert_phase(&env, Phase::Reveal);
         let reveal_end: u32 = env.storage().instance().get(&REVEAL_END).unwrap();
         assert!(
@@ -263,16 +324,37 @@ impl CommitRevealRng {
 
         let commits: Map<Address, BytesN<32>> = env.storage().instance().get(&COMMITS_KEY).unwrap();
         let reveals: Map<Address, bool> = env.storage().instance().get(&REVEALS_KEY).unwrap();
-
         let mut slashed: Vec<Address> = env.storage().instance().get(&SLASHED_KEY).unwrap();
+        let mut deposits: Map<Address, i128> = env.storage().instance().get(&DEPOSITS_KEY).unwrap();
 
-        for (addr, _) in commits.iter() {
-            if !reveals.contains_key(addr.clone()) && !slashed.contains(addr.clone()) {
-                slashed.push_back(addr.clone());
-                env.events().publish((symbol_short!("slashed"), addr), ());
+        let total_confiscated = slashing::slash_unrevealed(
+            &env,
+            &commits,
+            &reveals,
+            &mut slashed,
+            &mut deposits,
+        );
+
+        for addr in slashed.iter() {
+            env.events().publish((symbol_short!("slashed"), addr), ());
+        }
+
+        env.storage().instance().set(&SLASHED_KEY, &slashed);
+        env.storage().instance().set(&DEPOSITS_KEY, &deposits);
+
+        // If stake token is set and stakes were confiscated, redistribute among revealers
+        if total_confiscated > 0 {
+            if let Some(token_addr) = env.storage().instance().get(&TOKEN_KEY) {
+                slashing::redistribute_slashed_stake(
+                    &env,
+                    &token_addr,
+                    &reveals,
+                    total_confiscated,
+                );
             }
         }
-        env.storage().instance().set(&SLASHED_KEY, &slashed);
+
+        total_confiscated
     }
 
     // ── Finalise ──────────────────────────────────────────────────────────────
@@ -295,8 +377,8 @@ impl CommitRevealRng {
         Self::slash_non_revealers(env.clone());
 
         let entropy: BytesN<32> = env.storage().instance().get(&ENTROPY_KEY).unwrap();
-        // Final hash: sha256(accumulated_entropy) for additional mixing.
-        let result: BytesN<32> = env.crypto().sha256(&entropy.into()).into();
+        // Final hash: sha256(accumulated_entropy) for uniform unbiased randomness.
+        let result = entropy::finalize_entropy(&env, &entropy);
         env.storage().instance().set(&RESULT_KEY, &result);
         env.storage().instance().set(&PHASE_KEY, &Phase::Finalised);
 
@@ -331,6 +413,16 @@ impl CommitRevealRng {
             .unwrap_or(Vec::new(&env))
     }
 
+    /// Returns the deposited stake amount for an address.
+    pub fn get_deposit(env: Env, participant: Address) -> i128 {
+        let deposits: Map<Address, i128> = env
+            .storage()
+            .instance()
+            .get(&DEPOSITS_KEY)
+            .unwrap_or(Map::new(&env));
+        slashing::get_deposit(&env, &deposits, &participant)
+    }
+
     // ── Internal helpers ─────────────────────────────────────────────────────
 
     fn assert_phase(env: &Env, expected: Phase) {
@@ -343,14 +435,8 @@ impl CommitRevealRng {
     }
 
     /// XOR two 32-byte arrays element-wise.
-    fn xor_bytes32(env: &Env, a: &BytesN<32>, b: &BytesN<32>) -> BytesN<32> {
-        let a_arr = a.to_array();
-        let b_arr = b.to_array();
-        let mut result = [0u8; 32];
-        for i in 0..32 {
-            result[i] = a_arr[i] ^ b_arr[i];
-        }
-        BytesN::from_array(env, &result)
+    pub fn xor_bytes32(env: &Env, a: &BytesN<32>, b: &BytesN<32>) -> BytesN<32> {
+        entropy::xor_bytes32(env, a, b)
     }
 
     // ── VRF Consumer (SC-045) ────────────────────────────────────────────────
@@ -650,5 +736,72 @@ mod tests {
 
         let num = client.generate_vrf_random_int(&seed, &proof, &1, &100);
         assert!(num >= 1 && num <= 100);
+    }
+
+    #[test]
+    fn test_stake_deposit_slashing_and_redistribution() {
+        let (env, contract_id, admin) = setup();
+        let client = CommitRevealRngClient::new(&env, &contract_id);
+
+        let token_admin = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+        let token_client = soroban_sdk::token::Client::new(&env, &token_contract.address());
+        let token_admin_client =
+            soroban_sdk::token::StellarAssetClient::new(&env, &token_contract.address());
+
+        let p1 = Address::generate(&env);
+        let p2 = Address::generate(&env);
+        let p3 = Address::generate(&env);
+
+        let stake_amount: i128 = 1_000;
+        token_admin_client.mint(&p1, &stake_amount);
+        token_admin_client.mint(&p2, &stake_amount);
+        token_admin_client.mint(&p3, &stake_amount);
+
+        // Init with stake token
+        client.init_with_token(&admin, &5, &5, &Some(token_contract.address()));
+
+        let (s1, c1) = make_commitment(&env, b"honest_participant_1");
+        let (_s2, c2) = make_commitment(&env, b"dishonest_participant_2");
+        let (s3, c3) = make_commitment(&env, b"honest_participant_3");
+
+        client.commit_with_deposit(&p1, &c1, &stake_amount);
+        client.commit_with_deposit(&p2, &c2, &stake_amount);
+        client.commit_with_deposit(&p3, &c3, &stake_amount);
+
+        assert_eq!(client.get_deposit(&p1), stake_amount);
+        assert_eq!(client.get_deposit(&p2), stake_amount);
+        assert_eq!(client.get_deposit(&p3), stake_amount);
+        assert_eq!(token_client.balance(&contract_id), 3_000);
+
+        // Move to reveal phase
+        env.ledger().with_mut(|l| l.sequence_number += 6);
+        client.start_reveal();
+
+        // p1 and p3 reveal honestly; p2 refuses to reveal (withholds salt)
+        client.reveal(&p1, &s1);
+        client.reveal(&p3, &s3);
+
+        // p1 and p3 got their deposits refunded upon honest reveal
+        assert_eq!(token_client.balance(&p1), stake_amount);
+        assert_eq!(token_client.balance(&p3), stake_amount);
+        assert_eq!(client.get_deposit(&p1), 0);
+        assert_eq!(client.get_deposit(&p3), 0);
+
+        // Move past reveal window
+        env.ledger().with_mut(|l| l.sequence_number += 6);
+        let res = client.finalise();
+        assert_ne!(res, BytesN::from_array(&env, &[0u8; 32]));
+
+        // p2 must be slashed
+        let slashed = client.get_slashed();
+        assert_eq!(slashed.len(), 1);
+        assert_eq!(slashed.get(0).unwrap(), p2);
+        assert_eq!(client.get_deposit(&p2), 0);
+
+        // p2's slashed 1000 stake was redistributed equally among 2 honest revealers (500 each)
+        assert_eq!(token_client.balance(&p1), 1_500);
+        assert_eq!(token_client.balance(&p3), 1_500);
+        assert_eq!(token_client.balance(&p2), 0);
     }
 }

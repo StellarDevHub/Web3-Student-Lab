@@ -1,0 +1,85 @@
+# Prometheus alerting rules for Web3 Student Lab SLOs (BE-050, #1622).
+#
+# Metric sources (backend/src/metrics):
+#   w3sl_http_responses_total{status_class}                 MetricsExporter
+#   w3sl_http_request_duration_milliseconds_bucket{le}      MetricsCollector histogram
+#   w3sl_db_pool_utilization_percent                        dbPoolMetrics (set by DB health check)
+#   w3sl_external_probe_total{probe,outcome}                deepReadiness probe outcomes
+#
+# Noise control: each ratio alert also requires a minimum request rate so a
+# quiet service does not page on one failed request, and a `for:` duration so a
+# single bad evaluation does not fire. Evaluation interval is 15s, so an alert
+# fires roughly 45-60s after a sustained breach.
+
+groups:
+  - name: web3-student-lab-slo
+    interval: 15s
+    rules:
+      - alert: ApiErrorRateHigh
+        expr: |
+          (
+            sum(rate(w3sl_http_responses_total{status_class="5xx"}[5m]))
+            /
+            clamp_min(sum(rate(w3sl_http_responses_total[5m])), 1e-9)
+          ) > 0.01
+          and sum(rate(w3sl_http_responses_total[5m])) > 0.1
+        for: 30s
+        labels:
+          severity: critical
+          service: backend
+          slo: api-error-rate
+        annotations:
+          summary: "API 5xx error rate above 1% for 30s"
+          description: "5xx responses are {{ $value | humanizePercentage }} of all responses over the last 5m."
+          runbook_url: "https://github.com/StellarDevHub/Web3-Student-Lab/blob/main/monitoring/runbooks.md#apierrorratehigh"
+          diagnostic_query: 'sum by (status_class) (rate(w3sl_http_responses_total[5m]))'
+
+      - alert: ApiP95LatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(w3sl_http_request_duration_milliseconds_bucket[5m]))
+          ) > 1500
+          and sum(rate(w3sl_http_request_duration_milliseconds_count[5m])) > 0.1
+        for: 1m
+        labels:
+          severity: warning
+          service: backend
+          slo: api-p95-latency
+        annotations:
+          summary: "API p95 response time above 1500 ms"
+          description: "p95 latency is {{ $value | humanize }} ms over the last 5m."
+          runbook_url: "https://github.com/StellarDevHub/Web3-Student-Lab/blob/main/monitoring/runbooks.md#apip95latencyhigh"
+          diagnostic_query: 'histogram_quantile(0.95, sum by (le) (rate(w3sl_http_request_duration_milliseconds_bucket[5m])))'
+
+      - alert: DbPoolUtilizationHigh
+        expr: w3sl_db_pool_utilization_percent > 85
+        for: 30s
+        labels:
+          severity: critical
+          service: database
+          slo: db-pool-utilization
+        annotations:
+          summary: "Database connection pool above 85% utilisation"
+          description: "Pool utilisation is {{ $value }}% of DB_POOL_MAX (last health check)."
+          runbook_url: "https://github.com/StellarDevHub/Web3-Student-Lab/blob/main/monitoring/runbooks.md#dbpoolutilizationhigh"
+          diagnostic_query: 'w3sl_db_pool_utilization_percent'
+
+      - alert: RpcProbeFailureRateHigh
+        expr: |
+          (
+            sum(rate(w3sl_external_probe_total{probe="horizon_ledger",outcome="failed"}[5m]))
+            /
+            clamp_min(sum(rate(w3sl_external_probe_total{probe="horizon_ledger"}[5m])), 1e-9)
+          ) > 0.05
+          and sum(rate(w3sl_external_probe_total{probe="horizon_ledger"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: stellar-rpc
+          slo: rpc-failure-rate
+        annotations:
+          summary: "Stellar RPC readiness probe failing more than 5% of the time"
+          description: "Probe failure ratio is {{ $value | humanizePercentage }} over the last 5m."
+          runbook_url: "https://github.com/StellarDevHub/Web3-Student-Lab/blob/main/monitoring/runbooks.md#rpcprobefailureratehigh"
+          diagnostic_query: 'sum by (outcome) (rate(w3sl_external_probe_total{probe="horizon_ledger"}[5m]))'

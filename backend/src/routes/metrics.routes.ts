@@ -24,6 +24,7 @@ import {
   buildMetricsSnapshot,
   renderPrometheus,
 } from '../metrics/MetricsExporter.js';
+import { renderTracingPrometheus } from '../metrics/prometheusExporter.js';
 import { requireMetricsAuth } from '../middleware/metricsAuth.js';
 import { slidingWindowRateLimiter } from '../middleware/rateLimiter.js';
 import { authenticateToken } from '../middleware/auth.js';
@@ -67,7 +68,7 @@ router.use(
  */
 router.get('/prometheus', (_req: Request, res: Response) => {
   res.setHeader('Content-Type', PROMETHEUS_CONTENT_TYPE);
-  res.status(200).send(renderPrometheus());
+  res.status(200).send(`${renderPrometheus()}${renderTracingPrometheus()}`);
 });
 
 /**

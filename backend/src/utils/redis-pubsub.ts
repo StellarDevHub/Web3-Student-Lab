@@ -13,6 +13,8 @@
  *   wsSync.subscribe((message) => { /* broadcast to local WS clients *\/ });
  */
 
+import { extractTraceContext, injectTraceContext, runInSpan, SpanKind, type TraceCarrier } from '../instrumentation.js';
+import { pubsubMessages } from '../metrics/prometheusExporter.js';
 import { redisConnection } from './redis.js';
 
 export interface WsMessage {
@@ -50,12 +52,24 @@ export function createWsSync(
 
   async function publish(message: WsMessage): Promise<void> {
     try {
-      const payload = JSON.stringify({
-        ...message,
-        _channel: channelName,
-        _timestamp: Date.now(),
-      });
-      await redis.publish(channelName, payload);
+      await runInSpan(
+        `${channelName} publish`,
+        {
+          kind: SpanKind.PRODUCER,
+          attributes: { 'messaging.system': 'redis', 'messaging.destination.name': channelName },
+        },
+        async () => {
+          const payload = JSON.stringify({
+            ...message,
+            _channel: channelName,
+            _timestamp: Date.now(),
+            // W3C trace-context so subscribers continue the publisher's trace
+            _trace: injectTraceContext(),
+          });
+          await redis.publish(channelName, payload);
+        },
+      );
+      pubsubMessages.inc({ channel: channelName, direction: 'published' });
     } catch (err) {
       console.error(`[ws-sync] Publish error on "${channelName}":`, err);
     }
@@ -74,14 +88,25 @@ export function createWsSync(
           const parsed = JSON.parse(message) as WsMessage;
           // Skip our own messages (loop prevention)
           if (parsed._sender === process.env.NODE_ID) return;
-          // Notify all local handlers
-          for (const sub of subscribers) {
-            try {
-              sub(parsed);
-            } catch (err) {
-              console.error(`[ws-sync] Handler error on "${channelName}":`, err);
-            }
-          }
+          pubsubMessages.inc({ channel: channelName, direction: 'received' });
+          // Notify all local handlers inside a CONSUMER span linked to the publisher
+          runInSpan(
+            `${channelName} receive`,
+            {
+              kind: SpanKind.CONSUMER,
+              parent: extractTraceContext(parsed._trace as TraceCarrier | undefined),
+              attributes: { 'messaging.system': 'redis', 'messaging.destination.name': channelName },
+            },
+            () => {
+              for (const sub of subscribers) {
+                try {
+                  sub(parsed);
+                } catch (err) {
+                  console.error(`[ws-sync] Handler error on "${channelName}":`, err);
+                }
+              }
+            },
+          );
         } catch {
           // Ignore malformed messages
         }

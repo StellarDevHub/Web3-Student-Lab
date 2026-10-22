@@ -8,6 +8,7 @@ interface SplitScreenLayoutProps {
   rightPanel: React.ReactNode;
   minWidthPercent?: number;
   initialWidthPercent?: number;
+  storageKey?: string;
 }
 
 export default function SplitScreenLayout({
@@ -15,9 +16,25 @@ export default function SplitScreenLayout({
   rightPanel,
   minWidthPercent = 20,
   initialWidthPercent = 50,
+  storageKey = 'split-screen-layout',
 }: SplitScreenLayoutProps) {
-  const [leftWidth, setLeftWidth] = useState(initialWidthPercent);
+  // Persist pane sizing across page reloads (Acceptance Criteria: persists sizing across reloads)
+  const [leftWidth, setLeftWidth] = useState(() => {
+    if (typeof window === 'undefined') return initialWidthPercent;
+    try {
+      const stored = window.localStorage.getItem(storageKey);
+      if (stored) {
+        const parsed = parseFloat(stored);
+        if (!Number.isNaN(parsed)) return parsed;
+      }
+    } catch {
+      // localStorage may be unavailable; fall back to default
+    }
+    return initialWidthPercent;
+  });
+
   const [isDragging, setIsDragging] = useState(false);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -34,7 +51,6 @@ export default function SplitScreenLayout({
   const onDrag = useCallback((e: MouseEvent | TouchEvent) => {
     if (!isDragging || !containerRef.current) return;
 
-    // Throttle style calculations via requestAnimationFrame to ensure fluid 60fps movement
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
@@ -43,19 +59,22 @@ export default function SplitScreenLayout({
       const containerRect = containerRef.current!.getBoundingClientRect();
       const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
 
-      // Calculate new percentage relative to viewport container width
       const currentX = clientX - containerRect.left;
       let newWidthPercent = (currentX / containerRect.width) * 100;
 
-      // Restrict boundaries to prevent panels from totally collapsing out of sight
       if (newWidthPercent < minWidthPercent) newWidthPercent = minWidthPercent;
       if (newWidthPercent > 100 - minWidthPercent) newWidthPercent = 100 - minWidthPercent;
 
       setLeftWidth(newWidthPercent);
+      // Persist to localStorage so sizing survives reloads
+      try {
+        window.localStorage.setItem(storageKey, String(newWidthPercent));
+      } catch {
+        // ignore
+      }
     });
-  }, [isDragging, minWidthPercent]);
+  }, [isDragging, minWidthPercent, storageKey]);
 
-  // Handle binding window-level events during drag operations so cursor doesn't lose tracking
   useEffect(() => {
     if (isDragging) {
       window.addEventListener('mousemove', onDrag);
@@ -78,18 +97,53 @@ export default function SplitScreenLayout({
     };
   }, [isDragging, onDrag, stopDragging]);
 
+  // Close mobile drawer when resizing to a desktop breakpoint
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const handler = () => setIsMobileDrawerOpen(false);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
   return (
     <div
       ref={containerRef}
       className={`${styles.container} ${isDragging ? styles.isDragging : ''}`}
     >
-      {/* Reader / Left Panel */}
-      <div
-        className={styles.panel}
-        style={{ width: `calc(${leftWidth}% - 4px)` }}
-      >
-        {leftPanel}
-      </div>
+      {/* Mobile sidebar hamburger drawer trigger (Easy sub-task) */}
+      {isMobile && (
+        <button
+          className={styles.mobileDrawerToggle}
+          onClick={() => setIsMobileDrawerOpen((prev) => !prev)}
+          aria-label={isMobileDrawerOpen ? 'Close navigation drawer' : 'Open navigation drawer'}
+          aria-expanded={isMobileDrawerOpen}
+        >
+          <span className={styles.hamburgerLine} />
+          <span className={styles.hamburgerLine} />
+          <span className={styles.hamburgerLine} />
+        </button>
+      )}
+
+      {/* Mobile drawer panel */}
+      {isMobile && isMobileDrawerOpen && (
+        <div
+          className={styles.mobileDrawerOverlay}
+          onClick={() => setIsMobileDrawerOpen(false)}
+        >
+          <div className={styles.mobileDrawerPanel} onClick={(e) => e.stopPropagation()}>
+            <button
+              className={styles.mobileDrawerClose}
+              onClick={() => setIsMobileDrawerOpen(false)}
+              aria-label="Close drawer"
+            >
+              ✕
+            </button>
+            {leftPanel}
+          </div>
+        </div>
+      )}
 
       {/* Horizontal Divider Bar */}
       <div

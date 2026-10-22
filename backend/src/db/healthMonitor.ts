@@ -1,5 +1,6 @@
 import prisma from '../db/index.js';
 import logger from '../utils/logger.js';
+import { setDbPoolUtilizationPct } from '../metrics/dbPoolMetrics.js';
 
 export interface DbHealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -60,6 +61,7 @@ export async function checkDbHealth(): Promise<DbHealthStatus> {
       total: poolMax,
       utilizationPct,
     };
+    setDbPoolUtilizationPct(utilizationPct);
 
     if (latencyMs > LATENCY_CRITICAL_MS) {
       alerts.push(`Critical: DB query latency ${latencyMs}ms exceeds ${LATENCY_CRITICAL_MS}ms`);

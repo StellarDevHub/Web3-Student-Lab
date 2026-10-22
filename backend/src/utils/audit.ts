@@ -1,6 +1,7 @@
 import { Request } from 'express';
 import { createHash } from 'crypto';
 import prisma from '../db/index.js';
+import { tamperEvidentAuditService } from '../services/tamperEvidentAuditService.js';
 import logger, { auditLogger, getCorrelationId } from './logger.js';
 
 export interface AuditLogData {
@@ -98,6 +99,20 @@ export async function logAudit(data: AuditLogData): Promise<void> {
         prevHash: prevHash ?? null,
       },
     });
+
+    // Mirror into the tamper-evident hash chain (BE-009). A failure here is
+    // logged loudly but never blocks the action being audited.
+    try {
+      await tamperEvidentAuditService.record({
+        eventType: data.action,
+        actorId: data.userId ?? null,
+        entity: data.entity ?? null,
+        entityId: data.entityId ?? null,
+        payload: { ...payload, timestamp, legacyHash: hash },
+      });
+    } catch (chainError) {
+      logger.error('Failed to append audit event to hash chain', { error: chainError, correlationId });
+    }
 
     logger.info(
       `Audit Log: ${data.action} by ${data.userEmail ?? data.userId ?? 'unknown'}`,

@@ -8,6 +8,7 @@
 
 import prisma from '../db/index.js';
 import { storageService } from '../services/storage/index.js';
+import { ipfsPinningService } from '../services/ipfsPinningService.js';
 import { certificateBlockchainService } from '../blockchain/CertificateBlockchainService.js';
 import {
   Certificate,
@@ -207,6 +208,17 @@ export class CertificateService {
         tokenId: mintResult.tokenId,
         txHash: mintResult.transactionHash,
       });
+
+      // Auto-pin the certificate SVG + metadata to IPFS/Filecoin (BE-011).
+      // Runs alongside the email step so issuance latency is unaffected.
+      void ipfsPinningService
+        .autoPinCertificate({
+          certificateId,
+          metadata: { ...(metadata as unknown as Record<string, unknown>) },
+        })
+        .catch((pinError) => {
+          logger.error(`Failed to auto-pin certificate ${certificateId} to IPFS:`, pinError);
+        });
 
       // Send transactional email with PDF attachment and social sharing links
       try {

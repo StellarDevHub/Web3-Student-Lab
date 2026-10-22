@@ -39,6 +39,7 @@ model Student {
   ideas            Idea[]
   votes            Vote[]
   passkeyCredentials PasskeyCredential[]
+  webauthnCredentials WebAuthnCredential[]
   hashSimulations  HashSimulation[]
   subscriptions    Subscription[]
 
@@ -66,6 +67,53 @@ model PasskeyCredential {
 
   @@index([userId])
   @@map("passkey_credentials")
+}
+
+/// FIDO2/WebAuthn passkey bound to a student (BE-008).
+model WebAuthnCredential {
+  id                String    @id @default(cuid())
+  studentId         String
+  /// base64url credential ID chosen by the authenticator
+  credentialId      String    @unique
+  /// COSE_Key-encoded credential public key
+  publicKey         Bytes
+  /// COSE algorithm identifier (-7 ES256, -8 EdDSA, -257 RS256, ...)
+  algorithm         Int
+  /// Authenticator signature counter (uint32, hence BigInt)
+  signCount         BigInt    @default(0)
+  transports        String[]  @default([])
+  aaguid            String?
+  attestationFormat String
+  /// none | self | basic
+  attestationType   String
+  userVerified      Boolean   @default(false)
+  backupEligible    Boolean   @default(false)
+  backedUp          Boolean   @default(false)
+  deviceName        String?
+  /// Set when a signature-counter regression indicates a cloned authenticator; the credential is then refused
+  cloneDetectedAt   DateTime?
+  createdAt         DateTime  @default(now())
+  lastUsedAt        DateTime?
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@map("webauthn_credentials")
+}
+
+/// Single-use WebAuthn challenge nonce with a 60-second TTL (BE-008).
+model WebAuthnChallenge {
+  id        String   @id @default(cuid())
+  /// base64url-encoded 32-byte random nonce
+  challenge String   @unique
+  /// registration | authentication
+  ceremony  String
+  studentId String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+  @@map("webauthn_challenges")
 }
 
 model OAuthState {
@@ -611,4 +659,124 @@ model PaymentRecord {
 
   @@index([subscriptionId])
   @@map("payment_records")
+}
+
+// Immutable IPFS/Filecoin pins for certificates and course media (BE-011)
+model PinnedAsset {
+  id               String    @id @default(cuid())
+  resourceType     String
+  resourceId       String
+  kind             String
+  cid              String
+  contentType      String
+  sizeBytes        Int
+  sha256           String
+  provider         String
+  filecoinProvider String?
+  filecoinCid      String?
+  filecoinStatus   String    @default("pending") // pending | stored | failed | disabled
+  cdnUrl           String
+  gatewayVerified  Boolean   @default(false)
+  verifiedGateway  String?
+  verifiedAt       DateTime?
+  pinLatencyMs     Int
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([resourceType, resourceId, kind])
+  @@index([cid])
+  @@map("pinned_assets")
+}
+
+// Append-only SHA-256 hash chain of audit events (BE-009)
+model AuditChainEntry {
+  sequence  BigInt   @id
+  eventType String
+  actorId   String?
+  entity    String?
+  entityId  String?
+  payload   Json
+  prevHash  String
+  entryHash String   @unique
+  createdAt DateTime
+
+  @@index([createdAt])
+  @@map("audit_chain_entries")
+}
+
+// Merkle roots of audit chain ranges anchored on the Stellar ledger (BE-009)
+model AuditChainAnchor {
+  id           String    @id @default(cuid())
+  fromSequence BigInt
+  toSequence   BigInt
+  entryCount   Int
+  merkleRoot   String
+  headHash     String
+  network      String
+  txHash       String?
+  status       String    @default("pending") // pending | anchored | failed
+  error        String?
+  createdAt    DateTime  @default(now())
+  anchoredAt   DateTime?
+
+  @@index([toSequence])
+  @@index([status])
+  @@map("audit_chain_anchors")
+// Off-chain state channel between a student and a mentor (#1589 / BE-017).
+// Only funding and the final (or disputed) state are settled on Soroban.
+model StateChannel {
+  id               String    @id @default(cuid())
+  courseId         String
+  contractId       String
+  studentPublicKey String
+  mentorPublicKey  String
+  rewardStroops    String
+  status           String    @default("pending_funding") // pending_funding, open, disputed, settling, settled
+  latestSequence   Int       @default(0)
+  latestState      Json?
+  latestStudentSig String?
+  latestMentorSig  String?
+  fundingTxHash    String?
+  settlementTxHash String?
+  disputeInitiator String?
+  disputeDeadline  DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  updates StateChannelUpdate[]
+
+  @@index([status, disputeDeadline])
+  @@index([studentPublicKey])
+  @@index([mentorPublicKey])
+  @@map("state_channels")
+}
+
+model StateChannelUpdate {
+  id         String   @id @default(cuid())
+  channelId  String
+  sequence   Int
+  stateHash  String
+  state      Json
+  studentSig String
+  mentorSig  String
+  createdAt  DateTime @default(now())
+
+  channel StateChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, sequence])
+  @@map("state_channel_updates")
+}
+
+// Periodic Yjs document snapshot (#1592 / BE-020). Redis streams hold the
+// updates appended since `lastStreamId`.
+model YjsDocumentSnapshot {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  state        Bytes
+  stateVector  Bytes
+  lastStreamId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("yjs_document_snapshots")
 }

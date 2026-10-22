@@ -32,3 +32,32 @@ services:
         condition: service_healthy
       redis-cluster-3:
         condition: service_healthy
+
+  nginx:
+    image: nginx:alpine
+    container_name: web3-student-lab-proxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - certs_data:/etc/nginx/certs:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+      indexer:
+        condition: service_healthy
+    networks:
+      - web3-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  certs_data:

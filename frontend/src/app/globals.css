@@ -455,3 +455,81 @@ textarea {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #ef4444;
 }
+
+/* ─── Issue #1337: Dynamic Theme Engine – HSL Design Tokens ────────────────
+ * Semantic HSL color tokens used by the contrast-aware theming engine.
+ * HSL makes it trivial to derive accessible lightness steps while holding
+ * hue/saturation constant, which is what guarantees WCAG AAA contrast across
+ * dark and light modes.
+ * ─────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Base brand hue (orange) held constant across themes; only lightness shifts. */
+  --hsl-brand-h: 18;
+  --hsl-brand-s: 88%;
+  --hsl-brand-l-dark: 55%;
+  --hsl-brand-l-light: 45%;
+
+  /* Surface HSL tokens – lightness is the theme axis. */
+  --hsl-surface-bg-h: 210;
+  --hsl-surface-bg-s: 12%;
+  --hsl-surface-bg-l-dark: 8%;
+  --hsl-surface-bg-l-light: 98%;
+
+  --hsl-surface-panel-h: 210;
+  --hsl-surface-panel-s: 10%;
+  --hsl-surface-panel-l-dark: 14%;
+  --hsl-surface-panel-l-light: 94%;
+
+  /* Text HSL tokens – contrast is derived from the gap between text and bg L. */
+  --hsl-text-h: 210;
+  --hsl-text-s: 8%;
+  --hsl-text-l-dark: 88%;
+  --hsl-text-l-light: 12%;
+
+  --hsl-muted-h: 210;
+  --hsl-muted-s: 6%;
+  --hsl-muted-l-dark: 52%;
+  --hsl-muted-l-light: 42%;
+}
+
+.dark {
+  --hsl-bg: hsl(var(--hsl-surface-bg-h), var(--hsl-surface-bg-s), var(--hsl-surface-bg-l-dark));
+  --hsl-panel: hsl(var(--hsl-surface-panel-h), var(--hsl-surface-panel-s), var(--hsl-surface-panel-l-dark));
+  --hsl-text: hsl(var(--hsl-text-h), var(--hsl-text-s), var(--hsl-text-l-dark));
+  --hsl-muted: hsl(var(--hsl-muted-h), var(--hsl-muted-s), var(--hsl-muted-l-dark));
+  --hsl-brand: hsl(var(--hsl-brand-h), var(--hsl-brand-s), var(--hsl-brand-l-dark));
+}
+
+html:not(.dark) {
+  --hsl-bg: hsl(var(--hsl-surface-bg-h), var(--hsl-surface-bg-s), var(--hsl-surface-bg-l-light));
+  --hsl-panel: hsl(var(--hsl-surface-panel-h), var(--hsl-surface-panel-s), var(--hsl-surface-panel-l-light));
+  --hsl-text: hsl(var(--hsl-text-h), var(--hsl-text-s), var(--hsl-text-l-light));
+  --hsl-muted: hsl(var(--hsl-muted-h), var(--hsl-muted-s), var(--hsl-muted-l-light));
+  --hsl-brand: hsl(var(--hsl-brand-h), var(--hsl-brand-s), var(--hsl-brand-l-light));
+}
+
+/* Code syntax highlight tokens tuned for WCAG AAA contrast on both themes.
+ * Foreground lightness is chosen so contrast against the code bg is >= 7:1. */
+.lesson-viewer pre,
+.lesson-viewer code {
+  --code-hsl-bg-h: 210;
+  --code-hsl-bg-s: 10%;
+  --code-hsl-bg-l-dark: 6%;
+  --code-hsl-bg-l-light: 96%;
+  --code-hsl-fg-h: 210;
+  --code-hsl-fg-s: 6%;
+  --code-hsl-fg-l-dark: 92%;
+  --code-hsl-fg-l-light: 14%;
+}
+
+.dark .lesson-viewer pre,
+.dark .lesson-viewer code {
+  --code-bg: hsl(var(--code-hsl-bg-h), var(--code-hsl-bg-s), var(--code-hsl-bg-l-dark));
+  --code-fg: hsl(var(--code-hsl-fg-h), var(--code-hsl-fg-s), var(--code-hsl-fg-l-dark));
+}
+
+html:not(.dark) .lesson-viewer pre,
+html:not(.dark) .lesson-viewer code {
+  --code-bg: hsl(var(--code-hsl-bg-h), var(--code-hsl-bg-s), var(--code-hsl-bg-l-light));
+  --code-fg: hsl(var(--code-hsl-fg-h), var(--code-hsl-fg-s), var(--code-hsl-fg-l-light));
+}

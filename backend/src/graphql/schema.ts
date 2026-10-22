@@ -102,6 +102,8 @@ export const typeDefs = `
     enrollStudent(input: EnrollmentInput!): Enrollment!
     updateLearningProgress(input: ProgressUpdateInput!): LearningProgress!
     issueCertificate(studentId: ID!, courseId: ID!): Certificate!
+    "Broadcasts an announcement to every newGlobalAnnouncement subscriber. Admin only."
+    publishGlobalAnnouncement(input: GlobalAnnouncementInput!): GlobalAnnouncement!
   }
 
   type HealthResponse {
@@ -111,7 +113,73 @@ export const typeDefs = `
     redis: String!
   }
 
+  enum ExerciseStatus {
+    QUEUED
+    RUNNING
+    PASSED
+    FAILED
+    ERROR
+  }
+
+  type ExerciseTestResult {
+    name: String!
+    status: String!
+    gasUsed: Int!
+    durationMs: Float!
+    error: String
+  }
+
+  type ExerciseStatusEvent {
+    studentId: ID!
+    exerciseId: ID!
+    jobId: ID
+    status: ExerciseStatus!
+    gasUsed: Int
+    gasLimit: Int
+    terminationReason: String
+    passed: Int
+    total: Int
+    tests: [ExerciseTestResult!]
+    message: String
+    emittedAt: String!
+  }
+
+  type CourseProgressEvent {
+    courseId: ID!
+    studentId: ID!
+    percentage: Int!
+    status: String!
+    completedLessons: [String!]!
+    emittedAt: String!
+  }
+
+  enum AnnouncementSeverity {
+    INFO
+    WARNING
+    CRITICAL
+  }
+
+  type GlobalAnnouncement {
+    id: ID!
+    title: String!
+    message: String!
+    severity: AnnouncementSeverity!
+    publishedBy: ID
+    emittedAt: String!
+  }
+
+  input GlobalAnnouncementInput {
+    title: String!
+    message: String!
+    severity: AnnouncementSeverity
+  }
+
   type Subscription {
     courseUpdated(courseId: ID!): Course!
+    "Sandbox evaluation lifecycle for one student. Students may only subscribe to their own id."
+    exerciseStatusUpdated(studentId: ID!): ExerciseStatusEvent!
+    "Progress changes within a course. Non-admin subscribers only receive their own events."
+    courseProgressChanged(courseId: ID!): CourseProgressEvent!
+    newGlobalAnnouncement: GlobalAnnouncement!
   }
 `;

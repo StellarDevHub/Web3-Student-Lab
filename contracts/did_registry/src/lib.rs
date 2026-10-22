@@ -9,6 +9,9 @@
 //   * The registry stores the controller `Address`, an off-chain GitHub
 //     handle binding, the Ed25519 *verification key* used to sign contributor
 //     proofs, and the set of verified contributor claims.
+//   * String-form entry points (`register_string`, `resolve_string`) accept
+//     only canonical `did:stellar:<64 hex>` DIDs and reject malformed strings
+//     with `DIDError::MalformedDID`; `validate_did` is a non-panicking view.
 //
 // Cryptographic *verification* of Ed25519 signatures over contributor proofs
 // is performed by the off-chain resolver (see backend `didResolver`), which
@@ -17,49 +20,20 @@
 
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Bytes, BytesN, Env, Map, String, Symbol, Vec,
+    contract, contracterror, contractimpl, Address, Bytes, BytesN, Env, Map, String, Symbol, Vec,
 };
 
-/// A single signed contributor proof claim (PR or issue milestone).
-#[derive(Clone)]
-#[contracttype]
-pub struct ContributorProof {
-    /// Kind of contribution: "pr" or "issue".
-    pub claim_type: String,
-    /// GitHub repository, e.g. "StellarDevHub/Web3-Student-Lab".
-    pub repo: String,
-    /// Identifier of the PR/issue (number or node id).
-    pub item_id: String,
-    /// GitHub handle of the contributor (must match the bound handle).
-    pub github_handle: String,
-    /// Unix timestamp (seconds) the claim was issued.
-    pub issued_at: u64,
-    /// Raw Ed25519 signature bytes over the canonical claim payload.
-    pub signature: Bytes,
-}
+pub mod types;
+pub mod verification;
 
-#[derive(Clone)]
-#[contracttype]
-pub struct DIDDocument {
-    pub owner: Address,
-    /// Off-chain GitHub handle bound to this DID.
-    pub github_handle: Option<String>,
-    /// Social handles keyed by provider symbol (github or discord).
-    pub social_identities: Map<Symbol, String>,
-    /// Ed25519 verification key (32 bytes) used to sign contributor proofs.
-    pub verification_key: Option<BytesN<32>>,
-    pub attributes: Map<Symbol, Bytes>,
-    pub controllers: Vec<Address>,
-    pub revoked: bool,
-    /// Stored contributor proofs (mirror of on-chain claims).
-    pub proofs: Vec<ContributorProof>,
-}
+pub use types::*;
 
-#[contracttype]
-pub enum DataKey {
-    DIDs,
-    /// Map<BytesN<32>, Vec<ContributorProof>> — claims per DID.
-    Proofs,
+/// Contract-level errors.
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum DIDError {
+    /// `1` — input was not a canonical `did:stellar:<64 hex>` string.
+    MalformedDID = 1,
 }
 
 #[contract]
@@ -153,6 +127,23 @@ impl DIDRegistryContract {
         env.storage().persistent().set(&DataKey::DIDs, &dids);
     }
 
+    /// Revoke the delegated Ed25519 verification (signing) key. Only the
+    /// owner may revoke it; a new key can be set afterwards.
+    pub fn revoke_verification_key(env: Env, sender: Address, did: BytesN<32>) {
+        sender.require_auth();
+        let mut dids: Map<BytesN<32>, DIDDocument> =
+            env.storage().persistent().get(&DataKey::DIDs).unwrap();
+        let mut doc = dids.get(did.clone()).unwrap();
+        assert!(!doc.revoked, "DID revoked");
+        assert!(
+            doc.owner == sender,
+            "Only owner can revoke verification key"
+        );
+        doc.verification_key = None;
+        dids.set(did, doc);
+        env.storage().persistent().set(&DataKey::DIDs, &dids);
+    }
+
     /// Append a signed contributor proof claim. Only the owner may add; the
     /// resolver performs the cryptographic verification off-chain.
     pub fn add_contributor_proof(
@@ -167,7 +158,7 @@ impl DIDRegistryContract {
         let doc = dids.get(did.clone()).unwrap();
         assert!(!doc.revoked, "DID revoked");
         assert!(
-            doc.owner == sender || doc.controllers.contains(&sender),
+            verification::is_owner_or_controller(&doc, &sender),
             "Not authorized"
         );
         if let Some(handle) = doc.github_handle.clone() {
@@ -194,7 +185,7 @@ impl DIDRegistryContract {
         let mut doc = dids.get(did.clone()).unwrap();
         assert!(!doc.revoked, "DID revoked");
         assert!(
-            doc.owner == sender || doc.controllers.contains(&sender),
+            verification::is_owner_or_controller(&doc, &sender),
             "Not authorized"
         );
         doc.attributes = attributes;
@@ -268,6 +259,41 @@ impl DIDRegistryContract {
         Some(doc)
     }
 
+    /// Pure structural check: is this a canonical `did:stellar:<64 hex>`
+    /// string? Never panics — safe to call on untrusted resolver input.
+    pub fn validate_did(_env: Env, did: String) -> bool {
+        verification::is_valid_did_string(&did)
+    }
+
+    /// Register a DID from its canonical string form. Malformed DID strings
+    /// are rejected with `DIDError::MalformedDID`.
+    pub fn register_string(env: Env, owner: Address, did: String, attributes: Map<Symbol, Bytes>) {
+        // Parsing runs first so malformed input is rejected before anything
+        // else; `register` performs the `owner.require_auth()` itself (a
+        // second `require_auth` on the same frame is an auth error).
+        let key = match verification::parse_did_string(&env, &did) {
+            Some(key) => key,
+            None => soroban_sdk::panic_with_error!(&env, DIDError::MalformedDID),
+        };
+        Self::register(env, owner, key, attributes);
+    }
+
+    /// Resolve a DID document from its canonical string form. Malformed DID
+    /// strings are rejected with `DIDError::MalformedDID`.
+    pub fn resolve_string(env: Env, did: String) -> Option<DIDDocument> {
+        let key = match verification::parse_did_string(&env, &did) {
+            Some(key) => key,
+            None => soroban_sdk::panic_with_error!(&env, DIDError::MalformedDID),
+        };
+        Self::resolve(env, key)
+    }
+
+    /// Canonical `did:stellar:<hex>` string for a raw DID key — exact inverse
+    /// of the parser backing the string entry points.
+    pub fn did_to_string(env: Env, did: BytesN<32>) -> String {
+        verification::did_to_string(&env, &did)
+    }
+
     /// Returns the bound GitHub handle for a DID, if any.
     pub fn get_github_handle(env: Env, did: BytesN<32>) -> Option<String> {
         let dids: Map<BytesN<32>, DIDDocument> = env
@@ -311,7 +337,7 @@ impl DIDRegistryContract {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use soroban_sdk::{symbol_short, testutils::Address as _, BytesN, Env};
 
@@ -382,3 +408,6 @@ mod test {
         assert!(doc.revoked);
     }
 }
+
+#[cfg(test)]
+mod test;

@@ -94,6 +94,12 @@ const nextConfig: NextConfig = {
             priority: 10,
             reuseExistingChunk: true,
           },
+          yjs: {
+            test: /[\\/]node_modules[\\/](yjs|[\\/]@yjs)[\\/]/,
+            name: 'async-yjs',
+            chunks: 'async',
+            priority: 35,
+          },
           common: {
             name: 'common',
             minChunks: 2,

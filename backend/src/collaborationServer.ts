@@ -1,79 +1,82 @@
 import http from 'http';
-import { WebSocketServer, WebSocket } from 'ws';
+import { WebSocket, WebSocketServer } from 'ws';
+import { YjsDocumentManager } from './services/yjsDocumentManager.js';
 
 const port = process.env.WS_PORT || 1234;
+const HEARTBEAT_INTERVAL_MS = parseInt(process.env.WS_HEARTBEAT_INTERVAL_MS || '30000', 10);
+const MAX_PAYLOAD_BYTES = parseInt(process.env.WS_MAX_PAYLOAD_BYTES || String(10 * 1024 * 1024), 10);
+const ROOM_NAME_PATTERN = /^[\w\-.:/]{1,200}$/;
 
-interface RoomPresence {
-  clients: Set<WebSocket>;
-  roomName: string;
-}
-
-const roomPresenceMap = new Map<string, RoomPresence>();
+const documents = new YjsDocumentManager();
+const liveConnections = new WeakSet<WebSocket>();
 
 const server = http.createServer((request, response) => {
   if (request.url === '/health') {
+    const { rooms, connections } = documents.stats();
     response.writeHead(200, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ status: 'ok', activeRooms: roomPresenceMap.size }));
+    response.end(
+      JSON.stringify({
+        status: 'ok',
+        activeRooms: rooms,
+        connections,
+        heapUsedMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      })
+    );
     return;
   }
   response.writeHead(200, { 'Content-Type': 'text/plain' });
   response.end('Y-Websocket Collaboration Server is running');
 });
 
-const wss = new WebSocketServer({ server });
+// perMessageDeflate is disabled: Yjs updates are already compact binary and
+// per-socket zlib contexts dominate memory at thousands of connections.
+const wss = new WebSocketServer({ server, perMessageDeflate: false, maxPayload: MAX_PAYLOAD_BYTES });
 
 wss.on('connection', (conn: WebSocket, req) => {
   const url = new URL(req?.url || '/', `http://${req?.headers.host || 'localhost'}`);
-  const roomName = url.pathname.replace(/^\//, '') || 'default';
-
-  // Real-time room presence tracking
-  if (!roomPresenceMap.has(roomName)) {
-    roomPresenceMap.set(roomName, { clients: new Set(), roomName });
+  let roomName = '';
+  try {
+    roomName = decodeURIComponent(url.pathname.replace(/^\//, '')) || 'default';
+  } catch {
+    // fall through to the invalid-name rejection below
   }
 
-  const room = roomPresenceMap.get(roomName)!;
-  room.clients.add(conn);
+  if (!ROOM_NAME_PATTERN.test(roomName)) {
+    conn.close(1008, 'invalid room name');
+    return;
+  }
 
-  // Broadcast presence count update to connected room clients
-  const broadcastPresence = () => {
-    const presencePayload = JSON.stringify({
-      type: 'presence_update',
-      roomName,
-      activeUsers: room.clients.size,
-    });
+  liveConnections.add(conn);
+  conn.on('pong', () => liveConnections.add(conn));
 
-    room.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(presencePayload);
-      }
-    });
-  };
-
-  broadcastPresence();
-
-  conn.on('message', (message) => {
-    // Relay room synchronization messages to all room peers
-    room.clients.forEach((client) => {
-      if (client !== conn && client.readyState === WebSocket.OPEN) {
-        client.send(message);
-      }
-    });
-  });
-
-  conn.on('close', () => {
-    room.clients.delete(conn);
-    if (room.clients.size === 0) {
-      roomPresenceMap.delete(roomName);
-    } else {
-      broadcastPresence();
-    }
-  });
-
-  conn.on('error', (err) => {
-    console.error(`WebSocket error in room ${roomName}:`, err);
-    conn.close();
-  });
+  void documents.setupConnection(conn, roomName);
 });
+
+// Terminate sockets that stopped answering pings so their rooms get released.
+const heartbeat = setInterval(() => {
+  wss.clients.forEach((conn) => {
+    if (!liveConnections.has(conn)) {
+      conn.terminate();
+      return;
+    }
+    liveConnections.delete(conn);
+    conn.ping();
+  });
+}, HEARTBEAT_INTERVAL_MS);
+
+documents.startSnapshotting();
+
+const shutdown = async (signal: string) => {
+  console.log(`Collaboration server received ${signal}, flushing documents...`);
+  clearInterval(heartbeat);
+  wss.clients.forEach((conn) => conn.close(1001, 'server shutting down'));
+  server.close();
+  await documents.shutdown();
+  process.exit(0);
+};
+
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
 
 server.listen(port, () => {
   console.log(`Collaboration server running on port ${port}`);

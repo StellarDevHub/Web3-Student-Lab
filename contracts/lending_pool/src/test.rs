@@ -1,4 +1,5 @@
 use super::*;
+use soroban_sdk::testutils::Ledger as _;
 use soroban_sdk::{testutils::Address as _, Env};
 
 /// Minimal mock oracle: always returns SCALE for any token.
@@ -112,14 +113,13 @@ fn reentrancy_guard_blocks_double_entry() {
     let token = add_token(&env, &client);
     let user = Address::generate(&env);
 
-    // Now simulate reentrant state by directly setting LOCK on the contract instance
+    // Simulate a reentrant state by pre-setting the temporary guard key.
     env.as_contract(&client.address, || {
-        env.storage().instance().set(&LOCK, &true);
+        env.storage().temporary().set(&RG_KEY, &true);
     });
 
-    // This deposit should be rejected because LOCK is already true
+    // This deposit should be rejected because the guard key exists.
     client.deposit_collateral(&user, &token, &1_000);
-    // Should panic before reaching assert
 }
 
 #[test]
@@ -196,7 +196,10 @@ fn liquidate_reduces_borrower_debt_and_collateral() {
     client.liquidate(&liquidator, &borrower, &token, &token, &1_000);
 
     let debt_after = client.debt_of(&borrower, &token);
-    assert!(debt_after < debt_before, "debt must decrease after liquidation");
+    assert!(
+        debt_after < debt_before,
+        "debt must decrease after liquidation"
+    );
     // collateral of borrower should also decrease (seized to liquidator)
     let coll_after = client.collateral_of(&borrower, &token);
     assert!(
@@ -268,8 +271,7 @@ fn interest_accrual_increases_debt_over_time() {
     assert_eq!(debt_snapshot, 10_000);
 
     // Advance by one year (31_536_000 seconds)
-    env.ledger()
-        .with_mut(|l| l.timestamp += 31_536_000u64);
+    env.ledger().with_mut(|l| l.timestamp += 31_536_000u64);
 
     // Trigger accrual by calling repay with 0 to nudge accrue_user —
     // instead call debt_of after accruing via borrow (re-use a borrow that

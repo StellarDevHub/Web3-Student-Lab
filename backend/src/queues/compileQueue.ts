@@ -11,6 +11,7 @@
  */
 
 import { Queue, type JobsOptions } from 'bullmq';
+import { traceEnqueue, type TraceCarrier } from '../instrumentation.js';
 import logger from '../utils/logger.js';
 
 // ---------------------------------------------------------------------------
@@ -48,6 +49,8 @@ export interface CompileJobData {
   flags?: string[];
   /** Correlation ID for distributed tracing */
   traceId?: string;
+  /** W3C trace-context of the enqueuing request (set by traceEnqueue) */
+  _traceContext?: TraceCarrier;
 }
 
 export interface CompileJobResult {
@@ -147,7 +150,9 @@ export async function enqueueCompileJob(
     ...opts,
   };
 
-  const job = await compileQueue.add('compile', jobData, jobOpts);
+  const job = await traceEnqueue(COMPILE_QUEUE_NAME, jobData, (tracedData) =>
+    compileQueue.add('compile', tracedData, jobOpts),
+  );
 
   const waitingCount = await compileQueue.getWaitingCount();
 

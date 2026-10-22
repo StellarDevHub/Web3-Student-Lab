@@ -63,4 +63,69 @@
     height: 12px;
     cursor: row-resize;
   }
+
+  /* Mobile hamburger drawer trigger */
+  .mobileDrawerToggle {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 4px;
+    background: none;
+    border: none;
+    padding: 6px;
+    cursor: pointer;
+    z-index: 40;
+  }
+
+  .hamburgerLine {
+    width: 20px;
+    height: 2px;
+    background-color: currentColor;
+    border-radius: 2px;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+  }
+
+  /* Mobile drawer overlay + panel */
+  .mobileDrawerOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(4px);
+    z-index: 50;
+    display: flex;
+    align-items: flex-start;
+  }
+
+  .mobileDrawerPanel {
+    position: relative;
+    width: 72vw;
+    max-width: 320px;
+    height: 100vh;
+    background: var(--color-bg-primary, #ffffff);
+    color: var(--color-text-primary, #000000);
+    border-right: 1px solid var(--color-border-medium, #d0d0d0);
+    transform: translateX(0);
+    transition: transform 0.3s ease;
+    z-index: 51;
+    overflow-y: auto;
+    padding: 16px;
+  }
+
+  html.dark .mobileDrawerPanel,
+  html.oled .mobileDrawerPanel {
+    background: var(--color-bg-primary, #000000);
+    color: var(--color-text-primary, #ffffff);
+    border-right-color: var(--color-border-medium, #3d3d3d);
+  }
+
+  .mobileDrawerClose {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: transparent;
+    border: none;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px;
+  }
 }

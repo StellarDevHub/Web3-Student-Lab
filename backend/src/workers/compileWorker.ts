@@ -23,6 +23,7 @@ import { Worker, type Job } from 'bullmq';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { broadcastEvent } from '../websocket/gateway.js';
+import { traceJob } from '../instrumentation.js';
 import logger from '../utils/logger.js';
 import {
   COMPILE_QUEUE_NAME,
@@ -244,7 +245,7 @@ async function processCompileJob(job: Job<CompileJobData, CompileJobResult>): Pr
 
 export const compileWorker = new Worker<CompileJobData, CompileJobResult>(
   COMPILE_QUEUE_NAME,
-  processCompileJob,
+  (job) => traceJob(COMPILE_QUEUE_NAME, job, () => processCompileJob(job)),
   {
     connection: redisConnection,
     // Concurrency throttle: limit simultaneous builds per process

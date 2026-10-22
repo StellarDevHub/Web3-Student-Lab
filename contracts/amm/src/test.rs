@@ -57,7 +57,7 @@ fn setup(
         &token_b_id,
         &pool_share_id,
         &fee_collector,
-        &50,
+        &30, // 0.3 % base swap fee (spec: 0.3 % dynamic swap fee)
     );
 
     (admin, client, token_a_id, token_b_id, pool_share_id)
@@ -348,6 +348,78 @@ fn test_twap_resistant_to_single_block_flash_manipulation() {
 
     // TWAP output remains stable and immune to single-block flash loan spike
     assert_eq!(twap_before_flash, twap_during_flash);
+}
+
+// ── Reentrancy guard (flash-swap defense) tests ──────────────────────────────
+
+#[test]
+#[should_panic(expected = "Error(Contract, #411)")]
+fn test_reentrancy_guard_blocks_double_entry() {
+    let env = Env::default();
+    let (admin, client, _, _, _) = setup(&env);
+
+    // Simulate a reentrant state by pre-setting the temporary guard key.
+    env.as_contract(&client.address, || {
+        env.storage().temporary().set(&RG_KEY, &true);
+    });
+
+    // This deposit must be rejected because the guard is already held.
+    client.add_liquidity(&admin, &1_000_000, &1_000_000, &0);
+}
+
+#[test]
+fn test_reentrancy_lock_released_after_successful_calls() {
+    let env = Env::default();
+    let (admin, client, token_a_id, _, _) = setup(&env);
+
+    // Consecutive mutations succeed because each call releases its guard.
+    client.add_liquidity(&admin, &10_000_000, &10_000_000, &0);
+
+    let user = Address::generate(&env);
+    let token_a_client = token::StellarAssetClient::new(&env, &token_a_id);
+    token_a_client.mint(&user, &1_000_000);
+    client.swap_a_for_b(&user, &1_000_000, &0);
+
+    client.add_liquidity(&admin, &1_000_000, &1_000_000, &0);
+
+    // The guard must be absent from storage between transactions.
+    let lock_held = env.as_contract(&client.address, || env.storage().temporary().has(&RG_KEY));
+    assert!(
+        !lock_held,
+        "reentrancy guard must be released after each call"
+    );
+}
+
+// ── Fee accumulator test (0.3 % base fee + dynamic price-impact uplift) ─────
+
+#[test]
+fn test_swap_charges_0_3pct_base_fee_with_impact_uplift() {
+    let env = Env::default();
+    let (admin, client, token_a_id, _token_b_id, _) = setup(&env);
+
+    client.add_liquidity(&admin, &10_000_000, &10_000_000, &0);
+
+    let user = Address::generate(&env);
+    let token_a_client = token::StellarAssetClient::new(&env, &token_a_id);
+    let amount_in = 1_000_000i128;
+    token_a_client.mint(&user, &amount_in);
+
+    let (bal_a_before, bal_b_before, _) = client.get_pool_state();
+    let new_a = bal_a_before + amount_in;
+    let out_before = bal_b_before - (bal_a_before * bal_b_before + new_a - 1) / new_a;
+
+    // Spec: 0.3 % base fee, uplifted by price impact (bps / 100).
+    let impact_bps = (out_before * 10_000) / bal_b_before;
+    let expected_fee = (out_before * (30 + impact_bps / 100)) / 10_000;
+
+    let amount_out = client.swap_a_for_b(&user, &amount_in, &0);
+
+    let (_, bal_b_after, _) = client.get_pool_state();
+    let fee = (bal_b_before - bal_b_after) - amount_out;
+
+    assert!(fee > 0, "swap must collect a fee");
+    assert_eq!(fee, expected_fee, "fee must be 0.3 % base + impact uplift");
+    assert_eq!(amount_out, out_before - fee);
 }
 
 #[test]

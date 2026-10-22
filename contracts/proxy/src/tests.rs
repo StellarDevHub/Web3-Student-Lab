@@ -184,6 +184,98 @@ fn test_transfer_admin_revokes_old_admin() {
     client.upgrade_to(&admin, &wasm2);
 }
 
+#[test]
+#[should_panic(expected = "Error(Contract, #3)")]
+fn test_unauthorized_register_wasm() {
+    let (env, client, admin) = setup();
+    let wasm1 = dummy_wasm_hash(&env, 1);
+    let wasm2 = dummy_wasm_hash(&env, 2);
+    let non_admin = Address::generate(&env);
+
+    client.init(&admin, &wasm1);
+
+    client.register_wasm(&non_admin, &wasm2);
+}
+
+#[test]
+fn test_proxy_state_persists_across_upgrade() {
+    let (env, client, admin) = setup();
+    let wasm1 = dummy_wasm_hash(&env, 1);
+    let wasm2 = dummy_wasm_hash(&env, 2);
+    let pending_admin = Address::generate(&env);
+
+    client.init(&admin, &wasm1);
+    client.register_wasm(&admin, &wasm2);
+
+    // Build up proxy state before the upgrade.
+    client.transfer_admin(&admin, &pending_admin);
+    let eta = client.propose_upgrade(&admin, &wasm2);
+    let co_signer = Address::generate(&env);
+    client.approve_upgrade(&co_signer, &wasm2);
+    assert_eq!(client.get_storage_version(), 1u32);
+
+    env.ledger().set_timestamp(eta + 1);
+    client.execute_upgrade(&admin, &wasm2);
+
+    // Implementation pointer changed...
+    assert_eq!(client.get_implementation(), wasm2);
+    assert_eq!(client.get_storage_version(), 2u32);
+
+    // ...but every piece of proxy state survived the upgrade.
+    assert_eq!(client.get_admin(), admin);
+    assert_eq!(client.get_pending_admin().unwrap(), pending_admin);
+    assert!(client.is_wasm_registered(&wasm1));
+    assert!(client.is_wasm_registered(&wasm2));
+    let proposal = client.get_proposal(&wasm2).unwrap();
+    assert_eq!(proposal.wasm_hash, wasm2);
+    assert_eq!(proposal.eta, eta);
+    assert!(proposal.executed);
+
+    // The pending-admin ceremony still completes on the upgraded contract.
+    client.accept_admin(&pending_admin);
+    assert_eq!(client.get_admin(), pending_admin);
+    assert!(client.get_pending_admin().is_none());
+}
+
+#[test]
+fn test_proxy_and_impl_storage_keys_do_not_collide() {
+    use soroban_sdk::xdr::ToXdr;
+    let (env, client, admin) = setup();
+    let wasm = dummy_wasm_hash(&env, 1);
+    client.init(&admin, &wasm);
+
+    // The UUPS implementation intentionally reuses the proxy's Admin /
+    // ImplementationWasm keys, so those encodings must match exactly.
+    let proxy_admin = ProxyDataKey::Admin.to_xdr(&env);
+    let proxy_impl = ProxyDataKey::ImplementationWasm.to_xdr(&env);
+    let impl_proxy_admin = implementation_v1::ProxyDataKey::Admin.to_xdr(&env);
+    let impl_proxy_wasm = implementation_v1::ProxyDataKey::ImplementationWasm.to_xdr(&env);
+    assert_eq!(proxy_admin, impl_proxy_admin);
+    assert_eq!(proxy_impl, impl_proxy_wasm);
+
+    // Application-state keys must never alias any proxy key.
+    let score_key = implementation_v1::ImplDataKey::Score(admin.clone()).to_xdr(&env);
+    assert_ne!(score_key, proxy_admin);
+    assert_ne!(score_key, proxy_impl);
+
+    // Behavioral proof: both key families coexist in the same contract storage
+    // without clobbering each other.
+    env.as_contract(&client.address, || {
+        env.storage().instance().set(
+            &implementation_v1::ImplDataKey::Score(admin.clone()),
+            &77u32,
+        );
+    });
+    assert_eq!(client.get_admin(), admin);
+    let score: u32 = env.as_contract(&client.address, || {
+        env.storage()
+            .instance()
+            .get(&implementation_v1::ImplDataKey::Score(admin.clone()))
+            .unwrap()
+    });
+    assert_eq!(score, 77);
+}
+
 // ── SC-046 Security Council Tests ─────────────────────────────────────────────
 
 fn setup_council(

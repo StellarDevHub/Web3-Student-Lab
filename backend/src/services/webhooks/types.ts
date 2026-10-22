@@ -1,5 +1,6 @@
 export type WebhookEventName =
   | 'lab.completed'
+  | 'course.completed'
   | 'contract.deployed'
   | 'certificate.minted'
   | 'onchain.event'
@@ -58,6 +59,9 @@ export interface SignedWebhookHeaders {
   'x-webhook-event': string;
   'x-webhook-signature': string;
   'x-webhook-timestamp': string;
+  'x-hub-signature-256': string;
+  'x-webhook-nonce': string;
+  'x-webhook-unix-timestamp': string;
 }
 
 export type WebhookDeliveryState = 'pending' | 'delivered' | 'failed' | 'dead-letted';

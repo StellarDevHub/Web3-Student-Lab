@@ -17,6 +17,27 @@
 
 import logger from '../utils/logger.js';
 
+// ─── Histogram + probe types ──────────────────────────────────────────────────
+
+/**
+ * Upper bounds (ms) for the cumulative request-duration histogram. Chosen so
+ * the 1500 ms SLO threshold is an exact bucket boundary, which keeps the p95
+ * alert accurate.
+ */
+export const DURATION_BUCKETS_MS: readonly number[] = [50, 100, 250, 500, 1000, 1500, 2500, 5000];
+
+export interface DurationHistogramSnapshot {
+  /** Cumulative counts: each bucket counts requests with duration <= le. */
+  buckets: Array<{ le: number; count: number }>;
+  count: number;
+  sumMs: number;
+}
+
+export interface ProbeCounts {
+  ok: number;
+  failed: number;
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface PerformanceMetric {
@@ -86,6 +107,13 @@ export class MetricsCollector {
   private errorMetrics: ErrorMetric[] = [];
   private businessMetrics: BusinessMetric[] = [];
 
+  // Cumulative counters that survive ring-buffer trimming, so histogram and
+  // probe rates stay correct over long-running processes.
+  private durationBucketCounts: number[] = DURATION_BUCKETS_MS.map(() => 0);
+  private durationCount = 0;
+  private durationSumMs = 0;
+  private probeCounts = new Map<string, ProbeCounts>();
+
   /**
    * Maximum number of raw metric entries kept in memory per category.
    * Older entries are dropped (ring-buffer style) to bound memory usage.
@@ -118,6 +146,14 @@ export class MetricsCollector {
 
     this.performanceMetrics.push(metric);
     this.trim(this.performanceMetrics);
+
+    if (Number.isFinite(durationMs) && durationMs >= 0) {
+      this.durationCount += 1;
+      this.durationSumMs += durationMs;
+      DURATION_BUCKETS_MS.forEach((le, i) => {
+        if (durationMs <= le) this.durationBucketCounts[i] = (this.durationBucketCounts[i] ?? 0) + 1;
+      });
+    }
 
     // Log slow requests (>1 s) so they surface in existing log pipelines.
     if (durationMs > 1000) {
@@ -259,10 +295,45 @@ export class MetricsCollector {
   /**
    * Reset all collected metrics (useful in tests or after a scheduled flush).
    */
+  /**
+   * Cumulative request-duration histogram since process start (or last reset).
+   */
+  getDurationHistogram(): DurationHistogramSnapshot {
+    return {
+      buckets: DURATION_BUCKETS_MS.map((le, i) => ({ le, count: this.durationBucketCounts[i] ?? 0 })),
+      count: this.durationCount,
+      sumMs: this.durationSumMs,
+    };
+  }
+
+  /**
+   * Record the outcome of a periodic dependency probe (e.g. the deep readiness
+   * ledger check). `probe` is a low-cardinality label such as "horizon_ledger".
+   */
+  recordProbe(probe: string, ok: boolean): void {
+    const counts = this.probeCounts.get(probe) ?? { ok: 0, failed: 0 };
+    if (ok) counts.ok += 1;
+    else counts.failed += 1;
+    this.probeCounts.set(probe, counts);
+  }
+
+  /** Cumulative probe outcomes keyed by probe name. */
+  getProbeCounts(): Record<string, ProbeCounts> {
+    const out: Record<string, ProbeCounts> = {};
+    this.probeCounts.forEach((value, key) => {
+      out[key] = { ok: value.ok, failed: value.failed };
+    });
+    return out;
+  }
+
   reset(): void {
     this.performanceMetrics = [];
     this.errorMetrics = [];
     this.businessMetrics = [];
+    this.durationBucketCounts = DURATION_BUCKETS_MS.map(() => 0);
+    this.durationCount = 0;
+    this.durationSumMs = 0;
+    this.probeCounts = new Map<string, ProbeCounts>();
     logger.info('[Metrics] All metrics reset');
   }
 

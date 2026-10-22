@@ -11,12 +11,14 @@
 //! - Key rotation
 //! - Revocation: deactivated DIDs reject all subsequent mutations
 //! - Duplicate DID registration rejected
+//! - DID string form (SC-010): `did:stellar:<64 hex>` round-trip, malformed
+//!   string rejection via the typed `DIDError::MalformedDID` error
+//! - Unauthorized key binding attempts rejected (SC-010)
+//! - Delegated verification key revocation (SC-010)
 
 use crate::{ContributorProof, DIDRegistryContract, DIDRegistryContractClient};
 use soroban_sdk::{
-    symbol_short,
-    testutils::Address as _,
-    Address, Bytes, BytesN, Env, Map, String, Symbol,
+    symbol_short, testutils::Address as _, Address, Bytes, BytesN, Env, Map, String, Symbol,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -29,6 +31,30 @@ fn deploy(env: &Env) -> (Address, DIDRegistryContractClient) {
 
 fn make_did(env: &Env, seed: u8) -> BytesN<32> {
     BytesN::from_array(env, &[seed; 32])
+}
+
+/// Canonical `did:stellar:` string for `make_did(env, seed)` — built with an
+/// explicit hex table so it stays independent of `verification.rs`.
+fn canonical_string(env: &Env, seed: u8) -> String {
+    let hex = b"0123456789abcdef";
+    let mut buf = [0u8; 76];
+    buf[..12].copy_from_slice(b"did:stellar:");
+    for i in 0..32 {
+        buf[12 + 2 * i] = hex[(seed >> 4) as usize];
+        buf[13 + 2 * i] = hex[(seed & 0x0f) as usize];
+    }
+    String::from_bytes(env, &buf)
+}
+
+/// Concatenate byte parts into a soroban String (no alloc needed).
+fn cat(env: &Env, parts: &[&[u8]]) -> String {
+    let mut buf = [0u8; 256];
+    let mut n = 0usize;
+    for p in parts {
+        buf[n..n + p.len()].copy_from_slice(p);
+        n += p.len();
+    }
+    String::from_bytes(env, &buf[..n])
 }
 
 fn register_default(
@@ -99,10 +125,7 @@ fn test_bind_github_handle() {
 
     let doc = client.resolve(&did).unwrap();
     assert_eq!(doc.github_handle, Some(handle.clone()));
-    assert_eq!(
-        client.get_github_handle(&did),
-        Some(handle)
-    );
+    assert_eq!(client.get_github_handle(&did), Some(handle));
 }
 
 // ── Social identity binding ───────────────────────────────────────────────────
@@ -281,7 +304,10 @@ fn test_old_owner_cannot_mutate_after_rotation() {
     // Old owner tries to rotate again
     let another = Address::generate(&env);
     let result = client.try_rotate_key(&owner, &did, &another);
-    assert!(result.is_err(), "old owner must not be able to rotate after handoff");
+    assert!(
+        result.is_err(),
+        "old owner must not be able to rotate after handoff"
+    );
 }
 
 // ── Revocation ────────────────────────────────────────────────────────────────
@@ -374,9 +400,124 @@ fn test_update_attributes() {
     register_default(&env, &client, &owner, &did);
 
     let mut new_attrs = Map::new(&env);
-    new_attrs.set(symbol_short!("endpoint"), Bytes::from_slice(&env, b"https://example.com"));
+    new_attrs.set(
+        symbol_short!("endpoint"),
+        Bytes::from_slice(&env, b"https://example.com"),
+    );
     client.update(&owner, &did, &new_attrs);
 
     let doc = client.resolve(&did).unwrap();
     assert!(doc.attributes.contains_key(symbol_short!("endpoint")));
+}
+
+// ── DID string form (SC-010) ──────────────────────────────────────────────────
+
+#[test]
+fn test_register_and_resolve_via_did_string() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_id, client) = deploy(&env);
+    let owner = Address::generate(&env);
+    let did = make_did(&env, 20);
+    let did_str = canonical_string(&env, 20);
+    let mut attrs = Map::new(&env);
+    attrs.set(symbol_short!("name"), Bytes::from_slice(&env, b"Alice"));
+
+    assert!(client.validate_did(&did_str));
+
+    client.register_string(&owner, &did_str, &attrs);
+    let doc = client.resolve_string(&did_str).unwrap();
+    assert_eq!(doc.owner, owner);
+    // The string form resolves to the same document as the raw 32-byte key.
+    assert_eq!(client.resolve(&did).unwrap().owner, owner);
+    // Contract-side formatter round-trips to the exact canonical string.
+    assert_eq!(client.did_to_string(&did), did_str);
+    assert!(client.validate_did(&client.did_to_string(&did)));
+}
+
+#[test]
+fn test_malformed_did_strings_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_id, client) = deploy(&env);
+    let owner = Address::generate(&env);
+
+    let hex64 = [b'a'; 64];
+    // Sanity: the happy-path construction is accepted by the view.
+    let valid = cat(&env, &[b"did:stellar:", &hex64]);
+    assert!(client.validate_did(&valid));
+
+    let cases = [
+        cat(&env, &[]),                              // empty
+        cat(&env, &[b"did:stellar:"]),               // prefix only
+        cat(&env, &[b"did:stellar:", &hex64[..63]]), // 63 hex chars
+        cat(&env, &[b"did:stellar:", &hex64, b"a"]), // 65 hex chars
+        cat(&env, &[b"did:stellar:", &[b'z'; 64]]),  // non-hex payload
+        cat(&env, &[b"did:ethr:", &hex64]),          // wrong method
+        cat(&env, &[b"did:STELLAR:", &hex64]),       // case-sensitive prefix
+        cat(&env, &[&hex64]),                        // missing prefix
+        cat(&env, &[b"did:stellar:", &hex64, b"x"]), // trailing suffix
+    ];
+    for case in cases {
+        assert!(!client.validate_did(&case), "view must reject: {case:?}");
+        let reg = client.try_register_string(&owner, &case, &Map::new(&env));
+        assert!(reg.is_err(), "register_string must reject: {case:?}");
+        let res = client.try_resolve_string(&case);
+        assert!(res.is_err(), "resolve_string must reject: {case:?}");
+    }
+}
+
+// ── Unauthorized key binding (SC-010) ─────────────────────────────────────────
+
+#[test]
+fn test_unauthorized_key_binding_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_id, client) = deploy(&env);
+    let owner = Address::generate(&env);
+    let stranger = Address::generate(&env);
+    let did = make_did(&env, 21);
+    register_default(&env, &client, &owner, &did);
+
+    // A non-owner must be rejected from every binding operation.
+    let handle = String::from_str(&env, "mallory");
+    assert!(client.try_bind_github(&stranger, &did, &handle).is_err());
+    assert!(client
+        .try_bind_social(&stranger, &did, &Symbol::new(&env, "discord"), &handle)
+        .is_err());
+    let key = BytesN::from_array(&env, &[9u8; 32]);
+    assert!(client
+        .try_set_verification_key(&stranger, &did, &key)
+        .is_err());
+    assert!(client.try_revoke_verification_key(&stranger, &did).is_err());
+    assert!(client
+        .try_add_contributor_proof(&stranger, &did, &make_proof(&env, "mallory"))
+        .is_err());
+
+    // None of the attempts mutated the document.
+    let doc = client.resolve(&did).unwrap();
+    assert!(doc.github_handle.is_none());
+    assert_eq!(client.get_verification_key(&did), None);
+    assert_eq!(client.get_proofs(&did).len(), 0);
+}
+
+#[test]
+fn test_owner_revoke_verification_key() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_id, client) = deploy(&env);
+    let owner = Address::generate(&env);
+    let did = make_did(&env, 22);
+    register_default(&env, &client, &owner, &did);
+
+    let key = BytesN::from_array(&env, &[7u8; 32]);
+    client.set_verification_key(&owner, &did, &key);
+    assert_eq!(client.get_verification_key(&did), Some(key.clone()));
+
+    client.revoke_verification_key(&owner, &did);
+    assert_eq!(client.get_verification_key(&did), None);
+
+    // A new key can be bound again after revocation.
+    client.set_verification_key(&owner, &did, &key);
+    assert_eq!(client.get_verification_key(&did), Some(key));
 }
