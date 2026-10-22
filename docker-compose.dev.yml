@@ -9,6 +9,9 @@ services:
   db-read-replica:
     profiles: ["disabled"]
 
+  redis-replica:
+    profiles: ["disabled"]
+
   redis-sentinel-1:
     profiles: ["disabled"]
 
