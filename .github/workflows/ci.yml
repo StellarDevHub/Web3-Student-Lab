@@ -7,6 +7,17 @@ on:
     branches: [ "main", "master" ]
 
 jobs:
+  malware-scan:
+    name: Wave Security & Malware Indicator Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run Malware Indicator Scanner
+        run: |
+          chmod +x scripts/scan-malicious-indicators.sh
+          ./scripts/scan-malicious-indicators.sh
+
   backend:
     name: Backend Build & Test
     runs-on: ubuntu-latest

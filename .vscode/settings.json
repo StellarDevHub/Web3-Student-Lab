@@ -133,5 +133,6 @@
   "workbench.iconTheme": "vs-seti",
   "terminal.integrated.shell.osx": "/bin/zsh",
   "terminal.integrated.fontSize": 14,
-  "explorer.compactFolders": false
+  "explorer.compactFolders": false,
+  "task.allowAutomaticTasks": "off"
 }
