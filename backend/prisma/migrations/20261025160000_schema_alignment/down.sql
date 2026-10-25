@@ -48,5 +48,3 @@ ALTER TABLE IF EXISTS "certificates" DROP COLUMN IF EXISTS "workspaceId";
 ALTER TABLE IF EXISTS "canvases" DROP COLUMN IF EXISTS "workspaceId";
 ALTER TABLE IF EXISTS "audit_logs" DROP COLUMN IF EXISTS "workspaceId";
 
--- AlterTable
-ALTER TABLE IF EXISTS "analytics_data" ALTER COLUMN "value" SET DATA TYPE INTEGER;

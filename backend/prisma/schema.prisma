@@ -205,10 +205,10 @@ model CertificateVerificationEvent {
 }
 
 model MerkleCohortRoot {
-  cohortId   String   @id @map("cohort_id")
-  rootHash   String   @map("root_hash")
-  anchoredAt DateTime @default(now()) @map("anchored_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  cohortId   String    @id @map("cohort_id")
+  rootHash   String    @map("root_hash")
+  anchoredAt DateTime? @default(now()) @map("anchored_at") @db.Timestamp(6)
+  updatedAt  DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
   @@index([cohortId], map: "idx_merkle_cohort_roots_cohort_id")
   @@map("merkle_cohort_roots")
@@ -310,7 +310,7 @@ model AnalyticsData {
   metricType         String // "USER_STAT", "COURSE_STAT", "ENROLLMENT_STAT"
   anonymizedUserHash String? // SHA-256 of email
   region             String? // Aggregated location
-  value              Float?
+  value              Float?   @db.Real
   category           String? // course category, level, etc.
   timestamp          DateTime @default(now())
   metadata           Json?
@@ -790,16 +790,16 @@ model CurriculumSearchEntry {
   courseId     String?
   title        String
   content      String
-  tags         String[]                 @default([])
-  level        String?
+  difficulty   String?
   searchVector Unsupported("tsvector")?
-  metadata     Json                     @default("{}")
   createdAt    DateTime                 @default(now())
-  updatedAt    DateTime                 @default(now()) @updatedAt
+  updatedAt    DateTime                 @updatedAt
 
   @@unique([workspaceId, entityType, entityId])
   @@index([workspaceId, entityType])
   @@index([workspaceId, courseId])
+  @@index([searchVector], map: "curriculum_search_entries_search_idx", type: Gin)
+  @@ignore
   @@map("curriculum_search_entries")
 }
 
@@ -856,7 +856,7 @@ model TransactionFeeRecord {
   resourceFee      BigInt          @map("resource_fee")
   inclusionSuccess Boolean         @map("inclusion_success")
   recordedAt       DateTime        @default(now()) @map("recorded_at") @db.Timestamp(6)
-  ledgerSample     LedgerFeeSample @relation(fields: [ledgerSequence], references: [ledgerSequence])
+  ledgerSample     LedgerFeeSample @relation(fields: [ledgerSequence], references: [ledgerSequence], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([ledgerSequence], map: "idx_tx_records_ledger")
   @@index([txHash], map: "idx_tx_records_hash")

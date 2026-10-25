@@ -1,5 +1,3 @@
--- AlterTable
-ALTER TABLE "analytics_data" ALTER COLUMN "value" SET DATA TYPE DOUBLE PRECISION;
 
 -- AlterTable
 ALTER TABLE "audit_logs" ADD COLUMN IF NOT EXISTS "workspaceId" TEXT NOT NULL DEFAULT 'default';
