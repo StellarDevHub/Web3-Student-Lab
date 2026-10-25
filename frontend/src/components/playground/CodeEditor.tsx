@@ -17,9 +17,12 @@ import { ChevronRight, FileText } from 'lucide-react';
 import type { editor } from 'monaco-editor';
 import dynamic from 'next/dynamic';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import '@/lib/editor/monaco-loader';
 
-const Editor = dynamic(() => import('@monaco-editor/react'), {
-  ssr: false,
+const Editor = dynamic(
+  () => import('@/lib/editor/monaco-loader').then(() => import('@monaco-editor/react')),
+  {
+    ssr: false,
   loading: () => (
     <div className="flex h-full w-full items-center justify-center bg-zinc-950 text-zinc-500">
       <div className="flex flex-col items-center gap-4">

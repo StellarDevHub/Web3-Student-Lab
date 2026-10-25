@@ -27,7 +27,7 @@ export default function ResiliencyBanner() {
           setIsVisible(hasOpenBreaker);
         }
       } catch (error) {
-        console.error('Failed to fetch health status:', error);
+        console.debug('Circuit breaker health check unavailable:', error);
       }
     };
 

@@ -195,8 +195,8 @@ export async function middleware(request: NextRequest) {
     ? {
         // Development: allow unsafe-eval for HMR / source maps only
         'default-src': ["'self'"],
-        'script-src': ["'self'", "'unsafe-eval'", "'unsafe-inline'"],
-        'style-src': ["'self'", "'unsafe-inline'"],
+        'script-src': ["'self'", "'unsafe-eval'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+        'style-src': ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
         'img-src': ["'self'", 'data:', 'blob:', 'https:', 'http:'],
         'font-src': ["'self'", 'data:'],
         'connect-src': [

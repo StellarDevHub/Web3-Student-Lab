@@ -79,7 +79,7 @@ export const Web3OnboardingProvider = ({ children }: { children: ReactNode }) =>
           currentStepIndex: data.currentStepIndex || 0,
         }));
       } catch (error) {
-        console.warn('Failed to fetch onboarding state, using defaults', error);
+        console.debug('Onboarding state using defaults:', error);
       }
     };
     fetchOnboardingState();
@@ -89,7 +89,7 @@ export const Web3OnboardingProvider = ({ children }: { children: ReactNode }) =>
     try {
       await api.put('/user/onboarding', newState);
     } catch (error) {
-      console.error('Failed to save onboarding state', error);
+      console.debug('Failed to save onboarding state:', error);
     }
   };
 

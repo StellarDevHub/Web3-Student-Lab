@@ -25,8 +25,12 @@ import type { DiffChunk } from '@/lib/diff/diffTypes';
  * server bundle lean, matching `LessonCodeEditor`.
  */
 
-const DiffEditor = dynamic(() => import('@monaco-editor/react').then((m) => m.DiffEditor), {
-  ssr: false,
+import '@/lib/editor/monaco-loader';
+
+const DiffEditor = dynamic(
+  () => import('@/lib/editor/monaco-loader').then(() => import('@monaco-editor/react').then((m) => m.DiffEditor)),
+  {
+    ssr: false,
   loading: () => (
     <div
       role="status"

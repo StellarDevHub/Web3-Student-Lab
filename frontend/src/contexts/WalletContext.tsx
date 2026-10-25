@@ -499,7 +499,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const restoreSession = async () => {
       const sessionPk = loadSessionKey();
-      const saved = typeof window !== 'undefined' ? localStorage.getItem('stellar_wallet') : null;
+      const storage = typeof window !== 'undefined' && typeof localStorage !== 'undefined' ? localStorage : null;
+      const saved = storage ? storage.getItem('stellar_wallet') : null;
 
       if (!saved) return;
 
@@ -510,7 +511,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       try {
         ({ wallet: walletName, pk: storedPk, network } = JSON.parse(saved));
       } catch {
-        localStorage.removeItem('stellar_wallet');
+        storage?.removeItem('stellar_wallet');
         clearSessionKey();
         return;
       }
@@ -541,7 +542,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             // The user rotated their key while the tab was closed — update everything.
             setPublicKey(liveAddress);
             saveSessionKey(liveAddress);
-            localStorage.setItem(
+            storage?.setItem(
               'stellar_wallet',
               JSON.stringify({ wallet: walletName, pk: liveAddress, network })
             );
@@ -555,7 +556,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             setPublicKey(null);
             setActiveWallet(null);
             clearSessionKey();
-            localStorage.removeItem('stellar_wallet');
+            storage?.removeItem('stellar_wallet');
             sendTransaction({ type: 'DISCONNECT_WALLET' });
           }
         } catch {
