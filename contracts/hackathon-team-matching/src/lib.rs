@@ -830,10 +830,7 @@ impl HackathonTeamMatching {
         if amounts.is_empty() || team.members.is_empty() {
             panic_with_error!(&env, escrow::EscrowError::InvalidMilestones);
         }
-        if arbiters.is_empty()
-            || arbiter_threshold == 0
-            || arbiter_threshold > arbiters.len()
-        {
+        if arbiters.is_empty() || arbiter_threshold == 0 || arbiter_threshold > arbiters.len() {
             panic_with_error!(&env, escrow::EscrowError::InvalidArbiters);
         }
         for i in 0..arbiters.len() {
@@ -975,13 +972,7 @@ impl HackathonTeamMatching {
         if milestone.status != escrow::MilestoneStatus::Disputed {
             panic_with_error!(&env, escrow::EscrowError::NotDisputed);
         }
-        let resolved = dispute::cast_vote(
-            &env,
-            &record,
-            &mut milestone,
-            &arbiter,
-            release_to_team,
-        );
+        let resolved = dispute::cast_vote(&env, &record, &mut milestone, &arbiter, release_to_team);
         if resolved {
             if release_to_team {
                 escrow::release_milestone(&env, &record, &mut milestone);
@@ -1006,9 +997,11 @@ impl HackathonTeamMatching {
             if milestone.status == escrow::MilestoneStatus::Pending
                 || milestone.status == escrow::MilestoneStatus::Disputed
             {
-                refund_amount = refund_amount.checked_add(milestone.amount).unwrap_or_else(|| {
-                    panic_with_error!(&env, escrow::EscrowError::AmountOverflow)
-                });
+                refund_amount = refund_amount
+                    .checked_add(milestone.amount)
+                    .unwrap_or_else(|| {
+                        panic_with_error!(&env, escrow::EscrowError::AmountOverflow)
+                    });
                 milestone.status = escrow::MilestoneStatus::Refunded;
                 record.milestones.set(index, milestone);
             }

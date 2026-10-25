@@ -35,7 +35,9 @@ fn get_config(env: &Env) -> StakeConfig {
 }
 
 pub fn get_stake(env: &Env, user: &Address) -> Option<StakePosition> {
-    env.storage().persistent().get(&DataKey::Stake(user.clone()))
+    env.storage()
+        .persistent()
+        .get(&DataKey::Stake(user.clone()))
 }
 
 pub fn deposit(env: &Env, user: &Address, amount: i128) {
@@ -74,8 +76,8 @@ pub fn deposit(env: &Env, user: &Address, amount: i128) {
 }
 
 pub fn request_withdrawal(env: &Env, user: &Address) -> u64 {
-    let mut stake = get_stake(env, user)
-        .unwrap_or_else(|| panic_with_error!(env, SybilError::NoStake));
+    let mut stake =
+        get_stake(env, user).unwrap_or_else(|| panic_with_error!(env, SybilError::NoStake));
     if stake.amount <= 0 {
         panic_with_error!(env, SybilError::NoStake);
     }
@@ -96,8 +98,7 @@ pub fn request_withdrawal(env: &Env, user: &Address) -> u64 {
 }
 
 pub fn withdraw(env: &Env, user: &Address) -> i128 {
-    let stake = get_stake(env, user)
-        .unwrap_or_else(|| panic_with_error!(env, SybilError::NoStake));
+    let stake = get_stake(env, user).unwrap_or_else(|| panic_with_error!(env, SybilError::NoStake));
     if stake.amount <= 0 {
         panic_with_error!(env, SybilError::NoStake);
     }
@@ -121,7 +122,11 @@ pub fn withdraw(env: &Env, user: &Address) -> i128 {
 }
 
 pub fn is_eligible(env: &Env, user: &Address) -> bool {
-    let config = match env.storage().instance().get::<_, StakeConfig>(&DataKey::StakeConfig) {
+    let config = match env
+        .storage()
+        .instance()
+        .get::<_, StakeConfig>(&DataKey::StakeConfig)
+    {
         Some(config) => config,
         None => return false,
     };
@@ -143,7 +148,7 @@ pub fn slash_duplicate(env: &Env, user: &Address, evidence_id: BytesN<32>) {
     let config = get_config(env);
     env.storage()
         .persistent()
-        .set(&DataKey::FraudEvidence(evidence_id), user);
+        .set(&DataKey::FraudEvidence(evidence_id.clone()), user);
     env.storage()
         .persistent()
         .set(&DataKey::BannedUser(user.clone()), &true);

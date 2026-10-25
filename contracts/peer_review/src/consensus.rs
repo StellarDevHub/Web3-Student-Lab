@@ -28,7 +28,11 @@ pub(crate) fn median(grades: &Vec<i128>) -> Option<i128> {
     } else {
         let lower = sorted.get(n / 2 - 1)?;
         let upper = sorted.get(n / 2)?;
-        Some(lower / 2 + upper / 2 + (lower % 2 + upper % 2) / 2)
+        if let Some(sum) = lower.checked_add(upper) {
+            Some(sum / 2)
+        } else {
+            Some(lower / 2 + upper / 2 + (lower % 2 + upper % 2) / 2)
+        }
     }
 }
 

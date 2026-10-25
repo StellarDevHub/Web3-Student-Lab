@@ -199,11 +199,9 @@ impl QuadraticVotingContract {
 
         // Quadratic cost logic: incremental cost = (prev + add)^2 - prev^2,
         // so that the total cost of V votes is V^2.
-        let incremental_cost = math::quadratic_cost(
-            u64::from(previous_votes),
-            u64::from(additional_votes),
-        )
-        .unwrap_or_else(|| panic_with_error!(&env, QVError::Overflow));
+        let incremental_cost =
+            math::quadratic_cost(u64::from(previous_votes), u64::from(additional_votes))
+                .unwrap_or_else(|| panic_with_error!(&env, QVError::Overflow));
 
         if i128::from(current_credits) < incremental_cost {
             panic_with_error!(&env, QVError::InsufficientCredits);
@@ -213,8 +211,8 @@ impl QuadraticVotingContract {
             .checked_sub(incremental_cost)
             .unwrap_or_else(|| panic_with_error!(&env, QVError::InsufficientCredits));
         // remaining <= current_credits <= u32::MAX, so this conversion succeeds.
-        current_credits = u32::try_from(remaining)
-            .unwrap_or_else(|_| panic_with_error!(&env, QVError::Overflow));
+        current_credits =
+            u32::try_from(remaining).unwrap_or_else(|_| panic_with_error!(&env, QVError::Overflow));
 
         proposal.votes_received = proposal
             .votes_received

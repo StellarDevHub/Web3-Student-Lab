@@ -11,8 +11,8 @@ pub use vesting::MigrationVestingSchedule;
 pub mod burner;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short,
-    token, Address, Env, Vec,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, token,
+    Address, Env, Vec,
 };
 
 // ── Errors (SC-HARD-20: range 400+) ──────────────────────────────────────────
@@ -496,7 +496,11 @@ impl TokenMigrationContract {
 
         env.events().publish(
             (symbol_short!("vest_new"), schedule_id),
-            (schedule.beneficiary.clone(), total_amount, schedule.end_ledger),
+            (
+                schedule.beneficiary.clone(),
+                total_amount,
+                schedule.end_ledger,
+            ),
         );
         schedule_id
     }
@@ -682,11 +686,7 @@ impl TokenMigrationContract {
         new_amount: i128,
         vested: bool,
     ) {
-        let config: MigrationConfig = env
-            .storage()
-            .instance()
-            .get(&DataKey::Config)
-            .unwrap();
+        let config: MigrationConfig = env.storage().instance().get(&DataKey::Config).unwrap();
         let denominator: u32 = env
             .storage()
             .instance()

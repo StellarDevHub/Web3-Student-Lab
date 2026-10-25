@@ -3,9 +3,9 @@
 //! Provides Uniswap v2-style cumulative price-time accumulators ($P \cdot \Delta t$)
 //! resistant to single-block flash-loan and sandwich manipulation.
 
-use soroban_sdk::{Address, Env};
 use crate::storage::{DataKey, TwapSnapshot};
 use crate::AmmError;
+use soroban_sdk::{Address, Env};
 
 /// Fixed point precision scaling factor (1e9) for fractional exchange rates.
 pub const PRICE_PRECISION: i128 = 1_000_000_000;
@@ -98,9 +98,7 @@ pub fn update_cumulative_prices(env: &Env, reserve_a: i128, reserve_b: i128) {
         env.storage()
             .instance()
             .set(&DataKey::Snapshot(0), &snapshot);
-        env.storage()
-            .instance()
-            .set(&DataKey::SnapshotCount, &1u32);
+        env.storage().instance().set(&DataKey::SnapshotCount, &1u32);
     }
 }
 
@@ -120,7 +118,11 @@ pub fn get_historical_snapshot(env: &Env, target_timestamp: u64) -> Option<TwapS
 
     // Linear scan back from newest snapshot
     for i in (0..count).rev() {
-        if let Some(snap) = env.storage().instance().get::<DataKey, TwapSnapshot>(&DataKey::Snapshot(i)) {
+        if let Some(snap) = env
+            .storage()
+            .instance()
+            .get::<DataKey, TwapSnapshot>(&DataKey::Snapshot(i))
+        {
             if snap.timestamp <= target_timestamp {
                 best_match = Some(snap);
                 break;
@@ -176,7 +178,8 @@ pub fn consult(
         .get(&DataKey::PriceBCumulative)
         .unwrap_or(0);
 
-    let (past_cum, current_cum, effective_delta_t) = match get_historical_snapshot(env, target_time) {
+    let (past_cum, current_cum, effective_delta_t) = match get_historical_snapshot(env, target_time)
+    {
         Some(snap) => {
             let dt = current_time.saturating_sub(snap.timestamp);
             let delta_t = if dt > 0 { dt } else { 1 };
@@ -187,7 +190,11 @@ pub fn consult(
             }
         }
         None => {
-            let dt = if period_seconds > 0 { period_seconds } else { 1 };
+            let dt = if period_seconds > 0 {
+                period_seconds
+            } else {
+                1
+            };
             if is_token_a {
                 (0, current_cum_a, dt)
             } else {
@@ -199,8 +206,16 @@ pub fn consult(
     let delta_cum = current_cum.saturating_sub(past_cum);
     if delta_cum <= 0 || effective_delta_t == 0 {
         // Fallback to current spot price if no time elapsed
-        let res_a: i128 = env.storage().instance().get(&DataKey::ReserveA).unwrap_or(1);
-        let res_b: i128 = env.storage().instance().get(&DataKey::ReserveB).unwrap_or(1);
+        let res_a: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ReserveA)
+            .unwrap_or(1);
+        let res_b: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ReserveB)
+            .unwrap_or(1);
         return if is_token_a {
             Ok((amount_in * res_b) / res_a)
         } else {

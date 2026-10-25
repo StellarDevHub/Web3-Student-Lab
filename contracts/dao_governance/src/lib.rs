@@ -37,8 +37,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, panic_with_error, symbol_short, Address, Env, String,
-    Vec,
+    contract, contractimpl, contracttype, panic_with_error, symbol_short, Address, Env, String, Vec,
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -108,6 +107,9 @@ struct StoredProposal {
     status: u32,
     tally: i128,
     credits_spent: u128,
+    created_seq: u64,
+    quorum_required: u128,
+    eta: u64,
 }
 
 impl StoredProposal {
@@ -125,6 +127,9 @@ impl StoredProposal {
             },
             tally: proposal.tally,
             credits_spent: proposal.credits_spent,
+            created_seq: proposal.created_seq,
+            quorum_required: proposal.quorum_required,
+            eta: proposal.eta,
         }
     }
 
@@ -139,10 +144,14 @@ impl StoredProposal {
                 0 => ProposalStatus::Active,
                 1 => ProposalStatus::Passed,
                 2 => ProposalStatus::Failed,
+                3 => ProposalStatus::Executed,
                 _ => panic!("invalid compact proposal status"),
             },
             tally: self.tally,
             credits_spent: self.credits_spent,
+            created_seq: self.created_seq,
+            quorum_required: self.quorum_required,
+            eta: self.eta,
         }
     }
 }
@@ -176,7 +185,6 @@ pub mod treasury;
 pub use errors::DaoError;
 use ragequit::Ragequit;
 use treasury::{Treasury, TreasuryState};
-
 
 // ── Contract ──────────────────────────────────────────────────────────────────
 
@@ -254,8 +262,7 @@ impl DaoGovernance {
         let id: u64 = env.storage().instance().get(&Key::NextId).unwrap_or(0);
         env.storage().instance().set(&Key::NextId, &(id + 1));
 
-        let quorum_required =
-            read_total_granted(&env).saturating_mul(QUORUM_BPS) / BPS_DENOMINATOR;
+        let quorum_required = read_total_granted(&env).saturating_mul(QUORUM_BPS) / BPS_DENOMINATOR;
 
         let proposal = Proposal {
             id,
@@ -367,6 +374,7 @@ impl DaoGovernance {
         if proposal.credits_spent >= proposal.quorum_required && proposal.tally > 0 {
             proposal.status = ProposalStatus::Passed;
             proposal.eta = now.saturating_add(TIMELOCK_DELAY);
+        } else {
             proposal.status = ProposalStatus::Failed;
         }
         Self::store_proposal(&env, &proposal);
@@ -404,8 +412,7 @@ impl DaoGovernance {
         Self::only_admin(&env);
         check_voting_period(&env, period);
         env.storage().instance().set(&Key::VotingPeriod, &period);
-        env.events()
-            .publish((symbol_short!("vp_set"),), period);
+        env.events().publish((symbol_short!("vp_set"),), period);
     }
 
     /// Set the minimum credits a proposal creator must hold. Admin only.

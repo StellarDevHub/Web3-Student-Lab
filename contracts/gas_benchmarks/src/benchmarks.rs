@@ -90,9 +90,11 @@ fn bench_merkle_proof_packed_hashing() {
     }
 
     let (optimized_cpu, optimized_mem) = measure(&env, || {
-        crate::smart_vault::MerkleDistributor::verify_proof(&env, &leaf, &proof, &root)
+        crate::smart_vault::MerkleDistributor::verify_proof(&env, &leaf, &proof, &root);
     });
-    let (legacy_cpu, _) = measure(&env, || verify_proof_legacy(&env, &leaf, &proof, &root));
+    let (legacy_cpu, _) = measure(&env, || {
+        verify_proof_legacy(&env, &leaf, &proof, &root);
+    });
 
     assert!(optimized_cpu > 0);
     assert!(
@@ -205,8 +207,8 @@ fn bench_smart_vault_endpoints() {
 
     // withdraw
     let (cpu, mem) = measure(&env, || {
-        let withdrawn = client.withdraw(&user, &500_000);
-        assert_eq!(withdrawn, 500_000);
+        let withdrawn = client.withdraw(&user, &100_000);
+        assert_eq!(withdrawn, 100_000);
     });
     assert!(cpu > 0);
     record(
@@ -275,10 +277,10 @@ fn bench_dao_governance_endpoints() {
     let title = SorobanString::from_str(&env, "Benchmark");
     let desc = SorobanString::from_str(&env, "Test proposal");
     let (cpu, mem) = measure(&env, || {
-        let _pid = client.create_proposal(&admin, &title, &desc, &3600);
+        let _pid = client.create_proposal(&admin, &title, &desc, &86_400);
     });
     assert!(cpu > 0);
-    let pid: u64 = client.create_proposal(&admin, &title, &desc, &3600);
+    let pid: u64 = client.create_proposal(&admin, &title, &desc, &86_400);
     record(
         "dao_governance::create_proposal",
         cpu,
@@ -286,15 +288,16 @@ fn bench_dao_governance_endpoints() {
         "Creates proposal",
     );
 
-    let (cpu, mem) = measure(&env, || client.vote(&member, &pid, &3i64));
+    let (cpu, mem) = measure(&env, || client.vote(&member, &pid, &20i64));
     assert!(cpu > 0);
     record("dao_governance::vote", cpu, mem, "Quadratic vote");
 
-    env.ledger().with_mut(|l| l.timestamp += 4000);
+    env.ledger().with_mut(|l| l.timestamp += 86_401);
     let (cpu, mem) = measure(&env, || client.finalize(&pid));
     assert!(cpu > 0);
     record("dao_governance::finalize", cpu, mem, "Finalizes proposal");
 
+    env.ledger().with_mut(|l| l.timestamp += 172_800);
     let (cpu, mem) = measure(&env, || client.execute(&admin, &pid));
     assert!(cpu > 0);
     record(

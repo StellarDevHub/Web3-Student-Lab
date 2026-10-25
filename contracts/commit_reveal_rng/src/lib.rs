@@ -204,7 +204,11 @@ impl CommitRevealRng {
                 .get(&TOKEN_KEY)
                 .expect("stake token not configured");
             let token_client = soroban_sdk::token::Client::new(&env, &token_addr);
-            token_client.transfer(&participant, &env.current_contract_address(), &deposit_amount);
+            token_client.transfer(
+                &participant,
+                &env.current_contract_address(),
+                &deposit_amount,
+            );
 
             let mut deposits: Map<Address, i128> =
                 env.storage().instance().get(&DEPOSITS_KEY).unwrap();
@@ -327,13 +331,8 @@ impl CommitRevealRng {
         let mut slashed: Vec<Address> = env.storage().instance().get(&SLASHED_KEY).unwrap();
         let mut deposits: Map<Address, i128> = env.storage().instance().get(&DEPOSITS_KEY).unwrap();
 
-        let total_confiscated = slashing::slash_unrevealed(
-            &env,
-            &commits,
-            &reveals,
-            &mut slashed,
-            &mut deposits,
-        );
+        let total_confiscated =
+            slashing::slash_unrevealed(&env, &commits, &reveals, &mut slashed, &mut deposits);
 
         for addr in slashed.iter() {
             env.events().publish((symbol_short!("slashed"), addr), ());

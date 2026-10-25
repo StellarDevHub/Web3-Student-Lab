@@ -32,7 +32,7 @@ export class PlagiarismDetectorService {
       const matches = this.findSimilarSubmissions(fingerprint, studentId);
 
       // Calculate overall similarity
-      const similarityScore = matches.length > 0 ? matches[0].similarity : 0;
+      const similarityScore = matches.length > 0 && matches[0] ? matches[0].similarity : 0;
       const isPlagiarized = similarityScore >= this.SIMILARITY_THRESHOLD;
 
       // Determine risk level

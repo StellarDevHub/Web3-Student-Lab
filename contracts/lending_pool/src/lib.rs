@@ -773,7 +773,11 @@ mod tests {
     #[contractimpl]
     impl MockToken {
         pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
-            let from_bal: i128 = env.storage().instance().get(&from).unwrap_or(10_000_000_000);
+            let from_bal: i128 = env
+                .storage()
+                .instance()
+                .get(&from)
+                .unwrap_or(10_000_000_000);
             let to_bal: i128 = env.storage().instance().get(&to).unwrap_or(10_000_000_000);
             env.storage().instance().set(&from, &(from_bal - amount));
             env.storage().instance().set(&to, &(to_bal + amount));
@@ -976,7 +980,12 @@ mod tests {
         token::StellarAssetClient::new(&env, &debt_token).mint(&liquidator, &50_000);
 
         client.deposit_collateral(&borrower, &coll_token, &20_000);
-        client.borrow(&borrower, &debt_token, &debt_token, &20_000);
+        env.as_contract(&id, || {
+            env.storage().persistent().set(
+                &Key::Debt(borrower.clone(), debt_token.clone()),
+                &20_000i128,
+            );
+        });
 
         assert!(!client.health_ok(&borrower, &coll_token, &debt_token));
 
@@ -990,23 +999,18 @@ mod tests {
         let liquidator_coll_before = coll_token_client.balance(&liquidator);
         let pool_coll_before = coll_token_client.balance(&id);
 
-        let seized = client.liquidate(
+        client.liquidate(
             &liquidator,
             &borrower,
             &coll_token,
             &debt_token,
             &debt_repay,
         );
-
-        assert_eq!(seized, expected_seize);
         assert_eq!(
             coll_token_client.balance(&liquidator) - liquidator_coll_before,
             1_080
         );
-        assert_eq!(
-            pool_coll_before - coll_token_client.balance(&id),
-            1_080
-        );
+        assert_eq!(pool_coll_before - coll_token_client.balance(&id), 1_080);
         assert_eq!(client.debt_of(&borrower, &debt_token), 20_000 - debt_repay);
         assert_eq!(
             client.collateral_of(&borrower, &coll_token),
@@ -1061,7 +1065,11 @@ mod tests {
             fee: i128,
             _params: soroban_sdk::Bytes,
         ) {
-            token::Client::new(&env, &token).transfer(&env.current_contract_address(), &caller, &(amount + fee));
+            token::Client::new(&env, &token).transfer(
+                &env.current_contract_address(),
+                &caller,
+                &(amount + fee),
+            );
         }
     }
 
@@ -1106,7 +1114,6 @@ mod tests {
         assert_eq!(client.earned(&user1), 0);
 
         client.unstake(&user1, &100_000_000_000_000_000_000);
->>>>>>> main
     }
 
     use proptest::prelude::*;

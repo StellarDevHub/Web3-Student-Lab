@@ -92,8 +92,10 @@ impl PaymentSplitter {
             .instance()
             .set(&SplitterDataKey::Initialized, &true);
 
-        env.events()
-            .publish((symbol_short!("init_ps"),), (num_payees as u32, total_shares));
+        env.events().publish(
+            (symbol_short!("init_ps"),),
+            (num_payees as u32, total_shares),
+        );
     }
 
     /// Deposit arbitrary Soroban token to the splitter contract.
@@ -108,10 +110,8 @@ impl PaymentSplitter {
         let client = token::Client::new(&env, &token);
         client.transfer(&sender, &env.current_contract_address(), &amount);
 
-        env.events().publish(
-            (symbol_short!("ps_dep"), token.clone(), sender),
-            amount,
-        );
+        env.events()
+            .publish((symbol_short!("ps_dep"), token.clone(), sender), amount);
     }
 
     /// Release accrued tokens to a specific beneficiary. Pull-payment pattern.
@@ -145,10 +145,8 @@ impl PaymentSplitter {
         let client = token::Client::new(&env, &token);
         client.transfer(&env.current_contract_address(), &payee, &payment);
 
-        env.events().publish(
-            (symbol_short!("released"), token, payee),
-            payment,
-        );
+        env.events()
+            .publish((symbol_short!("released"), token, payee), payment);
 
         payment
     }

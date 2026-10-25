@@ -138,7 +138,7 @@ fn test_aggregation_requires_three_fresh_reports() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #427)")]
+#[should_panic(expected = "Error(Contract, #429)")]
 fn test_future_dated_report_is_not_fresh() {
     let env = Env::default();
     let (_, client) = setup(&env);

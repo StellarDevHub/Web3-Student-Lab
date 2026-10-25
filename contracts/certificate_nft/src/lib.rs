@@ -3,12 +3,12 @@
 pub mod badges;
 pub mod rarity;
 
+pub use badges::{AchievementBadge, ProvenanceRecord};
+pub use rarity::RarityTier;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
     Env, String, Symbol,
 };
-pub use badges::{AchievementBadge, ProvenanceRecord};
-pub use rarity::RarityTier;
 
 // ---- Errors (SC-HARD-20: range 400+) ----
 
@@ -129,8 +129,14 @@ impl CertificateNFTContract {
     ) -> u64 {
         admin.require_auth();
 
-        let badge_id: u64 = env.storage().persistent().get(&DataKey::BadgeCounter).unwrap_or(1);
-        env.storage().persistent().set(&DataKey::BadgeCounter, &(badge_id + 1));
+        let badge_id: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::BadgeCounter)
+            .unwrap_or(1);
+        env.storage()
+            .persistent()
+            .set(&DataKey::BadgeCounter, &(badge_id + 1));
 
         let badge = match AchievementBadge::new(
             &env,
@@ -146,7 +152,9 @@ impl CertificateNFTContract {
             Err(e) => panic_with_error!(&env, e),
         };
 
-        env.storage().persistent().set(&DataKey::Badge(badge_id), &badge);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Badge(badge_id), &badge);
 
         let topics: (Symbol, Address, u64) = (symbol_short!("badge_mnt"), student, badge_id);
         env.events().publish(topics, badge_id);
@@ -167,7 +175,9 @@ impl CertificateNFTContract {
         admin.require_auth();
         let mut badge: AchievementBadge = Self::get_badge(env.clone(), badge_id);
         badge.add_milestone(&env, milestone);
-        env.storage().persistent().set(&DataKey::Badge(badge_id), &badge);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Badge(badge_id), &badge);
     }
 
     /// Upgrades badge rarity tier after verifying prerequisite milestones.
@@ -183,7 +193,9 @@ impl CertificateNFTContract {
         if let Err(e) = badge.upgrade_tier(&env, target_tier, new_metadata_uri) {
             panic_with_error!(&env, e);
         }
-        env.storage().persistent().set(&DataKey::Badge(badge_id), &badge);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Badge(badge_id), &badge);
     }
 
     /// Strictly enforces soulbound non-transferability.
@@ -192,7 +204,13 @@ impl CertificateNFTContract {
     }
 
     /// Strictly enforces soulbound non-transferability.
-    pub fn transfer_from(env: Env, _spender: Address, _from: Address, _to: Address, _badge_id: u64) {
+    pub fn transfer_from(
+        env: Env,
+        _spender: Address,
+        _from: Address,
+        _to: Address,
+        _badge_id: u64,
+    ) {
         AchievementBadge::assert_transfer_blocked(&env);
     }
 }

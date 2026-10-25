@@ -1248,7 +1248,7 @@ mod tests {
         let v = setup();
         fractionalize(&v, 300, 200, 500);
 
-        v.client().transfer_shares(&v.user_a, &v.user_b, &100);
+        v.client().transfer_shares(&v.user_a, &v.user_b, &100_000);
 
         assert_eq!(v.client().share_balance(&v.user_a), 200_000);
         assert_eq!(v.client().share_balance(&v.user_b), 300_000);
@@ -1361,7 +1361,7 @@ mod tests {
         v.client().finalize_buyout(&v.bidder);
 
         assert_eq!(v.client().claim_buyout_payout(&v.user_a), 1_600);
-        assert_eq!(v.client().claim_buyout_payout(&v.user_b), 4_000);
+        assert_eq!(v.client().claim_buyout_payout(&v.user_b), 2_400);
         assert_eq!(v.client().share_balance(&v.user_a), 0);
         assert_eq!(v.client().share_balance(&v.user_b), 0);
     }

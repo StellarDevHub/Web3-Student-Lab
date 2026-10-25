@@ -63,11 +63,11 @@ pub enum AmmError {
     InvariantViolated = 412,
 }
 
-pub mod lp_token;
 pub mod anti_mev;
 pub mod circuit_breaker;
 pub mod events;
 pub mod invariants;
+pub mod lp_token;
 pub mod storage;
 pub mod twap;
 
@@ -191,9 +191,9 @@ impl AMMContract {
         Self::lock(&env);
         circuit_breaker::assert_not_paused(&env);
         if amount_a <= 0 || amount_b <= 0 {
+            Self::unlock(&env);
             panic_with_error!(&env, AmmError::InvalidAmount);
         }
-        Self::lock(&env);
 
         let token_a: Address = env.storage().instance().get(&DataKey::TokenA).unwrap();
         let token_b: Address = env.storage().instance().get(&DataKey::TokenB).unwrap();
@@ -288,9 +288,9 @@ impl AMMContract {
         Self::lock(&env);
         circuit_breaker::assert_not_paused(&env);
         if shares <= 0 {
+            Self::unlock(&env);
             panic_with_error!(&env, AmmError::InvalidAmount);
         }
-        Self::lock(&env);
 
         let pool_share: Address = env.storage().instance().get(&DataKey::PoolShare).unwrap();
         let token_a: Address = env.storage().instance().get(&DataKey::TokenA).unwrap();
@@ -598,8 +598,6 @@ impl AMMContract {
     pub fn twap_consult_1h(env: Env, token_in: Address, amount_in: i128) -> i128 {
         Self::twap_consult(env, token_in, amount_in, twap::TWAP_PERIOD_1H)
     }
-
-
 }
 
 pub mod math;

@@ -8,7 +8,7 @@ import * as Redis from 'redis';
 @Injectable()
 export class RedisCacheAsideService {
   private readonly logger = new Logger(RedisCacheAsideService.name);
-  private redisClient: Redis.RedisClient;
+  private redisClient: any;
   private lockTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
   // Configuration
@@ -22,11 +22,11 @@ export class RedisCacheAsideService {
   }
 
   private initializeRedis(): void {
-    this.redisClient = Redis.createClient({
+    this.redisClient = (Redis as any).createClient({
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
       password: process.env.REDIS_PASSWORD,
-      retryStrategy: (options) => {
+      retryStrategy: (options: any) => {
         if (options.total_retry_time > 1000 * 60 * 60) {
           return new Error('Redis retry time exhausted');
         }
@@ -37,7 +37,7 @@ export class RedisCacheAsideService {
       },
     });
 
-    this.redisClient.on('error', (err) => {
+    this.redisClient.on('error', (err: any) => {
       this.logger.error(`Redis client error: ${err}`);
     });
 
@@ -102,7 +102,7 @@ export class RedisCacheAsideService {
       const lockValue = `${Date.now()}-${Math.random()}`;
       const timeout = setTimeout(() => resolve(false), this.LOCK_TIMEOUT);
 
-      this.redisClient.set(lockKey, lockValue, 'PX', this.LOCK_TIMEOUT, 'NX', (err, reply) => {
+      this.redisClient.set(lockKey, lockValue, 'PX', this.LOCK_TIMEOUT, 'NX', (err: any, reply: any) => {
         clearTimeout(timeout);
         resolve(!err && reply === 'OK');
       });
@@ -172,7 +172,7 @@ export class RedisCacheAsideService {
    */
   private async getCached<T>(key: string): Promise<T | null> {
     return new Promise((resolve) => {
-      this.redisClient.get(key, (err, reply) => {
+      this.redisClient.get(key, (err: any, reply: any) => {
         if (err) {
           this.logger.error(`Cache get failed for key ${key}: ${err}`);
           resolve(null);
@@ -200,7 +200,7 @@ export class RedisCacheAsideService {
   private async setCached<T>(key: string, value: T, ttl: number): Promise<void> {
     return new Promise((resolve) => {
       const serialized = JSON.stringify(value);
-      this.redisClient.setex(key, ttl, serialized, (err) => {
+      this.redisClient.setex(key, ttl, serialized, (err: any) => {
         if (err) {
           this.logger.error(`Cache set failed for key ${key}: ${err}`);
         } else {
@@ -225,13 +225,13 @@ export class RedisCacheAsideService {
    */
   async invalidatePattern(pattern: string): Promise<number> {
     return new Promise((resolve) => {
-      this.redisClient.keys(pattern, (err, keys) => {
+      this.redisClient.keys(pattern, (err: any, keys: any) => {
         if (err || !keys || keys.length === 0) {
           resolve(0);
           return;
         }
 
-        this.redisClient.del(...keys, (err, reply) => {
+        this.redisClient.del(...keys, (err: any, reply: any) => {
           resolve(!err ? reply : 0);
         });
       });
@@ -243,7 +243,7 @@ export class RedisCacheAsideService {
    */
   async getStats(): Promise<{ keys: number; memory: string; hitRate: number }> {
     return new Promise((resolve) => {
-      this.redisClient.info('stats', (err, info) => {
+      this.redisClient.info('stats', (err: any, info: any) => {
         if (err) {
           resolve({ keys: 0, memory: '0B', hitRate: 0 });
           return;
@@ -255,17 +255,17 @@ export class RedisCacheAsideService {
 
         for (const line of lines) {
           if (line.startsWith('keyspace_hits:')) {
-            const hits = parseInt(line.split(':')[1]);
-            const misses = parseInt(lines.find((l) => l.startsWith('keyspace_misses:'))?.split(':')[1] || '1');
+            const hits = parseInt(line.split(':')[1] || '0', 10);
+            const misses = parseInt(lines.find((l: string) => l.startsWith('keyspace_misses:'))?.split(':')[1] || '1', 10);
             hitRate = hits / (hits + misses);
           }
         }
 
-        this.redisClient.dbsize((err, keys) => {
-          this.redisClient.info('memory', (err, memInfo) => {
+        this.redisClient.dbsize((err: any, keys: any) => {
+          this.redisClient.info('memory', (err: any, memInfo: any) => {
             const memLine = memInfo
               ?.split('\r\n')
-              .find((l) => l.startsWith('used_memory_human:'));
+              .find((l: string) => l.startsWith('used_memory_human:'));
             const memory = memLine?.split(':')[1] || '0B';
 
             resolve({

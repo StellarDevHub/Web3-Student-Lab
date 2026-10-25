@@ -65,6 +65,8 @@ struct StoredCertificateRecord {
     revocation_reason: String,
     previous_cert_id: BytesN<32>,
     content_hash: BytesN<32>,
+    metadata_uri: String,
+    expires_at: Option<u64>,
 }
 
 impl StoredCertificateRecord {
@@ -84,6 +86,8 @@ impl StoredCertificateRecord {
             revocation_reason: record.revocation_reason.clone(),
             previous_cert_id: record.previous_cert_id.clone(),
             content_hash: record.content_hash.clone(),
+            metadata_uri: record.metadata_uri.clone(),
+            expires_at: record.expires_at,
         }
     }
 
@@ -104,6 +108,8 @@ impl StoredCertificateRecord {
             revocation_reason: self.revocation_reason,
             previous_cert_id: self.previous_cert_id,
             content_hash: self.content_hash,
+            metadata_uri: self.metadata_uri,
+            expires_at: self.expires_at,
             royalty_bps: self.metadata & 0x1fff,
             soulbound: (self.metadata & (1 << 15)) != 0,
         }
@@ -157,7 +163,7 @@ impl CertificateContract {
     }
 
     /// Registers the institutional ed25519 public key whose signatures
-    /// authorize revocation via `revoke_certificate_with_institution_sig`.
+    /// authorize revocation via `revoke_with_institution_sig`.
     /// Admin only.
     pub fn set_institution_key(env: Env, public_key: BytesN<32>) {
         let admin: Address = env
@@ -251,7 +257,7 @@ impl CertificateContract {
     /// message `cert_id (32 bytes) || reason_code (UTF-8 bytes)` made with
     /// the key registered via `set_institution_key`. Traps if the
     /// signature is invalid or no institution key is registered.
-    pub fn revoke_certificate_with_institution_sig(
+    pub fn revoke_with_institution_sig(
         env: Env,
         cert_id: BytesN<32>,
         reason_code: String,
@@ -274,7 +280,6 @@ impl CertificateContract {
             .ed25519_verify(&institution_key, &message, &signature);
 
         Self::apply_revocation(&env, &mut record, reason_code);
-    }
     }
 
     pub fn reissue_certificate(
@@ -405,11 +410,7 @@ impl CertificateContract {
     /// Certificates in `Reissued` status are treated as `Revoked` because
     /// reissuance is only possible after revocation.
     pub fn verify_certificate(env: Env, cert_id: BytesN<32>) -> VerificationStatus {
-        let record: CertificateRecord = match env
-            .storage()
-            .persistent()
-            .get(&DataKey::Certificate(cert_id))
-        {
+        let record: CertificateRecord = match Self::try_load_certificate(&env, &cert_id) {
             Some(r) => r,
             None => return VerificationStatus::NotFound,
         };
@@ -434,11 +435,7 @@ impl CertificateContract {
     /// Returns `true` if `content_hash` matches the hash recorded for the
     /// certificate's metadata document. Traps if the certificate is unknown.
     pub fn verify_content_hash(env: Env, cert_id: BytesN<32>, content_hash: BytesN<32>) -> bool {
-        let record: CertificateRecord = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Certificate(cert_id))
-            .unwrap_or_else(|| panic_with_error!(&env, Error::NotFound));
+        let record: CertificateRecord = Self::load_certificate(&env, &cert_id);
         record.content_hash == content_hash
     }
 
@@ -544,17 +541,21 @@ impl CertificateContract {
         );
     }
 
-    fn load_certificate(env: &Env, cert_id: &BytesN<32>) -> CertificateRecord {
+    fn try_load_certificate(env: &Env, cert_id: &BytesN<32>) -> Option<CertificateRecord> {
         if let Some(record) = env
             .storage()
             .persistent()
             .get::<DataKey, StoredCertificateRecord>(&DataKey::CompactCertificate(cert_id.clone()))
         {
-            return record.into_record(cert_id.clone());
+            return Some(record.into_record(cert_id.clone()));
         }
         env.storage()
             .persistent()
             .get::<DataKey, CertificateRecord>(&DataKey::Certificate(cert_id.clone()))
+    }
+
+    fn load_certificate(env: &Env, cert_id: &BytesN<32>) -> CertificateRecord {
+        Self::try_load_certificate(env, cert_id)
             .unwrap_or_else(|| panic_with_error!(env, Error::NotFound))
     }
 

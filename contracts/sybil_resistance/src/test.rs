@@ -1,7 +1,5 @@
 use super::*;
-use soroban_sdk::{
-    testutils::Address as _, testutils::Ledger as _, token, Address, BytesN, Env,
-};
+use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, token, Address, BytesN, Env};
 
 fn setup(env: &Env) -> (SybilResistanceContractClient<'static>, Address, Address) {
     let id = env.register(SybilResistanceContract, ());
@@ -62,27 +60,15 @@ fn test_reputation_awarding_and_cap() {
     assert_eq!(client.get_reputation(&user), 0);
 
     // Award points for course completion (+500)
-    client.adjust_reputation(
-        &user,
-        &500,
-        &reputation::ReputationReason::CourseCompletion,
-    );
+    client.adjust_reputation(&user, &500, &reputation::ReputationReason::CourseCompletion);
     assert_eq!(client.get_reputation(&user), 500);
 
     // Award points for peer review (+200)
-    client.adjust_reputation(
-        &user,
-        &200,
-        &reputation::ReputationReason::PeerReview,
-    );
+    client.adjust_reputation(&user, &200, &reputation::ReputationReason::PeerReview);
     assert_eq!(client.get_reputation(&user), 700);
 
     // Award massive points for winning hackathon (+15000), should cap at MAX_REPUTATION_SCORE (10,000)
-    client.adjust_reputation(
-        &user,
-        &15000,
-        &reputation::ReputationReason::HackathonWin,
-    );
+    client.adjust_reputation(&user, &15000, &reputation::ReputationReason::HackathonWin);
     assert_eq!(client.get_reputation(&user), 10_000);
 }
 
@@ -99,11 +85,7 @@ fn test_exponential_time_decay_halving() {
     let (client, _, user) = setup(&env);
 
     // Give user 8000 points
-    client.adjust_reputation(
-        &user,
-        &8000,
-        &reputation::ReputationReason::HackathonWin,
-    );
+    client.adjust_reputation(&user, &8000, &reputation::ReputationReason::HackathonWin);
     assert_eq!(client.get_reputation(&user), 8000);
 
     // Advance ledger by 1 epoch (180 days = 15,552,000s)
@@ -162,9 +144,13 @@ fn stake_withdrawal_requires_fourteen_day_cooling_off() {
     assert!(client.is_eligible(&user));
     let unlock_at = client.request_withdrawal(&user);
     assert!(!client.is_eligible(&user));
-    assert_eq!(unlock_at, env.ledger().timestamp() + staking::COOLING_OFF_SECONDS);
+    assert_eq!(
+        unlock_at,
+        env.ledger().timestamp() + staking::COOLING_OFF_SECONDS
+    );
 
-    env.ledger().with_mut(|ledger| ledger.timestamp = unlock_at - 1);
+    env.ledger()
+        .with_mut(|ledger| ledger.timestamp = unlock_at - 1);
     assert!(client.try_withdraw_stake(&user).is_err());
     env.ledger().with_mut(|ledger| ledger.timestamp = unlock_at);
     assert_eq!(client.withdraw_stake(&user), 500);

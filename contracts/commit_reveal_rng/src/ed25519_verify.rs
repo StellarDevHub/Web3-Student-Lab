@@ -9,12 +9,7 @@ impl Ed25519Verifier {
     ///
     /// # Panics
     /// Panics if the signature is invalid or does not match the public key.
-    pub fn verify(
-        env: &Env,
-        public_key: &BytesN<32>,
-        message: &Bytes,
-        signature: &BytesN<64>,
-    ) {
+    pub fn verify(env: &Env, public_key: &BytesN<32>, message: &Bytes, signature: &BytesN<64>) {
         env.crypto().ed25519_verify(public_key, message, signature);
     }
 }

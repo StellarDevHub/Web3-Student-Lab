@@ -5,8 +5,8 @@
 //! - Minimum output amount checks (strict slippage enforcement).
 //! - Same-block bidirectional trade restriction (reverting immediate round-trip arbitrage from the same origin address).
 
-use soroban_sdk::{panic_with_error, Address, Env};
 use crate::{storage::DataKey, AmmError};
+use soroban_sdk::{panic_with_error, Address, Env};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SwapDirection {
@@ -41,6 +41,8 @@ pub fn check_and_record_trade(env: &Env, user: &Address, direction: SwapDirectio
         }
     }
 
-    env.storage().temporary().set(&key, &(current_ledger, direction as u32));
+    env.storage()
+        .temporary()
+        .set(&key, &(current_ledger, direction as u32));
     env.storage().temporary().extend_ttl(&key, 100, 1000);
 }

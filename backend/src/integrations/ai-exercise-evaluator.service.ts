@@ -113,7 +113,7 @@ Provide evaluation in JSON format:
     systemPrompt: string,
     userPrompt: string,
   ): AsyncIterable<string> {
-    const stream = await this.openai.messages.stream({
+    const stream = await (this.openai as any).messages.stream({
       model: 'gpt-4-turbo',
       max_tokens: 1024,
       messages: [
@@ -143,7 +143,7 @@ Provide evaluation in JSON format:
     overall_score: number;
     criteria_scores: Record<string, number>;
   }> {
-    const response = await this.openai.messages.create({
+    const response = await (this.openai as any).messages.create({
       model: 'gpt-4-turbo',
       max_tokens: 1024,
       messages: [

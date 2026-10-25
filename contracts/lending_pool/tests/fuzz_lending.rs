@@ -7,10 +7,7 @@
 
 use lending_pool::{LendingPool, LendingPoolClient};
 use proptest::prelude::*;
-use soroban_sdk::{
-    contract, contractimpl, testutils::Address as _,
-    Address, Env,
-};
+use soroban_sdk::{contract, contractimpl, testutils::Address as _, Address, Env};
 
 #[contract]
 struct MockOracle;

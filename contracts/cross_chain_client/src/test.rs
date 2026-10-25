@@ -11,6 +11,8 @@ use super::*;
 use soroban_sdk::testutils::{Address as _, Ledger as _};
 use soroban_sdk::Env;
 
+extern crate std;
+
 fn setup(env: &Env) -> (CrossChainClientClient<'static>, Address) {
     let admin = Address::generate(env);
     let contract_id = env.register(CrossChainClient, ());
@@ -188,12 +190,18 @@ fn rlp_receipt_parser_accepts_valid_receipt_and_rejects_malformed_data() {
     let receipt = valid_empty_receipt();
     let receipt = Bytes::from_slice(&Env::default(), &receipt);
     assert!(rlp::is_receipt(&receipt));
-    assert!(!rlp::is_receipt(&Bytes::from_array(&Env::default(), &[0xf8, 0x01, 0xc0])));
+    assert!(!rlp::is_receipt(&Bytes::from_array(
+        &Env::default(),
+        &[0xf8, 0x01, 0xc0]
+    )));
 
     let env = Env::default();
     assert_eq!(rlp::encode_index(&env, 0), Bytes::from_array(&env, &[0x80]));
     assert_eq!(rlp::encode_index(&env, 1), Bytes::from_array(&env, &[0x01]));
-    assert_eq!(rlp::encode_index(&env, 128), Bytes::from_array(&env, &[0x81, 0x80]));
+    assert_eq!(
+        rlp::encode_index(&env, 128),
+        Bytes::from_array(&env, &[0x81, 0x80])
+    );
 }
 
 #[test]
@@ -220,11 +228,5 @@ fn mpt_receipt_proof_validates_leaf_against_keccak_root() {
     ));
 
     let wrong_value = Bytes::from_array(&env, &[0xc0]);
-    assert!(!mpt::verify_proof(
-        &env,
-        &root,
-        &key,
-        &wrong_value,
-        &proof
-    ));
+    assert!(!mpt::verify_proof(&env, &root, &key, &wrong_value, &proof));
 }

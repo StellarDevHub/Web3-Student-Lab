@@ -139,12 +139,7 @@ impl SybilResistanceContract {
     }
 
     /// Enable or disable an institution authorized to attest to student identity.
-    pub fn set_institution(
-        env: Env,
-        admin: Address,
-        institution: Address,
-        enabled: bool,
-    ) {
+    pub fn set_institution(env: Env, admin: Address, institution: Address, enabled: bool) {
         admin.require_auth();
         Self::require_admin(&env, &admin);
         attestation::set_institution(&env, institution, enabled);
@@ -158,12 +153,7 @@ impl SybilResistanceContract {
     }
 
     /// Enable or disable an authorized fraud-detection reporter.
-    pub fn set_fraud_reporter(
-        env: Env,
-        admin: Address,
-        reporter: Address,
-        enabled: bool,
-    ) {
+    pub fn set_fraud_reporter(env: Env, admin: Address, reporter: Address, enabled: bool) {
         admin.require_auth();
         Self::require_admin(&env, &admin);
         env.storage()
@@ -181,14 +171,7 @@ impl SybilResistanceContract {
         valid_until: u64,
     ) {
         institution.require_auth();
-        attestation::submit(
-            &env,
-            &institution,
-            &user,
-            chain_id,
-            voucher_id,
-            valid_until,
-        );
+        attestation::submit(&env, &institution, &user, chain_id, voucher_id, valid_until);
     }
 
     /// Revoke an existing attestation. Its issuing institution must authorize the revocation.
@@ -204,7 +187,7 @@ impl SybilResistanceContract {
 
     /// True when the user is verified, holds sufficient active stake, or has a valid attestation.
     pub fn is_eligible(env: Env, user: Address) -> bool {
-        if Self::is_banned(&env, &user) {
+        if Self::is_banned(env.clone(), user.clone()) {
             return false;
         }
         Self::is_verified(env.clone(), user.clone())
@@ -221,7 +204,7 @@ impl SybilResistanceContract {
             .get(&DataKey::Admin)
             .unwrap_or_else(|| panic_with_error!(&env, SybilError::NotInitialized));
         admin.require_auth();
-        if Self::is_banned(&env, &user) {
+        if Self::is_banned(env.clone(), user.clone()) {
             panic_with_error!(&env, SybilError::UserBanned);
         }
 

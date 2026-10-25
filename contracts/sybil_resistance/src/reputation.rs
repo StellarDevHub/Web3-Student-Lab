@@ -43,12 +43,7 @@ pub fn get_reputation_record(env: &Env, user: &Address) -> Option<ReputationReco
 
 /// Adjusts user reputation score according to an action, capping at MAX_REPUTATION_SCORE
 /// and emitting a transparent adjustment event with a reasoning code.
-pub fn adjust_reputation(
-    env: &Env,
-    user: Address,
-    delta: i64,
-    reason: ReputationReason,
-) -> u64 {
+pub fn adjust_reputation(env: &Env, user: Address, delta: i64, reason: ReputationReason) -> u64 {
     let key = DataKey::Reputation(user.clone());
     let now = env.ledger().timestamp();
 
@@ -93,7 +88,12 @@ pub fn settle_decay(env: &Env, user: Address) -> u64 {
 
         env.events().publish(
             (symbol_short!("rep_adj"), user),
-            (record.score, decayed, ReputationReason::TimeDecay as u32, now),
+            (
+                record.score,
+                decayed,
+                ReputationReason::TimeDecay as u32,
+                now,
+            ),
         );
 
         decayed

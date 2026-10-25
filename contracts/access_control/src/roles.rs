@@ -67,7 +67,7 @@ pub(crate) fn set_admin(env: &Env, new_admin: &Address) {
 /// the timelocked `propose_admin` / `claim_admin` flow.
 pub fn grant_role(env: &Env, caller: &Address, role: Role, account: &Address) {
     caller.require_auth();
-    crate::require_admin!(env, caller);
+    crate::require_admin(env, caller);
     if role == Role::Admin {
         soroban_sdk::panic_with_error!(env, AcError::InvalidRole);
     }
@@ -90,7 +90,7 @@ pub fn grant_role(env: &Env, caller: &Address, role: Role, account: &Address) {
 /// Revoke a non-admin role from `account`.
 pub fn revoke_role(env: &Env, caller: &Address, role: Role, account: &Address) {
     caller.require_auth();
-    crate::require_admin!(env, caller);
+    crate::require_admin(env, caller);
     if role == Role::Admin {
         soroban_sdk::panic_with_error!(env, AcError::InvalidRole);
     }
@@ -132,8 +132,8 @@ pub fn pause(env: &Env, caller: &Address) {
 /// Resume application operations. Only the admin may unpause.
 pub fn unpause(env: &Env, caller: &Address) {
     caller.require_auth();
-    crate::require_admin!(env, caller);
+    crate::require_admin(env, caller);
     env.storage().instance().set(&PAUSED_KEY, &false);
     env.events()
-        .publish((symbol_short!("AC_UNPAUSE"),), caller.clone());
+        .publish((symbol_short!("AC_UNPAUS"),), caller.clone());
 }

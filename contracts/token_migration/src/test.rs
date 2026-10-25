@@ -1,6 +1,8 @@
 use super::*;
 use soroban_sdk::{
-    contract, contractimpl, testutils::{Address as _, Ledger as _}, token, Address, Env,
+    contract, contractimpl,
+    testutils::{Address as _, Ledger as _},
+    token, Address, Env,
 };
 
 /// Minimal legacy token: tracks transfers but otherwise a no-op.
@@ -21,13 +23,7 @@ impl MockLegacyToken {
     ) {
     }
     #[allow(dead_code)]
-    pub fn burn_from(
-        _env: Env,
-        _spender: Address,
-        _from: Address,
-        _amount: i128,
-    ) {
-    }
+    pub fn burn_from(_env: Env, _spender: Address, _from: Address, _amount: i128) {}
     #[allow(dead_code)]
     pub fn burn(_env: Env, _from: Address, _amount: i128) {}
     #[allow(dead_code)]
@@ -194,14 +190,7 @@ fn test_token_migration_vesting_cliff_and_pro_rata() {
     let beneficiary = Address::generate(&env);
 
     // 50,000 tokens, 100 ledgers cliff, 500 ledgers total duration
-    let sched_id = client.create_vesting_schedule(
-        &admin,
-        &beneficiary,
-        &50_000,
-        &100,
-        &500,
-        &true,
-    );
+    let sched_id = client.create_vesting_schedule(&admin, &beneficiary, &50_000, &100, &500, &true);
 
     // Prior to cliff: 0 claimable
     env.ledger().with_mut(|li| li.sequence_number += 80);

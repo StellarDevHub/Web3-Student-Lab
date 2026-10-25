@@ -8,7 +8,7 @@ import { PrismaClient } from '@prisma/client';
 @Injectable()
 export class DatabaseRouter {
   private readonly logger = new Logger(DatabaseRouter.name);
-  private primaryDb: PrismaClient;
+  private primaryDb!: PrismaClient;
   private readReplicas: Map<string, PrismaClient>;
   private replicaHealthStatus: Map<string, boolean>;
   private currentReplicaIndex = 0;
@@ -21,7 +21,7 @@ export class DatabaseRouter {
 
   private initializeConnections(): void {
     // Primary database for writes
-    this.primaryDb = new PrismaClient({
+    this.primaryDb = new (PrismaClient as any)({
       datasources: {
         db: {
           url: process.env.DATABASE_URL,
@@ -47,7 +47,7 @@ export class DatabaseRouter {
 
     for (const replica of replicas) {
       if (replica.url) {
-        const client = new PrismaClient({
+        const client = new (PrismaClient as any)({
           datasources: {
             db: {
               url: replica.url,
@@ -87,7 +87,7 @@ export class DatabaseRouter {
       const replicaName = replicaNames[this.currentReplicaIndex % replicaNames.length];
       this.currentReplicaIndex++;
 
-      if (this.replicaHealthStatus.get(replicaName)) {
+      if (replicaName && this.replicaHealthStatus.get(replicaName)) {
         return this.readReplicas.get(replicaName)!;
       }
       attempts++;

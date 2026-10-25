@@ -7,7 +7,7 @@ import * as winston from 'winston';
  */
 @Injectable()
 export class StructuredLoggerService {
-  private logger: winston.Logger;
+  private logger!: winston.Logger;
   private readonly redactionPatterns = [
     { pattern: /Bearer\s+[A-Za-z0-9_-]+/gi, mask: 'Bearer [REDACTED]' },
     { pattern: /authorization:\s*[^\s,}]+/gi, mask: 'authorization: [REDACTED]' },
@@ -252,7 +252,7 @@ export class StructuredLoggerService {
 
     // Check for common suspicious patterns
     const suspiciousPatterns = [
-      { name: 'SQL Injection', pattern: /('|("|%22))|(\*|%2A)|(-{2})|({3,})|[\\/]/i },
+      { name: 'SQL Injection', pattern: /('|("|%22))|(\*|%2A)|(-{2})|(\{3,\})|[\\/]/i },
       { name: 'Script Injection', pattern: /<script|<iframe|javascript:|on\w+=/i },
       { name: 'Path Traversal', pattern: /\.\.\/|\.\.\\|\.\.\%2f|\.\.\%5c/i },
     ];

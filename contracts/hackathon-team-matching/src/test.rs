@@ -1,9 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{
-    testutils::Address as _, testutils::Ledger as _, token, vec, Address, Env,
-};
+use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, token, vec, Address, Env};
 
 // --- Mock Skill Verifier Contract ---
 #[contract]
@@ -359,11 +357,7 @@ fn test_escrow_releases_only_after_sponsor_and_entire_team_approve() {
     client.invite_developer(&team_lead, &member, &team_id);
     client.accept_invitation(&member, &team_id);
 
-    let arbiters = vec![
-        &env,
-        Address::generate(&env),
-        Address::generate(&env),
-    ];
+    let arbiters = vec![&env, Address::generate(&env), Address::generate(&env)];
     let escrow_id = client.create_escrow(
         &sponsor,
         &team_id,
@@ -471,7 +465,13 @@ fn test_unclaimed_milestones_refund_after_expiration() {
     assert_eq!(token_client.balance(&sponsor), 200);
     assert_eq!(token_client.balance(&contract_id), 0);
     assert_eq!(
-        client.get_escrow(&escrow_id).unwrap().milestones.get(1).unwrap().status,
+        client
+            .get_escrow(&escrow_id)
+            .unwrap()
+            .milestones
+            .get(1)
+            .unwrap()
+            .status,
         escrow::MilestoneStatus::Refunded
     );
 }

@@ -349,8 +349,8 @@ impl CrossChainClient {
         if !Self::verify_block_header(env.clone(), block_hash.clone(), signers, signatures) {
             panic_with_error!(&env, ClientError::InvalidHeader);
         }
-        let header_item =
-            rlp::decode(&header_rlp, 0).unwrap_or_else(|| panic_with_error!(&env, ClientError::InvalidRlp));
+        let header_item = rlp::decode(&header_rlp, 0)
+            .unwrap_or_else(|| panic_with_error!(&env, ClientError::InvalidRlp));
         let parent_hash = rlp::list_item(&header_rlp, header_item, 0)
             .and_then(|item| rlp::payload(&header_rlp, item))
             .and_then(|value| BytesN::<32>::try_from(value).ok())
@@ -380,7 +380,7 @@ impl CrossChainClient {
             parent_hash,
             state_root,
             tx_root,
-            receipts_root,
+            receipts_root: receipts_root.clone(),
             rlp_verified: true,
             timestamp,
         };
@@ -477,7 +477,7 @@ impl CrossChainClient {
         let record = UnlockRecord {
             chain_id,
             tx_hash: tx_hash.clone(),
-            asset_id,
+            asset_id: asset_id.clone(),
             recipient: recipient_bytes.clone(),
             amount,
             block_number,
@@ -491,8 +491,15 @@ impl CrossChainClient {
             .persistent()
             .set(&ClientKey::ProcessedTx(tx_hash.clone()), &true);
         env.events().publish(
-            (symbol_short!("asset_unlk"), chain_id),
-            (tx_hash, block_number, transaction_index, asset_id, recipient_bytes, amount),
+            (symbol_short!("ast_unlk"), chain_id),
+            (
+                tx_hash,
+                block_number,
+                transaction_index,
+                asset_id,
+                recipient_bytes,
+                amount,
+            ),
         );
         true
     }
@@ -773,10 +780,10 @@ impl CrossChainClient {
         }
         if consume
             && env
-            .storage()
-            .persistent()
-            .get::<_, bool>(&ClientKey::HasReceiptIndex(chain_id, block_number))
-            .unwrap_or(false)
+                .storage()
+                .persistent()
+                .get::<_, bool>(&ClientKey::HasReceiptIndex(chain_id, block_number))
+                .unwrap_or(false)
         {
             let last_index: u64 = env
                 .storage()
@@ -795,20 +802,15 @@ impl CrossChainClient {
             panic_with_error!(env, ClientError::InvalidProof);
         }
         if consume {
+            env.storage().persistent().set(
+                &ClientKey::LastReceiptIndex(chain_id, block_number),
+                &transaction_index,
+            );
             env.storage()
                 .persistent()
-                .set(
-                    &ClientKey::LastReceiptIndex(chain_id, block_number),
-                    &transaction_index,
-                );
-            env.storage()
-                .persistent()
-                .set(
-                    &ClientKey::HasReceiptIndex(chain_id, block_number),
-                    &true,
-                );
+                .set(&ClientKey::HasReceiptIndex(chain_id, block_number), &true);
             env.events().publish(
-                (symbol_short!("receipt_ok"), chain_id),
+                (symbol_short!("rcpt_ok"), chain_id),
                 (block_number, transaction_index, header.receipts_root),
             );
         }

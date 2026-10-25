@@ -239,9 +239,10 @@ fn quadratic_cost_values() {
     assert_eq!(math::quadratic_cost(0, 3), Some(9));
     assert_eq!(math::quadratic_cost(3, 2), Some(16)); // 25 - 9
     assert_eq!(math::quadratic_cost(3, 4), Some(40)); // 49 - 9
-    assert_eq!(math::quadratic_cost(u32::MAX as u64, 1), Some(
-        (u32::MAX as i128 + 1).pow(2) - (u32::MAX as i128).pow(2)
-    ));
+    assert_eq!(
+        math::quadratic_cost(u32::MAX as u64, 1),
+        Some((u32::MAX as i128 + 1).pow(2) - (u32::MAX as i128).pow(2))
+    );
 }
 
 #[test]

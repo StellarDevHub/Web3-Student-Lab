@@ -10,8 +10,8 @@ import { Response } from 'express';
 @Injectable()
 export class RedisSseBroadcastService {
   private readonly logger = new Logger(RedisSseBroadcastService.name);
-  private redisPublisher: Redis.RedisClient;
-  private redisSubscriber: Redis.RedisClient;
+  private redisPublisher: any;
+  private redisSubscriber: any;
   private connections: Map<string, Response> = new Map();
   private connectionsByChannel: Map<string, Set<string>> = new Map();
 
@@ -21,11 +21,11 @@ export class RedisSseBroadcastService {
 
   private initializeRedis(): void {
     // Create publisher connection
-    this.redisPublisher = Redis.createClient({
+    this.redisPublisher = (Redis as any).createClient({
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
       password: process.env.REDIS_PASSWORD,
-      retryStrategy: (options) => {
+      retryStrategy: (options: any) => {
         if (options.error && options.error.code === 'ECONNREFUSED') {
           return new Error('Redis connection refused');
         }
@@ -40,22 +40,22 @@ export class RedisSseBroadcastService {
     });
 
     // Create subscriber connection (must be separate from publisher)
-    this.redisSubscriber = Redis.createClient({
+    this.redisSubscriber = (Redis as any).createClient({
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
       password: process.env.REDIS_PASSWORD,
     });
 
     // Handle Redis messages
-    this.redisSubscriber.on('message', (channel, message) => {
+    this.redisSubscriber.on('message', (channel: string, message: string) => {
       this.broadcastToConnections(channel, message);
     });
 
-    this.redisSubscriber.on('error', (err) => {
+    this.redisSubscriber.on('error', (err: any) => {
       this.logger.error(`Redis subscriber error: ${err}`);
     });
 
-    this.redisPublisher.on('error', (err) => {
+    this.redisPublisher.on('error', (err: any) => {
       this.logger.error(`Redis publisher error: ${err}`);
     });
 
@@ -82,7 +82,7 @@ export class RedisSseBroadcastService {
     for (const channel of channels) {
       if (!this.connectionsByChannel.has(channel)) {
         this.connectionsByChannel.set(channel, new Set());
-        this.redisSubscriber.subscribe(channel, (err) => {
+        this.redisSubscriber.subscribe(channel, (err: any) => {
           if (err) {
             this.logger.error(`Failed to subscribe to ${channel}: ${err}`);
           } else {
@@ -139,7 +139,7 @@ export class RedisSseBroadcastService {
     });
 
     // Publish to Redis (reaches all instances)
-    this.redisPublisher.publish(channel, message, (err) => {
+    this.redisPublisher.publish(channel, message, (err: any) => {
       if (err) {
         this.logger.error(`Failed to publish to ${channel}: ${err}`);
       } else {

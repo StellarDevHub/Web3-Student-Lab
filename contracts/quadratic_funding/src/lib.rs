@@ -120,7 +120,10 @@ pub fn commitment_hash(
 ) -> BytesN<32> {
     let mut preimage = Bytes::from_slice(env, COMMIT_DOMAIN);
     preimage.append(&donor.clone().to_xdr(env));
-    preimage.append(&Bytes::from_array(env, &u64::from(project_id).to_be_bytes()));
+    preimage.append(&Bytes::from_array(
+        env,
+        &u64::from(project_id).to_be_bytes(),
+    ));
     preimage.append(&Bytes::from_array(env, &amount.to_be_bytes()));
     preimage.append(&Bytes::from_array(env, &salt.to_array()));
     env.crypto().sha256(&preimage).to_bytes()
@@ -261,10 +264,8 @@ impl QuadraticFunding {
             .persistent()
             .extend_ttl(&key, TTL_THRESHOLD, INSTANCE_BUMP);
 
-        env.events().publish(
-            (symbol_short!("committed"), donor.clone()),
-            project_id,
-        );
+        env.events()
+            .publish((symbol_short!("committed"), donor.clone()), project_id);
         bump_instance(&env);
     }
 
@@ -400,7 +401,8 @@ impl QuadraticFunding {
         }
 
         for (id, amount) in payouts.iter() {
-            env.events().publish((symbol_short!("payout"),), (id, amount));
+            env.events()
+                .publish((symbol_short!("payout"),), (id, amount));
         }
 
         // Close the round.
@@ -504,8 +506,10 @@ impl QuadraticFunding {
         projects.set(project_id, project);
         env.storage().instance().set(&PROJECTS_KEY, &projects);
 
-        env.events()
-            .publish((symbol_short!("donated"), donor.clone()), (project_id, amount));
+        env.events().publish(
+            (symbol_short!("donated"), donor.clone()),
+            (project_id, amount),
+        );
         bump_instance(env);
     }
 

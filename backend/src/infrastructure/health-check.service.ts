@@ -8,10 +8,10 @@ import * as Redis from 'redis';
 @Injectable()
 export class HealthCheckService {
   private readonly logger = new Logger(HealthCheckService.name);
-  private redisClient: Redis.RedisClient;
+  private redisClient: any;
 
   constructor() {
-    this.redisClient = Redis.createClient({
+    this.redisClient = (Redis as any).createClient({
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
       password: process.env.REDIS_PASSWORD,
@@ -53,8 +53,9 @@ export class HealthCheckService {
     ];
 
     for (let i = 0; i < results.length; i++) {
-      const result = results[i];
+      const result: any = results[i];
       const checkName = checkNames[i];
+      if (!checkName || !result) continue;
 
       if (result.status === 'fulfilled') {
         checks[checkName] = result.value;
@@ -141,7 +142,7 @@ export class HealthCheckService {
   private async checkRedis(): Promise<HealthCheckResult> {
     const startTime = Date.now();
     return new Promise((resolve) => {
-      this.redisClient.ping((err, reply) => {
+      this.redisClient.ping((err: any, reply: any) => {
         const latency = Date.now() - startTime;
 
         if (err) {
@@ -155,7 +156,7 @@ export class HealthCheckService {
         }
 
         // Check memory usage
-        this.redisClient.info('memory', (err, info) => {
+        this.redisClient.info('memory', (err: any, info: any) => {
           if (err) {
             resolve({
               status: 'unhealthy',
@@ -356,10 +357,10 @@ export class HealthCheckService {
 
     for (const line of lines) {
       if (line.startsWith('used_memory:')) {
-        used = parseInt(line.split(':')[1]);
+        used = parseInt(line.split(':')[1] || '0', 10);
       }
       if (line.startsWith('maxmemory:')) {
-        max = parseInt(line.split(':')[1]);
+        max = parseInt(line.split(':')[1] || '0', 10);
       }
     }
 

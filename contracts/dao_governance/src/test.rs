@@ -77,7 +77,7 @@ fn compact_proposal_storage_reduces_size_and_reads_legacy_records() {
     let proposal = client.get_proposal(&pid).unwrap();
     let compact = StoredProposal::from_proposal(&proposal);
 
-    assert!(compact.to_xdr(&env).len() < proposal.to_xdr(&env).len());
+    assert!(compact.clone().to_xdr(&env).len() < proposal.clone().to_xdr(&env).len());
     assert_eq!(compact.clone().into_proposal(pid), proposal);
 
     env.as_contract(&client.address, || {

@@ -375,4 +375,3 @@ fn test_verify_amm_and_lending_invariants() {
     assert_eq!(rec.iterations, 1_000_000);
     assert!(rec.passed);
 }
-

@@ -78,7 +78,7 @@ export class CertificateRevocationRegistryService {
    */
   private generateInclusionProof(certificateHash: string): string {
     const sortedCerts = Array.from(this.activeCertificates).sort();
-    const index = sortedCerts.indexOf(certificateHash);
+    let index = sortedCerts.indexOf(certificateHash);
 
     if (index === -1) {
       throw new Error('Certificate not found in active set');
@@ -90,8 +90,8 @@ export class CertificateRevocationRegistryService {
     while (level.length > 1) {
       const nextLevel: string[] = [];
       for (let i = 0; i < level.length; i += 2) {
-        const left = level[i];
-        const right = level[i + 1] || level[i];
+        const left = level[i] || '';
+        const right = level[i + 1] || left;
         const combined = this.hashPair(left, right);
         nextLevel.push(combined);
 
@@ -152,14 +152,14 @@ export class CertificateRevocationRegistryService {
     while (level.length > 1) {
       const nextLevel: string[] = [];
       for (let i = 0; i < level.length; i += 2) {
-        const left = level[i];
-        const right = level[i + 1] || level[i];
+        const left = level[i] || '';
+        const right = level[i + 1] || left;
         nextLevel.push(this.hashPair(left, right));
       }
       level = nextLevel;
     }
 
-    return level[0];
+    return level[0] || '';
   }
 
   /**

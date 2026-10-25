@@ -63,9 +63,7 @@ fn decode_long(bytes: &Bytes, start: u32, length_of_length: u32, is_list: bool) 
         return None;
     }
     let length_start = start.checked_add(1)?;
-    if length_start.checked_add(length_of_length)? > bytes.len()
-        || bytes.get(length_start)? == 0
-    {
+    if length_start.checked_add(length_of_length)? > bytes.len() || bytes.get(length_start)? == 0 {
         return None;
     }
     let mut payload_len = 0u32;
@@ -180,9 +178,7 @@ pub fn encode_index(env: &Env, index: u64) -> Bytes {
     output
 }
 
-pub fn evm_header_fields(
-    bytes: &Bytes,
-) -> Option<(BytesN<32>, BytesN<32>, BytesN<32>, u64, u64)> {
+pub fn evm_header_fields(bytes: &Bytes) -> Option<(BytesN<32>, BytesN<32>, BytesN<32>, u64, u64)> {
     let header = decode(bytes, 0)?;
     let count = list_len(bytes, header)?;
     if !header.is_list
@@ -242,9 +238,7 @@ pub fn evm_header_fields(
 
 fn is_canonical_uint(bytes: &Bytes, item: Item, max_len: u32) -> bool {
     match payload(bytes, item) {
-        Some(value) => {
-            value.len() <= max_len && (value.is_empty() || value.get(0) != Some(0))
-        }
+        Some(value) => value.len() <= max_len && (value.is_empty() || value.get(0) != Some(0)),
         None => false,
     }
 }
@@ -287,10 +281,7 @@ pub fn is_receipt(bytes: &Bytes) -> bool {
         Some(value) => value,
         None => return false,
     };
-    if status.len() != 0
-        && status.len() != 1
-        && status.len() != 32
-    {
+    if status.len() != 0 && status.len() != 1 && status.len() != 32 {
         return false;
     }
     if status.len() == 1 && status.get(0).unwrap_or(2) > 1 {

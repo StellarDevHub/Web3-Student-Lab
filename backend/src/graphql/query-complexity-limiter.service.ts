@@ -98,6 +98,7 @@ export class QueryComplexityLimiterService {
     let match;
     while ((match = fieldPattern.exec(query))) {
       const field = match[1];
+      if (!field) continue;
 
       if (fields.has(field) && stack.includes(field)) {
         return {

@@ -164,7 +164,7 @@ export class RbacAbacEngineService {
    * Get all permissions for a user
    */
   getUserPermissions(userRole: string, context?: any): string[] {
-    const rolePermissions = Array.from(this.rolePermissions[userRole] || new Set());
+    const rolePermissions: string[] = Array.from(this.rolePermissions[userRole] || new Set<string>());
 
     if (!context) {
       return rolePermissions;
@@ -178,7 +178,7 @@ export class RbacAbacEngineService {
       }
     }
 
-    return Array.from(new Set([...rolePermissions, ...abacPermissions]));
+    return Array.from(new Set<string>([...rolePermissions, ...abacPermissions]));
   }
 
   /**
@@ -190,8 +190,8 @@ export class RbacAbacEngineService {
     additionalPermissions: string[] = [],
     deniedPermissions: string[] = [],
   ): void {
-    const basePermissions = new Set(
-      this.rolePermissions[baseRole] || new Set(),
+    const basePermissions: Set<string> = new Set<string>(
+      this.rolePermissions[baseRole] || new Set<string>(),
     );
 
     // Add additional permissions

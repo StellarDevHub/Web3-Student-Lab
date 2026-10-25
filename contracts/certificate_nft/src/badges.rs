@@ -6,11 +6,9 @@
 //! 3. Tiered upgrades requiring milestone verification
 //! 4. Immutable historical provenance tracking
 
-use soroban_sdk::{
-    contracttype, panic_with_error, Address, Env, String, Vec,
-};
 use crate::rarity::RarityTier;
 use crate::CertError;
+use soroban_sdk::{contracttype, panic_with_error, Address, Env, String, Vec};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -94,7 +92,10 @@ impl AchievementBadge {
         target_tier: RarityTier,
         new_metadata_uri: String,
     ) -> Result<(), CertError> {
-        if !self.tier.can_upgrade_to(target_tier, self.completed_milestones.len()) {
+        if !self
+            .tier
+            .can_upgrade_to(target_tier, self.completed_milestones.len())
+        {
             return Err(CertError::InvalidTierUpgrade);
         }
 

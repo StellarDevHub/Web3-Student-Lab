@@ -150,12 +150,7 @@ impl AuthChecker {
     /// Multi-call authorization step verifier.
     /// Ensures that chained contract invocations verify native authorization at each hop
     /// with replay tracking across steps.
-    pub fn execute_multicall_step(
-        env: Env,
-        invoker: Address,
-        step_id: u64,
-        operation: String,
-    ) {
+    pub fn execute_multicall_step(env: Env, invoker: Address, step_id: u64, operation: String) {
         invoker.require_auth();
 
         let step_key = AuthKey::MulticallStep(invoker.clone(), step_id);

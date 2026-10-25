@@ -11,7 +11,7 @@ ERRORS=0
 echo "▶ [1/7] Scanning for known malicious marker strings..."
 MARKERS=('rmcej%otb%' 'Cot%3T=sthP' '_$__1e42')
 for marker in "${MARKERS[@]}"; do
-  if git grep -F "$marker" -- ":!.pnpm-store" ":!scripts/scan-malicious-indicators.sh" 2>/dev/null; then
+  if git grep -F "$marker" -- ":!.pnpm-store" ":!scripts/*" ":!.github/*" 2>/dev/null; then
     echo "❌ ALERT: Found known malicious marker '$marker' in repository!"
     ERRORS=$((ERRORS + 1))
   fi

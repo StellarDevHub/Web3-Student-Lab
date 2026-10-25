@@ -31,12 +31,7 @@ pub enum RoyaltyKey {
 pub struct Royalties;
 
 impl Royalties {
-    pub fn set_royalty_config(
-        env: &Env,
-        token_id: &String,
-        recipient: &Address,
-        royalty_bps: u32,
-    ) {
+    pub fn set_royalty_config(env: &Env, token_id: &String, recipient: &Address, royalty_bps: u32) {
         if royalty_bps > MAX_ROYALTY_BPS {
             panic!("Royalty percentage exceeds maximum cap");
         }

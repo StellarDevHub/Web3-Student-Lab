@@ -210,7 +210,7 @@ export class CrossChainRelayerService {
       const hash = crypto.createHash('sha256').update(messageString).digest('hex');
 
       // Would verify signature using elliptic curve verification
-      return signature && signature.length === 128; // Placeholder check
+      return Boolean(signature && signature.length === 128); // Placeholder check
     } catch (error) {
       this.logger.error(`Source signature verification failed: ${error}`);
       return false;
@@ -224,7 +224,7 @@ export class CrossChainRelayerService {
     try {
       // Verify relayer has signed the message
       // This prevents a compromised relayer from modifying messages
-      return signature && signature.length === 128; // Placeholder check
+      return Boolean(signature && signature.length === 128); // Placeholder check
     } catch (error) {
       this.logger.error(`Relayer signature verification failed: ${error}`);
       return false;
@@ -244,7 +244,7 @@ export class CrossChainRelayerService {
         blockHash: receipt.blockHash,
       });
 
-      return signature && signature.length === 128; // Placeholder check
+      return Boolean(signature && signature.length === 128); // Placeholder check
     } catch (error) {
       this.logger.error(`Receipt signature verification failed: ${error}`);
       return false;

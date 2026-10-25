@@ -36,8 +36,12 @@ impl MigrationVestingSchedule {
         if total_duration == 0 || cliff_duration > total_duration {
             return Err(MigError::ZeroAmount);
         }
-        let cliff_ledger = start_ledger.checked_add(cliff_duration).ok_or(MigError::Overflow)?;
-        let end_ledger = start_ledger.checked_add(total_duration).ok_or(MigError::Overflow)?;
+        let cliff_ledger = start_ledger
+            .checked_add(cliff_duration)
+            .ok_or(MigError::Overflow)?;
+        let end_ledger = start_ledger
+            .checked_add(total_duration)
+            .ok_or(MigError::Overflow)?;
 
         Ok(Self {
             id,

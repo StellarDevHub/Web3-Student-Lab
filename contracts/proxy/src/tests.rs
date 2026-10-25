@@ -399,4 +399,3 @@ fn test_security_council_rejects_digest_mismatch() {
     // Panics with DigestMismatch #106
     client.execute_security_council_upgrade(&admin, &wasm2, &sigs);
 }
-

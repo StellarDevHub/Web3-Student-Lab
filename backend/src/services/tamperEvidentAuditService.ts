@@ -102,7 +102,7 @@ export function computeEntryHash(entry: Omit<AuditChainRecord, 'entryHash'>): st
 export function computeMerkleRoot(leafHashes: string[]): string {
   if (leafHashes.length === 0) return GENESIS_HASH;
 
-  let level = leafHashes.map((h) => Buffer.from(h, 'hex'));
+  let level: Buffer[] = leafHashes.map((h) => Buffer.from(h, 'hex'));
   while (level.length > 1) {
     const next: Buffer[] = [];
     for (let i = 0; i < level.length; i += 2) {

@@ -1,6 +1,4 @@
-use soroban_sdk::{
-    contracterror, contracttype, panic_with_error, token, Address, Env, Vec,
-};
+use soroban_sdk::{contracterror, contracttype, panic_with_error, token, Address, Env, Vec};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -70,8 +68,7 @@ pub fn load(env: &Env, escrow_id: u64) -> Option<HackathonEscrow> {
 }
 
 pub fn load_or_fail(env: &Env, escrow_id: u64) -> HackathonEscrow {
-    load(env, escrow_id)
-        .unwrap_or_else(|| panic_with_error!(env, EscrowError::EscrowNotFound))
+    load(env, escrow_id).unwrap_or_else(|| panic_with_error!(env, EscrowError::EscrowNotFound))
 }
 
 pub fn store(env: &Env, escrow: &HackathonEscrow) {

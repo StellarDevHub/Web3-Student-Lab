@@ -179,7 +179,7 @@ chmod +x /etc/postgresql/wal_archive.sh`;
       }
 
       for (const object of response.Contents) {
-        if (object.LastModified && object.LastModified < cutoffDate && object.Size) {
+        if (object.Key && object.LastModified && object.LastModified < cutoffDate && object.Size) {
           // Copy to Glacier storage class
           await this.s3
             .copyObject({
@@ -246,15 +246,15 @@ chmod +x /etc/postgresql/wal_archive.sh`;
       return null;
     }
 
-    const validBackups = response.Contents.filter((obj) => obj.LastModified && obj.LastModified < date);
+    const validBackups = (response.Contents || []).filter((obj: any) => obj.LastModified && obj.LastModified < date);
 
     if (validBackups.length === 0) {
       return null;
     }
 
-    validBackups.sort((a, b) => (b.LastModified?.getTime() || 0) - (a.LastModified?.getTime() || 0));
+    validBackups.sort((a: any, b: any) => (b.LastModified?.getTime() || 0) - (a.LastModified?.getTime() || 0));
 
-    return validBackups[0].Key || null;
+    return validBackups[0]?.Key || null;
   }
 
   private async applyWALUntilTime(targetTime: Date): Promise<void> {

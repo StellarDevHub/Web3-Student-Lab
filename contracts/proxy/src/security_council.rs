@@ -3,9 +3,7 @@
 //! Enforces a 3-of-5 Security Council threshold signature requirement and a
 //! mandatory 24-hour announcement timelock before contract bytecode upgrades.
 
-use soroban_sdk::{
-    contracterror, contracttype, symbol_short, Address, BytesN, Env, Vec,
-};
+use soroban_sdk::{contracterror, contracttype, symbol_short, Address, BytesN, Env, Vec};
 
 pub const COUNCIL_SIZE: u32 = 5;
 pub const COUNCIL_THRESHOLD: u32 = 3;
@@ -52,10 +50,7 @@ pub enum CouncilDataKey {
 }
 
 /// Set the designated 5 security council addresses.
-pub fn set_security_council(
-    env: &Env,
-    members: &Vec<Address>,
-) -> Result<(), SecurityCouncilError> {
+pub fn set_security_council(env: &Env, members: &Vec<Address>) -> Result<(), SecurityCouncilError> {
     if members.len() != COUNCIL_SIZE {
         return Err(SecurityCouncilError::InvalidCouncilSize);
     }
@@ -77,14 +72,13 @@ pub fn set_security_council(
 
 /// Retrieve the list of designated security council addresses.
 pub fn get_security_council(env: &Env) -> Option<Vec<Address>> {
-    env.storage().instance().get(&CouncilDataKey::CouncilMembers)
+    env.storage()
+        .instance()
+        .get(&CouncilDataKey::CouncilMembers)
 }
 
 /// Announce a bytecode upgrade, initiating the mandatory 24-hour timelock.
-pub fn announce_upgrade(
-    env: &Env,
-    wasm_hash: &BytesN<32>,
-) -> Result<u64, SecurityCouncilError> {
+pub fn announce_upgrade(env: &Env, wasm_hash: &BytesN<32>) -> Result<u64, SecurityCouncilError> {
     let now = env.ledger().timestamp();
     let unlock_at = now + ANNOUNCEMENT_TIMELOCK;
 
@@ -95,9 +89,10 @@ pub fn announce_upgrade(
         executed: false,
     };
 
-    env.storage()
-        .instance()
-        .set(&CouncilDataKey::Announcement(wasm_hash.clone()), &announcement);
+    env.storage().instance().set(
+        &CouncilDataKey::Announcement(wasm_hash.clone()),
+        &announcement,
+    );
 
     env.events().publish(
         (symbol_short!("council"), symbol_short!("announce")),
@@ -108,10 +103,7 @@ pub fn announce_upgrade(
 }
 
 /// Retrieve current upgrade announcement details.
-pub fn get_announcement(
-    env: &Env,
-    wasm_hash: &BytesN<32>,
-) -> Option<UpgradeAnnouncement> {
+pub fn get_announcement(env: &Env, wasm_hash: &BytesN<32>) -> Option<UpgradeAnnouncement> {
     env.storage()
         .instance()
         .get(&CouncilDataKey::Announcement(wasm_hash.clone()))
@@ -131,8 +123,8 @@ pub fn verify_security_council_signatures(
     }
 
     // Retrieve announcement and verify 24-hour timelock
-    let mut announcement = get_announcement(env, wasm_hash)
-        .ok_or(SecurityCouncilError::UpgradeNotAnnounced)?;
+    let mut announcement =
+        get_announcement(env, wasm_hash).ok_or(SecurityCouncilError::UpgradeNotAnnounced)?;
 
     if announcement.executed {
         return Err(SecurityCouncilError::AlreadyExecuted);
@@ -185,9 +177,10 @@ pub fn verify_security_council_signatures(
 
     // Mark announcement as executed
     announcement.executed = true;
-    env.storage()
-        .instance()
-        .set(&CouncilDataKey::Announcement(wasm_hash.clone()), &announcement);
+    env.storage().instance().set(
+        &CouncilDataKey::Announcement(wasm_hash.clone()),
+        &announcement,
+    );
 
     env.events().publish(
         (symbol_short!("council"), symbol_short!("verified")),

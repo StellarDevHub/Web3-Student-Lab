@@ -722,6 +722,8 @@ model AuditChainAnchor {
   @@index([toSequence])
   @@index([status])
   @@map("audit_chain_anchors")
+}
+
 // Off-chain state channel between a student and a mentor (#1589 / BE-017).
 // Only funding and the final (or disputed) state are settled on Soroban.
 model StateChannel {

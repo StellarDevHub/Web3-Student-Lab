@@ -558,12 +558,20 @@ impl FreelancePlatform {
     }
 
     /// Retrieve deliverable escrow record.
-    pub fn get_deliverable(env: Env, job_id: u64, milestone_index: u32) -> Option<escrow::DeliverableEscrow> {
+    pub fn get_deliverable(
+        env: Env,
+        job_id: u64,
+        milestone_index: u32,
+    ) -> Option<escrow::DeliverableEscrow> {
         escrow::EscrowManager::get_submission(&env, job_id, milestone_index)
     }
 
     /// Retrieve dispute record.
-    pub fn get_dispute(env: Env, job_id: u64, milestone_index: u32) -> Option<arbitration::DisputeRecord> {
+    pub fn get_dispute(
+        env: Env,
+        job_id: u64,
+        milestone_index: u32,
+    ) -> Option<arbitration::DisputeRecord> {
         arbitration::ArbitrationManager::get_dispute(&env, job_id, milestone_index)
     }
 
@@ -579,12 +587,7 @@ impl FreelancePlatform {
     }
 
     /// Claim a bounty with proof evidence hash
-    pub fn claim_bounty(
-        env: Env,
-        claimant: Address,
-        bounty_id: u64,
-        evidence_hash: BytesN<32>,
-    ) {
+    pub fn claim_bounty(env: Env, claimant: Address, bounty_id: u64, evidence_hash: BytesN<32>) {
         bounty::claim_bounty(&env, claimant, bounty_id, evidence_hash)
     }
 
@@ -597,7 +600,14 @@ impl FreelancePlatform {
         split_bps: Vec<u32>,
         evidence_hash: BytesN<32>,
     ) {
-        bounty::claim_bounty_collaborative(&env, submitter, bounty_id, claimants, split_bps, evidence_hash)
+        bounty::claim_bounty_collaborative(
+            &env,
+            submitter,
+            bounty_id,
+            claimants,
+            split_bps,
+            evidence_hash,
+        )
     }
 
     /// Funder verifies PR evidence and triggers release of funds (single or split)
@@ -623,4 +633,3 @@ pub mod reputation_system;
 
 #[cfg(test)]
 mod test;
-

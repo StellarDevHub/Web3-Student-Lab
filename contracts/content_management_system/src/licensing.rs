@@ -1,7 +1,7 @@
 use crate::errors::Error;
 use crate::storage::{get_content, is_instructor};
 use crate::types::StorageKey;
-use soroban_sdk::{contracttype, token, symbol_short, Address, BytesN, Env};
+use soroban_sdk::{contracttype, symbol_short, token, Address, BytesN, Env};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -104,7 +104,9 @@ pub fn purchase_license(
 
     let next_id_key = StorageKey::NextLicenseId;
     let license_id: u64 = env.storage().instance().get(&next_id_key).unwrap_or(1);
-    env.storage().instance().set(&next_id_key, &(license_id + 1));
+    env.storage()
+        .instance()
+        .set(&next_id_key, &(license_id + 1));
 
     let now = env.ledger().timestamp();
     let valid_to = now.checked_add(terms.duration_seconds).unwrap_or(u64::MAX);
@@ -141,7 +143,11 @@ pub fn is_license_valid(env: &Env, institution: Address, content_id: u64) -> boo
 
     if let Some(license_id) = license_id_opt {
         let license_key = StorageKey::License(license_id);
-        if let Some(voucher) = env.storage().persistent().get::<_, LicenseVoucher>(&license_key) {
+        if let Some(voucher) = env
+            .storage()
+            .persistent()
+            .get::<_, LicenseVoucher>(&license_key)
+        {
             let now = env.ledger().timestamp();
             return !voucher.is_revoked && now >= voucher.valid_from && now <= voucher.valid_to;
         }

@@ -1,7 +1,7 @@
 use crate::errors::Error;
 use crate::storage::{get_content, is_instructor};
 use crate::types::StorageKey;
-use soroban_sdk::{contracttype, Address, BytesN, Env, symbol_short};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]

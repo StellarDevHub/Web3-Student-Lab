@@ -100,7 +100,9 @@ impl MerkleDistributor {
             claimed_amount: 0,
             start_time: env.ledger().timestamp(),
         };
-        env.storage().instance().set(&DistributorKey::Config, &config);
+        env.storage()
+            .instance()
+            .set(&DistributorKey::Config, &config);
     }
 
     /// Retrieves current airdrop distribution configuration.
@@ -117,13 +119,7 @@ impl MerkleDistributor {
     }
 
     /// Processes claim with cryptographic Merkle proof and marks index in bitmap.
-    pub fn claim(
-        env: &Env,
-        index: u32,
-        account: Address,
-        amount: i128,
-        proof: Vec<BytesN<32>>,
-    ) {
+    pub fn claim(env: &Env, index: u32, account: Address, amount: i128, proof: Vec<BytesN<32>>) {
         account.require_auth();
         if amount <= 0 {
             panic_with_error!(env, DistributorError::ZeroAmount);
@@ -151,7 +147,9 @@ impl MerkleDistributor {
             panic_with_error!(env, DistributorError::InsufficientRemaining);
         }
 
-        env.storage().instance().set(&DistributorKey::Config, &config);
+        env.storage()
+            .instance()
+            .set(&DistributorKey::Config, &config);
 
         if let Some(token_addr) = config.token {
             let client = soroban_sdk::token::Client::new(env, &token_addr);
@@ -168,7 +166,11 @@ impl MerkleDistributor {
         }
 
         let current_time = env.ledger().timestamp();
-        if current_time < config.start_time.saturating_add(AIRDROP_CLAWBACK_WINDOW_SECONDS) {
+        if current_time
+            < config
+                .start_time
+                .saturating_add(AIRDROP_CLAWBACK_WINDOW_SECONDS)
+        {
             panic_with_error!(env, DistributorError::ClawbackWindowActive);
         }
 
@@ -179,7 +181,9 @@ impl MerkleDistributor {
 
         if remaining > 0 {
             config.claimed_amount = config.total_amount;
-            env.storage().instance().set(&DistributorKey::Config, &config);
+            env.storage()
+                .instance()
+                .set(&DistributorKey::Config, &config);
 
             if let Some(token_addr) = config.token {
                 let client = soroban_sdk::token::Client::new(env, &token_addr);

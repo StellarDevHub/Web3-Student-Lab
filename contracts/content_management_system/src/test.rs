@@ -619,7 +619,8 @@ fn test_dynamic_licensing_purchase_and_validation() {
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let token_client = soroban_sdk::token::Client::new(&env, &token_contract.address());
-    let token_admin_client = soroban_sdk::token::StellarAssetClient::new(&env, &token_contract.address());
+    let token_admin_client =
+        soroban_sdk::token::StellarAssetClient::new(&env, &token_contract.address());
 
     let institution = Address::generate(&env);
     token_admin_client.mint(&institution, &5000);
@@ -686,7 +687,8 @@ fn test_license_revocation() {
 
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
-    let token_admin_client = soroban_sdk::token::StellarAssetClient::new(&env, &token_contract.address());
+    let token_admin_client =
+        soroban_sdk::token::StellarAssetClient::new(&env, &token_contract.address());
 
     let institution = Address::generate(&env);
     token_admin_client.mint(&institution, &1000);

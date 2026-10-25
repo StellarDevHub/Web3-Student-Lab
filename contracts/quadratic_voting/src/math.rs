@@ -28,7 +28,9 @@ pub fn isqrt_u128(n: u128) -> u128 {
         // bit <= 2^126, so the candidate fits in u128.
         let candidate = res.checked_add(bit).expect("isqrt candidate overflow");
         if num >= candidate {
-            num = num.checked_sub(candidate).expect("isqrt remainder underflow");
+            num = num
+                .checked_sub(candidate)
+                .expect("isqrt remainder underflow");
             res = (res >> 1).checked_add(bit).expect("isqrt result overflow");
         } else {
             res >>= 1;

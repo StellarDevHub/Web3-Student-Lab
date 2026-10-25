@@ -343,7 +343,7 @@ export class SorobanEventIngestor {
       throw new Error(`Soroban RPC HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as any;
     if (data.error) {
       throw new Error(`Soroban RPC error ${data.error.code}: ${data.error.message}`);
     }
