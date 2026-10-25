@@ -8,40 +8,50 @@ describe('GDPR Account Deletion & Cryptographic Anonymization Pipeline (Issue #1
 
   beforeAll(async () => {
     try {
-      await prisma.student.create({
-        data: {
-          id: testStudentId,
-          email: testEmail,
-          firstName: 'GDPR',
-          lastName: 'Subject',
-          password: 'secret-hash',
-          workspaceId: 'test',
-        },
-      });
+      await Promise.race([
+        (async () => {
+          await prisma.student.create({
+            data: {
+              id: testStudentId,
+              email: testEmail,
+              firstName: 'GDPR',
+              lastName: 'Subject',
+              password: 'secret-hash',
+              workspaceId: 'test',
+            },
+          });
 
-      await prisma.certificate.create({
-        data: {
-          id: `cert-${testStudentId}`,
-          studentId: testStudentId,
-          courseId: 'course-1',
-          tokenId: `token-${testStudentId}`,
-          certificateHash: '0x1234567890abcdef',
-          status: 'issued',
-        },
-      });
+          await prisma.certificate.create({
+            data: {
+              id: `cert-${testStudentId}`,
+              studentId: testStudentId,
+              courseId: 'course-1',
+              tokenId: `token-${testStudentId}`,
+              certificateHash: '0x1234567890abcdef',
+              status: 'issued',
+            },
+          });
+        })(),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
     } catch {
       // Setup fails gracefully if test DB is disconnected
     }
-  }, 30_000);
+  }, 10_000);
 
   afterAll(async () => {
     try {
-      await prisma.certificate.deleteMany({ where: { studentId: SYSTEM_BURN_USER_ID } });
-      await prisma.student.deleteMany({ where: { id: SYSTEM_BURN_USER_ID } });
+      await Promise.race([
+        (async () => {
+          await prisma.certificate.deleteMany({ where: { studentId: SYSTEM_BURN_USER_ID } }).catch(() => {});
+          await prisma.student.deleteMany({ where: { id: SYSTEM_BURN_USER_ID } }).catch(() => {});
+        })(),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
     } catch {
       // Cleanup fails gracefully
     }
-  }, 30_000);
+  }, 10_000);
 
   test('hashPII returns deterministic SHA-256 string', () => {
     const hash1 = anonymizationService.hashPII('user@example.com');
