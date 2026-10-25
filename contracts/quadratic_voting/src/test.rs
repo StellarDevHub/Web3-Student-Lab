@@ -219,7 +219,6 @@ fn isqrt_i128_max_does_not_panic_and_is_floor() {
     let r = math::isqrt_i128(i128::MAX);
     // r is floor(sqrt(MAX)): r^2 <= MAX < (r+1)^2.
     assert!(r.checked_mul(r).is_some());
-    assert!(r.checked_mul(r).unwrap() <= i128::MAX);
     assert!((r + 1).checked_mul(r + 1).is_none());
 }
 

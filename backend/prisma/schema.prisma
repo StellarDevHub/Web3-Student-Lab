@@ -205,12 +205,12 @@ model CertificateVerificationEvent {
 }
 
 model MerkleCohortRoot {
-  cohortId   String   @id
-  rootHash   String
-  anchoredAt DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  cohortId   String   @id @map("cohort_id")
+  rootHash   String   @map("root_hash")
+  anchoredAt DateTime @default(now()) @map("anchored_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
-  @@index([cohortId])
+  @@index([cohortId], map: "idx_merkle_cohort_roots_cohort_id")
   @@map("merkle_cohort_roots")
 }
 
@@ -363,7 +363,7 @@ model DecentralizedAsset {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  @@unique([workspaceId, resourceType, resourceId, name])
+  @@unique([workspaceId, resourceType, resourceId, name], map: "decentralized_assets_workspaceId_resourceType_resourceId_name_k")
   @@index([workspaceId, status])
   @@index([workspaceId, resourceType, resourceId])
   @@map("decentralized_assets")
@@ -589,12 +589,11 @@ model ContributorProof {
 
 model User {
   id            String   @id @default(uuid())
-  walletAddress String   @unique @map("wallet_address")
+  walletAddress String   @unique(map: "idx_users_wallet_address") @map("wallet_address")
   nonce         String
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  @@index([walletAddress], map: "idx_users_wallet_address")
   @@map("users")
 }
 
@@ -781,4 +780,87 @@ model YjsDocumentSnapshot {
   updatedAt    DateTime @updatedAt
 
   @@map("yjs_document_snapshots")
+}
+
+model CurriculumSearchEntry {
+  id           String                   @id
+  workspaceId  String                   @default("default")
+  entityType   String
+  entityId     String
+  courseId     String?
+  title        String
+  content      String
+  tags         String[]                 @default([])
+  level        String?
+  searchVector Unsupported("tsvector")?
+  metadata     Json                     @default("{}")
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @default(now()) @updatedAt
+
+  @@unique([workspaceId, entityType, entityId])
+  @@index([workspaceId, entityType])
+  @@index([workspaceId, courseId])
+  @@map("curriculum_search_entries")
+}
+
+model Job {
+  id              String    @id @default(uuid()) @db.Uuid
+  jobType         String    @map("job_type") @db.VarChar(50)
+  status          String    @default("queued") @db.VarChar(20)
+  payload         Json
+  result          Json?
+  progressPercent Int       @default(0) @map("progress_percent")
+  progressMessage String    @default("Queued") @map("progress_message") @db.VarChar(255)
+  webhookUrl      String?   @map("webhook_url") @db.VarChar(500)
+  webhookHeaders  Json?     @map("webhook_headers")
+  webhookSecret   String?   @map("webhook_secret") @db.VarChar(255)
+  errorMessage    String?   @map("error_message")
+  errorType       String?   @map("error_type") @db.VarChar(50)
+  timeoutSecs     Int       @default(300) @map("timeout_secs")
+  retryCount      Int       @default(0) @map("retry_count")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  startedAt       DateTime? @map("started_at") @db.Timestamptz(6)
+  completedAt     DateTime? @map("completed_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status], map: "idx_jobs_status")
+  @@index([createdAt], map: "idx_jobs_created_at")
+  @@index([status, createdAt], map: "idx_jobs_status_created_at")
+  @@ignore
+  @@map("jobs")
+}
+
+model LedgerFeeSample {
+  ledgerSequence   BigInt                 @id @map("ledger_sequence")
+  collectedAt      DateTime               @map("collected_at") @db.Timestamp(6)
+  baseReserve      BigInt                 @map("base_reserve")
+  baseFee          BigInt                 @map("base_fee")
+  maxFee           BigInt                 @map("max_fee")
+  feeCharged       BigInt                 @map("fee_charged")
+  transactionCount Int                    @map("transaction_count")
+  ledgerCloseTime  DateTime               @map("ledger_close_time") @db.Timestamp(6)
+  txRecords        TransactionFeeRecord[]
+
+  @@index([ledgerSequence], map: "idx_fee_samples_sequence")
+  @@index([ledgerCloseTime], map: "idx_fee_samples_close_time")
+  @@ignore
+  @@map("ledger_fee_samples")
+}
+
+model TransactionFeeRecord {
+  id               String          @id
+  ledgerSequence   BigInt          @map("ledger_sequence")
+  txHash           String          @map("tx_hash") @db.VarChar(64)
+  feeBid           BigInt          @map("fee_bid")
+  feeCharged       BigInt          @map("fee_charged")
+  resourceFee      BigInt          @map("resource_fee")
+  inclusionSuccess Boolean         @map("inclusion_success")
+  recordedAt       DateTime        @default(now()) @map("recorded_at") @db.Timestamp(6)
+  ledgerSample     LedgerFeeSample @relation(fields: [ledgerSequence], references: [ledgerSequence])
+
+  @@index([ledgerSequence], map: "idx_tx_records_ledger")
+  @@index([txHash], map: "idx_tx_records_hash")
+  @@index([recordedAt], map: "idx_tx_records_recorded_at")
+  @@ignore
+  @@map("transaction_fee_records")
 }

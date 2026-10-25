@@ -397,7 +397,7 @@ fn test_isqrt_boundaries_and_max() {
     assert_eq!(QuadraticFunding::isqrt(100), 10);
     // Must not panic at the type boundary; floor(sqrt(MAX)) ≈ 1.3e19.
     let r = QuadraticFunding::isqrt(i128::MAX);
-    assert!(r.checked_mul(r).unwrap() <= i128::MAX);
+    assert!(r.checked_mul(r).is_some());
 }
 
 #[test]
