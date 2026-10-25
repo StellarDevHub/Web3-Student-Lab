@@ -49,7 +49,7 @@ export function createDefaultNodes(): ValidatorNode[] {
   return NODE_IDS.map((id, index) => {
     const angle = (Math.PI * 2 * index) / NODE_IDS.length - Math.PI / 2;
     return {
-      id<
+      id,
       label: id,
       x: center.x + Math.cos(angle) * radius,
       y: center.y + Math.sin(angle) * radius,

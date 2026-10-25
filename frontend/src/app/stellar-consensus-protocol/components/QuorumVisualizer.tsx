@@ -131,7 +131,7 @@ export default function QuorumVisualizer({
       if (onNodeDrag) {
         onNodeDrag(state.id, x, y);
       } else {
-        updateNode(state.id, (n) => ({ ....n, xPercent: x, yPercent: y }));
+        updateNode(state.id, (n) => ({ ...n, xPercent: x, yPercent: y }));
       }
       return undefined;
     },
@@ -218,7 +218,7 @@ export default function QuorumVisualizer({
               key={`${edge.from.id}-${edge.to.id}`}
               x1={edge.from.xPercent}
               y1={edge.from.yPercent}
-              x2=edge.to.xPercent}
+              x2={edge.to.xPercent}
               y2={edge.to.yPercent}
               className={
                 edge.active
