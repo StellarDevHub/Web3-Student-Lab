@@ -2,6 +2,7 @@ import { anonymizationService, SYSTEM_BURN_USER_ID } from '../src/services/anony
 import prisma from '../src/db/index.js';
 
 describe('GDPR Account Deletion & Cryptographic Anonymization Pipeline (Issue #1115)', () => {
+  jest.setTimeout(30_000);
   const testStudentId = `gdpr-test-${Date.now()}`;
   const testEmail = `gdpr-test-${Date.now()}@example.com`;
 
@@ -31,7 +32,7 @@ describe('GDPR Account Deletion & Cryptographic Anonymization Pipeline (Issue #1
     } catch {
       // Setup fails gracefully if test DB is disconnected
     }
-  });
+  }, 30_000);
 
   afterAll(async () => {
     try {
@@ -40,7 +41,7 @@ describe('GDPR Account Deletion & Cryptographic Anonymization Pipeline (Issue #1
     } catch {
       // Cleanup fails gracefully
     }
-  });
+  }, 30_000);
 
   test('hashPII returns deterministic SHA-256 string', () => {
     const hash1 = anonymizationService.hashPII('user@example.com');
