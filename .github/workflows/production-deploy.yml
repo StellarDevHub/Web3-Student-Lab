@@ -89,7 +89,7 @@ jobs:
         id: canary_smoke
         timeout-minutes: 2
         env:
-          CANARY_TARGET_URL: ${{ secrets.PROD_API_URL || 'http://localhost:8080' }}
+          CANARY_TARGET_URL: ${{ secrets.PROD_API_URL }}
           CANARY_TEST_USER_EMAIL: ${{ secrets.CANARY_TEST_USER_EMAIL || 'canary-synthetic@web3studentlab.com' }}
           CANARY_TEST_USER_PASSWORD: ${{ secrets.CANARY_TEST_USER_PASSWORD || 'CanaryPass123!' }}
           SOROBAN_RPC_URL: ${{ secrets.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org' }}

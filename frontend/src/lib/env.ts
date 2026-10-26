@@ -241,8 +241,8 @@ export function validatePublicEnv(source: NodeJS.ProcessEnv = process.env): EnvV
     errors.push('NEXT_PUBLIC_WS_URL: required in production but not set');
   }
 
-  const rawApiUrl = data.NEXT_PUBLIC_API_URL ?? (production ? '' : DEFAULT_DEV_API_URL);
-  const rawWsUrl = data.NEXT_PUBLIC_WS_URL ?? (production ? '' : DEFAULT_DEV_WS_URL);
+  const rawApiUrl = data.NEXT_PUBLIC_API_URL ?? (production ? FALLBACK_RENDER_API_URL : DEFAULT_DEV_API_URL);
+  const rawWsUrl = data.NEXT_PUBLIC_WS_URL ?? (production ? FALLBACK_RENDER_WS_URL : DEFAULT_DEV_WS_URL);
 
   const apiUrl = rawApiUrl ? rawApiUrl.replace(/\/+$/, '') : '';
   const wsUrl = rawWsUrl ? rawWsUrl.replace(/\/+$/, '') : '';
