@@ -119,10 +119,11 @@ function FileTreeRow({
       <div style={{ marginLeft: depth * INDENT_PX }} className="flex w-full items-center gap-2">
         {node.type === 'folder' ? (
           <button
-            className="font-semibold tracking-wide text-zinc-200 uppercase min-h-[44px] md:min-h-0 flex items-center"
+            className="font-semibold tracking-wide text-zinc-200 uppercase min-h-[44px] md:min-h-0 flex items-center gap-1"
             onClick={() => onToggleFolder(node.path)}
           >
-            {filePresenceManager.isFolderExpanded(node.path) ? '▾' : '▸'} {node.name}
+            <span>{filePresenceManager.isFolderExpanded(node.path) ? '▾' : '▸'}</span>
+            <span>{node.name}</span>
           </button>
         ) : (
           <button
@@ -130,7 +131,7 @@ function FileTreeRow({
             onClick={() => onSelectFile(node.path)}
           >
             <span className="mr-1.5 text-zinc-500">•</span>
-            {node.name}
+            <span>{node.name}</span>
           </button>
         )}
         {node.type === 'file' && <PresenceIndicator users={users} />}
@@ -204,7 +205,7 @@ export function VirtualizedFileTree({
   );
 
   return (
-    <div className="overflow-hidden rounded-xl border border-white/10 bg-black/60">
+    <div role="tree" aria-label="Project files" className="overflow-hidden rounded-xl border border-white/10 bg-black/60">
       <div className="border-b border-white/10 px-3 py-2 text-[10px] font-black tracking-[0.2em] text-zinc-500 uppercase">
         project explorer
       </div>

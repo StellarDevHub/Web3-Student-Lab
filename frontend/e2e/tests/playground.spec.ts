@@ -21,6 +21,17 @@ test.describe('Playground: Full-Lifecycle Contract Development Workflow', () => 
     // Install wallet and websocket mocks
     await installWalletMocks();
 
+    // Seed connected wallet so WalletGate allows access to /playground
+    await page.addInitScript(() => {
+      window.localStorage.setItem(
+        'stellar_wallet',
+        JSON.stringify({
+          wallet: 'Freighter',
+          pk: 'GCMOCKWALLETADDRESS000000000000000000000000000000000000000000000',
+        })
+      );
+    });
+
     // Mock API endpoints for compilation, deployment, and contract state queries
     await page.route('**/api/v1/compile**', async (route) => {
       await route.fulfill({
