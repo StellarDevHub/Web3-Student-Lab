@@ -21,8 +21,10 @@ test.describe('Playground: Full-Lifecycle Contract Development Workflow', () => 
     // Install wallet and websocket mocks
     await installWalletMocks();
 
-    // Seed connected wallet so WalletGate allows access to /playground
+    // Seed connected wallet and dismiss warming modal so WalletGate and modals allow direct access
     await page.addInitScript(() => {
+      window.sessionStorage.setItem('render_warning_seen', 'true');
+      window.localStorage.setItem('render_warning_seen', 'true');
       window.localStorage.setItem(
         'stellar_wallet',
         JSON.stringify({
@@ -117,11 +119,17 @@ test.describe('Playground: Full-Lifecycle Contract Development Workflow', () => 
     // Verify main playground region mounts
     await expect(page.locator('body')).toBeVisible();
 
+    // Dismiss warming modal if it appears
+    const warningBtn = page.getByRole('button', { name: /I Understand, Continue/i });
+    if (await warningBtn.isVisible().catch(() => false)) {
+      await warningBtn.click();
+    }
+
     // 1. Load Template Verification
     // The default template loads file tree with lib.rs and Cargo.toml
     const libFile = page.getByText('lib.rs', { exact: true }).first();
     await expect(libFile).toBeVisible({ timeout: 15_000 });
-    await libFile.click();
+    await libFile.click({ force: true });
 
     // 2. Edit Rust Contract Code
     // We can simulate updating editor code or inserting counter increment
@@ -159,7 +167,7 @@ impl CounterContract {
     // Find compile trigger button with strict mode locator
     const compileButton = page.getByRole('button', { name: /compile/i }).first();
     if (await compileButton.isVisible()) {
-      await compileButton.click();
+      await compileButton.click({ force: true });
     } else {
       // Direct compile dispatch
       await page.evaluate(() => {

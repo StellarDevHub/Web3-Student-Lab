@@ -7,11 +7,18 @@ export default function RenderWarningModal() {
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    const hasSeenWarning =
-      sessionStorage.getItem('render_warning_seen') ||
-      localStorage.getItem('render_warning_seen');
-    if (!hasSeenWarning) {
-      setIsOpen(true);
+    if (typeof window !== 'undefined') {
+      const isLocal =
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname === '::1';
+      const hasSeenWarning =
+        isLocal ||
+        sessionStorage.getItem('render_warning_seen') ||
+        localStorage.getItem('render_warning_seen');
+      if (!hasSeenWarning) {
+        setIsOpen(true);
+      }
     }
   }, []);
 
