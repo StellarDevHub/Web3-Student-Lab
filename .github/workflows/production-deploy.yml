@@ -105,15 +105,28 @@ jobs:
   automated_rollback:
     name: Automated Rollback on Canary Failure
     needs: [deploy_production, canary_verification]
-    if: failure() && needs.deploy_production.result == 'success'
+    if: always()
     runs-on: ubuntu-latest
     steps:
+      - name: Evaluate Canary Health Status
+        id: check_status
+        run: |
+          if [ "${{ needs.canary_verification.result }}" != "success" ] && [ "${{ needs.deploy_production.result }}" == "success" ]; then
+            echo "TRIGGER_ROLLBACK=true" >> $GITHUB_ENV
+            echo "🚨 Canary verification failed! Proceeding with automated rollback..."
+          else
+            echo "TRIGGER_ROLLBACK=false" >> $GITHUB_ENV
+            echo "✅ Canary verification passed. System healthy, no rollback required."
+          fi
+
       - name: Checkout Code
+        if: env.TRIGGER_ROLLBACK == 'true'
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.deploy_production.outputs.previous_sha }}
 
       - name: Trigger Automated Production Rollback
+        if: env.TRIGGER_ROLLBACK == 'true'
         id: rollback
         run: |
           echo "========================================================"
@@ -124,7 +137,7 @@ jobs:
           echo "Rollback successfully executed."
 
       - name: Send Rollback Incident Alert to Discord / Slack
-        if: always()
+        if: env.TRIGGER_ROLLBACK == 'true'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
@@ -142,6 +155,7 @@ jobs:
               -d "{\"text\": \"$ALERT_MSG\"}" \
               "$SLACK_WEBHOOK" || true
           fi
+
 
   deployment_notifications:
     name: Post-Deployment Alerts & Notifications
