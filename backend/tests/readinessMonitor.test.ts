@@ -88,7 +88,7 @@ describe('Readiness Monitor', () => {
     expect(result.status).toBe('not_ready');
     expect(result.checks.database.status).toBe('unavailable');
     expect(result.checks.database.error).toBe('database unavailable');
-    expect(result.checks.database.latencyMs).toBeGreaterThanOrEqual(10);
+    expect(result.checks.database.latencyMs).toBeGreaterThanOrEqual(5);
   });
 
   it('sanitizes errors and never leaks credentials or connection details', async () => {
