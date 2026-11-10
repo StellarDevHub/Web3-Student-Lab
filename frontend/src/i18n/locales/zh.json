@@ -43,7 +43,9 @@
   "language": {
     "english": "英语",
     "spanish": "西班牙语",
-    "chinese": "中文"
+    "portuguese": "葡萄牙语",
+    "chinese": "中文",
+    "french": "法语"
   },
   "courses": {
     "page": {

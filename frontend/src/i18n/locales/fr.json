@@ -1,0 +1,231 @@
+{
+  "home": {
+    "title": "Web3 Student ",
+    "title_accent": "Lab",
+    "subtitle": "La plateforme éducative open-source ultime pour le développement blockchain. Apprenez les contrats intelligents, collaborez sur des projets et construisez l'avenir du Web3.",
+    "launch_app": "Lancer l'App",
+    "view_source": "Voir le Code",
+    "feature_curriculum_title": "Programme Interactif",
+    "feature_curriculum_desc": "Progressez des bases jusqu'au développement avancé de contrats intelligents avec des exercices pratiques. Obtenez des certificats vérifiables sur la blockchain.",
+    "feature_ide_title": "IDE dans le Navigateur",
+    "feature_ide_desc": "Écrivez, testez et déployez des contrats intelligents Rust directement depuis votre navigateur sans configuration locale. Intégré à Soroban pour des tests fluides.",
+    "feature_collab_title": "Laboratoire Collaboratif",
+    "feature_collab_desc": "Travaillez ensemble sur des projets de Hackathon, partagez des composants et bâtissez votre réputation décentralisée grâce aux évaluations par les pairs on-chain.",
+    "grant_title": "Statut du Projet : Subvention Requise",
+    "grant_desc": "Web3 Student Lab est un projet open-source ambitieux conçu pour révolutionner l'intégration des développeurs dans l'écosystème Stellar. Nous recherchons actuellement une subvention pour déployer notre infrastructure et amener cette plateforme sur le mainnet."
+  },
+  "nav": {
+    "admin": "Admin",
+    "learn": "Apprendre",
+    "dashboard": "Tableau de bord",
+    "modules": "MODULES",
+    "roadmap": "FEUILLE DE ROUTE",
+    "quiz": "QUIZ",
+    "playground": "ATELIER",
+    "reviews": "REVUES",
+    "simulator": "SIMULATEUR",
+    "ideas": "IDÉES",
+    "verify": "VÉRIFIER",
+    "subscriptions": "ABONNEMENTS",
+    "notarization": "NOTARISATION",
+    "devtools": "OUTILS",
+    "open_source_lab": "Laboratoire Open Source",
+    "web3_student_lab": "Laboratoire Étudiant Web3",
+    "certificates": "Certificats",
+    "notifications": "Notifications",
+    "sign_out": "Déconnexion",
+    "wallet_connected": "Portefeuille connecté",
+    "connect_wallet": "Connecter le portefeuille",
+    "open_wallet_access": "Ouvrir l'accès portefeuille",
+    "complete_profile": "Compléter le profil",
+    "start_with_wallet": "Commencer avec un portefeuille"
+  },
+  "language": {
+    "english": "Anglais",
+    "spanish": "Espagnol",
+    "portuguese": "Portugais",
+    "chinese": "Chinois",
+    "french": "Français"
+  },
+  "courses": {
+    "page": {
+      "eyebrow": "Modules d'apprentissage",
+      "title": "Un catalogue plus clair pour les étudiants qui veulent se lancer.",
+      "description": "Parcourez les modules actifs, découvrez qui les enseigne et passez directement à l'étape suivante sans vous perdre dans des écrans surchargés.",
+      "focus": "Les domaines clés incluent les fondamentaux de la blockchain, les contrats intelligents Soroban et les modèles pratiques de contribution open-source.",
+      "search_label": "Rechercher des modules",
+      "search_placeholder": "Essayez Soroban, DeFi, débutant, Stellar...",
+      "loading": "Chargement des modules...",
+      "count_available": "{count} module{plural} disponible{plural}",
+      "no_results_title": "Aucun module trouvé",
+      "no_results_description": "Essayez un autre terme de recherche ou effacez le filtre pour voir tout le catalogue.",
+      "instructor": "Instructeur",
+      "open": "Ouvrir",
+      "credits": "{credits} crédits",
+      "description_fallback": "Description bientôt disponible."
+    },
+    "detail": {
+      "back": "Répertoire du Réseau",
+      "badge": "Initialisation du Module",
+      "instructor": "Instructeur :",
+      "payload": "Charge :",
+      "unit": "UNITÉ",
+      "level": "Niveau :",
+      "duration": "Durée :",
+      "protocol_specs": "Spécifications du Protocole",
+      "description_fallback": "Métadonnées système manquantes. En attente du téléchargement du programme.",
+      "execution_objectives": "Objectifs d'Exécution",
+      "curriculum_map": "Carte du Programme",
+      "module": "Module {number}",
+      "deliverables": "Livrables",
+      "tools": "Outils Utilisés",
+      "connection_status": "État de Connexion",
+      "uplink_active": "Liaison Active",
+      "in_progress": "Exécution du module en cours...",
+      "mint_prompt": "Programme terminé ? Exécutez le contrat intelligent ci-dessous pour émettre votre justificatif vérifiable sur la blockchain Stellar.",
+      "token_minted": "Jeton Émis",
+      "redirecting": "Redirection vers le Coffre...",
+      "extract_certificate": "Extraire le Certificat",
+      "compiling_tx": "Compilation tx...",
+      "start_enrollment": "Commencer l'Inscription",
+      "connect_wallet": "Connecter le Portefeuille",
+      "complete_profile": "Compléter le Profil",
+      "checking_session": "Vérification de la session...",
+      "wizard_hint": "Assistant en 5 étapes avec sauvegarde de progression",
+      "profile_hint": "Complétez votre profil une fois pour garder l'inscription disponible.",
+      "no_gas_fees": "SANS FRAIS DE GAZ • TESTNET PUBLIC",
+      "async_execution": "Exécution Asynchrone",
+      "onchain_verification": "Vérification On-chain",
+      "encrypted_payload": "Charge Chiffrée",
+      "not_found_title": "Nœud Introuvable",
+      "not_found_back": "Retour au Répertoire"
+    }
+  },
+  "course": {
+    "cm1yxxxx-intro": {
+      "level": "Débutant",
+      "duration": "3 semaines",
+      "summary": "Construisez un modèle mental clair des portefeuilles, registres, actifs, du consensus et du rôle de Stellar dans les systèmes Web3 pratiques.",
+      "outcomes": [
+        "Expliquer comment les réseaux blockchain atteignent le consensus et enregistrent les états",
+        "Comprendre les comptes, actifs, trustlines et paiements sur Stellar",
+        "Naviguer avec assurance dans les portefeuilles, transactions et explorateurs"
+      ],
+      "modules": [
+        {
+          "title": "Fondations Web3",
+          "description": "Le passage des systèmes centralisés aux infrastructures ouvertes et partagées."
+        },
+        {
+          "title": "Primitives du réseau Stellar",
+          "description": "Comptes, soldes, actifs, trustlines et flux de transactions."
+        },
+        {
+          "title": "Opérations réseau pratiques",
+          "description": "Utilisez des portefeuilles, inspectez des transactions et simulez des paiements réels."
+        }
+      ],
+      "deliverables": [
+        "Un court guide de l'écosystème",
+        "Un tutoriel de configuration et financement de portefeuille",
+        "Une démonstration de transaction Stellar de base"
+      ],
+      "tools": ["Freighter", "Stellar Expert", "Testnet faucet", "Outils d'exploration"]
+    },
+    "cm1yxxxx-soroban": {
+      "level": "Intermédiaire",
+      "duration": "5 semaines",
+      "summary": "Apprenez à créer des contrats intelligents Soroban sécurisés en Rust, à les tester correctement et à les déployer avec confiance.",
+      "outcomes": [
+        "Comprendre la structure des contrats Soroban et les modèles de stockage",
+        "Écrire une logique de contrat avec des transitions d'état et validations claires",
+        "Tester et déployer des contrats Rust sur le testnet Stellar"
+      ],
+      "modules": [
+        {
+          "title": "Architecture Soroban",
+          "description": "Comment les contrats s'exécutent, stockent des données et interagissent avec les transactions."
+        },
+        {
+          "title": "Modèles de contrats Rust",
+          "description": "Fonctions, stockage, authentification et conception défensive pour contrats intelligents."
+        },
+        {
+          "title": "Tests et déploiement",
+          "description": "Exécutez des tests locaux, simulez des scénarios et publiez sur le testnet."
+        }
+      ],
+      "deliverables": [
+        "Un contrat simple avec état",
+        "Une suite de tests couvrant les cas de succès et d'échec",
+        "Une liste de contrôle de déploiement sur le testnet"
+      ],
+      "tools": ["Rust", "Soroban SDK", "Stellar CLI", "Testnet RPC"]
+    },
+    "cm1yxxxx-defi": {
+      "level": "Intermédiaire",
+      "duration": "4 semaines",
+      "summary": "Explorez la composition des systèmes DeFi, des pools de liquidité et AMM jusqu'aux incitations et à la gestion des risques.",
+      "outcomes": [
+        "Décrire comment les AMM et les pools de liquidité évaluent les actifs",
+        "Évaluer les risques liés au rendement, à la volatilité et au glissement",
+        "Concevoir des flux de jetons de base pour les prêts, échanges ou récompenses"
+      ],
+      "modules": [
+        {
+          "title": "Briques de base DeFi",
+          "description": "Pools, jetons LP, échanges, routage et mécanismes de frais."
+        },
+        {
+          "title": "Tokenomics et incitations",
+          "description": "Comment les protocoles alignent participation, récompenses et gouvernance."
+        },
+        {
+          "title": "Analyse des risques",
+          "description": "Perte impermanente, risque de contrat intelligent et compromis systémiques."
+        }
+      ],
+      "deliverables": [
+        "Une analyse détaillée d'un protocole DeFi",
+        "Un diagramme de flux de jetons",
+        "Un exercice simple de mathématiques AMM"
+      ],
+      "tools": [
+        "Simulateurs AMM",
+        "Modélisation sur tableur",
+        "Tableaux de bord de protocole",
+        "Outils d'exploration"
+      ]
+    },
+    "default": {
+      "level": "Tous niveaux",
+      "duration": "4 semaines",
+      "summary": "Ce module est prêt pour l'inscription, mais ses métadonnées de programme structurées n'ont pas encore été entièrement publiées.",
+      "outcomes": [
+        "Comprendre les concepts principaux abordés par le module",
+        "Pratiquer avec des ateliers guidés et des exercices concrets",
+        "Terminer par un projet ou une évaluation liée au thème du module"
+      ],
+      "modules": [
+        {
+          "title": "Concepts clés",
+          "description": "Apprenez d'abord le vocabulaire, les modèles mentaux et les bases du système."
+        },
+        {
+          "title": "Pratique guidée",
+          "description": "Travaillez sur des exercices appliqués et des guides d'implémentation."
+        },
+        {
+          "title": "Conclusion du projet",
+          "description": "Assemblez toutes les pièces dans un livrable final ou un point de révision."
+        }
+      ],
+      "deliverables": [
+        "Notes et points de contrôle",
+        "Travaux pratiques de laboratoire",
+        "Artefact de révision finale"
+      ],
+      "tools": ["Outils de portefeuille", "Explorateurs", "Exercices du cours"]
+    }
+  }
+}

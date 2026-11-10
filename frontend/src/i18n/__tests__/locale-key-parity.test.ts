@@ -1,13 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import en from '@/i18n/locales/en.json';
 import es from '@/i18n/locales/es.json';
+import pt from '@/i18n/locales/pt.json';
 import zh from '@/i18n/locales/zh.json';
+import fr from '@/i18n/locales/fr.json';
+import {
+  loadLocaleBundle,
+  resolveTranslationWithFallback,
+  SUPPORTED_LOCALES,
+} from '@/i18n/config';
 
 type LocaleDictionary = Record<string, unknown>;
-type ComparableLocale = 'es' | 'zh';
+type ComparableLocale = 'es' | 'pt' | 'zh' | 'fr';
 
 const referenceLocale = 'en';
-const translatedLocales: Record<ComparableLocale, LocaleDictionary> = { es, zh };
+const translatedLocales: Record<ComparableLocale, LocaleDictionary> = {
+  es,
+  pt,
+  zh,
+  fr,
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -59,12 +71,26 @@ function diffLocaleKeys(localeName: ComparableLocale, dictionary: LocaleDictiona
   return [...missing, ...unexpected].sort();
 }
 
-describe('locale dictionary key parity', () => {
-  it(`keeps Spanish and Chinese keys aligned with ${referenceLocale}.json`, () => {
+describe('locale dictionary key parity & dynamic bundle loader', () => {
+  it(`keeps Spanish, Portuguese, Chinese, and French keys 100% aligned with ${referenceLocale}.json`, () => {
     const issues = Object.entries(translatedLocales).flatMap(([localeName, dictionary]) =>
       diffLocaleKeys(localeName as ComparableLocale, dictionary)
     );
 
     expect(issues, issues.join('\n')).toEqual([]);
+  });
+
+  it('dynamically loads all 5 supported locale bundles (en, es, pt, zh, fr)', async () => {
+    for (const locale of SUPPORTED_LOCALES) {
+      const bundle = await loadLocaleBundle(locale);
+      expect(bundle).toBeDefined();
+      expect(typeof (bundle.home as Record<string, unknown>)?.launch_app).toBe('string');
+    }
+  });
+
+  it('falls back to English (en) when a key is missing in a partial bundle', () => {
+    const partialBundle = { home: { launch_app: 'Iniciar App' } };
+    expect(resolveTranslationWithFallback(partialBundle, 'home.launch_app')).toBe('Iniciar App');
+    expect(resolveTranslationWithFallback(partialBundle, 'home.view_source')).toBe('View Source');
   });
 });
