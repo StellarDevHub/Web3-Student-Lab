@@ -10,6 +10,8 @@ import { Alert, AlertDescription } from '@/components/ui/Alert';
 import { Progress } from '@/components/ui/Progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
+import { CrossChainMonitor } from '@/components/bridge/CrossChainMonitor';
+import { sha256PairHex, sha256TextHex } from '@/services/bridge/relayerTracker';
 import { useBridgeTracker } from '@/lib/bridge/useBridgeTracker';
 import type { BridgeStatus, BridgeTransaction } from '@/lib/bridge/types';
 import {
@@ -39,15 +41,8 @@ export default function BridgeTransactionTracker() {
   const [searchId, setSearchId] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [showHelpDialog, setShowHelpDialog] = useState(false);
-  const {
-    transactions,
-    loading,
-    refreshing,
-    error,
-    configured,
-    usingLocalFixtures,
-    refresh,
-  } = useBridgeTracker({ autoRefresh });
+  const { transactions, loading, refreshing, error, configured, usingLocalFixtures, refresh } =
+    useBridgeTracker({ autoRefresh });
 
   useEffect(() => {
     if (!selectedTransaction) return;
@@ -229,6 +224,7 @@ export default function BridgeTransactionTracker() {
                     <TabsTrigger value="progress">Progress</TabsTrigger>
                     <TabsTrigger value="details">Details</TabsTrigger>
                     <TabsTrigger value="explorers">Explorers</TabsTrigger>
+                    <TabsTrigger value="merkle">Merkle Proof</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="progress" className="space-y-4">
@@ -320,13 +316,19 @@ export default function BridgeTransactionTracker() {
                         <Detail label="Bridge Service" value={selectedTransaction.serviceName} />
                       )}
                       {selectedTransaction.protocol && (
-                        <Detail label="Protocol" value={selectedTransaction.protocol.toUpperCase()} />
+                        <Detail
+                          label="Protocol"
+                          value={selectedTransaction.protocol.toUpperCase()}
+                        />
                       )}
                       <Detail
                         label="Amount"
                         value={`${selectedTransaction.amount} ${selectedTransaction.asset}`}
                       />
-                      <Detail label="Started" value={selectedTransaction.timestamp.toLocaleString()} />
+                      <Detail
+                        label="Started"
+                        value={selectedTransaction.timestamp.toLocaleString()}
+                      />
                       <Detail label="Source Chain" value={selectedTransaction.sourceChain} />
                       <Detail label="Target Chain" value={selectedTransaction.targetChain} />
                       <Detail label="Sender" value={selectedTransaction.sender} mono />
@@ -365,6 +367,10 @@ export default function BridgeTransactionTracker() {
                         </div>
                       )}
                   </TabsContent>
+
+                  <TabsContent value="merkle" className="space-y-4">
+                    <MerkleTransferPanel transaction={selectedTransaction} />
+                  </TabsContent>
                 </Tabs>
               </CardContent>
             </Card>
@@ -384,6 +390,32 @@ export default function BridgeTransactionTracker() {
   );
 }
 
+function MerkleTransferPanel({ transaction }: { transaction: BridgeTransaction }) {
+  const leafHash = sha256TextHex(
+    `${transaction.id}:${transaction.asset}:${transaction.amount}:${transaction.sender}:${transaction.recipient}`
+  );
+  const sibling1 = sha256TextHex(`${transaction.id}:batch-neighbor-0`);
+  const sibling2 = sha256TextHex(`${transaction.id}:batch-subtree-1`);
+  const parent1 = sha256PairHex(leafHash, sibling1);
+  const expectedRootHash = sha256PairHex(sibling2, parent1);
+
+  return (
+    <CrossChainMonitor
+      transferId={transaction.id}
+      assetSymbol={transaction.asset}
+      amount={String(transaction.amount)}
+      sourceTxHash={transaction.sourceTxHash || `0x${leafHash}`}
+      destinationTxHash={transaction.targetTxHash}
+      leafHash={leafHash}
+      siblings={[
+        { position: 'right', siblingHash: sibling1 },
+        { position: 'left', siblingHash: sibling2 },
+      ]}
+      expectedRootHash={expectedRootHash}
+    />
+  );
+}
+
 function Detail({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
     <div>
@@ -393,15 +425,7 @@ function Detail({ label, value, mono = false }: { label: string; value: string; 
   );
 }
 
-function ExplorerRow({
-  label,
-  chain,
-  txHash,
-}: {
-  label: string;
-  chain: string;
-  txHash?: string;
-}) {
+function ExplorerRow({ label, chain, txHash }: { label: string; chain: string; txHash?: string }) {
   if (!txHash) return null;
 
   const url = getExplorerUrl(chain, txHash);
@@ -481,7 +505,10 @@ function getBridgeSteps(transaction: BridgeTransaction): BridgeStep[] {
   return steps;
 }
 
-function getStepStatus(transaction: BridgeTransaction, stepKey: BridgeStatus): BridgeStep['status'] {
+function getStepStatus(
+  transaction: BridgeTransaction,
+  stepKey: BridgeStatus
+): BridgeStep['status'] {
   const statusOrder: Record<BridgeStatus, number> = {
     initiated: 0,
     pending_anchor: 1,
