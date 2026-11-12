@@ -5,3 +5,9 @@ export { CourseNotificationListener } from './CourseNotificationListener';
 export { OfflineNotification } from './OfflineNotification';
 export { OfflineReadyNotification } from './OfflineReadyNotification';
 export { UpdateAvailableNotification } from './UpdateAvailableNotification';
+export {
+  EventToaster,
+  AUTO_DISMISS_MS,
+  type ContractEventToast,
+  type EventToasterProps,
+} from './EventToaster';
