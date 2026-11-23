@@ -111,7 +111,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(destination, 301);
   }
 
-  const ip = request.ip || request.headers.get('x-forwarded-for') || '127.0.0.1';
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
   const userAgent = request.headers.get('user-agent') || '';
 
   // 1. Bot detection
@@ -126,7 +126,10 @@ export async function middleware(request: NextRequest) {
 
   // 3. Admin routes protection
   if (request.nextUrl.pathname.startsWith(ADMIN_ROUTE_PREFIX)) {
-    const country = request.geo?.country;
+    const country =
+      request.headers.get('x-vercel-ip-country') ||
+      request.headers.get('cf-ipcountry') ||
+      undefined;
 
     // Geo-fencing
     if (ALLOWED_ADMIN_COUNTRIES.length > 0 && country && !ALLOWED_ADMIN_COUNTRIES.includes(country)) {
