@@ -15,6 +15,7 @@
  */
 
 import type { Job, JobsOptions, Queue } from 'bullmq';
+import { createDlqIncidentAlert, extractPayloadIds, sendDlqIncidentAlert } from '../services/alertingService.js';
 import logger from '../utils/logger.js';
 
 export const DEAD_LETTER_QUEUE_NAME = 'dead-letter';
@@ -64,23 +65,14 @@ const deadLetterId = (sourceQueue: string, jobId: string) => `${sourceQueue}--${
  * Slack/PagerDuty bridge) when `DLQ_ALERT_WEBHOOK_URL` is set.
  */
 export const defaultDlqAlertSink: DlqAlertSink = async (alert) => {
-  logger.error(`[DLQ] ${alert.message}`, { kind: alert.kind, queue: alert.queue, ...alert.details });
-
-  const url = process.env.DLQ_ALERT_WEBHOOK_URL;
-  if (!url) return;
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text: alert.message, ...alert }),
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!response.ok) {
-      logger.warn('[DLQ] Alert webhook responded with non-2xx', { status: response.status });
-    }
-  } catch (err) {
-    logger.warn('[DLQ] Alert webhook delivery failed', { error: err instanceof Error ? err.message : String(err) });
-  }
+  await sendDlqIncidentAlert(
+    createDlqIncidentAlert({
+      kind: alert.kind,
+      queue: alert.queue,
+      message: alert.message,
+      details: alert.details,
+    })
+  );
 };
 
 export class DlqProcessor {
@@ -134,8 +126,10 @@ export class DlqProcessor {
       ...(typeof data.userId === 'string' ? { userId: data.userId } : {}),
     };
 
+    const dlqId = deadLetterId(sourceQueue, String(job.id));
+
     await this.queue.add(job.name, entry, {
-      jobId: deadLetterId(sourceQueue, String(job.id)),
+      jobId: dlqId,
       removeOnComplete: true,
       removeOnFail: false,
     });
@@ -144,7 +138,18 @@ export class DlqProcessor {
       kind: 'job-dead-lettered',
       queue: sourceQueue,
       message: `Job ${job.name}#${job.id} on '${sourceQueue}' moved to the DLQ after ${job.attemptsMade} attempt(s): ${entry.failedReason}`,
-      details: { jobId: job.id, jobName: job.name, attemptsMade: job.attemptsMade, userId: entry.userId },
+      details: {
+        jobId: job.id,
+        dlqId,
+        jobName: job.name,
+        attemptsMade: job.attemptsMade,
+        userId: entry.userId,
+        traceId: typeof data.traceId === 'string' ? data.traceId : undefined,
+        failedAt: entry.failedAt,
+        payloadIds: extractPayloadIds(data, [String(job.id), dlqId]),
+        stacktrace: entry.stacktrace,
+        data,
+      },
     });
     await this.checkThreshold(sourceQueue);
     return true;

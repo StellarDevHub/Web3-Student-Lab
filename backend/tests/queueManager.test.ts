@@ -80,11 +80,11 @@ describe('QueueManager (BE-006)', () => {
     expect(minting.concurrency).toBeLessThanOrEqual(minting.limiter!.max);
   });
 
-  it('gives every job 1 attempt + 5 retries with exponential backoff and jitter', () => {
+  it('gives every job 5 attempts with a two-hour jittered backoff schedule', () => {
     const opts = defaultJobOptions('standard');
-    expect(MAX_RETRIES).toBe(5);
-    expect(opts.attempts).toBe(6);
-    expect(opts.backoff).toMatchObject({ type: 'exponential', jitter: BACKOFF_JITTER });
+    expect(MAX_RETRIES).toBe(4);
+    expect(opts.attempts).toBe(5);
+    expect(opts.backoff).toMatchObject({ type: 'custom' });
     expect(BACKOFF_JITTER).toBeGreaterThan(0);
     expect(defaultJobOptions('critical').priority).toBeLessThan(defaultJobOptions('low').priority!);
   });
@@ -95,7 +95,7 @@ describe('QueueManager (BE-006)', () => {
 
     const stored = queues.get(QUEUE_NAMES.IPFS_PINNING)!.jobs.get(String(job.id));
     expect(stored.data).toEqual({ cid: 'bafy', userId: 'u1' });
-    expect(stored.opts).toMatchObject({ attempts: 6, backoff: { type: 'exponential' } });
+    expect(stored.opts).toMatchObject({ attempts: 5, backoff: { type: 'custom' } });
   });
 
   it('rate-limits each user independently per queue', async () => {
@@ -326,7 +326,7 @@ describe('QueueManager + BullMQ integration (real Redis)', () => {
     const { entries } = await manager.dlq.list();
     expect(entries[0]).toMatchObject({
       sourceQueue: QUEUE_NAMES.IPFS_PINNING,
-      attemptsMade: 6,
+      attemptsMade: 5,
       failedReason: 'IPFS gateway unavailable',
       data: { cid: 'bafy-int', userId: 'int-user' },
     });

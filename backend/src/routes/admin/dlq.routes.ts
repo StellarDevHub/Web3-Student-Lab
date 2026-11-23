@@ -6,12 +6,19 @@ import {
   getDLQTriageSummary,
   replayDLQJob,
   replayAllDLQJobs,
+  replayDLQJobsByIds,
   purgeDLQ,
+  purgeDLQJobsByIds,
 } from '../../services/dlq.service.js';
 import { authenticateToken } from '../../middleware/auth.js';
 import { requireAdmin } from '../../middleware/admin.js';
 import { validate } from '../../middleware/validation.js';
-import { dlqReplaySchema, dlqPurgeSchema } from './dlq.validation.schemas.js';
+import {
+  dlqReplaySchema,
+  dlqPurgeSchema,
+  dlqBatchRetrySchema,
+  dlqBatchPurgeSchema,
+} from './dlq.validation.schemas.js';
 import logger from '../../utils/logger.js';
 
 const router: ReturnType<typeof Router> = Router();
@@ -170,6 +177,30 @@ router.post('/replay', validate(dlqReplaySchema), async (req: Request, res: Resp
   }
 });
 
+router.post('/batch-retry', validate(dlqBatchRetrySchema), async (req: Request, res: Response) => {
+  try {
+    const { dlqIds } = req.body as { dlqIds: string[] };
+
+    const result = await replayDLQJobsByIds(dlqIds);
+
+    res.json({
+      status: 'success',
+      data: {
+        message: `Replayed ${result.replayedCount} of ${dlqIds.length} selected jobs`,
+        requestedCount: dlqIds.length,
+        replayedCount: result.replayedCount,
+        errors: result.errors,
+      }
+    });
+  } catch (error: any) {
+    logger.error('Failed to batch replay DLQ jobs:', error);
+    res.status(500).json({
+      status: 'error',
+      error: 'Failed to batch replay DLQ jobs'
+    });
+  }
+});
+
 /**
  * @route DELETE /api/v1/admin/dlq/purge
  * @desc Purge DLQ jobs from storage
@@ -193,6 +224,30 @@ router.delete('/purge', validate(dlqPurgeSchema), async (req: Request, res: Resp
     res.status(500).json({
       status: 'error',
       error: 'Failed to purge DLQ jobs'
+    });
+  }
+});
+
+router.delete('/batch-purge', validate(dlqBatchPurgeSchema), async (req: Request, res: Response) => {
+  try {
+    const { dlqIds } = req.body as { dlqIds: string[] };
+
+    const result = await purgeDLQJobsByIds(dlqIds);
+
+    res.json({
+      status: 'success',
+      data: {
+        message: `Purged ${result.purgedCount} of ${dlqIds.length} selected jobs`,
+        requestedCount: dlqIds.length,
+        purgedCount: result.purgedCount,
+        missingIds: result.missingIds,
+      }
+    });
+  } catch (error: any) {
+    logger.error('Failed to batch purge DLQ jobs:', error);
+    res.status(500).json({
+      status: 'error',
+      error: 'Failed to batch purge DLQ jobs'
     });
   }
 });
