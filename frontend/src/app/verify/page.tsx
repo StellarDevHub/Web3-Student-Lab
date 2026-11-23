@@ -4,6 +4,7 @@ import { certificatesAPI } from '@/lib/api';
 import { AlertCircle, BadgeCheck, Search, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { ErrorBoundary } from '@/components/ui';
+import { ZkProofPanel } from '@/components/zk/ZkProofPanel';
 
 type VerificationResponse = {
   isValid: boolean;
@@ -176,6 +177,8 @@ export default function VerifyPage() {
               )}
             </section>
           )}
+
+          <ZkProofPanel />
         </div>
       </div>
     </ErrorBoundary>
