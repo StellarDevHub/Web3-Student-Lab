@@ -64,17 +64,18 @@ router.post(
         userDisplayName
       );
 
-      // Convert Buffer fields to base64 for JSON serialization
+      // Buffers → unpadded base64url, the encoding WebAuthn JSON and
+      // clientDataJSON use, so the challenge round-trips unchanged.
       const serializableChallenge = {
         ...challenge,
-        challenge: challenge.challenge.toString('base64'),
+        challenge: challenge.challenge.toString('base64url'),
         user: {
           ...challenge.user,
-          id: challenge.user.id.toString('base64'),
+          id: challenge.user.id.toString('base64url'),
         },
         excludeCredentials: challenge.excludeCredentials.map((cred) => ({
           ...cred,
-          id: cred.id.toString('base64'),
+          id: cred.id.toString('base64url'),
         })),
       };
 
@@ -190,13 +191,14 @@ router.post(
 
       const challenge = await passkeyService.generateAuthenticationChallenge(userId);
 
-      // Convert Buffer fields to base64 for JSON serialization
+      // Buffers → unpadded base64url, the encoding WebAuthn JSON and
+      // clientDataJSON use, so the challenge round-trips unchanged.
       const serializableChallenge = {
         ...challenge,
-        challenge: challenge.challenge.toString('base64'),
+        challenge: challenge.challenge.toString('base64url'),
         allowCredentials: challenge.allowCredentials.map((cred) => ({
           ...cred,
-          id: cred.id.toString('base64'),
+          id: cred.id.toString('base64url'),
         })),
       };
 
