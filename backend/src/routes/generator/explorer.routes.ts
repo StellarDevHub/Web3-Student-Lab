@@ -63,7 +63,8 @@ router.get('/explorer/snapshot', async (req: Request, res: Response): Promise<vo
 router.get('/explorer/search', async (req: Request, res: Response): Promise<void> => {
   try {
     const query = getQueryString(req.query.q);
-    const snapshot = await getExplorerSnapshot({ limit: 50 });
+    const mode = parseMode(req);
+    const snapshot = await getExplorerSnapshot({ limit: 50, mode } as never);
 
     const filtered = filterTransactions(snapshot.transactions, query);
 

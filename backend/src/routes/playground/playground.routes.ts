@@ -37,7 +37,6 @@ router.post('/triage/score', async (req: Request, res: Response) => {
     const round = scoreRound(submissions);
     let leaderboardEntry: LeaderboardEntry | null = null;
 
-
     if (playerId && typeof playerId === 'string') {
       leaderboardEntry = await updateLeaderboard(
         playerId,

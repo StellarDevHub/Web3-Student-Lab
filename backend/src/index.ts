@@ -93,10 +93,11 @@ app.use(
 // Mount OpenAPI 3.1 interactive docs (Swagger UI) + JSON/YAML spec export.
 app.use('/api/docs', swaggerDocsRouter);
 
-// Mount main API v1 router
+// Mount main API v1 router. All domain routers (generator, simulator, playground,
+// etc.) are consolidated and registered exactly once inside routes/index.ts.
 app.use('/api/v1', routes);
 
-// Mount versioned API routes (e.g. /api/v1/lottery, /api/v2/lottery)
+// Mount versioned API routes (e.g. /api/v2/lottery)
 app.use('/api', apiRouter);
 
 // Mount Sentry Error Handler middleware

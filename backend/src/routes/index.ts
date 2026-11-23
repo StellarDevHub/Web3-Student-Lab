@@ -99,11 +99,25 @@ router.use('/security', securityRouter);
 router.use('/licenses', licenseRoutes);
 router.use('/seo', seoRouter);
 router.use('/i18n', i18nRouter);
-router.use('/generator', generatorRouter);
-router.use('/generator', explorerRouter);
+
+// /generator: generator and explorer routers are merged into one mount so the
+// prefix is registered exactly once. Explorer paths (/explorer/*) are disjoint
+// from generator paths, so no route is shadowed.
+router.use('/generator', generatorRouter, explorerRouter);
+
 router.use('/osct', osctRouter);
-router.use('/simulator', simulatorRouter);
-router.use('/playground', playgroundRouter);
+
+// /simulator: the scanner (simulator/simulator.routes), the ideas router and
+// the errors router are combined under a single mount. The errors router is
+// nested at /errors so it no longer collides with the ideas router at /simulator.
+router.use('/simulator', simulatorRouter, simulatorIdeasRouter);
+router.use('/simulator/errors', simulatorErrorsRouter);
+
+// /playground: the triage game, validation and privacy-policy routers are
+// unified under one mount point. Privacy policy is nested under /privacy-policy.
+router.use('/playground', playgroundRouter, playgroundValidateRouter);
+router.use('/playground/privacy-policy', privacyPolicyRouter);
+
 router.use('/export', exportRouter);
 router.use('/deploy', deployRouter);
 router.use('/did', didRouter);
@@ -126,11 +140,7 @@ router.use('/user', userRouter);
 router.use('/metrics', metricsRouter);
 router.use('/dependencies', dependenciesRouter);
 router.use('/infrastructure', infrastructureRouter);
-router.use('/simulator', simulatorIdeasRouter);
-router.use('/simulator/errors', simulatorErrorsRouter);
 router.use('/roadmap/tos', termsOfServiceRouter);
-router.use('/playground', playgroundValidateRouter);
-router.use('/playground/privacy-policy', privacyPolicyRouter);
 router.use('/oauth', oauthRouter);
 router.use('/', apiRouter);
 router.use('/tokenomics', tokenomicsRouter);

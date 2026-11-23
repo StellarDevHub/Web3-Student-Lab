@@ -8,6 +8,43 @@ import logger from '../../utils/logger.js';
 const router: ReturnType<typeof Router> = Router();
 
 /**
+ * @openapi
+ * /api/v1/simulator/scan:
+ *   post:
+ *     summary: Scan contract source for security vulnerabilities
+ *     tags:
+ *       - Simulator
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - sourceCode
+ *             properties:
+ *               sourceCode:
+ *                 type: string
+ *                 description: Solidity contract source code to scan
+ *     responses:
+ *       200:
+ *         description: Scan completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *       400:
+ *         description: Invalid scan request
+ *       500:
+ *         description: Failed to scan contract
+ */
+/**
  * @route POST /api/v1/simulator/scan
  * @desc Scan contract source for security vulnerabilities
  */
