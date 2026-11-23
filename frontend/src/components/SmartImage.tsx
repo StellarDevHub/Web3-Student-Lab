@@ -30,13 +30,6 @@ interface SmartImageProps extends Omit<
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Tiny transparent 1×1 GIF – used as placeholder when no LQIP is provided.
- * Prevents layout shift while keeping the image slot reserved.
- */
-const TRANSPARENT_PLACEHOLDER =
-  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-
 /** Small, dependency-free blurred SVG used when an image has no supplied LQIP. */
 const DEFAULT_BLUR_PLACEHOLDER =
   'data:image/svg+xml;charset=utf-8,' +
@@ -142,8 +135,9 @@ export function SmartImage({
   const handleLoad = useCallback(() => setStatus('loaded'), []);
 
   const handleError = useCallback(() => {
-    if (fallbackSrc && activeSrc !== fallbackSrc) {
-      setActiveSrc(fallbackSrc);
+    const resolvedFallback = fallbackSrc ? resolveIpfsImageSrc(fallbackSrc) : undefined;
+    if (resolvedFallback && activeSrc !== resolvedFallback) {
+      setActiveSrc(resolvedFallback);
     } else {
       setStatus('error');
     }
