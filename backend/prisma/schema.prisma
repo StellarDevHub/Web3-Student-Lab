@@ -9,6 +9,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Student {
@@ -146,9 +147,32 @@ model AuditLog {
   details   Json?
   ipAddress String?
   userAgent String?
+  prevHash  String?
+  hash      String?
   createdAt DateTime @default(now())
 
   @@map("audit_logs")
+  @@index([createdAt])
+  @@index([hash])
+}
+
+model MerkleAnchor {
+  id              String   @id @default(cuid())
+  merkleRoot      String   @unique
+  prevMerkleRoot  String?
+  periodStart     DateTime
+  periodEnd       DateTime
+  logCount        Int
+  transactionHash String
+  contractAddress String?
+  network         String?
+  status          String   @default("ANCHORED") // ANCHORED, FAILED, PENDING
+  anchoredAt      DateTime @default(now())
+  metadata        Json?
+
+  @@map("merkle_anchors")
+  @@index([periodStart, periodEnd])
+  @@index([transactionHash])
 }
 
 model AuthNonce {
