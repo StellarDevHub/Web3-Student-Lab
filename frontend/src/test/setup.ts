@@ -15,27 +15,31 @@ import { afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { server } from '../mocks/server';
 import { webcrypto } from 'node:crypto';
 
-// Polyfill window.crypto with Node's webcrypto so crypto.subtle is available in jsdom
-Object.defineProperty(window, 'crypto', {
-  configurable: true,
-  value: webcrypto,
-});
-
-// Polyfill window.indexedDB from globalThis (set by fake-indexeddb/auto)
-if (typeof (globalThis as any).indexedDB !== 'undefined') {
-  Object.defineProperty(window, 'indexedDB', {
+// Browser polyfills only apply to DOM environments; suites that opt into
+// `// @vitest-environment node` (e.g. Stellar SDK signing) have no `window`.
+if (typeof window !== 'undefined') {
+  // Polyfill window.crypto with Node's webcrypto so crypto.subtle is available in jsdom
+  Object.defineProperty(window, 'crypto', {
     configurable: true,
-    writable: true,
-    value: (globalThis as any).indexedDB,
+    value: webcrypto,
+  });
+
+  // Polyfill window.indexedDB from globalThis (set by fake-indexeddb/auto)
+  if (typeof (globalThis as any).indexedDB !== 'undefined') {
+    Object.defineProperty(window, 'indexedDB', {
+      configurable: true,
+      writable: true,
+      value: (globalThis as any).indexedDB,
+    });
+  }
+
+  Object.defineProperty(window.navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      writeText: vi.fn().mockResolvedValue(undefined),
+    },
   });
 }
-
-Object.defineProperty(window.navigator, 'clipboard', {
-  configurable: true,
-  value: {
-    writeText: vi.fn().mockResolvedValue(undefined),
-  },
-});
 
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'bypass' });
