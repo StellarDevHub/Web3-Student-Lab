@@ -1,26 +1,34 @@
-"use client";
+'use client';
 
-import { useState, useRef } from "react";
-import { useDebugger } from "@/hooks/useDebugger";
-import CallStackView from "./CallStackView";
-import StateInspector from "./StateInspector";
-import BreakpointManager from "./BreakpointManager";
+import { useState, useRef } from 'react';
+import { useDebugger } from '@/hooks/useDebugger';
+import CallStackView from './CallStackView';
+import StateInspector from './StateInspector';
+import BreakpointManager from './BreakpointManager';
 
 // ---------------------------------------------------------------------------
 // Step type styling
 // ---------------------------------------------------------------------------
 
 const STEP_COLORS: Record<string, { dot: string; bg: string; label: string }> = {
-  function_call:   { dot: "bg-[#00d4aa]",  bg: "bg-[#00d4aa]/5  border-[#00d4aa]/20",  label: "CALL"    },
-  function_return: { dot: "bg-[#c9b1ff]",  bg: "bg-[#c9b1ff]/5  border-[#c9b1ff]/20",  label: "RETURN"  },
-  storage_read:    { dot: "bg-[#a8d8ea]",  bg: "bg-[#a8d8ea]/5  border-[#a8d8ea]/20",  label: "READ"    },
-  storage_write:   { dot: "bg-[#f9c74f]",  bg: "bg-[#f9c74f]/5  border-[#f9c74f]/20",  label: "WRITE"   },
-  variable_mutation:{ dot: "bg-[#f77f00]", bg: "bg-[#f77f00]/5  border-[#f77f00]/20",  label: "MUTATE"  },
-  error:           { dot: "bg-[#f94144]",  bg: "bg-[#f94144]/5  border-[#f94144]/20",  label: "ERROR"   },
-  gas_checkpoint:  { dot: "bg-[#3a8a6a]",  bg: "bg-[#3a8a6a]/5  border-[#3a8a6a]/20",  label: "GAS"     },
+  function_call: { dot: 'bg-[#00d4aa]', bg: 'bg-[#00d4aa]/5  border-[#00d4aa]/20', label: 'CALL' },
+  function_return: {
+    dot: 'bg-[#c9b1ff]',
+    bg: 'bg-[#c9b1ff]/5  border-[#c9b1ff]/20',
+    label: 'RETURN',
+  },
+  storage_read: { dot: 'bg-[#a8d8ea]', bg: 'bg-[#a8d8ea]/5  border-[#a8d8ea]/20', label: 'READ' },
+  storage_write: { dot: 'bg-[#f9c74f]', bg: 'bg-[#f9c74f]/5  border-[#f9c74f]/20', label: 'WRITE' },
+  variable_mutation: {
+    dot: 'bg-[#f77f00]',
+    bg: 'bg-[#f77f00]/5  border-[#f77f00]/20',
+    label: 'MUTATE',
+  },
+  error: { dot: 'bg-[#f94144]', bg: 'bg-[#f94144]/5  border-[#f94144]/20', label: 'ERROR' },
+  gas_checkpoint: { dot: 'bg-[#3a8a6a]', bg: 'bg-[#3a8a6a]/5  border-[#3a8a6a]/20', label: 'GAS' },
 };
 
-type Panel = "stack" | "state" | "breakpoints";
+type Panel = 'stack' | 'state' | 'breakpoints';
 
 // ---------------------------------------------------------------------------
 // Execution controls bar
@@ -56,11 +64,11 @@ function ExecutionControls({
   return (
     <div className="flex flex-col gap-2">
       {/* Button row */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex flex-wrap items-center gap-2">
         {!isRunning ? (
           <button
             onClick={onStart}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00d4aa] text-[#061015] text-xs font-bold hover:bg-[#00b894] transition-colors shadow-[0_0_16px_rgba(0,212,170,0.3)]"
+            className="flex items-center gap-2 rounded-lg bg-[#00d4aa] px-4 py-2 text-xs font-bold text-[#061015] shadow-[0_0_16px_rgba(0,212,170,0.3)] transition-colors hover:bg-[#00b894]"
           >
             <span>▶</span> Start Debugger
           </button>
@@ -70,7 +78,7 @@ function ExecutionControls({
               onClick={onStepBackward}
               disabled={currentStep === 0}
               title="Step Back"
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-[#1a2e3a] bg-[#0d1b2a] text-[#7ecfb3] hover:border-[#00d4aa]/40 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-sm"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#1a2e3a] bg-[#0d1b2a] text-sm text-[#7ecfb3] transition-colors hover:border-[#00d4aa]/40 disabled:cursor-not-allowed disabled:opacity-30"
             >
               ⏮
             </button>
@@ -79,7 +87,7 @@ function ExecutionControls({
               <button
                 onClick={onPlay}
                 title="Play"
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-[#00d4aa]/40 bg-[#00d4aa]/10 text-[#00d4aa] hover:bg-[#00d4aa]/20 transition-colors"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#00d4aa]/40 bg-[#00d4aa]/10 text-[#00d4aa] transition-colors hover:bg-[#00d4aa]/20"
               >
                 ▶
               </button>
@@ -87,7 +95,7 @@ function ExecutionControls({
               <button
                 onClick={onPause}
                 title="Pause"
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-[#f9c74f]/40 bg-[#f9c74f]/10 text-[#f9c74f] hover:bg-[#f9c74f]/20 transition-colors"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#f9c74f]/40 bg-[#f9c74f]/10 text-[#f9c74f] transition-colors hover:bg-[#f9c74f]/20"
               >
                 ⏸
               </button>
@@ -97,7 +105,7 @@ function ExecutionControls({
               onClick={onStepForward}
               disabled={currentStep >= totalSteps - 1}
               title="Step Forward"
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-[#1a2e3a] bg-[#0d1b2a] text-[#7ecfb3] hover:border-[#00d4aa]/40 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-sm"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#1a2e3a] bg-[#0d1b2a] text-sm text-[#7ecfb3] transition-colors hover:border-[#00d4aa]/40 disabled:cursor-not-allowed disabled:opacity-30"
             >
               ⏭
             </button>
@@ -105,16 +113,16 @@ function ExecutionControls({
             <button
               onClick={onStop}
               title="Stop"
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-[#f94144]/30 bg-[#f94144]/5 text-[#f94144] hover:bg-[#f94144]/15 transition-colors text-sm"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#f94144]/30 bg-[#f94144]/5 text-sm text-[#f94144] transition-colors hover:bg-[#f94144]/15"
             >
               ■
             </button>
 
-            <div className="h-5 w-px bg-[#1a2e3a] mx-1" />
+            <div className="mx-1 h-5 w-px bg-[#1a2e3a]" />
 
             <button
               onClick={onExport}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#1a2e3a] text-[#4a6070] text-xs hover:text-[#7ecfb3] hover:border-[#2a3e4a] transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border-[#1a2e3a] px-3 py-1.5 text-xs text-[#4a6070] transition-colors hover:border-[#2a3e4a] hover:text-[#7ecfb3]"
             >
               ↓ Export Trace
             </button>
@@ -125,13 +133,13 @@ function ExecutionControls({
       {/* Progress bar */}
       {isRunning && (
         <div className="flex items-center gap-3">
-          <div className="flex-1 h-1 bg-[#0d1b2a] rounded-full overflow-hidden">
+          <div className="h-1 flex-1 overflow-hidden rounded-full bg-[#0d1b2a]">
             <div
-              className="h-full bg-[#00d4aa] rounded-full transition-all duration-300"
+              className="h-full rounded-full bg-[#00d4aa] transition-all duration-300"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <span className="text-[10px] font-mono text-[#4a6070] whitespace-nowrap">
+          <span className="font-mono text-[10px] whitespace-nowrap text-[#4a6070]">
             {currentStep + 1} / {totalSteps}
           </span>
         </div>
@@ -159,18 +167,18 @@ function ExecutionTimeline({
 
   return (
     <div className="border-t border-[#1a2e3a]">
-      <div className="px-4 pt-3 pb-1 flex items-center justify-between">
-        <span className="text-[10px] font-mono text-[#4a6070] uppercase tracking-widest">
+      <div className="flex items-center justify-between px-4 pt-3 pb-1">
+        <span className="font-mono text-[10px] tracking-widest text-[#4a6070] uppercase">
           Execution Timeline
         </span>
-        <span className="text-[10px] font-mono text-[#3a5570]">
+        <span className="font-mono text-[10px] text-[#3a5570]">
           ⛽ {steps[currentStep]?.gasConsumed?.toLocaleString() ?? 0} gas
         </span>
       </div>
       <div
         ref={containerRef}
-        className="flex gap-0.5 overflow-x-auto px-4 pb-3 scrollbar-none"
-        style={{ scrollbarWidth: "none" }}
+        className="scrollbar-none flex gap-0.5 overflow-x-auto px-4 pb-3"
+        style={{ scrollbarWidth: 'none' }}
       >
         {steps.map((step, i) => {
           const style = STEP_COLORS[step.type] ?? STEP_COLORS.function_call;
@@ -181,13 +189,13 @@ function ExecutionTimeline({
               onClick={() => onJump(i)}
               title={step.description}
               className={[
-                "flex-shrink-0 w-3 h-6 rounded-sm transition-all duration-150",
+                'h-6 w-3 flex-shrink-0 rounded-sm transition-all duration-150',
                 isCurrent
-                  ? `${style.dot.replace("bg-", "bg-")} opacity-100 scale-y-125 shadow-lg`
+                  ? `${style.dot.replace('bg-', 'bg-')} scale-y-125 opacity-100 shadow-lg`
                   : i < currentStep
-                  ? `${style.dot} opacity-60`
-                  : "bg-[#1a2e3a] opacity-40",
-              ].join(" ")}
+                    ? `${style.dot} opacity-60`
+                    : 'bg-[#1a2e3a] opacity-40',
+              ].join(' ')}
             />
           );
         })}
@@ -215,12 +223,12 @@ function CodeEditor({
   onToggleBreakpoint: (line: number) => void;
   readOnly: boolean;
 }) {
-  const lines = code.split("\n");
+  const lines = code.split('\n');
 
   return (
-    <div className="flex h-full font-mono text-xs overflow-hidden rounded-xl border border-[#1a2e3a]">
+    <div className="flex h-full overflow-hidden rounded-xl border border-[#1a2e3a] font-mono text-xs">
       {/* Gutter */}
-      <div className="flex flex-col bg-[#080f14] border-r border-[#1a2e3a] select-none flex-shrink-0">
+      <div className="flex flex-shrink-0 flex-col border-r border-[#1a2e3a] bg-[#080f14] select-none">
         {lines.map((_, i) => {
           const lineNum = i + 1;
           const hasBp = breakpoints.has(lineNum);
@@ -230,25 +238,25 @@ function CodeEditor({
               key={i}
               onClick={() => onToggleBreakpoint(lineNum)}
               className={[
-                "flex items-center gap-1.5 px-2 h-5 cursor-pointer group transition-colors",
-                isCurrent ? "bg-[#f9c74f]/10" : "hover:bg-[#1a2e3a]/50",
-              ].join(" ")}
+                'group flex h-5 cursor-pointer items-center gap-1.5 px-2 transition-colors',
+                isCurrent ? 'bg-[#f9c74f]/10' : 'hover:bg-[#1a2e3a]/50',
+              ].join(' ')}
             >
               <span
                 className={[
-                  "w-2 h-2 rounded-full flex-shrink-0 transition-all",
+                  'h-2 w-2 flex-shrink-0 rounded-full transition-all',
                   hasBp
-                    ? "bg-[#f94144]"
+                    ? 'bg-[#f94144]'
                     : isCurrent
-                    ? "bg-[#f9c74f]"
-                    : "bg-transparent group-hover:bg-[#f94144]/30",
-                ].join(" ")}
+                      ? 'bg-[#f9c74f]'
+                      : 'bg-transparent group-hover:bg-[#f94144]/30',
+                ].join(' ')}
               />
               <span
                 className={[
-                  "text-[10px] w-5 text-right",
-                  isCurrent ? "text-[#f9c74f]" : "text-[#2a4a5a]",
-                ].join(" ")}
+                  'w-5 text-right text-[10px]',
+                  isCurrent ? 'text-[#f9c74f]' : 'text-[#2a4a5a]',
+                ].join(' ')}
               >
                 {lineNum}
               </span>
@@ -263,7 +271,7 @@ function CodeEditor({
         onChange={(e) => onChange(e.target.value)}
         readOnly={readOnly}
         spellCheck={false}
-        className="flex-1 bg-[#080f14] text-[#a0c4b8] p-2 resize-none focus:outline-none leading-5 overflow-auto"
+        className="flex-1 resize-none overflow-auto bg-[#080f14] p-2 leading-5 text-[#a0c4b8] focus:outline-none"
         style={{ fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}
       />
     </div>
@@ -275,7 +283,7 @@ function CodeEditor({
 // ---------------------------------------------------------------------------
 
 export default function DebuggerPanel() {
-  const [activePanel, setActivePanel] = useState<Panel>("state");
+  const [activePanel, setActivePanel] = useState<Panel>('state');
 
   const {
     contractCode,
@@ -299,50 +307,46 @@ export default function DebuggerPanel() {
   const currentLine = currentStepData?.line;
 
   const panels: { id: Panel; label: string; icon: string }[] = [
-    { id: "stack", label: "Call Stack", icon: "⬡" },
-    { id: "state", label: "State", icon: "◈" },
-    { id: "breakpoints", label: "Breakpoints", icon: "⬤" },
+    { id: 'stack', label: 'Call Stack', icon: '⬡' },
+    { id: 'state', label: 'State', icon: '◈' },
+    { id: 'breakpoints', label: 'Breakpoints', icon: '⬤' },
   ];
 
   return (
     <div
-      className="flex flex-col h-screen bg-[#061015] text-[#a0c4b8] overflow-hidden"
+      className="flex h-screen flex-col overflow-hidden bg-[#061015] text-[#a0c4b8]"
       style={{ fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}
     >
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-[#1a2e3a] bg-[#080f14] flex-shrink-0">
+      <div className="flex flex-shrink-0 items-center justify-between border-b border-[#1a2e3a] bg-[#080f14] px-5 py-3">
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/30 flex items-center justify-center">
-            <span className="text-[#00d4aa] text-xs">⬡</span>
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#00d4aa]/30 bg-[#00d4aa]/10">
+            <span className="text-xs text-[#00d4aa]">⬡</span>
           </div>
           <div>
-            <h1 className="text-sm font-bold text-[#c8e6de] tracking-tight">
-              Soroban Debugger
-            </h1>
-            <p className="text-[10px] text-[#3a5570]">
-              Step-through contract execution
-            </p>
+            <h1 className="text-sm font-bold tracking-tight text-[#c8e6de]">Soroban Debugger</h1>
+            <p className="text-[10px] text-[#3a5570]">Step-through contract execution</p>
           </div>
         </div>
 
         {state.isRunning && currentStepData && (
           <div
             className={[
-              "flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs",
-              STEP_COLORS[currentStepData.type]?.bg ?? "border-[#1a2e3a]",
-            ].join(" ")}
+              'flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs',
+              STEP_COLORS[currentStepData.type]?.bg ?? 'border-[#1a2e3a]',
+            ].join(' ')}
           >
             <span
               className={[
-                "w-1.5 h-1.5 rounded-full",
-                STEP_COLORS[currentStepData.type]?.dot ?? "bg-[#00d4aa]",
-                !state.isPaused && "animate-pulse",
-              ].join(" ")}
+                'h-1.5 w-1.5 rounded-full',
+                STEP_COLORS[currentStepData.type]?.dot ?? 'bg-[#00d4aa]',
+                !state.isPaused && 'animate-pulse',
+              ].join(' ')}
             />
-            <span className="text-[10px] uppercase tracking-wider opacity-70">
+            <span className="text-[10px] tracking-wider uppercase opacity-70">
               {STEP_COLORS[currentStepData.type]?.label}
             </span>
-            <span className="text-[#7ecfb3] max-w-[200px] truncate">
+            <span className="max-w-[200px] truncate text-[#7ecfb3]">
               {currentStepData.description}
             </span>
           </div>
@@ -350,7 +354,7 @@ export default function DebuggerPanel() {
       </div>
 
       {/* ── Controls ─────────────────────────────────────────────────────── */}
-      <div className="px-5 py-3 border-b border-[#1a2e3a] flex-shrink-0 bg-[#080f14]/60">
+      <div className="flex-shrink-0 border-b border-[#1a2e3a] bg-[#080f14]/60 px-5 py-3">
         <ExecutionControls
           isRunning={state.isRunning}
           isPaused={state.isPaused}
@@ -369,13 +373,13 @@ export default function DebuggerPanel() {
       {/* ── Main layout ──────────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
         {/* Code editor pane */}
-        <div className="flex flex-col flex-1 min-w-0 border-r border-[#1a2e3a]">
-          <div className="px-4 pt-3 pb-2 flex-shrink-0">
-            <span className="text-[10px] uppercase tracking-widest text-[#4a6070]">
+        <div className="flex min-w-0 flex-1 flex-col border-r border-[#1a2e3a]">
+          <div className="flex-shrink-0 px-4 pt-3 pb-2">
+            <span className="text-[10px] tracking-widest text-[#4a6070] uppercase">
               Contract Source
             </span>
           </div>
-          <div className="flex-1 overflow-hidden px-4 pb-4 min-h-0">
+          <div className="min-h-0 flex-1 overflow-hidden px-4 pb-4">
             <CodeEditor
               code={contractCode}
               onChange={setContractCode}
@@ -388,19 +392,19 @@ export default function DebuggerPanel() {
         </div>
 
         {/* Right panel */}
-        <div className="w-80 flex flex-col flex-shrink-0 bg-[#080f14]/40">
+        <div className="flex w-80 flex-shrink-0 flex-col bg-[#080f14]/40">
           {/* Panel tabs */}
-          <div className="flex border-b border-[#1a2e3a] flex-shrink-0">
+          <div className="flex flex-shrink-0 border-b border-[#1a2e3a]">
             {panels.map((p) => (
               <button
                 key={p.id}
                 onClick={() => setActivePanel(p.id)}
                 className={[
-                  "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[10px] uppercase tracking-wider transition-colors border-b-2 -mb-px",
+                  '-mb-px flex flex-1 items-center justify-center gap-1.5 border-b-2 py-2.5 text-[10px] tracking-wider uppercase transition-colors',
                   activePanel === p.id
-                    ? "border-[#00d4aa] text-[#00d4aa]"
-                    : "border-transparent text-[#4a6070] hover:text-[#7ecfb3]",
-                ].join(" ")}
+                    ? 'border-[#00d4aa] text-[#00d4aa]'
+                    : 'border-transparent text-[#4a6070] hover:text-[#7ecfb3]',
+                ].join(' ')}
               >
                 <span>{p.icon}</span>
                 <span className="hidden sm:inline">{p.label}</span>
@@ -409,14 +413,11 @@ export default function DebuggerPanel() {
           </div>
 
           {/* Panel content */}
-          <div className="flex-1 overflow-hidden p-4 min-h-0">
-            {activePanel === "stack" && (
-              <CallStackView
-                frames={state.callStack}
-                currentStep={state.currentStep}
-              />
+          <div className="min-h-0 flex-1 overflow-hidden p-4">
+            {activePanel === 'stack' && (
+              <CallStackView frames={state.callStack} currentStep={state.currentStep} />
             )}
-            {activePanel === "state" && (
+            {activePanel === 'state' && (
               <StateInspector
                 localVariables={state.localVariables}
                 contractStorage={state.contractStorage}
@@ -425,10 +426,10 @@ export default function DebuggerPanel() {
                 onRemoveWatch={removeWatchExpression}
               />
             )}
-            {activePanel === "breakpoints" && (
+            {activePanel === 'breakpoints' && (
               <BreakpointManager
                 breakpoints={state.breakpoints}
-                totalLines={contractCode.split("\n").length}
+                totalLines={contractCode.split('\n').length}
                 onToggle={toggleBreakpoint}
                 onClearAll={clearBreakpoints}
                 currentLine={currentLine}
@@ -438,24 +439,22 @@ export default function DebuggerPanel() {
 
           {/* Step detail card */}
           {state.isRunning && currentStepData && (
-            <div className="border-t border-[#1a2e3a] p-4 flex-shrink-0 space-y-2">
-              <p className="text-[10px] uppercase tracking-widest text-[#4a6070]">
-                Current Step
-              </p>
-              <p className="text-xs text-[#7ecfb3] leading-relaxed">
+            <div className="flex-shrink-0 space-y-2 border-t border-[#1a2e3a] p-4">
+              <p className="text-[10px] tracking-widest text-[#4a6070] uppercase">Current Step</p>
+              <p className="text-xs leading-relaxed text-[#7ecfb3]">
                 {currentStepData.description}
               </p>
               {currentStepData.stateDiff && (
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <div className="bg-[#f94144]/5 border border-[#f94144]/15 rounded-lg p-2">
-                    <p className="text-[9px] text-[#f94144]/60 mb-1">BEFORE</p>
-                    <p className="text-[10px] text-[#f94144] font-mono">
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div className="rounded-lg border border-[#f94144]/15 bg-[#f94144]/5 p-2">
+                    <p className="mb-1 text-[9px] text-[#f94144]/60">BEFORE</p>
+                    <p className="font-mono text-[10px] text-[#f94144]">
                       {JSON.stringify(currentStepData.stateDiff.before.value)}
                     </p>
                   </div>
-                  <div className="bg-[#00d4aa]/5 border border-[#00d4aa]/15 rounded-lg p-2">
-                    <p className="text-[9px] text-[#00d4aa]/60 mb-1">AFTER</p>
-                    <p className="text-[10px] text-[#00d4aa] font-mono">
+                  <div className="rounded-lg border border-[#00d4aa]/15 bg-[#00d4aa]/5 p-2">
+                    <p className="mb-1 text-[9px] text-[#00d4aa]/60">AFTER</p>
+                    <p className="font-mono text-[10px] text-[#00d4aa]">
                       {JSON.stringify(currentStepData.stateDiff.after.value)}
                     </p>
                   </div>
@@ -463,7 +462,8 @@ export default function DebuggerPanel() {
               )}
               {currentStepData.line && (
                 <p className="text-[10px] text-[#3a5570]">
-                  Line {currentStepData.line} · ⛽ {currentStepData.gasConsumed.toLocaleString()} gas total
+                  Line {currentStepData.line} · ⛽ {currentStepData.gasConsumed.toLocaleString()}{' '}
+                  gas total
                 </p>
               )}
             </div>

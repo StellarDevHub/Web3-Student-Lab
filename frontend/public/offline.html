@@ -1,227 +1,231 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Web3 Student Lab - Offline</title>
     <style>
-        :root {
-            --bg-dark: #000000;
-            --text-light: #ffffff;
-            --accent: #7C3AED;
-            --border: #2d2d2d;
-        }
+      :root {
+        --bg-dark: #000000;
+        --text-light: #ffffff;
+        --accent: #7c3aed;
+        --border: #2d2d2d;
+      }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-                sans-serif;
-            background: var(--bg-dark);
-            color: var(--text-light);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell',
+          'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+        background: var(--bg-dark);
+        color: var(--text-light);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
 
-        .container {
-            max-width: 600px;
-            text-align: center;
-            animation: fadeIn 0.5s ease-in-out;
-        }
+      .container {
+        max-width: 600px;
+        text-align: center;
+        animation: fadeIn 0.5s ease-in-out;
+      }
 
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
         }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
 
-        .icon {
-            width: 80px;
-            height: 80px;
-            margin: 0 auto 30px;
-            background: linear-gradient(135deg, var(--accent), #A78BFA);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 40px;
-        }
+      .icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 30px;
+        background: linear-gradient(135deg, var(--accent), #a78bfa);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 40px;
+      }
 
-        h1 {
-            font-size: 32px;
-            margin-bottom: 15px;
-            background: linear-gradient(135deg, var(--accent), #A78BFA);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
+      h1 {
+        font-size: 32px;
+        margin-bottom: 15px;
+        background: linear-gradient(135deg, var(--accent), #a78bfa);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
 
-        p {
-            font-size: 16px;
-            color: #a0a0a0;
-            margin-bottom: 10px;
-            line-height: 1.6;
-        }
+      p {
+        font-size: 16px;
+        color: #a0a0a0;
+        margin-bottom: 10px;
+        line-height: 1.6;
+      }
 
-        .cached-content {
-            background: #0a0a0a;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 20px;
-            margin: 30px 0;
-            text-align: left;
-        }
+      .cached-content {
+        background: #0a0a0a;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+        margin: 30px 0;
+        text-align: left;
+      }
 
-        .cached-content h2 {
-            font-size: 14px;
-            color: var(--accent);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 15px;
-        }
+      .cached-content h2 {
+        font-size: 14px;
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 15px;
+      }
 
-        .cached-content ul {
-            list-style: none;
-        }
+      .cached-content ul {
+        list-style: none;
+      }
 
-        .cached-content li {
-            padding: 8px 0;
-            color: #a0a0a0;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-        }
+      .cached-content li {
+        padding: 8px 0;
+        color: #a0a0a0;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+      }
 
-        .cached-content li:before {
-            content: "✓";
-            color: var(--accent);
-            margin-right: 10px;
-            font-weight: bold;
-        }
+      .cached-content li:before {
+        content: '✓';
+        color: var(--accent);
+        margin-right: 10px;
+        font-weight: bold;
+      }
 
-        .status {
-            margin-top: 30px;
-            padding: 15px;
-            background: rgba(124, 58, 237, 0.1);
-            border: 1px solid rgba(124, 58, 237, 0.3);
-            border-radius: 6px;
-            font-size: 14px;
-        }
+      .status {
+        margin-top: 30px;
+        padding: 15px;
+        background: rgba(124, 58, 237, 0.1);
+        border: 1px solid rgba(124, 58, 237, 0.3);
+        border-radius: 6px;
+        font-size: 14px;
+      }
 
-        .status.checking {
-            animation: pulse 1s infinite;
-        }
+      .status.checking {
+        animation: pulse 1s infinite;
+      }
 
-        @keyframes pulse {
-            0%, 100% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.7;
-            }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
         }
+        50% {
+          opacity: 0.7;
+        }
+      }
 
-        .retry-button {
-            margin-top: 20px;
-            padding: 12px 24px;
-            background: linear-gradient(135deg, var(--accent), #A78BFA);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: transform 0.2s, opacity 0.2s;
-        }
+      .retry-button {
+        margin-top: 20px;
+        padding: 12px 24px;
+        background: linear-gradient(135deg, var(--accent), #a78bfa);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 16px;
+        cursor: pointer;
+        transition:
+          transform 0.2s,
+          opacity 0.2s;
+      }
 
-        .retry-button:hover {
-            transform: translateY(-2px);
-            opacity: 0.9;
-        }
+      .retry-button:hover {
+        transform: translateY(-2px);
+        opacity: 0.9;
+      }
 
-        .retry-button:active {
-            transform: translateY(0);
-        }
+      .retry-button:active {
+        transform: translateY(0);
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <div class="icon">📡</div>
-        <h1>You're Offline</h1>
-        <p>No internet connection detected. However, you can still access cached content from your previous visits.</p>
+      <div class="icon">📡</div>
+      <h1>You're Offline</h1>
+      <p>
+        No internet connection detected. However, you can still access cached content from your
+        previous visits.
+      </p>
 
-        <div class="cached-content">
-            <h2>Available Offline</h2>
-            <ul>
-                <li>Previously visited courses</li>
-                <li>Learning materials</li>
-                <li>Certificates overview</li>
-                <li>Saved progress</li>
-            </ul>
-        </div>
+      <div class="cached-content">
+        <h2>Available Offline</h2>
+        <ul>
+          <li>Previously visited courses</li>
+          <li>Learning materials</li>
+          <li>Certificates overview</li>
+          <li>Saved progress</li>
+        </ul>
+      </div>
 
-        <p>Core learning content will be available once your connection is restored.</p>
+      <p>Core learning content will be available once your connection is restored.</p>
 
-        <div class="status checking">
-            <span id="status-text">Checking for connection...</span>
-        </div>
+      <div class="status checking">
+        <span id="status-text">Checking for connection...</span>
+      </div>
 
-        <button class="retry-button" onclick="location.reload()">
-            Try Again
-        </button>
+      <button class="retry-button" onclick="location.reload()">Try Again</button>
     </div>
 
     <script>
-        // Monitor connection status
-        let isOnline = navigator.onLine;
+      // Monitor connection status
+      let isOnline = navigator.onLine;
 
-        window.addEventListener('online', () => {
-            isOnline = true;
-            updateStatus();
-        });
-
-        window.addEventListener('offline', () => {
-            isOnline = false;
-            updateStatus();
-        });
-
-        function updateStatus() {
-            const statusText = document.getElementById('status-text');
-            if (isOnline) {
-                statusText.textContent = '✓ Connection restored! You can navigate normally now.';
-                statusText.parentElement.classList.remove('checking');
-
-                // Automatically reload if back online
-                setTimeout(() => {
-                    window.location.reload();
-                }, 2000);
-            } else {
-                statusText.textContent = 'Still offline. Waiting for connection...';
-                statusText.parentElement.classList.add('checking');
-            }
-        }
-
-        // Initial check
+      window.addEventListener('online', () => {
+        isOnline = true;
         updateStatus();
+      });
 
-        // Periodic connection check every 5 seconds
-        setInterval(() => {
-            if (isOnline && navigator.onLine) {
-                updateStatus();
-            }
-        }, 5000);
+      window.addEventListener('offline', () => {
+        isOnline = false;
+        updateStatus();
+      });
+
+      function updateStatus() {
+        const statusText = document.getElementById('status-text');
+        if (isOnline) {
+          statusText.textContent = '✓ Connection restored! You can navigate normally now.';
+          statusText.parentElement.classList.remove('checking');
+
+          // Automatically reload if back online
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        } else {
+          statusText.textContent = 'Still offline. Waiting for connection...';
+          statusText.parentElement.classList.add('checking');
+        }
+      }
+
+      // Initial check
+      updateStatus();
+
+      // Periodic connection check every 5 seconds
+      setInterval(() => {
+        if (isOnline && navigator.onLine) {
+          updateStatus();
+        }
+      }, 5000);
     </script>
-</body>
+  </body>
 </html>

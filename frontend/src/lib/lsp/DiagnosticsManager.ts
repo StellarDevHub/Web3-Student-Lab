@@ -12,7 +12,7 @@ export class DiagnosticsManager {
   constructor(private editor: monaco.editor.IStandaloneCodeEditor) {}
 
   public setDiagnostics(diagnostics: Diagnostic[]) {
-    this.markers = diagnostics.map(d => ({
+    this.markers = diagnostics.map((d) => ({
       message: d.message,
       severity: d.severity,
       startLineNumber: d.range.startLineNumber,

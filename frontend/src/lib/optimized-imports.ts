@@ -4,45 +4,28 @@
  */
 
 // Stellar SDK - Tree-shaked imports
-export { 
-  Server, 
-  TransactionBuilder, 
-  Asset, 
-  Operation, 
-  Account, 
+export {
+  Horizon,
+  TransactionBuilder,
+  Asset,
+  Operation,
+  Account,
   Keypair,
   Networks,
   StrKey,
-  Horizon
 } from '@stellar/stellar-sdk';
 
 // D3.js - Specific imports for visualization
-export { 
-  select, 
-  selectAll 
-} from 'd3-selection';
+export { select, selectAll } from 'd3-selection';
 
-export { 
-  forceSimulation,
-  forceLink,
-  forceManyBody,
-  forceCenter,
-  forceCollide
-} from 'd3-force';
+export { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide } from 'd3-force';
 
-export { 
-  scaleLinear,
-  scaleBand
-} from 'd3-scale';
+export { scaleLinear, scaleBand } from 'd3-scale';
 
-export { 
-  line,
-  area,
-  arc
-} from 'd3-shape';
+export { line, area, arc } from 'd3-shape';
 
 // Lucide React - Specific icon imports
-export { 
+export {
   Shield,
   Users,
   Settings,
@@ -55,7 +38,7 @@ export {
   RefreshCw,
   HelpCircle,
   Loader2,
-  ArrowRightLeft
+  ArrowRightLeft,
 } from 'lucide-react';
 
 // Native JavaScript utilities to replace large libraries
@@ -82,7 +65,7 @@ export const nativeUtils = {
       if (!inThrottle) {
         func(...args);
         inThrottle = true;
-        setTimeout(() => inThrottle = false, limit);
+        setTimeout(() => (inThrottle = false), limit);
       }
     };
   },
@@ -91,7 +74,7 @@ export const nativeUtils = {
   cloneDeep: <T>(obj: T): T => {
     if (obj === null || typeof obj !== 'object') return obj;
     if (obj instanceof Date) return new Date(obj.getTime()) as unknown as T;
-    if (obj instanceof Array) return obj.map(item => nativeUtils.cloneDeep(item)) as unknown as T;
+    if (obj instanceof Array) return obj.map((item) => nativeUtils.cloneDeep(item)) as unknown as T;
     if (typeof obj === 'object') {
       const clonedObj = {} as T;
       for (const key in obj) {
@@ -122,11 +105,11 @@ export const nativeUtils = {
       },
       ...options,
     });
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     return response.json();
   },
 
@@ -141,11 +124,11 @@ export const nativeUtils = {
       body: data ? JSON.stringify(data) : undefined,
       ...options,
     });
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     return response.json();
   },
 
@@ -156,21 +139,21 @@ export const nativeUtils = {
       month: 'short',
       day: 'numeric',
     };
-    
+
     switch (format) {
       case 'short':
         return date.toLocaleDateString('en-US', { ...options, year: '2-digit' });
       case 'long':
-        return date.toLocaleDateString('en-US', { 
-          ...options, 
+        return date.toLocaleDateString('en-US', {
+          ...options,
           weekday: 'long',
           hour: '2-digit',
-          minute: '2-digit'
+          minute: '2-digit',
         });
       case 'time':
-        return date.toLocaleTimeString('en-US', { 
+        return date.toLocaleTimeString('en-US', {
           hour: '2-digit',
-          minute: '2-digit'
+          minute: '2-digit',
         });
       default:
         return date.toLocaleDateString('en-US', options);
@@ -198,7 +181,11 @@ export const nativeUtils = {
   },
 
   // Replace moment date diff
-  dateDiff: (date1: Date, date2: Date, unit: 'days' | 'hours' | 'minutes' | 'seconds' = 'days'): number => {
+  dateDiff: (
+    date1: Date,
+    date2: Date,
+    unit: 'days' | 'hours' | 'minutes' | 'seconds' = 'days'
+  ): number => {
     const diffMs = Math.abs(date1.getTime() - date2.getTime());
     switch (unit) {
       case 'days':
@@ -212,7 +199,7 @@ export const nativeUtils = {
       default:
         return diffMs;
     }
-  }
+  },
 };
 
 // Early bird loading script for critical resources
@@ -278,12 +265,14 @@ export const bundleMonitor = {
   // Log bundle size warnings
   logSizeWarning: (currentSize: number, maxSize: number, bundleName: string): void => {
     if (currentSize > maxSize) {
-      console.warn(`⚠️ Bundle ${bundleName} size ${(currentSize / 1000).toFixed(2)}KB exceeds target ${(maxSize / 1000).toFixed(2)}KB`);
+      console.warn(
+        `⚠️ Bundle ${bundleName} size ${(currentSize / 1000).toFixed(2)}KB exceeds target ${(maxSize / 1000).toFixed(2)}KB`
+      );
     }
   },
 
   // Calculate compression ratio
   getCompressionRatio: (originalSize: number, compressedSize: number): number => {
     return ((originalSize - compressedSize) / originalSize) * 100;
-  }
+  },
 };

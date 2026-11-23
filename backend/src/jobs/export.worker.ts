@@ -4,19 +4,29 @@ import { Parser } from 'json2csv';
 import path from 'path';
 import prisma from '../db/index.js';
 import logger from '../utils/logger.js';
-import { redisConnection } from '../utils/redis.js';
 import { broadcastEvent } from '../websocket/gateway.js';
+
+import fsSync from 'fs';
+import { Queue } from 'bullmq';
 
 const EXPORTS_DIR = path.join(process.cwd(), 'exports');
 
 // Ensure exports directory exists
 try {
-  await fs.mkdir(EXPORTS_DIR, { recursive: true });
+  fsSync.mkdirSync(EXPORTS_DIR, { recursive: true });
 } catch (err) {
   logger.error('Failed to create exports directory', err);
 }
 
 export const EXPORT_QUEUE_NAME = 'export-queue';
+
+const redisUrl = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
+const redisConnection = {
+  host: redisUrl.hostname,
+  port: Number(redisUrl.port) || 6379,
+  password: redisUrl.password || undefined,
+  maxRetriesPerRequest: null,
+};
 
 interface ExportJobData {
   type: 'students' | 'audit' | 'courses';
@@ -45,7 +55,9 @@ const worker = new Worker(
   EXPORT_QUEUE_NAME,
   async (job: Job<ExportJobData>) => {
     const { type, format, userId } = job.data;
-    logger.info(`Starting export job ${job.id} for user ${userId}, type: ${type}, format: ${format}`);
+    logger.info(
+      `Starting export job ${job.id} for user ${userId}, type: ${type}, format: ${format}`
+    );
 
     await publishExportProgress(job, 5, 'started');
 
@@ -127,13 +139,22 @@ const _cleanupWorker = new Worker(
       }
     }
   },
-  { connection: redisConnection }
+  {
+    connection: redisConnection,
+  }
 );
 
-import { Queue } from 'bullmq';
-const cleanupQueue = new Queue(CLEANUP_QUEUE_NAME, { connection: redisConnection });
-await cleanupQueue.add('cleanup', {}, {
-  repeat: { pattern: '0 * * * *' } // Every hour
+const cleanupQueue = new Queue(CLEANUP_QUEUE_NAME, {
+  connection: redisConnection,
+});
+void cleanupQueue.add(
+  'cleanup',
+  {},
+  {
+    repeat: { pattern: '0 * * * *' }, // Every hour
+  }
+).catch((err) => {
+  logger.error('Failed to initialize cleanup job schedule', err);
 });
 
 worker.on('completed', (job) => {

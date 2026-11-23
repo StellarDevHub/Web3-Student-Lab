@@ -1,6 +1,5 @@
 import {
   Horizon,
-  Server,
   TransactionBuilder,
   Asset,
   Operation,
@@ -10,11 +9,12 @@ import {
   StrKey,
   AuthRevocableFlag,
   AuthRequiredFlag,
-  AuthClawbackEnabledFlag
-} from "@stellar/stellar-sdk";
+  AuthClawbackEnabledFlag,
+} from '@stellar/stellar-sdk';
+import { getPublicEnv } from './env';
 
-const HORIZON_URL = process.env.NEXT_PUBLIC_HORIZON_URL || "https://horizon-testnet.stellar.org";
-const server = new Server(HORIZON_URL);
+const HORIZON_URL = getPublicEnv().horizonUrl;
+const server = new Horizon.Server(HORIZON_URL);
 
 export interface StellarAssetInfo {
   code: string;
@@ -46,16 +46,13 @@ export interface ClawbackParams {
  */
 export const getAssetsByIssuer = async (issuer: string): Promise<StellarAssetInfo[]> => {
   try {
-    const assets = await server
-      .assets()
-      .forIssuer(issuer)
-      .call();
+    const assets = await server.assets().forIssuer(issuer).call();
 
     const assetInfos: StellarAssetInfo[] = [];
 
     for (const record of assets.records) {
       const trustlines = await getTrustlinesForAsset(record.asset_code, record.asset_issuer);
-      
+
       assetInfos.push({
         code: record.asset_code,
         issuer: record.asset_issuer,
@@ -63,13 +60,13 @@ export const getAssetsByIssuer = async (issuer: string): Promise<StellarAssetInf
         clawbackEnabled: record.flags.auth_clawback_enabled || false,
         authRequired: record.flags.auth_required || false,
         authRevocable: record.flags.auth_revocable || false,
-        trustlines
+        trustlines,
       });
     }
 
     return assetInfos;
   } catch (error) {
-    console.error("Error fetching assets:", error);
+    console.error('Error fetching assets:', error);
     throw error;
   }
 };
@@ -77,23 +74,23 @@ export const getAssetsByIssuer = async (issuer: string): Promise<StellarAssetInf
 /**
  * Get trustlines for a specific asset
  */
-export const getTrustlinesForAsset = async (assetCode: string, assetIssuer: string): Promise<StellarTrustlineInfo[]> => {
+export const getTrustlinesForAsset = async (
+  assetCode: string,
+  assetIssuer: string
+): Promise<StellarTrustlineInfo[]> => {
   try {
     // Get all accounts that have trustlines for this asset
-    const trustlines = await server
-      .trustlines()
-      .forAsset(new Asset(assetCode, assetIssuer))
-      .call();
+    const trustlines = await server.trustlines().forAsset(new Asset(assetCode, assetIssuer)).call();
 
-    return trustlines.records.map(record => ({
+    return trustlines.records.map((record) => ({
       accountId: record.account_id,
       balance: record.balance,
       limit: record.limit,
       authorized: record.authorized || false,
-      authorizedToMaintainLiabilities: record.authorized_to_maintain_liabilities || false
+      authorizedToMaintainLiabilities: record.authorized_to_maintain_liabilities || false,
     }));
   } catch (error) {
-    console.error("Error fetching trustlines:", error);
+    console.error('Error fetching trustlines:', error);
     return [];
   }
 };
@@ -112,34 +109,34 @@ export const buildUpdateFlagsTransaction = async (
 ): Promise<string> => {
   try {
     const issuerAccount = await server.loadAccount(issuerKeypair.publicKey());
-    
+
     const setOptionsOp = Operation.setOptions({
       // Set flags based on parameters
       setFlags: [
         ...(flags.authRequired ? [AuthRequiredFlag] : []),
         ...(flags.authRevocable ? [AuthRevocableFlag] : []),
-        ...(flags.clawbackEnabled ? [AuthClawbackEnabledFlag] : [])
+        ...(flags.clawbackEnabled ? [AuthClawbackEnabledFlag] : []),
       ],
       clearFlags: [
         ...(!flags.authRequired ? [AuthRequiredFlag] : []),
         ...(!flags.authRevocable ? [AuthRevocableFlag] : []),
-        ...(!flags.clawbackEnabled ? [AuthClawbackEnabledFlag] : [])
-      ]
+        ...(!flags.clawbackEnabled ? [AuthClawbackEnabledFlag] : []),
+      ],
     });
 
     const transaction = new TransactionBuilder(issuerAccount, {
       fee: await server.fetchBaseFee(),
-      networkPassphrase: Networks.TESTNET
+      networkPassphrase: Networks.TESTNET,
     })
       .addOperation(setOptionsOp)
       .setTimeout(30)
       .build();
 
     transaction.sign(issuerKeypair);
-    
+
     return transaction.toXDR();
   } catch (error) {
-    console.error("Error building update flags transaction:", error);
+    console.error('Error building update flags transaction:', error);
     throw error;
   }
 };
@@ -153,26 +150,26 @@ export const buildClawbackTransaction = async (
 ): Promise<string> => {
   try {
     const issuerAccount = await server.loadAccount(issuerKeypair.publicKey());
-    
+
     const clawbackOp = Operation.clawback({
       from: params.from,
       asset: new Asset(params.assetCode, params.assetIssuer),
-      amount: params.amount
+      amount: params.amount,
     });
 
     const transaction = new TransactionBuilder(issuerAccount, {
       fee: await server.fetchBaseFee(),
-      networkPassphrase: Networks.TESTNET
+      networkPassphrase: Networks.TESTNET,
     })
       .addOperation(clawbackOp)
       .setTimeout(30)
       .build();
 
     transaction.sign(issuerKeypair);
-    
+
     return transaction.toXDR();
   } catch (error) {
-    console.error("Error building clawback transaction:", error);
+    console.error('Error building clawback transaction:', error);
     throw error;
   }
 };
@@ -180,13 +177,15 @@ export const buildClawbackTransaction = async (
 /**
  * Submit a signed transaction to the network
  */
-export const submitTransaction = async (xdr: string): Promise<Horizon.SubmitTransactionResponse> => {
+export const submitTransaction = async (
+  xdr: string
+): Promise<Horizon.SubmitTransactionResponse> => {
   try {
     const transaction = TransactionBuilder.fromXDR(xdr, Networks.TESTNET);
     const result = await server.submitTransaction(transaction);
     return result;
   } catch (error) {
-    console.error("Error submitting transaction:", error);
+    console.error('Error submitting transaction:', error);
     throw error;
   }
 };
@@ -202,28 +201,28 @@ export const buildRevokeTrustlineTransaction = async (
 ): Promise<string> => {
   try {
     const issuerAccount = await server.loadAccount(issuerKeypair.publicKey());
-    
+
     const revokeOp = Operation.setTrustLineFlags({
       trustor: accountId,
       asset: new Asset(assetCode, assetIssuer),
       flags: {
-        authorized: false
-      }
+        authorized: false,
+      },
     });
 
     const transaction = new TransactionBuilder(issuerAccount, {
       fee: await server.fetchBaseFee(),
-      networkPassphrase: Networks.TESTNET
+      networkPassphrase: Networks.TESTNET,
     })
       .addOperation(revokeOp)
       .setTimeout(30)
       .build();
 
     transaction.sign(issuerKeypair);
-    
+
     return transaction.toXDR();
   } catch (error) {
-    console.error("Error building revoke transaction:", error);
+    console.error('Error building revoke transaction:', error);
     throw error;
   }
 };
@@ -239,28 +238,28 @@ export const buildGrantTrustlineTransaction = async (
 ): Promise<string> => {
   try {
     const issuerAccount = await server.loadAccount(issuerKeypair.publicKey());
-    
+
     const grantOp = Operation.setTrustLineFlags({
       trustor: accountId,
       asset: new Asset(assetCode, assetIssuer),
       flags: {
-        authorized: true
-      }
+        authorized: true,
+      },
     });
 
     const transaction = new TransactionBuilder(issuerAccount, {
       fee: await server.fetchBaseFee(),
-      networkPassphrase: Networks.TESTNET
+      networkPassphrase: Networks.TESTNET,
     })
       .addOperation(grantOp)
       .setTimeout(30)
       .build();
 
     transaction.sign(issuerKeypair);
-    
+
     return transaction.toXDR();
   } catch (error) {
-    console.error("Error building grant transaction:", error);
+    console.error('Error building grant transaction:', error);
     throw error;
   }
 };
@@ -283,7 +282,7 @@ export const formatStellarAddress = (address: string, chars: number = 4): string
   if (!isValidStellarAddress(address)) {
     return address;
   }
-  
+
   return `${address.substring(0, chars)}...${address.substring(address.length - chars)}`;
 };
 
@@ -295,7 +294,7 @@ export const getAccountDetails = async (accountId: string): Promise<Account> => 
     const account = await server.loadAccount(accountId);
     return account;
   } catch (error) {
-    console.error("Error fetching account details:", error);
+    console.error('Error fetching account details:', error);
     throw error;
   }
 };

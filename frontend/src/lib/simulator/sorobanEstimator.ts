@@ -1,7 +1,7 @@
-export type ResourceLevel = "safe" | "warning" | "critical";
+export type ResourceLevel = 'safe' | 'warning' | 'critical';
 
 export interface EstimatorWarning {
-  metric: "cpu" | "ram" | "storage" | "gas";
+  metric: 'cpu' | 'ram' | 'storage' | 'gas';
   level: ResourceLevel;
   message: string;
 }
@@ -45,7 +45,7 @@ interface FeatureVector {
 }
 
 const BENCHMARK_PROFILE = {
-  version: "soroban-testnet-2026q1",
+  version: 'soroban-testnet-2026q1',
   baseCpu: 16,
   baseRam: 14,
   baseStorage: 8,
@@ -85,7 +85,7 @@ function countMatches(source: string, pattern: RegExp): number {
 function extractFeatures(code: string): FeatureVector {
   const source = code.toLowerCase();
   const lines = code
-    .split("\n")
+    .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0).length;
 
@@ -95,7 +95,10 @@ function extractFeatures(code: string): FeatureVector {
     nestedLoops: countMatches(source, /\bfor\b[\s\S]{0,140}\bfor\b/g),
     branching: countMatches(source, /\b(if|match|else if)\b/g),
     storageReads: countMatches(source, /\b(get|load|instance\(\)\.get|persistent\(\)\.get)\b/g),
-    storageWrites: countMatches(source, /\b(set|put|instance\(\)\.set|persistent\(\)\.set|remove)\b/g),
+    storageWrites: countMatches(
+      source,
+      /\b(set|put|instance\(\)\.set|persistent\(\)\.set|remove)\b/g
+    ),
     mapOps: countMatches(source, /\bmap\b/g),
     vecOps: countMatches(source, /\bvec\b/g),
     hashOps: countMatches(source, /\bsha256|keccak|hash\b/g),
@@ -151,7 +154,9 @@ export function estimateSorobanResources(code: string): SorobanEstimate {
   const gas = Math.round(cpu * 52 + ram * 34 + storage * 88 + features.crossContractCalls * 220);
 
   const confidence = clamp(
-    Math.round(60 + Math.min(features.lines, 120) * 0.25 + Math.min(features.storageWrites, 12) * 1.1),
+    Math.round(
+      60 + Math.min(features.lines, 120) * 0.25 + Math.min(features.storageWrites, 12) * 1.1
+    ),
     62,
     93
   );
@@ -160,33 +165,33 @@ export function estimateSorobanResources(code: string): SorobanEstimate {
 
   if (cpu >= 75) {
     warnings.push({
-      metric: "cpu",
-      level: cpu >= 90 ? "critical" : "warning",
-      message: "CPU is high. Reduce nested loops or cache repeated reads.",
+      metric: 'cpu',
+      level: cpu >= 90 ? 'critical' : 'warning',
+      message: 'CPU is high. Reduce nested loops or cache repeated reads.',
     });
   }
 
   if (ram >= 72) {
     warnings.push({
-      metric: "ram",
-      level: ram >= 88 ? "critical" : "warning",
-      message: "RAM pressure detected. Prefer compact structs and avoid large vectors.",
+      metric: 'ram',
+      level: ram >= 88 ? 'critical' : 'warning',
+      message: 'RAM pressure detected. Prefer compact structs and avoid large vectors.',
     });
   }
 
   if (storage >= 68) {
     warnings.push({
-      metric: "storage",
-      level: storage >= 85 ? "critical" : "warning",
-      message: "Storage writes are expensive. Batch writes or compress key payloads.",
+      metric: 'storage',
+      level: storage >= 85 ? 'critical' : 'warning',
+      message: 'Storage writes are expensive. Batch writes or compress key payloads.',
     });
   }
 
   if (gas >= 8500) {
     warnings.push({
-      metric: "gas",
-      level: gas >= 11000 ? "critical" : "warning",
-      message: "Estimated gas exceeds typical classroom budget for a single invocation.",
+      metric: 'gas',
+      level: gas >= 11000 ? 'critical' : 'warning',
+      message: 'Estimated gas exceeds typical classroom budget for a single invocation.',
     });
   }
 
@@ -204,7 +209,7 @@ export function estimateSorobanResources(code: string): SorobanEstimate {
 function scaleMetrics(
   baseline: SorobanEstimate,
   factors: { cpu: number; ram: number; storage: number }
-): Omit<StrategyComparison, "id" | "label" | "description" | "savings"> {
+): Omit<StrategyComparison, 'id' | 'label' | 'description' | 'savings'> {
   const cpu = clamp(Math.round(baseline.cpu * factors.cpu), 1, 100);
   const ram = clamp(Math.round(baseline.ram * factors.ram), 1, 100);
   const storage = clamp(Math.round(baseline.storage * factors.storage), 1, 100);
@@ -213,13 +218,11 @@ function scaleMetrics(
   return { cpu, ram, storage, gas };
 }
 
-export function buildStrategyComparisons(
-  baseline: SorobanEstimate
-): StrategyComparison[] {
+export function buildStrategyComparisons(baseline: SorobanEstimate): StrategyComparison[] {
   const baselineRow: StrategyComparison = {
-    id: "baseline",
-    label: "Current Contract",
-    description: "No optimization applied.",
+    id: 'baseline',
+    label: 'Current Contract',
+    description: 'No optimization applied.',
     cpu: baseline.cpu,
     ram: baseline.ram,
     storage: baseline.storage,
@@ -235,30 +238,30 @@ export function buildStrategyComparisons(
   const rows: StrategyComparison[] = [
     baselineRow,
     {
-      id: "cache-reads",
-      label: "Cache Hot Reads",
-      description: "Memoize instance and persistent reads across branches.",
+      id: 'cache-reads',
+      label: 'Cache Hot Reads',
+      description: 'Memoize instance and persistent reads across branches.',
       ...cache,
       savings: baseline.gas - cache.gas,
     },
     {
-      id: "batch-writes",
-      label: "Batch Storage Writes",
-      description: "Accumulate state changes and persist once per call.",
+      id: 'batch-writes',
+      label: 'Batch Storage Writes',
+      description: 'Accumulate state changes and persist once per call.',
       ...batch,
       savings: baseline.gas - batch.gas,
     },
     {
-      id: "compact-layout",
-      label: "Compact Data Layout",
-      description: "Use tighter key/value formats and slimmer event payloads.",
+      id: 'compact-layout',
+      label: 'Compact Data Layout',
+      description: 'Use tighter key/value formats and slimmer event payloads.',
       ...compact,
       savings: baseline.gas - compact.gas,
     },
     {
-      id: "hybrid",
-      label: "Hybrid Optimization",
-      description: "Combination of caching, batching, and compact schema choices.",
+      id: 'hybrid',
+      label: 'Hybrid Optimization',
+      description: 'Combination of caching, batching, and compact schema choices.',
       ...hybrid,
       savings: baseline.gas - hybrid.gas,
     },

@@ -1,11 +1,20 @@
 'use client';
 
-import { CollaborativeCanvas } from '@/components/CollaborativeCanvas';
+import dynamic from 'next/dynamic';
+import { EncryptedRoomChat } from '@/components/collaboration/EncryptedRoomChat';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
+import { getApiEndpoint } from '@/lib/env';
+import { BrainstormSkeleton } from '@/components/ui/skeletons/PageSkeletons';
 
-export default function BrainstormPage() {
+// ReactFlow + html2canvas + jsPDF are only needed once a session is open.
+const CollaborativeCanvas = dynamic(
+  () => import('@/components/CollaborativeCanvas').then((mod) => mod.CollaborativeCanvas),
+  { ssr: false, loading: () => <div className="h-[480px] w-full animate-pulse rounded-2xl bg-zinc-900/40" aria-busy="true" />, },
+);
+
+function BrainstormContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user } = useAuth();
@@ -19,6 +28,7 @@ export default function BrainstormPage() {
   };
 
   useEffect(() => {
+    if (!searchParams) return;
     const sessionId = searchParams.get('session') || generateRoomId();
     setRoomId(sessionId);
 
@@ -37,11 +47,10 @@ export default function BrainstormPage() {
 
     const syncCanvas = async () => {
       setIsLoading(true);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
       const token = localStorage.getItem('token');
 
       try {
-        const response = await fetch(`${apiUrl}/canvas/room/${roomId}`, {
+        const response = await fetch(getApiEndpoint(`/canvas/room/${roomId}`), {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -93,11 +102,10 @@ export default function BrainstormPage() {
 
   const handleDownloadJSON = async () => {
     setIsLoading(true);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
     const token = localStorage.getItem('token');
 
     try {
-      const response = await fetch(`${apiUrl}/canvas/room/${roomId}`, {
+      const response = await fetch(getApiEndpoint(`/canvas/room/${roomId}`), {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -142,16 +150,12 @@ export default function BrainstormPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-80px)] flex flex-col bg-gray-50 dark:bg-gray-950">
+    <div className="flex h-[calc(100vh-80px)] flex-col bg-gray-50 dark:bg-gray-950">
       {/* Top navigation bar */}
       <div className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 dark:border-gray-700 dark:bg-gray-900">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-            Brainstorming Canvas
-          </h1>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            {sessionName}
-          </p>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Brainstorming Canvas</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{sessionName}</p>
         </div>
 
         <div className="flex items-center gap-4">
@@ -173,25 +177,33 @@ export default function BrainstormPage() {
         </div>
       </div>
 
-      {/* Canvas component */}
-      {roomId && user ? (
-        <CollaborativeCanvas
-          roomId={roomId}
-          userId={user.id}
-          onCanvasReady={() => {
-            // Canvas is ready
-          }}
-        />
-      ) : (
-        <div className="flex flex-1 items-center justify-center">
-          <div className="text-center">
-            <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600"></div>
-            <p className="text-gray-600 dark:text-gray-400">
-              Initializing canvas...
-            </p>
-          </div>
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        {/* Canvas component */}
+        <div className="min-h-0 flex-1">
+          {roomId && user ? (
+            <CollaborativeCanvas
+              roomId={roomId}
+              userId={user.id}
+              onCanvasReady={() => {
+                // Canvas is ready
+              }}
+            />
+          ) : (
+            <div className="flex h-full flex-1 items-center justify-center">
+              <div className="text-center">
+                <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600"></div>
+                <p className="text-gray-600 dark:text-gray-400">Initializing canvas...</p>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+
+        {roomId && (
+          <div className="h-[420px] shrink-0 lg:h-auto">
+            <EncryptedRoomChat roomId={roomId} />
+          </div>
+        )}
+      </div>
 
       {/* Info panel */}
       <div className="border-t border-gray-200 bg-white px-6 py-3 dark:border-gray-700 dark:bg-gray-900">
@@ -208,5 +220,13 @@ export default function BrainstormPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function BrainstormPage() {
+  return (
+    <Suspense fallback={<BrainstormSkeleton />}>
+      <BrainstormContent />
+    </Suspense>
   );
 }

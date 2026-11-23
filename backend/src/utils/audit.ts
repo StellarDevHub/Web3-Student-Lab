@@ -1,7 +1,9 @@
 import crypto from 'crypto';
 import { Request } from 'express';
+import { createHash } from 'crypto';
 import prisma from '../db/index.js';
-import logger from './logger.js';
+import { tamperEvidentAuditService } from '../services/tamperEvidentAuditService.js';
+import logger, { auditLogger, getCorrelationId } from './logger.js';
 
 export interface AuditLogData {
   userId?: string | null;
@@ -14,77 +16,33 @@ export interface AuditLogData {
   userAgent?: string | null;
 }
 
-export interface AuditLogRow {
-  id?: string;
-  userId?: string | null;
-  userEmail?: string | null;
-  action: string;
-  entity?: string | null;
-  entityId?: string | null;
-  details?: unknown;
-  ipAddress?: string | null;
-  userAgent?: string | null;
-  prevHash?: string | null;
-  hash?: string | null;
-  createdAt?: Date | string;
+/** Shape written into the DB `details` JSON column */
+interface AuditDetailsRecord {
+  _hash: string;
+  correlationId: string | undefined;
+  [key: string]: unknown;
+}
+
+function buildChainInput(
+  prevHash: string | undefined,
+  timestamp: string,
+  userId: string | null | undefined,
+  action: string,
+  payload: Record<string, unknown>
+): string {
+  return [
+    prevHash ?? '',
+    timestamp,
+    userId ?? '',
+    action,
+    JSON.stringify(payload),
+  ].join('\x00');
 }
 
 /**
- * Genesis hash used as the prevHash for the very first audit log in the chain.
- * Standard 64-character SHA-256 hex zero string.
- */
-export const GENESIS_HASH = '0'.repeat(64);
-
-/**
- * Deterministically canonicalizes a JSON-compatible object/value by sorting keys recursively.
- */
-export function canonicalize(obj: unknown): string {
-  if (obj === null || obj === undefined) return 'null';
-  if (typeof obj !== 'object') return JSON.stringify(obj);
-  if (obj instanceof Date) return JSON.stringify(obj.toISOString());
-  if (Array.isArray(obj)) {
-    return '[' + obj.map(canonicalize).join(',') + ']';
-  }
-  const keys = Object.keys(obj as Record<string, unknown>).sort();
-  return (
-    '{' +
-    keys
-      .map((key) => `${JSON.stringify(key)}:${canonicalize((obj as Record<string, unknown>)[key])}`)
-      .join(',') +
-    '}'
-  );
-}
-
-/**
- * Serializes audit row fields canonically for SHA-256 hash computation.
- */
-export function serializeAuditRow(data: {
-  action: string;
-  entity?: string | null;
-  entityId?: string | null;
-  userId?: string | null;
-  userEmail?: string | null;
-  details?: unknown;
-  ipAddress?: string | null;
-  userAgent?: string | null;
-  createdAt?: Date | string;
-}): string {
-  const normalized = {
-    action: data.action,
-    createdAt: data.createdAt instanceof Date ? data.createdAt.toISOString() : data.createdAt || '',
-    details: data.details ?? null,
-    entity: data.entity ?? null,
-    entityId: data.entityId ?? null,
-    ipAddress: data.ipAddress ?? null,
-    userAgent: data.userAgent ?? null,
-    userEmail: data.userEmail ?? null,
-    userId: data.userId ?? null,
-  };
-  return canonicalize(normalized);
-}
-
-/**
- * Computes hash = SHA256(row || prevHash)
+ * Logs an administrative or sensitive action to the database and immutable
+ * file storage.  Sensitive fields must be stripped by the caller before
+ * passing `details`.
  */
 export function computeRowHash(
   row: {
@@ -109,58 +67,106 @@ export function computeRowHash(
  */
 export async function logAudit(data: AuditLogData) {
   try {
-    // Retrieve the most recent audit entry to link prevHash
-    const lastLog = await prisma.auditLog.findFirst({
+    const timestamp = new Date().toISOString();
+    const correlationId = getCorrelationId();
+
+    const previousLog = await prisma.auditLog.findFirst({
       orderBy: { createdAt: 'desc' },
-      select: { id: true, hash: true },
+      select: { prevHash: true },
     });
 
-    const prevHash = lastLog?.hash || GENESIS_HASH;
-    const createdAt = new Date();
+    const prevHash = previousLog?.prevHash ?? undefined;
 
-    const rowForHash = {
-      action: data.action,
-      entity: data.entity ?? null,
-      entityId: data.entityId ?? null,
-      userId: data.userId ?? null,
-      userEmail: data.userEmail ?? null,
-      details: data.details ?? null,
-      ipAddress: data.ipAddress ?? null,
-      userAgent: data.userAgent ?? null,
-      createdAt,
+    const payload = {
+      userEmail: data.userEmail,
+      entity: data.entity,
+      entityId: data.entityId,
+      details: data.details,
+      ipAddress: data.ipAddress,
+      userAgent: data.userAgent,
+      correlationId,
     };
 
-    const hash = computeRowHash(rowForHash, prevHash);
+    const chainInput = buildChainInput(prevHash, timestamp, data.userId, data.action, payload);
+    const hash = createHash('sha256').update(chainInput, 'utf8').digest('hex');
 
-    const created = await prisma.auditLog.create({
+    const logEntry = {
+      ...data,
+      timestamp,
+      correlationId,
+      hash,
+    };
+
+    auditLogger.info(logEntry);
+
+    const detailsRecord: AuditDetailsRecord = {
+      _hash: hash,
+      correlationId,
+    };
+
+    if (typeof data.details === 'object' && data.details !== null) {
+      Object.assign(detailsRecord, data.details as Record<string, unknown>);
+    }
+
+    await prisma.auditLog.create({
       data: {
         userId: data.userId ?? null,
         userEmail: data.userEmail ?? null,
         action: data.action,
         entity: data.entity ?? null,
         entityId: data.entityId ?? null,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        details: (data.details as any) ?? null,
+        details: detailsRecord as any,
         ipAddress: data.ipAddress ?? null,
         userAgent: data.userAgent ?? null,
-        prevHash,
-        hash,
-        createdAt,
+        prevHash: prevHash ?? null,
       },
     });
 
+    // Mirror into the tamper-evident hash chain (BE-009). A failure here is
+    // logged loudly but never blocks the action being audited.
+    try {
+      await tamperEvidentAuditService.record({
+        eventType: data.action,
+        actorId: data.userId ?? null,
+        entity: data.entity ?? null,
+        entityId: data.entityId ?? null,
+        payload: { ...payload, timestamp, legacyHash: hash },
+      });
+    } catch (chainError) {
+      logger.error('Failed to append audit event to hash chain', { error: chainError, correlationId });
+    }
+
     logger.info(
-      `Audit Log: ${data.action} by ${data.userEmail || 'unknown'} [hash: ${hash.substring(0, 8)}...]`
+      `Audit Log: ${data.action} by ${data.userEmail ?? data.userId ?? 'unknown'}`,
+      {
+        correlationId,
+        action: data.action,
+        entity: data.entity,
+      }
     );
-    return created;
   } catch (error) {
-    logger.error('Failed to create audit log:', error);
-    return null;
+    logger.error('Failed to create audit log:', {
+      error,
+      correlationId: getCorrelationId(),
+    });
   }
 }
 
+/** Shape of `req.user` as set by auth middleware on authenticated routes */
+interface AuthenticatedUser {
+  id?: string;
+  email?: string;
+}
+
+/** Body shapes that may carry a top-level `email` field (login / register) */
+interface BodyWithOptionalEmail {
+  email?: string;
+}
+
 /**
- * Helper to log an audit entry from an Express request
+ * Helper to log an audit entry from an Express request.
+ * Extracts user identity from `req.user` (authenticated routes) or falls back
+ * to `req.body.email` for login / register flows.
  */
 export async function logRequestAudit(
   req: Request,
@@ -168,17 +174,21 @@ export async function logRequestAudit(
   entity?: string,
   entityId?: string,
   details?: unknown
-) {
-  const user = req.user as { id: string; email: string } | undefined;
+): Promise<void> {
+  const user = req.user as AuthenticatedUser | undefined;
+
+  const body = req.body as BodyWithOptionalEmail | undefined;
+  const fallbackEmail: string | null = body?.email ?? null;
 
   return logAudit({
     userId: user?.id ?? null,
-    userEmail: user?.email ?? null,
+    userEmail: user?.email ?? fallbackEmail,
     action,
     entity: entity ?? null,
     entityId: entityId ?? null,
     details: details ?? null,
-    ipAddress: (req.ip || req.socket.remoteAddress) ?? null,
-    userAgent: (req.headers['user-agent'] as string) ?? null,
+    ipAddress: (req.ip ?? req.socket?.remoteAddress) ?? null,
+    userAgent: (req.headers['user-agent'] as string | undefined) ?? null,
   });
 }
+

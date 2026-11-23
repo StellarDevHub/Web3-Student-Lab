@@ -1,13 +1,16 @@
-"use client";
+'use client';
 
-import Image, { ImageProps } from "next/image";
-import { useState, useEffect, useRef, useCallback } from "react";
+import Image, { ImageProps } from 'next/image';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ImageStatus = "idle" | "loading" | "loaded" | "error";
+type ImageStatus = 'idle' | 'loading' | 'loaded' | 'error';
 
-interface SmartImageProps extends Omit<ImageProps, "placeholder" | "blurDataURL" | "onLoad" | "onError"> {
+interface SmartImageProps extends Omit<
+  ImageProps,
+  'placeholder' | 'blurDataURL' | 'onLoad' | 'onError'
+> {
   /** Base64 LQIP string – generated server-side (see generateLQIP util) */
   blurDataURL?: string;
   /** Shown when the image fails to load */
@@ -31,7 +34,7 @@ interface SmartImageProps extends Omit<ImageProps, "placeholder" | "blurDataURL"
  * Prevents layout shift while keeping the image slot reserved.
  */
 const TRANSPARENT_PLACEHOLDER =
-  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
 /**
  * Converts an ordinary image URL to its WebP/AVIF equivalent when served by a
@@ -43,15 +46,13 @@ const TRANSPARENT_PLACEHOLDER =
  *
  * Override this function to match your CDN's API.
  */
-export function toModernFormat(src: string, format: "webp" | "avif"): string {
-  if (src.startsWith("data:") || src.startsWith("blob:")) return src;
+export function toModernFormat(src: string, format: 'webp' | 'avif'): string {
+  if (src.startsWith('data:') || src.startsWith('blob:')) return src;
   try {
-    const url = new URL(src, "https://placeholder.local");
-    url.searchParams.set("fm", format);
+    const url = new URL(src, 'https://placeholder.local');
+    url.searchParams.set('fm', format);
     // If the URL has a real host, return the full URL; otherwise strip the base.
-    return url.hostname === "placeholder.local"
-      ? `${url.pathname}${url.search}`
-      : url.toString();
+    return url.hostname === 'placeholder.local' ? `${url.pathname}${url.search}` : url.toString();
   } catch {
     return src;
   }
@@ -81,17 +82,17 @@ export function SmartImage({
   fallbackSrc,
   fallbackElement,
   observerThreshold = 0.1,
-  observerRootMargin = "200px",
+  observerRootMargin = '200px',
   eager = false,
-  className = "",
-  wrapperClassName = "",
+  className = '',
+  wrapperClassName = '',
   style,
   ...rest
 }: SmartImageProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [status, setStatus] = useState<ImageStatus>("idle");
+  const [status, setStatus] = useState<ImageStatus>('idle');
   const [isVisible, setIsVisible] = useState<boolean>(eager || !!priority);
-  const [activeSrc, setActiveSrc] = useState<ImageProps["src"]>(src);
+  const [activeSrc, setActiveSrc] = useState<ImageProps['src']>(src);
 
   // ── IntersectionObserver ──────────────────────────────────────────────────
 
@@ -99,7 +100,7 @@ export function SmartImage({
     if (eager || priority || isVisible) return;
 
     const el = wrapperRef.current;
-    if (!el || typeof IntersectionObserver === "undefined") {
+    if (!el || typeof IntersectionObserver === 'undefined') {
       setIsVisible(true);
       return;
     }
@@ -122,33 +123,33 @@ export function SmartImage({
 
   useEffect(() => {
     setActiveSrc(src);
-    setStatus("idle");
+    setStatus('idle');
   }, [src]);
 
   // ── Event handlers ────────────────────────────────────────────────────────
 
-  const handleLoadStart = useCallback(() => setStatus("loading"), []);
+  const handleLoadStart = useCallback(() => setStatus('loading'), []);
 
-  const handleLoad = useCallback(() => setStatus("loaded"), []);
+  const handleLoad = useCallback(() => setStatus('loaded'), []);
 
   const handleError = useCallback(() => {
     if (fallbackSrc && activeSrc !== fallbackSrc) {
       setActiveSrc(fallbackSrc);
     } else {
-      setStatus("error");
+      setStatus('error');
     }
   }, [fallbackSrc, activeSrc]);
 
   // ── Derived values ────────────────────────────────────────────────────────
 
   const lqip = blurDataURL ?? TRANSPARENT_PLACEHOLDER;
-  const showBlur = status !== "loaded" && status !== "error";
-  const showFallback = status === "error";
+  const showBlur = status !== 'loaded' && status !== 'error';
+  const showFallback = status === 'error';
 
   // Wrapper dimensions – honour both fill and explicit w/h modes.
   const wrapperStyle: React.CSSProperties = fill
-    ? { position: "relative", width: "100%", height: "100%", ...style }
-    : { position: "relative", display: "inline-block", ...style };
+    ? { position: 'relative', width: '100%', height: '100%', ...style }
+    : { position: 'relative', display: 'inline-block', ...style };
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -157,7 +158,7 @@ export function SmartImage({
       ref={wrapperRef}
       className={`smart-image-wrapper ${wrapperClassName}`}
       style={wrapperStyle}
-      aria-busy={status === "loading"}
+      aria-busy={status === 'loading'}
     >
       {/* ── Skeleton / blur overlay ───────────────────────────────────────── */}
       {showBlur && (
@@ -165,13 +166,13 @@ export function SmartImage({
           aria-hidden="true"
           className="smart-image-skeleton"
           style={{
-            position: "absolute",
+            position: 'absolute',
             inset: 0,
             zIndex: 1,
-            overflow: "hidden",
-            borderRadius: "inherit",
-            transition: "opacity 0.4s ease",
-            opacity: status === "loaded" ? 0 : 1,
+            overflow: 'hidden',
+            borderRadius: 'inherit',
+            transition: 'opacity 0.4s ease',
+            opacity: (status as ImageStatus) === 'loaded' ? 0 : 1,
           }}
         >
           {/* Blurred LQIP preview */}
@@ -180,23 +181,23 @@ export function SmartImage({
             src={lqip}
             alt=""
             style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              filter: blurDataURL ? "blur(20px) saturate(1.2)" : "none",
-              transform: "scale(1.05)", // hide blur edges
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              filter: blurDataURL ? 'blur(20px) saturate(1.2)' : 'none',
+              transform: 'scale(1.05)', // hide blur edges
             }}
           />
           {/* Shimmer overlay when no LQIP is available */}
           {!blurDataURL && (
             <div
               style={{
-                position: "absolute",
+                position: 'absolute',
                 inset: 0,
                 background:
-                  "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%)",
-                backgroundSize: "200% 100%",
-                animation: "smartimage-shimmer 1.6s infinite",
+                  'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%)',
+                backgroundSize: '200% 100%',
+                animation: 'smartimage-shimmer 1.6s infinite',
               }}
             />
           )}
@@ -210,17 +211,17 @@ export function SmartImage({
           aria-label={alt}
           className="smart-image-fallback"
           style={{
-            position: "absolute",
+            position: 'absolute',
             inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "rgba(128,128,128,0.1)",
-            borderRadius: "inherit",
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(128,128,128,0.1)',
+            borderRadius: 'inherit',
           }}
         >
           {fallbackElement ?? (
-            <span style={{ fontSize: "0.75rem", color: "rgba(128,128,128,0.8)" }}>
+            <span style={{ fontSize: '0.75rem', color: 'rgba(128,128,128,0.8)' }}>
               Image unavailable
             </span>
           )}
@@ -240,16 +241,16 @@ export function SmartImage({
           quality={quality}
           priority={priority}
           // Use blur placeholder when we have an LQIP; otherwise empty.
-          placeholder={blurDataURL ? "blur" : "empty"}
+          placeholder={blurDataURL ? 'blur' : 'empty'}
           blurDataURL={blurDataURL}
           onLoadStart={handleLoadStart}
           onLoad={handleLoad}
           onError={handleError}
           className={className}
           style={{
-            transition: "opacity 0.4s ease",
-            opacity: status === "loaded" ? 1 : 0,
-            ...(fill ? {} : { display: "block" }),
+            transition: 'opacity 0.4s ease',
+            opacity: status === 'loaded' ? 1 : 0,
+            ...(fill ? {} : { display: 'block' }),
           }}
         />
       )}
@@ -284,14 +285,14 @@ export function SmartImage({
  */
 export async function generateLQIP(imagePath: string): Promise<string> {
   // Dynamic import keeps `sharp` out of client bundles.
-  const sharp = (await import("sharp")).default;
+  const sharp = (await import('sharp')).default;
 
   const buffer = await sharp(imagePath)
-    .resize(16, 16, { fit: "inside" }) // 16 × 16 thumbnail
+    .resize(16, 16, { fit: 'inside' }) // 16 × 16 thumbnail
     .webp({ quality: 20 })
     .toBuffer();
 
-  return `data:image/webp;base64,${buffer.toString("base64")}`;
+  return `data:image/webp;base64,${buffer.toString('base64')}`;
 }
 
 // ─── Picture wrapper for external / CDN images ────────────────────────────────
@@ -312,17 +313,13 @@ interface SmartPictureProps extends SmartImageProps {
  * in /public or fetched through the `/_next/image` endpoint), you do NOT need
  * this wrapper – Next.js handles format negotiation automatically.
  */
-export function SmartPicture({
-  src,
-  useModernFormats = true,
-  ...props
-}: SmartPictureProps) {
-  if (!useModernFormats || typeof src !== "string") {
+export function SmartPicture({ src, useModernFormats = true, ...props }: SmartPictureProps) {
+  if (!useModernFormats || typeof src !== 'string') {
     return <SmartImage src={src} {...props} />;
   }
 
-  const avifSrc = toModernFormat(src, "avif");
-  const webpSrc = toModernFormat(src, "webp");
+  const avifSrc = toModernFormat(src, 'avif');
+  const webpSrc = toModernFormat(src, 'webp');
 
   // If format conversion didn't change the URL (e.g. src is a local path),
   // fall through to the standard SmartImage.
@@ -360,12 +357,12 @@ export function useLazyVisible<T extends Element>(
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || typeof IntersectionObserver === "undefined") {
+    if (!el || typeof IntersectionObserver === 'undefined') {
       setIsVisible(true);
       return;
     }
 
-    const { threshold = 0.1, rootMargin = "200px", root } = options;
+    const { threshold = 0.1, rootMargin = '200px', root } = options;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {

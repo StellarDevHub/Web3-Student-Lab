@@ -1,50 +1,94 @@
-# Security Best Practices
+# Security Policy
 
-This document outlines the security guidelines for developers contributing to the Web3 Student Lab
-project. Ensuring the security of our codebase, user data, and smart contracts is a top priority.
+## Supported Versions
 
-## Handling Secrets and API Keys
+| Version | Supported          |
+| ------- | ------------------ |
+| main    | :white_check_mark: |
 
-- **Never Commit Secrets**: Do not commit API keys, passwords, or other secrets to the repository.
-- **Use Environment Variables**: Store sensitive configuration in a `.env` file and use a package
-  like `dotenv` to load them.
-- **`.gitignore`**: Ensure that `.env` and other files containing secrets are included in the
-  `.gitignore` file.
-- **Secret Scanning**: We use GitHub's secret scanning to detect accidentally committed secrets. If
-  a secret is leaked, rotate it immediately.
+## Reporting a Vulnerability
 
-## Managing Sensitive Data
+Please report vulnerabilities by opening a private security advisory on GitHub or by emailing security@web3studentlab.com. We aim to acknowledge reports within 24 hours and provide a remediation plan within 72 hours.
 
-- **Private Keys**: Never share or commit private keys. Use hardware wallets or secure vault
-  services for managing keys in production.
-- **User Data**: Minimize the collection of personal data. Encrypt sensitive user information at
-  rest and in transit.
-- **Blockchain Data**: Remember that data stored on-chain is public. Do not store sensitive
-  information directly on the blockchain unless it is encrypted.
+## Vulnerability Triage and Remediation SLAs
 
-## Secure Coding Practices
+We use the following service level objectives for security issues identified through automated scanning, bug reports, or audits:
 
-### General
+- **Critical**: fix within 24 hours; patch deployed within 48 hours.
+- **High**: fix within 72 hours; patch deployed within 7 days.
+- **Medium**: fix within 14 days; patch deployed within 30 days.
+- **Low**: fix within 30 days; patch deployed within 90 days.
 
-- **Input Validation**: Always validate and sanitize user input to prevent common vulnerabilities
-  like XSS and Injection.
-- **Dependency Management**: Regularly update dependencies and use tools like `npm audit` or `snyk`
-  to check for known vulnerabilities.
-- **Principle of Least Privilege**: Grant only the minimum necessary permissions to services and
-  users.
+### Triage Workflow
 
-### Smart Contracts
+1. Automated scanners (`cargo-audit`, `npm audit`) raise issues in CI.
+2. Security team reviews findings daily and assigns severity.
+3. Critical/high issues block merges until remediated or accepted with documented risk.
+4. Remediation PRs are labeled `security` and reviewed by at least one maintainer.
+5. Patches are backported to supported branches when applicable.
 
-- **Reentrancy Protection**: Use `ReentrancyGuard` or the checks-effects-interactions pattern.
-- **Integer Overflows**: Use Solidity 0.8+ or `SafeMath` for older versions.
-- **Access Control**: Use `Ownable` or `AccessControl` to restrict sensitive functions.
-- **Audit**: High-stakes contracts should undergo a professional security audit before deployment.
+## Automated Security Scanning
 
-## GitHub Security Policy
+CI runs continuous vulnerability checks on every commit:
 
-For information on how to report vulnerabilities or see our security advisories, please refer to our
-[GitHub Security Policy](https://github.com/StellarDevHub/Web3-Student-Lab/security/policy).
+- `cargo-audit` on `contracts/Cargo.lock`
+- `npm audit --audit-level=high` on `frontend` and `backend`
 
----
+## Secure Development Practices
 
-_Last Updated: 2026-03-24_
+- All dependencies are pinned and audited before release.
+- Secrets are managed via environment variables and never committed.
+- Code changes require review and passing CI security checks.
+- Production deployments require signed images and least-privilege access.
+
+## Secret Scanning & Leak Prevention
+
+This repository is scanned automatically for exposed credentials using Gitleaks.
+
+### Local Prevention
+
+- Pre-commit hooks run Gitleaks on every `git commit`.
+- Install hooks with: `pip install pre-commit && pre-commit install`
+- Manual scan: `pre-commit run --all-files`
+
+### CI Enforcement
+
+- Gitleaks runs on every push and pull request across all branches.
+- A detected secret fails the workflow immediately.
+- Full history is scanned (`fetch-depth: 0`) to catch historical leaks.
+
+### Supported Secret Patterns
+
+Custom rules in `.gitleaks.toml` target:
+- Stellar Ed25519 secret seeds (`S[A-Z0-9]{55}`)
+- JWT secrets
+- Generic API keys
+- PEM private key blocks
+
+### Incident Response
+
+If a secret is detected:
+
+1. **Rotate immediately**
+   - JWT / API keys: regenerate and deploy new values.
+   - Stellar secret keys: move funds to a new account and revoke the old key.
+   - Database credentials: reset passwords and rotate connection strings.
+
+2. **Revoke the commit**
+   - If the secret was committed, rewrite history to purge it:
+     ```bash
+     git filter-branch --force --index-filter \
+       "git rm --cached --ignore-unmatch path/to/secret" \
+       --prune-empty --tag-name-filter cat -- --all
+     ```
+   - Force-push the rewritten branch and open a PR to update references.
+
+3. **Audit access logs**
+   - Review CloudWatch / Datadog for any unauthorized access between the time of leak and rotation.
+
+4. **Notify stakeholders**
+   - Report the incident to the security team and affected service owners within 24 hours.
+
+### Reporting
+
+Found a false positive or missed pattern? Open an issue referencing `.gitleaks.toml`.

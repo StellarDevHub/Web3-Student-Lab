@@ -13,18 +13,7 @@ interface AnimatedInputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const AnimatedInput = React.forwardRef<HTMLInputElement, AnimatedInputProps>(
-  (
-    {
-      label,
-      error,
-      success,
-      icon,
-      showFeedback = true,
-      className = '',
-      ...props
-    },
-    ref
-  ) => {
+  ({ label, error, success, icon, showFeedback = true, className = '', ...props }, ref) => {
     const [isFocused, setIsFocused] = React.useState(false);
     const hasError = error && showFeedback;
     const hasSuccess = success && showFeedback;
@@ -47,7 +36,7 @@ export const AnimatedInput = React.forwardRef<HTMLInputElement, AnimatedInputPro
             <motion.div
               animate={{ scale: isFocused ? 1.05 : 1 }}
               transition={{ duration: ANIMATION_TOKENS.durations.micro }}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400"
             >
               {icon}
             </motion.div>
@@ -76,13 +65,7 @@ export const AnimatedInput = React.forwardRef<HTMLInputElement, AnimatedInputPro
                 setIsFocused(false);
                 props.onBlur?.(e);
               }}
-              className={`
-                w-full rounded-lg bg-transparent px-3 py-2
-                ${icon ? 'pl-10' : ''}
-                text-white placeholder-gray-500
-                focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed
-                ${className}
-              `}
+              className={`w-full rounded-lg bg-transparent px-3 py-2 ${icon ? 'pl-10' : ''} text-white placeholder-gray-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${className} `}
               {...props}
             />
           </motion.div>
@@ -93,13 +76,9 @@ export const AnimatedInput = React.forwardRef<HTMLInputElement, AnimatedInputPro
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: ANIMATION_TOKENS.durations.micro }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500"
+              className="absolute top-1/2 right-3 -translate-y-1/2 text-green-500"
             >
-              <svg
-                className="h-5 w-5"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
+              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fillRule="evenodd"
                   d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
@@ -115,13 +94,9 @@ export const AnimatedInput = React.forwardRef<HTMLInputElement, AnimatedInputPro
               initial={{ opacity: 0, scale: 0.8, x: 5 }}
               animate={{ opacity: 1, scale: 1, x: 0 }}
               transition={{ duration: ANIMATION_TOKENS.durations.micro }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-red-500"
+              className="absolute top-1/2 right-3 -translate-y-1/2 text-red-500"
             >
-              <svg
-                className="h-5 w-5"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
+              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fillRule="evenodd"
                   d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"

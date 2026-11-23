@@ -10,33 +10,39 @@ interface TimelineProps {
 
 export const Timeline: React.FC<TimelineProps> = ({ snapshots, currentIndex, onSelect }) => {
   return (
-    <div className="relative h-14 flex items-center px-8 bg-black/40 border-t border-white/5 overflow-x-auto no-scrollbar group/timeline shadow-inner">
-      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-white/5" />
-      <div className="flex items-center gap-1 min-w-full relative z-10 py-4">
+    <div className="no-scrollbar group/timeline relative flex h-14 items-center overflow-x-auto border-t border-white/5 bg-black/40 px-8 shadow-inner">
+      <div className="absolute inset-x-0 top-1/2 h-[1px] -translate-y-1/2 bg-white/5" />
+      <div className="relative z-10 flex min-w-full items-center gap-1 py-4">
         {snapshots.map((snapshot, index) => (
           <div
             key={snapshot.id}
             onClick={() => onSelect(index)}
-            className="group relative flex-shrink-0 flex flex-col items-center justify-center w-4 h-8 cursor-pointer"
+            className="group relative flex h-8 w-4 flex-shrink-0 cursor-pointer flex-col items-center justify-center"
           >
             <div
               className={cn(
-                "w-1.5 h-1.5 rounded-full transition-all duration-300 transform",
-                index === currentIndex ? "bg-red-500 scale-[2] shadow-[0_0_15px_#ef4444]" : "bg-gray-700 hover:bg-gray-400 group-hover:scale-125",
-                index < currentIndex ? "bg-red-500/40" : ""
+                'h-1.5 w-1.5 transform rounded-full transition-all duration-300',
+                index === currentIndex
+                  ? 'scale-[2] bg-red-500 shadow-[0_0_15px_#ef4444]'
+                  : 'bg-gray-700 group-hover:scale-125 hover:bg-gray-400',
+                index < currentIndex ? 'bg-red-500/40' : ''
               )}
             />
-            
+
             {/* Tooltip on hover */}
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 hidden group-hover:block z-50 pointer-events-none">
-              <div className="bg-gray-900/95 backdrop-blur-md border border-white/10 rounded-xl px-3 py-2 text-[10px] text-white whitespace-nowrap shadow-2xl animate-in fade-in zoom-in duration-200">
-                <div className="flex items-center gap-2 mb-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_#ef4444]" />
-                    <span className="font-black uppercase tracking-widest text-[9px]">Checkpoint</span>
+            <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-4 hidden -translate-x-1/2 group-hover:block">
+              <div className="animate-in fade-in zoom-in rounded-xl border border-white/10 bg-gray-900/95 px-3 py-2 text-[10px] whitespace-nowrap text-white shadow-2xl backdrop-blur-md duration-200">
+                <div className="mb-1 flex items-center gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-red-500 shadow-[0_0_5px_#ef4444]" />
+                  <span className="text-[9px] font-black tracking-widest uppercase">
+                    Checkpoint
+                  </span>
                 </div>
                 <div className="font-medium text-gray-200">{snapshot.description}</div>
-                <div className="text-[9px] text-gray-500 font-mono mt-1">{new Date(snapshot.timestamp).toLocaleTimeString()}</div>
-                
+                <div className="mt-1 font-mono text-[9px] text-gray-500">
+                  {new Date(snapshot.timestamp).toLocaleTimeString()}
+                </div>
+
                 {/* Triangle pointer */}
                 <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-gray-900/95" />
               </div>
@@ -44,7 +50,7 @@ export const Timeline: React.FC<TimelineProps> = ({ snapshots, currentIndex, onS
 
             {/* Current Indicator Marker */}
             {index === currentIndex && (
-                <div className="absolute top-full mt-2 w-[1px] h-3 bg-red-500/50" />
+              <div className="absolute top-full mt-2 h-3 w-[1px] bg-red-500/50" />
             )}
           </div>
         ))}

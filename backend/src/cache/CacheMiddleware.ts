@@ -18,7 +18,7 @@ export const cacheMiddleware = (options: CacheOptions) => {
 
     try {
       const cachedData = await cacheService.get(cacheKey);
-      
+
       if (cachedData) {
         res.setHeader('X-Cache', 'HIT');
         return res.json(cachedData);

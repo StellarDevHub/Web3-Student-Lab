@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 type ServiceWorkerCallback = (event?: Event) => void;
-export type ServiceWorkerStatus = 'idle' | 'installing' | 'installed' | 'updating' | 'ready' | 'error' | 'offline';
+export type ServiceWorkerStatus =
+  | 'idle'
+  | 'installing'
+  | 'installed'
+  | 'updating'
+  | 'ready'
+  | 'error'
+  | 'offline';
 
 interface UseServiceWorkerOptions {
   onInstalled?: ServiceWorkerCallback;
@@ -60,7 +67,7 @@ export function useServiceWorker(options: UseServiceWorkerOptions = {}) {
 
       // Check for updates periodically
       setInterval(() => {
-        registration.update().catch(err => {
+        registration.update().catch((err) => {
           console.error('[SW] Update check failed:', err);
         });
       }, 60000); // Check every minute

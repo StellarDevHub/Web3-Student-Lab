@@ -8,7 +8,7 @@ import { sseSessionManager } from '../sse/SseSessionManager.js';
 
 const EXPORTS_DIR = path.join(process.cwd(), 'exports');
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 // POST /api/v1/export - Trigger an export
 router.post('/', async (req, res) => {
@@ -36,7 +36,8 @@ router.post('/', async (req, res) => {
 router.get('/events', (req, res) => {
   const authHeader = req.headers.authorization;
   const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
-  const queryToken = typeof req.query.access_token === 'string' ? req.query.access_token : undefined;
+  const queryToken =
+    typeof req.query.access_token === 'string' ? req.query.access_token : undefined;
   const token = headerToken || queryToken;
 
   if (!token) {

@@ -24,9 +24,7 @@ describe('SseSessionManager', () => {
     expect(responseA.write).toHaveBeenCalledWith(
       expect.stringContaining('event: user_metrics_updated')
     );
-    expect(responseA.write).toHaveBeenCalledWith(
-      expect.stringContaining('"progress":40')
-    );
+    expect(responseA.write).toHaveBeenCalledWith(expect.stringContaining('"progress":40'));
     expect(responseB.write).toHaveBeenCalledWith(
       expect.stringContaining('event: user_metrics_updated')
     );

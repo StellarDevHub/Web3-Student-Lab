@@ -36,7 +36,7 @@ export function UpdateAvailableNotification({
     onUpdate?.();
 
     // Give time for new service worker to activate
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   };
 
   const handleDismiss = () => {
@@ -47,8 +47,8 @@ export function UpdateAvailableNotification({
   if (!isVisible) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 z-50 animate-in slide-in-from-bottom-2 duration-300">
-      <div className="flex items-center gap-3 rounded-lg bg-blue-900 px-4 py-3 text-blue-100 shadow-lg backdrop-blur-sm max-w-md">
+    <div className="animate-in slide-in-from-bottom-2 fixed bottom-4 left-4 z-50 duration-300">
+      <div className="flex max-w-md items-center gap-3 rounded-lg bg-blue-900 px-4 py-3 text-blue-100 shadow-lg backdrop-blur-sm">
         <RefreshCw className={`h-5 w-5 flex-shrink-0 ${isUpdating ? 'animate-spin' : ''}`} />
         <div className="flex flex-1 flex-col gap-1">
           <p className="text-sm font-medium">New Version Available</p>
@@ -57,14 +57,14 @@ export function UpdateAvailableNotification({
             <button
               onClick={handleUpdate}
               disabled={isUpdating}
-              className="text-xs font-semibold bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1 rounded transition-colors"
+              className="rounded bg-blue-500 px-3 py-1 text-xs font-semibold transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isUpdating ? 'Updating...' : 'Update Now'}
             </button>
             <button
               onClick={handleDismiss}
               disabled={isUpdating}
-              className="text-xs font-semibold bg-blue-800 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1 rounded transition-colors"
+              className="rounded bg-blue-800 px-3 py-1 text-xs font-semibold transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Later
             </button>
@@ -73,7 +73,7 @@ export function UpdateAvailableNotification({
         <button
           onClick={handleDismiss}
           disabled={isUpdating}
-          className="ml-2 rounded p-1 hover:bg-blue-800 disabled:opacity-50 transition-colors"
+          className="ml-2 rounded p-1 transition-colors hover:bg-blue-800 disabled:opacity-50"
           aria-label="Close notification"
         >
           <X className="h-4 w-4" />

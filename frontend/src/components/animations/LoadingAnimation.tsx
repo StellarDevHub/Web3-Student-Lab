@@ -89,7 +89,7 @@ export const LoadingAnimation: React.FC<LoadingAnimationProps> = ({
                 repeat: Infinity,
                 delay: i * ANIMATION_TOKENS.durations.micro,
               }}
-              className={`rounded-full bg-current flex-1`}
+              className={`flex-1 rounded-full bg-current`}
             />
           ))}
         </div>
@@ -117,7 +117,7 @@ export const LoadingAnimation: React.FC<LoadingAnimationProps> = ({
                 repeat: Infinity,
                 delay: i * ANIMATION_TOKENS.durations.micro,
               }}
-              className={`h-full w-1 rounded-full bg-current flex-1 ${color}`}
+              className={`h-full w-1 flex-1 rounded-full bg-current ${color}`}
             />
           ))}
         </div>
@@ -134,7 +134,7 @@ export const LoadingAnimation: React.FC<LoadingAnimationProps> = ({
                 repeat: Infinity,
                 delay: i * ANIMATION_TOKENS.durations.micro,
               }}
-              className="h-4 bg-gray-700 rounded"
+              className="h-4 rounded bg-gray-700"
             />
           ))}
         </div>

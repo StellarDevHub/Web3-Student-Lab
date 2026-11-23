@@ -1,10 +1,6 @@
 import { ethers } from 'ethers';
 import prisma from '../db/index.js';
-import { 
-  generateAccessToken, 
-  generateRefreshToken,
-  TokenPayload 
-} from './token.service.js';
+import { generateAccessToken, generateRefreshToken, TokenPayload } from './token.service.js';
 import { formatUserResponse } from './auth.service.js';
 
 const NONCE_EXPIRY_MINUTES = 5;
@@ -27,16 +23,16 @@ export const generateNonce = (): string => {
  */
 export const createNonce = async (walletAddress: string): Promise<string> => {
   // Normalize wallet address to checksum format
-  const normalizedAddress = ethers.getAddress(walletAddress);
-  
+  const normalizedAddress = ethers.utils.getAddress(walletAddress);
+
   // Clean up any existing nonces for this wallet
   await prisma.authNonce.deleteMany({
     where: {
       walletAddress: normalizedAddress,
       expiresAt: {
-        lt: new Date()
-      }
-    }
+        lt: new Date(),
+      },
+    },
   });
 
   // Generate new nonce
@@ -49,7 +45,7 @@ export const createNonce = async (walletAddress: string): Promise<string> => {
       walletAddress: normalizedAddress,
       nonce,
       expiresAt,
-    }
+    },
   });
 
   return nonce;
@@ -64,7 +60,7 @@ export const verifySignature = async (
   nonce: string
 ): Promise<{ user: any; accessToken: string; refreshToken: string }> => {
   // Normalize wallet address
-  const normalizedAddress = ethers.getAddress(walletAddress);
+  const normalizedAddress = ethers.utils.getAddress(walletAddress);
 
   // Find and validate nonce
   const storedNonce = await prisma.authNonce.findFirst({
@@ -72,9 +68,9 @@ export const verifySignature = async (
       walletAddress: normalizedAddress,
       nonce,
       expiresAt: {
-        gt: new Date()
-      }
-    }
+        gt: new Date(),
+      },
+    },
   });
 
   if (!storedNonce) {
@@ -86,7 +82,7 @@ export const verifySignature = async (
 
   try {
     // Recover the signer address from the signature
-    const recoveredAddress = ethers.verifyMessage(message, signature);
+    const recoveredAddress = ethers.utils.verifyMessage(message, signature);
 
     // Verify the recovered address matches the claimed wallet address
     if (recoveredAddress.toLowerCase() !== normalizedAddress.toLowerCase()) {
@@ -98,12 +94,12 @@ export const verifySignature = async (
 
   // Clean up the used nonce
   await prisma.authNonce.delete({
-    where: { id: storedNonce.id }
+    where: { id: storedNonce.id },
   });
 
   // Find or create user with this wallet address
   let student = await prisma.student.findUnique({
-    where: { walletAddress: normalizedAddress }
+    where: { walletAddress: normalizedAddress },
   });
 
   if (!student) {
@@ -115,7 +111,7 @@ export const verifySignature = async (
         firstName: 'Wallet',
         lastName: 'User',
         password: '', // Empty password for wallet users
-      }
+      },
     });
   }
 
@@ -138,8 +134,8 @@ export const cleanupExpiredNonces = async (): Promise<void> => {
   await prisma.authNonce.deleteMany({
     where: {
       expiresAt: {
-        lt: new Date()
-      }
-    }
+        lt: new Date(),
+      },
+    },
   });
 };

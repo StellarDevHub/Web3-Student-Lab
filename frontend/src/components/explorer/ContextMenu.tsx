@@ -27,12 +27,20 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onClose, onActio
   const items = [
     { id: 'rename', label: 'Rename', icon: Edit2, shortcut: 'F2' },
     { id: 'duplicate', label: 'Duplicate', icon: Copy, shortcut: '⌘D' },
-    ...(type === 'folder' ? [
-      { id: 'new-file', label: 'New File', icon: FilePlus },
-      { id: 'new-folder', label: 'New Folder', icon: FolderPlus },
-    ] : []),
+    ...(type === 'folder'
+      ? [
+          { id: 'new-file', label: 'New File', icon: FilePlus },
+          { id: 'new-folder', label: 'New Folder', icon: FolderPlus },
+        ]
+      : []),
     { id: 'separator', type: 'separator' },
-    { id: 'delete', label: 'Delete', icon: Trash2, className: 'text-rose-500 hover:bg-rose-500/10', shortcut: '⌫' },
+    {
+      id: 'delete',
+      label: 'Delete',
+      icon: Trash2,
+      className: 'text-rose-500 hover:bg-rose-500/10',
+      shortcut: '⌫',
+    },
   ];
 
   return (
@@ -40,13 +48,17 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onClose, onActio
       ref={menuRef}
       initial={{ opacity: 0, scale: 0.95, y: -10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      className="fixed z-[1000] w-56 bg-gray-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] py-2"
+      className="fixed z-[1000] w-56 rounded-2xl border border-white/10 bg-gray-900/95 py-2 shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-2xl"
       style={{ top: y, left: x }}
     >
-      {items.map((item, index) => (
-        item.type === 'separator' ? (
-          <div key={`sep-${index}`} className="h-px bg-white/5 my-1.5 mx-2" />
-        ) : (
+      {items.map((item, index) => {
+        if (item.type === 'separator') {
+          return <div key={`sep-${index}`} className="mx-2 my-1.5 h-px bg-white/5" />;
+        }
+
+        const Icon = item.icon as React.ElementType;
+
+        return (
           <button
             key={item.id}
             onClick={() => {
@@ -54,20 +66,24 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onClose, onActio
               onClose();
             }}
             className={cn(
-              "w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-medium transition-all group",
-              item.className || "text-gray-300 hover:text-white hover:bg-white/5"
+              'group flex w-full items-center justify-between px-3.5 py-2.5 text-xs font-medium transition-all',
+              item.className || 'text-gray-300 hover:bg-white/5 hover:text-white'
             )}
           >
             <div className="flex items-center gap-3">
-              <item.icon className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" />
+              {Icon && (
+                <Icon className="h-4 w-4 opacity-50 transition-opacity group-hover:opacity-100" />
+              )}
               <span>{item.label}</span>
             </div>
-            {item.shortcut && (
-              <span className="text-[10px] text-gray-600 font-mono tracking-tighter group-hover:text-gray-400">{item.shortcut}</span>
+            {'shortcut' in item && item.shortcut && (
+              <span className="font-mono text-[10px] tracking-tighter text-gray-600 group-hover:text-gray-400">
+                {item.shortcut}
+              </span>
             )}
           </button>
-        )
-      ))}
+        );
+      })}
     </motion.div>
   );
 };

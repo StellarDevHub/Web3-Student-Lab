@@ -62,8 +62,7 @@ export const useNetworkStore = create<NetworkStore>()(
 
         updatePeers: (peers) => set({ peers }),
 
-        updateBandwidth: (upload, download) => 
-          set({ bandwidth: { upload, download } }),
+        updateBandwidth: (upload, download) => set({ bandwidth: { upload, download } }),
 
         setError: (error) => set({ error }),
 
@@ -95,7 +94,7 @@ export const useNetworkStore = create<NetworkStore>()(
 // Selectors for optimized re-renders
 export const useNetwork = () => {
   const store = useNetworkStore();
-  
+
   return {
     // Network state
     isConnected: store.isConnected,
@@ -106,7 +105,7 @@ export const useNetwork = () => {
     bandwidth: store.bandwidth,
     connectionStatus: store.connectionStatus,
     error: store.error,
-    
+
     // Network actions
     setConnectionStatus: store.setConnectionStatus,
     setNetworkType: store.setNetworkType,

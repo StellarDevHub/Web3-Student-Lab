@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, ChevronLeft, ChevronRight, Clock, Activity, ListFilter } from 'lucide-react';
+import {
+  Play,
+  Pause,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Activity,
+  ListFilter,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { StateSnapshot } from '../../lib/debugger/SnapshotManager';
 import { Timeline } from './Timeline';
@@ -51,71 +60,75 @@ export const TimeTravelDebugger: React.FC<TimeTravelDebuggerProps> = ({ snapshot
   }, [isPlaying, snapshots, onRestore]);
 
   return (
-    <div className="flex flex-col w-full bg-[#09090b]/90 backdrop-blur-2xl border-t border-white/5 relative shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
-      <div className="flex items-center justify-between px-6 py-3 border-b border-white/5">
+    <div className="relative flex w-full flex-col border-t border-white/5 bg-[#09090b]/90 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
+      <div className="flex items-center justify-between border-b border-white/5 px-6 py-3">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2.5">
             <div className="relative">
-                <Clock className="w-4 h-4 text-red-500 animate-[pulse_2s_infinite]" />
-                <div className="absolute inset-0 bg-red-500/20 blur-lg rounded-full" />
+              <Clock className="h-4 w-4 animate-[pulse_2s_infinite] text-red-500" />
+              <div className="absolute inset-0 rounded-full bg-red-500/20 blur-lg" />
             </div>
-            <span className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400">Temporal Engine</span>
+            <span className="text-[11px] font-black tracking-[0.2em] text-gray-400 uppercase">
+              Temporal Engine
+            </span>
           </div>
-          <div className="flex items-center gap-2 text-[10px] text-gray-500 bg-white/5 px-3 py-1 rounded-full border border-white/10 font-bold uppercase tracking-tight">
-            <Activity className="w-3 h-3 text-emerald-500" />
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold tracking-tight text-gray-500 uppercase">
+            <Activity className="h-3 w-3 text-emerald-500" />
             State: {currentIndex + 1} / {snapshots.length}
           </div>
         </div>
-        
+
         <div className="flex items-center gap-3">
-          <div className="flex items-center bg-black/40 border border-white/10 rounded-xl p-1 gap-0.5 shadow-inner">
-            <button 
+          <div className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-black/40 p-1 shadow-inner">
+            <button
               onClick={() => handleSelect(Math.max(0, currentIndex - 1))}
-              className="p-2 hover:bg-white/5 rounded-lg text-gray-500 hover:text-white transition-all active:scale-90"
+              className="rounded-lg p-2 text-gray-500 transition-all hover:bg-white/5 hover:text-white active:scale-90"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="h-4 w-4" />
             </button>
-            <button 
+            <button
               onClick={togglePlay}
-              className="p-2.5 bg-red-500 hover:bg-red-400 text-white rounded-lg transition-all shadow-[0_0_20px_rgba(239,68,68,0.3)] active:scale-95"
+              className="rounded-lg bg-red-500 p-2.5 text-white shadow-[0_0_20px_rgba(239,68,68,0.3)] transition-all hover:bg-red-400 active:scale-95"
             >
-              {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
+              {isPlaying ? (
+                <Pause className="h-4 w-4 fill-current" />
+              ) : (
+                <Play className="ml-0.5 h-4 w-4 fill-current" />
+              )}
             </button>
-            <button 
+            <button
               onClick={() => handleSelect(Math.min(snapshots.length - 1, currentIndex + 1))}
-              className="p-2 hover:bg-white/5 rounded-lg text-gray-500 hover:text-white transition-all active:scale-90"
+              className="rounded-lg p-2 text-gray-500 transition-all hover:bg-white/5 hover:text-white active:scale-90"
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-          
-          <div className="w-px h-6 bg-white/10 mx-1" />
-          
-          <button 
+
+          <div className="mx-1 h-6 w-px bg-white/10" />
+
+          <button
             onClick={() => handleSelect(snapshots.length - 1)}
-            className="p-2 hover:bg-white/5 rounded-xl text-gray-500 hover:text-white transition-all group"
+            className="group rounded-xl p-2 text-gray-500 transition-all hover:bg-white/5 hover:text-white"
             title="Reset to latest"
           >
-            <RotateCcw className="w-4 h-4 group-active:rotate-[-180deg] transition-transform duration-500" />
+            <RotateCcw className="h-4 w-4 transition-transform duration-500 group-active:rotate-[-180deg]" />
           </button>
-          
-          <button 
+
+          <button
             onClick={() => setShowHistory(!showHistory)}
             className={cn(
-              "p-2 rounded-xl transition-all",
-              showHistory ? "bg-red-500/10 text-red-500" : "text-gray-500 hover:text-white hover:bg-white/5"
+              'rounded-xl p-2 transition-all',
+              showHistory
+                ? 'bg-red-500/10 text-red-500'
+                : 'text-gray-500 hover:bg-white/5 hover:text-white'
             )}
           >
-            <ListFilter className="w-4 h-4" />
+            <ListFilter className="h-4 w-4" />
           </button>
         </div>
       </div>
-      
-      <Timeline 
-        snapshots={snapshots} 
-        currentIndex={currentIndex} 
-        onSelect={handleSelect} 
-      />
+
+      <Timeline snapshots={snapshots} currentIndex={currentIndex} onSelect={handleSelect} />
 
       <AnimatePresence>
         {showHistory && (
@@ -123,23 +136,32 @@ export const TimeTravelDebugger: React.FC<TimeTravelDebuggerProps> = ({ snapshot
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="absolute bottom-full right-6 mb-4 w-64 bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl z-[100]"
+            className="absolute right-6 bottom-full z-[100] mb-4 w-64 rounded-2xl border border-white/10 bg-gray-900/95 p-4 shadow-2xl backdrop-blur-xl"
           >
-            <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3 border-b border-white/5 pb-2">History Log</h4>
-            <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar">
-              {snapshots.slice().reverse().map((s, i) => (
-                <div 
-                  key={s.id} 
-                  className={cn(
-                    "p-2 rounded-lg text-xs cursor-pointer transition-all border border-transparent",
-                    snapshots.length - 1 - i === currentIndex ? "bg-red-500/10 text-white border-red-500/20" : "text-gray-500 hover:bg-white/5 hover:text-gray-300"
-                  )}
-                  onClick={() => handleSelect(snapshots.length - 1 - i)}
-                >
-                  <div className="font-bold">{s.description}</div>
-                  <div className="text-[9px] opacity-60 font-mono tracking-tighter">{new Date(s.timestamp).toLocaleTimeString()}</div>
-                </div>
-              ))}
+            <h4 className="mb-3 border-b border-white/5 pb-2 text-[10px] font-black tracking-widest text-gray-500 uppercase">
+              History Log
+            </h4>
+            <div className="no-scrollbar max-h-60 space-y-2 overflow-y-auto">
+              {snapshots
+                .slice()
+                .reverse()
+                .map((s, i) => (
+                  <div
+                    key={s.id}
+                    className={cn(
+                      'cursor-pointer rounded-lg border border-transparent p-2 text-xs transition-all',
+                      snapshots.length - 1 - i === currentIndex
+                        ? 'border-red-500/20 bg-red-500/10 text-white'
+                        : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'
+                    )}
+                    onClick={() => handleSelect(snapshots.length - 1 - i)}
+                  >
+                    <div className="font-bold">{s.description}</div>
+                    <div className="font-mono text-[9px] tracking-tighter opacity-60">
+                      {new Date(s.timestamp).toLocaleTimeString()}
+                    </div>
+                  </div>
+                ))}
             </div>
           </motion.div>
         )}

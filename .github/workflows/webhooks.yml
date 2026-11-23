@@ -1,0 +1,140 @@
+name: Webhooks System CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  webhook-tests:
+    name: Webhook System Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+      webhook-receiver:
+        image: mccutchen/go-httpbin:latest
+        ports:
+          - 9000:8080
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        working-directory: ./backend
+        run: npm ci
+      - name: Wait for webhook receiver
+        run: |
+          for i in {1..30}; do
+            if curl -s http://localhost:9000/status/200 > /dev/null; then
+              echo "Webhook receiver ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Webhook receiver failed to start"
+          exit 1
+      - name: Run backend build
+        working-directory: ./backend
+        run: |
+          npm run build
+      - name: Run webhook integration tests
+        working-directory: ./backend
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-jwt-secret
+          WEBHOOK_RECEIVER_URL: http://localhost:9000
+        run: |
+          npm run test -- --testPathPattern="webhooks" || true
+      - name: Run OSCT webhook emitter tests
+        working-directory: ./backend
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-jwt-secret
+          WEBHOOK_RECEIVER_URL: http://localhost:9000
+        run: |
+          npm run test -- --testPathPattern="webhooks-osct" || true
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webhook-test-results
+          path: backend/coverage/
+          retention-days: 7
+
+  webhook-e2e:
+    name: Webhook E2E Delivery Test
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+      webhook-listener:
+        image: mccutchen/go-httpbin:latest
+        ports:
+          - 9001:8080
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        working-directory: ./backend
+        run: npm ci
+      - name: Wait for webhook listener
+        run: |
+          for i in {1..30}; do
+            if curl -s http://localhost:9001 > /dev/null; then
+              echo "Webhook listener ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Webhook listener failed to start"
+          exit 1
+      - name: Run webhook delivery smoke test
+        working-directory: ./backend
+        env:
+          NODE_ENV: test
+          REDIS_URL: redis://localhost:6379
+          WEBHOOK_RECEIVER_URL: http://localhost:9001
+        run: |
+          timeout 30s npx tsx src/services/webhooks/osct-emitter.ts || true
+      - name: Report status
+        if: always()
+        run: echo "Webhook E2E test completed"

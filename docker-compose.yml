@@ -4,13 +4,31 @@ services:
     container_name: web3-student-lab-db
     restart: always
     environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: web3-student-lab
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db-read-replica:
+    image: postgres:15-alpine
+    container_name: web3-student-lab-db-replica
+    restart: always
+    environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: web3-student-lab
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_replica_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -22,9 +40,143 @@ services:
     container_name: web3-student-lab-redis
     restart: always
     ports:
-      - "6379:6379"
+      - "6380:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis replica - promoted by Sentinel when the primary fails (BE-004)
+  redis-replica:
+    image: redis:7-alpine
+    container_name: web3-student-lab-redis-replica
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --replicaof redis 6379
+    volumes:
+      - redis_replica_data:/data
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Sentinel 1 - Monitors primary Redis instance
+  redis-sentinel-1:
+    image: redis:7-alpine
+    container_name: web3-student-lab-sentinel-1
+    restart: always
+    ports:
+      - "26379:26379"
+    # Sentinel rewrites its config at runtime, so copy the read-only template.
+    command: sh -c "cp /etc/sentinel.tpl.conf /data/sentinel.conf && exec redis-sentinel /data/sentinel.conf --port 26379"
+    volumes:
+      - ./redis-sentinel.conf:/etc/sentinel.tpl.conf:ro
+    depends_on:
+      - redis
+      - redis-replica
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Sentinel 2
+  redis-sentinel-2:
+    image: redis:7-alpine
+    container_name: web3-student-lab-sentinel-2
+    restart: always
+    ports:
+      - "26380:26379"
+    # Sentinel rewrites its config at runtime, so copy the read-only template.
+    command: sh -c "cp /etc/sentinel.tpl.conf /data/sentinel.conf && exec redis-sentinel /data/sentinel.conf --port 26379"
+    volumes:
+      - ./redis-sentinel.conf:/etc/sentinel.tpl.conf:ro
+    depends_on:
+      - redis
+      - redis-replica
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Sentinel 3
+  redis-sentinel-3:
+    image: redis:7-alpine
+    container_name: web3-student-lab-sentinel-3
+    restart: always
+    ports:
+      - "26381:26379"
+    # Sentinel rewrites its config at runtime, so copy the read-only template.
+    command: sh -c "cp /etc/sentinel.tpl.conf /data/sentinel.conf && exec redis-sentinel /data/sentinel.conf --port 26379"
+    volumes:
+      - ./redis-sentinel.conf:/etc/sentinel.tpl.conf:ro
+    depends_on:
+      - redis
+      - redis-replica
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cluster Node 1
+  redis-cluster-1:
+    image: redis:7-alpine
+    container_name: web3-student-lab-redis-cluster-1
+    restart: always
+    ports:
+      - "6381:6381"
+      - "16381:16381"
+    command: redis-server --port 6381 --cluster-enabled yes --cluster-config-file nodes-1.conf --cluster-node-timeout 5000 --appendonly yes
+    volumes:
+      - redis_cluster_1_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6381", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cluster Node 2
+  redis-cluster-2:
+    image: redis:7-alpine
+    container_name: web3-student-lab-redis-cluster-2
+    restart: always
+    ports:
+      - "6382:6382"
+      - "16382:16382"
+    command: redis-server --port 6382 --cluster-enabled yes --cluster-config-file nodes-2.conf --cluster-node-timeout 5000 --appendonly yes
+    volumes:
+      - redis_cluster_2_data:/data
+    depends_on:
+      - redis-cluster-1
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6382", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cluster Node 3
+  redis-cluster-3:
+    image: redis:7-alpine
+    container_name: web3-student-lab-redis-cluster-3
+    restart: always
+    ports:
+      - "6383:6383"
+      - "16383:16383"
+    command: redis-server --port 6383 --cluster-enabled yes --cluster-config-file nodes-3.conf --cluster-node-timeout 5000 --appendonly yes
+    volumes:
+      - redis_cluster_3_data:/data
+    depends_on:
+      - redis-cluster-1
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6383", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -38,18 +190,124 @@ services:
     ports:
       - "8080:8080"
     environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/web3-student-lab?schema=public
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/web3-student-lab?schema=public
-      - REDIS_URL=redis://redis:6379
+      - DB_READ_REPLICA_URL=postgresql://postgres:postgres@db-read-replica:5432/web3-student-lab?schema=public
       - NODE_ENV=development
-      - JWT_SECRET=your-secret-key-change-in-production
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      # GitHub OAuth Configuration
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-your-github-client-id}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-your-github-client-secret}
+      - GITHUB_REDIRECT_URI=${BACKEND_URL:-http://localhost:8080}/api/v1/oauth/github/callback
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      # Redis Configuration - Choose one of: standalone, sentinel, cluster
+      - REDIS_MODE=standalone
+      # Standalone Redis
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      # Redis Sentinel (activate by setting REDIS_MODE=sentinel)
+      - REDIS_SENTINELS=redis-sentinel-1:26379,redis-sentinel-2:26379,redis-sentinel-3:26379
+      - REDIS_SENTINEL_NAME=mymaster
+      # Redis Cluster (activate by setting REDIS_MODE=cluster)
+      - REDIS_CLUSTER_NODES=redis-cluster-1:6381,redis-cluster-2:6382,redis-cluster-3:6383
+      # Cache warming and block polling
+      - CACHE_WARMING_INTERVAL=300000
+      - BLOCK_POLL_INTERVAL=10000
+      - INSTANCE_ID=backend-1
     depends_on:
       db:
         condition: service_healthy
+      db-read-replica:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    # Liveness probe — lightweight, no dependency calls
+    # In Kubernetes, use separate livenessProbe (on /health/live) and
+    # readinessProbe (on /health/ready)
+    healthcheck:
+      # Readiness probe: container is healthy only when the API is running
+      # AND database + Redis are available.
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/health/ready', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - web3-network
+
+  # Soroban / Stellar event indexer. Polls the Soroban RPC, persists events
+  # into a SQLite file (mounted as a Docker volume) and exposes a WebSocket /
+  # SSE fan-out on :3001 that the frontend can subscribe to for live event
+  # updates. Uses the same Docker network as the backend so it can also reach
+  # Postgres when DATABASE_URL is overridden.
+  indexer:
+    build:
+      context: ./indexer
+      dockerfile: Dockerfile
+    image: web3-student-lab-indexer:latest
+    container_name: web3-student-lab-indexer
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      # Default to local SQLite. To use Postgres instead uncomment the line
+      # below and remove the DATABASE_URL — the service auto-detects the
+      # scheme.
+      - DATABASE_URL=sqlite:///data/indexer.db?mode=rwc
+      # - DATABASE_URL=postgresql://postgres:postgres@db:5432/web3-student-lab
+      - SOROBAN_RPC_URL=${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
+      - POLL_INTERVAL_MS=${INDEXER_POLL_INTERVAL_MS:-5000}
+      - BATCH_SIZE=${INDEXER_BATCH_SIZE:-100}
+      - RUST_LOG=${RUST_LOG:-info,indexer=debug}
+    volumes:
+      - indexer_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/soroban-indexer", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - web3-network
+
+  frontend:
+    build:
+      context: ./
+      dockerfile: frontend/Dockerfile
+    container_name: web3-student-lab-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', (r) => {process.exit(r.statusCode === 200 ? 0 : 0)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - web3-network
+
+networks:
+  web3-network:
+    driver: bridge
 
 volumes:
   postgres_data:
+  postgres_replica_data:
   redis_data:
+  redis_replica_data:
+  redis_cluster_1_data:
+  redis_cluster_2_data:
+  redis_cluster_3_data:
+  indexer_data:

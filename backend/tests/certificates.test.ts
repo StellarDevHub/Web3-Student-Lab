@@ -6,12 +6,12 @@ import { CertificateStatus } from '../src/types/certificate.types';
 // Mock the blockchain service
 jest.mock('../src/blockchain/CertificateBlockchainService', () => ({
   certificateBlockchainService: {
-    mintCertificate: jest.fn().mockResolvedValue({
+    mintCertificate: jest.fn().mockImplementation((metadata: any) => Promise.resolve({
       success: true,
-      tokenId: '12345',
+      tokenId: metadata.verification.tokenId || '12345',
       transactionHash: '0x1234567890abcdef',
       contractAddress: 'GCERTIFICATECONTRACT',
-    }),
+    })),
     verifyOnChain: jest.fn().mockResolvedValue(true),
     getOwner: jest.fn().mockResolvedValue('GSTUDENTWALLET'),
     revokeCertificate: jest.fn().mockResolvedValue(undefined),
@@ -90,6 +90,7 @@ describe('CertificateService', () => {
       const request = {
         studentId: testStudentId,
         courseId: testCourseId,
+        tokenId: '12345',
       };
 
       const issuerDid = 'did:stellar:TESTISSUER123456789';
@@ -201,7 +202,7 @@ describe('CertificateService', () => {
       expect(verification.certificate).toBeDefined();
       expect(verification.certificate!.name).toContain('John Doe');
       expect(verification.onChainData).toBeDefined();
-      expect(verification.onChainData!.tokenId).toBe('12345');
+      expect(verification.onChainData!.tokenId).toBe(mintResult.tokenId);
       expect(verification.onChainData!.owner).toBe('GSTUDENTWALLET');
     });
 

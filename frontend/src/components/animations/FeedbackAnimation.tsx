@@ -120,7 +120,7 @@ export const FeedbackAnimation: React.FC<FeedbackAnimationProps> = ({
             onClick={handleDismiss}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.95 }}
-            className="flex-shrink-0 rounded p-1 opacity-70 hover:opacity-100 transition-opacity"
+            className="flex-shrink-0 rounded p-1 opacity-70 transition-opacity hover:opacity-100"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
@@ -172,26 +172,16 @@ export const InlineFeedbackAnimation: React.FC<{
             ease: ANIMATION_TOKENS.easing.easeOut,
           }}
           className={`flex items-center gap-2 rounded px-3 py-2 text-sm font-medium ${
-            isSuccess
-              ? 'bg-green-900 text-green-100'
-              : 'bg-red-900 text-red-100'
+            isSuccess ? 'bg-green-900 text-green-100' : 'bg-red-900 text-red-100'
           }`}
         >
           <motion.div
-            animate={
-              isSuccess
-                ? { scale: [1, 1.2, 1] }
-                : { rotate: [0, -5, 5, -5, 0] }
-            }
+            animate={isSuccess ? { scale: [1, 1.2, 1] } : { rotate: [0, -5, 5, -5, 0] }}
             transition={{
               duration: ANIMATION_TOKENS.durations.short,
             }}
           >
-            {isSuccess ? (
-              <CheckCircle className="h-4 w-4" />
-            ) : (
-              <AlertCircle className="h-4 w-4" />
-            )}
+            {isSuccess ? <CheckCircle className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
           </motion.div>
           {message}
         </motion.div>

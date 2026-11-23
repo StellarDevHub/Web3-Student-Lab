@@ -1,7 +1,14 @@
-"use client";
+'use client';
 
-import { CertificateData, buildExplorerUrl, drawCryptoStamp, truncateHash } from "@/lib/certificate-generator";
-import { useEffect, useRef } from "react";
+import {
+  CertificateData,
+  buildExplorerUrl,
+  drawCryptoStamp,
+  renderVerificationQr,
+  seedFromString,
+  truncateHash,
+} from '@/lib/certificate-generator';
+import { useEffect, useRef, useState, forwardRef } from 'react';
 
 interface Props {
   data: CertificateData;
@@ -9,8 +16,37 @@ interface Props {
   forExport?: boolean;
 }
 
-export default function CertificateTemplate({ data, forExport = false }: Props) {
+// Lightweight deterministic guilloche SVG frame (no per-frame randomness → no lag).
+function GuillocheFrame({ seed }: { seed: number }) {
+  const rings = Array.from({ length: 5 }, (_, r) => {
+    const radius = 40 + r * 7;
+    const petals = 7 + (r % 3);
+    const pts: string[] = [];
+    for (let t = 0; t <= 360; t += 6) {
+      const rad = (t * Math.PI) / 180;
+      const rr = radius * (1 + 0.06 * Math.sin(petals * rad + seed));
+      pts.push(`${50 + rr * Math.cos(rad)},${50 + rr * Math.sin(rad)}`);
+    }
+    return pts.join(' ');
+  });
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.12]"
+      aria-hidden="true"
+    >
+      {rings.map((points, i) => (
+        <polygon key={i} points={points} fill="none" stroke="rgba(220,38,38,0.6)" strokeWidth={0.3} />
+      ))}
+    </svg>
+  );
+}
+
+// Forward ref so parent can capture the container for downloading
+const CertificateTemplate = forwardRef<HTMLDivElement, Props>(function CertificateTemplate({ data, forExport = false }, ref) {
   const stampRef = useRef<HTMLCanvasElement>(null);
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
 
   // Draw the crypto stamp on the canvas overlay
   useEffect(() => {
@@ -21,32 +57,51 @@ export default function CertificateTemplate({ data, forExport = false }: Props) 
     drawCryptoStamp(canvas, data.transactionHash, 70, 70, 60);
   }, [data.transactionHash]);
 
-  const formattedDate = data.issueDate
-    ? new Date(data.issueDate).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
+  // Render the verification QR code pointing at /verify/[id]
+  useEffect(() => {
+    let cancelled = false;
+    renderVerificationQr(data.certificateId || 'pending')
+      .then((url) => {
+        if (!cancelled) setQrUrl(url);
       })
-    : "—";
+      .catch(() => {
+        if (!cancelled) setQrUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [data.certificateId]);
+
+  const formattedDate = data.issueDate
+    ? new Date(data.issueDate).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : '—';
 
   const explorerUrl = buildExplorerUrl(data.transactionHash);
 
   return (
     <div
       id="certificate-template"
-      className={`relative bg-zinc-950 overflow-hidden select-none ${
-        forExport ? "w-[1200px] h-[848px]" : "w-full aspect-[1200/848]"
+      ref={ref}
+      className={`relative overflow-hidden bg-zinc-950 select-none ${
+        forExport ? 'h-[848px] w-[1200px]' : 'aspect-[1200/848] w-full'
       }`}
-      style={{ fontFamily: "Georgia, serif" }}
+      style={{ fontFamily: 'Georgia, serif' }}
     >
       {/* Background gradient layers */}
       <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-black to-zinc-950" />
-      <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-red-900/10 rounded-full blur-[120px]" />
-      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-red-800/8 rounded-full blur-[100px]" />
+      <div className="absolute top-0 left-0 h-[600px] w-[600px] rounded-full bg-red-900/10 blur-[120px]" />
+      <div className="absolute right-0 bottom-0 h-[400px] w-[400px] rounded-full bg-red-800/8 blur-[100px]" />
+
+      {/* Deterministic guilloche anti-counterfeit border */}
+      <GuillocheFrame seed={seedFromString(data.certificateId || data.recipientName || 'cert')} />
 
       {/* Outer border frame */}
-      <div className="absolute inset-4 border border-red-600/30 rounded-xl pointer-events-none" />
-      <div className="absolute inset-6 border border-white/5 rounded-xl pointer-events-none" />
+      <div className="pointer-events-none absolute inset-4 rounded-xl border border-red-600/30" />
+      <div className="pointer-events-none absolute inset-6 rounded-xl border border-white/5" />
 
       {/* Corner ornaments */}
       <CornerOrnament position="top-left" />
@@ -55,77 +110,70 @@ export default function CertificateTemplate({ data, forExport = false }: Props) 
       <CornerOrnament position="bottom-right" />
 
       {/* Content */}
-      <div className="relative z-10 h-full flex flex-col items-center justify-between px-16 py-10">
+      <div className="relative z-10 flex h-full flex-col items-center justify-between px-16 py-10">
         {/* Header */}
         <div className="text-center">
-          <div className="flex items-center justify-center gap-3 mb-2">
-            <div className="w-8 h-px bg-red-600/60" />
-            <span className="text-red-500 font-mono text-xs uppercase tracking-[0.3em]">
-              Web3 Student Lab
-            </span>
-            <div className="w-8 h-px bg-red-600/60" />
+          <div className="mb-2 flex items-center justify-center gap-3">
+            <div className="h-px w-8 bg-red-600/60" />
+            <span className="font-mono text-xs tracking-[0.3em] text-red-500 uppercase">Web3 Student Lab</span>
+            <div className="h-px w-8 bg-red-600/60" />
           </div>
-          <p className="text-gray-500 font-mono text-[10px] uppercase tracking-[0.4em]">
-            Blockchain-Verified Certificate of Completion
-          </p>
+          <p className="font-mono text-[10px] tracking-[0.4em] text-gray-500 uppercase">Blockchain-Verified Certificate of Completion</p>
         </div>
 
         {/* Main body */}
-        <div className="text-center flex-1 flex flex-col items-center justify-center gap-4">
-          <p className="text-gray-400 text-sm uppercase tracking-[0.25em] font-sans">
-            This certifies that
-          </p>
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
+          <p className="font-sans text-sm tracking-[0.25em] text-gray-400 uppercase">This certifies that</p>
 
           {/* Recipient name */}
           <div className="relative">
             <h1
-              className="text-5xl font-black text-white tracking-tight leading-none"
-              style={{ fontFamily: "Georgia, serif", textShadow: "0 0 40px rgba(220,38,38,0.3)" }}
+              className="text-5xl leading-none font-black tracking-tight text-white"
+              style={{ fontFamily: 'Georgia, serif', textShadow: '0 0 40px rgba(220,38,38,0.3)' }}
             >
-              {data.recipientName || "Student Name"}
+              {data.recipientName || 'Student Name'}
             </h1>
             <div className="mt-2 h-px bg-gradient-to-r from-transparent via-red-600/60 to-transparent" />
           </div>
 
-          <p className="text-gray-400 text-sm uppercase tracking-[0.25em] font-sans">
-            has successfully completed
-          </p>
+          <p className="font-sans text-sm tracking-[0.25em] text-gray-400 uppercase">has successfully completed</p>
 
           {/* Course name */}
           <h2
-            className="text-3xl font-bold text-red-400 uppercase tracking-wide leading-tight max-w-2xl text-center"
-            style={{ fontFamily: "Georgia, serif" }}
+            className="max-w-2xl text-center text-3xl leading-tight font-bold tracking-wide text-red-400 uppercase"
+            style={{ fontFamily: 'Georgia, serif' }}
           >
-            {data.courseName || "Course Name"}
+            {data.courseName || 'Course Name'}
           </h2>
 
           {/* Issue date */}
-          <p className="text-gray-500 text-sm font-mono tracking-widest mt-2">
-            Issued on {formattedDate}
-          </p>
+          <p className="mt-2 font-mono text-sm tracking-widest text-gray-500">Issued on {formattedDate}</p>
         </div>
 
         {/* Footer row */}
-        <div className="w-full flex items-end justify-between">
+        <div className="flex w-full items-end justify-between">
           {/* Instructor signature */}
-          <div className="text-center min-w-[180px]">
-            <div className="h-px bg-white/20 mb-2" />
-            <p className="text-white text-sm font-bold tracking-wider">
-              {data.instructorName || "Instructor"}
-            </p>
-            <p className="text-gray-500 text-[10px] uppercase tracking-widest font-mono">
-              Course Instructor
-            </p>
+          <div className="min-w-[180px] text-center">
+            <div className="mb-2 h-px bg-white/20" />
+            <p className="text-sm font-bold tracking-wider text-white">{data.instructorName || 'Instructor'}</p>
+            <p className="font-mono text-[10px] tracking-widest text-gray-500 uppercase">Course Instructor</p>
           </div>
 
-          {/* Crypto stamp canvas */}
+          {/* Crypto stamp canvas + verification QR */}
           <div className="flex flex-col items-center gap-1">
-            <canvas ref={stampRef} className="w-[70px] h-[70px]" />
+            <canvas ref={stampRef} className="h-[70px] w-[70px]" />
+            {qrUrl && (
+              <img
+                src={qrUrl}
+                alt={`Verification QR for certificate ${data.certificateId}`}
+                className="h-[64px] w-[64px] rounded-sm"
+              />
+            )}
             <a
               href={explorerUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-red-500/70 font-mono text-[8px] tracking-widest hover:text-red-400 transition-colors"
+              className="font-mono text-[8px] tracking-widest text-red-500/70 transition-colors hover:text-red-400"
               onClick={(e) => e.stopPropagation()}
             >
               {truncateHash(data.transactionHash, 8)}
@@ -133,32 +181,34 @@ export default function CertificateTemplate({ data, forExport = false }: Props) 
           </div>
 
           {/* Certificate ID */}
-          <div className="text-center min-w-[180px]">
-            <div className="h-px bg-white/20 mb-2" />
-            <p className="text-white text-sm font-bold tracking-wider font-mono">
-              {data.certificateId ? data.certificateId.slice(0, 12).toUpperCase() : "—"}
+          <div className="min-w-[180px] text-center">
+            <div className="mb-2 h-px bg-white/20" />
+            <p className="font-mono text-sm font-bold tracking-wider text-white">
+              {data.certificateId ? data.certificateId.slice(0, 12).toUpperCase() : '—'}
             </p>
-            <p className="text-gray-500 text-[10px] uppercase tracking-widest font-mono">
-              Certificate ID
-            </p>
+            <p className="font-mono text-[10px] tracking-widest text-gray-500 uppercase">Certificate ID</p>
           </div>
         </div>
       </div>
     </div>
   );
-}
+});
 
-function CornerOrnament({ position }: { position: "top-left" | "top-right" | "bottom-left" | "bottom-right" }) {
+function CornerOrnament({
+  position,
+}: {
+  position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+}) {
   const posClass = {
-    "top-left": "top-8 left-8",
-    "top-right": "top-8 right-8 rotate-90",
-    "bottom-left": "bottom-8 left-8 -rotate-90",
-    "bottom-right": "bottom-8 right-8 rotate-180",
+    'top-left': 'top-8 left-8',
+    'top-right': 'top-8 right-8 rotate-90',
+    'bottom-left': 'bottom-8 left-8 -rotate-90',
+    'bottom-right': 'bottom-8 right-8 rotate-180',
   }[position];
 
   return (
-    <div className={`absolute ${posClass} w-8 h-8 pointer-events-none`}>
-      <svg viewBox="0 0 32 32" fill="none" className="w-full h-full">
+    <div className={`absolute ${posClass} pointer-events-none h-8 w-8`}>
+      <svg viewBox="0 0 32 32" fill="none" className="h-full w-full">
         <path d="M2 30 L2 2 L30 2" stroke="rgba(220,38,38,0.5)" strokeWidth="1.5" fill="none" />
         <path d="M2 2 L8 2" stroke="rgba(220,38,38,0.9)" strokeWidth="2" />
         <path d="M2 2 L2 8" stroke="rgba(220,38,38,0.9)" strokeWidth="2" />
@@ -166,3 +216,5 @@ function CornerOrnament({ position }: { position: "top-left" | "top-right" | "bo
     </div>
   );
 }
+
+export default CertificateTemplate;

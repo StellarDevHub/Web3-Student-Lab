@@ -1,45 +1,49 @@
-"use client";
+'use client';
 
-import { DecodedEvent, decodeRpcEvent, SOROBAN_RPC_URL } from "@/lib/soroban-tools";
-import { rpc } from "@stellar/stellar-sdk";
-import { useEffect, useState } from "react";
+import { DecodedEvent, decodeRpcEvent, SOROBAN_RPC_URL } from '@/lib/soroban-tools';
+import { rpc } from '@stellar/stellar-sdk';
+import { useEffect, useState } from 'react';
 
 // ─── Trace View ───────────────────────────────────────────────────────────────
 
 function TraceView({ events }: { events: DecodedEvent[] }) {
-  const [txHash, setTxHash] = useState("");
+  const [txHash, setTxHash] = useState('');
   const txEvents = txHash ? events.filter((e) => e.txHash === txHash) : [];
   const uniqueTxs = [...new Set(events.map((e) => e.txHash))];
 
   return (
-    <div className="bg-zinc-900 border border-white/10 rounded-lg p-4 mb-6">
-      <div className="text-xs font-bold text-gray-400 mb-3">TRACE VIEW</div>
+    <div className="mb-6 rounded-lg border border-white/10 bg-zinc-900 p-4">
+      <div className="mb-3 text-xs font-bold text-gray-400">TRACE VIEW</div>
       <select
         value={txHash}
         onChange={(e) => setTxHash(e.target.value)}
-        className="w-full bg-black border border-white/20 rounded px-3 py-2 text-sm font-mono mb-4"
+        className="mb-4 w-full rounded border border-white/20 bg-black px-3 py-2 font-mono text-sm"
       >
         <option value="">Select a transaction hash...</option>
         {uniqueTxs.map((h) => (
-          <option key={h} value={h}>{h}</option>
+          <option key={h} value={h}>
+            {h}
+          </option>
         ))}
       </select>
       {txHash && txEvents.length === 0 && (
-        <div className="text-gray-500 text-sm text-center py-4">No events for this transaction</div>
+        <div className="py-4 text-center text-sm text-gray-500">No events for this transaction</div>
       )}
       {txEvents.length > 0 && (
         <div className="relative pl-6">
-          <div className="absolute left-2 top-0 bottom-0 w-px bg-red-500/30" />
+          <div className="absolute top-0 bottom-0 left-2 w-px bg-red-500/30" />
           {txEvents.map((evt, i) => (
             <div key={evt.id} className="relative mb-4">
-              <div className="absolute -left-4 top-2 w-3 h-3 rounded-full bg-red-500 border-2 border-black" />
-              <div className="bg-black border border-white/10 rounded p-3">
-                <div className="flex items-center gap-2 mb-2">
+              <div className="absolute top-2 -left-4 h-3 w-3 rounded-full border-2 border-black bg-red-500" />
+              <div className="rounded border border-white/10 bg-black p-3">
+                <div className="mb-2 flex items-center gap-2">
                   <span className="text-xs font-bold text-red-400">#{i + 1}</span>
                   <span className="text-xs text-gray-400">{evt.type}</span>
-                  <span className="text-xs text-gray-500 font-mono">{evt.contractId.slice(0, 8)}...</span>
+                  <span className="font-mono text-xs text-gray-500">
+                    {evt.contractId.slice(0, 8)}...
+                  </span>
                 </div>
-                <pre className="text-xs font-mono text-gray-300 overflow-x-auto">
+                <pre className="overflow-x-auto font-mono text-xs text-gray-300">
                   {JSON.stringify({ topics: evt.topics, value: evt.value }, null, 2)}
                 </pre>
               </div>
@@ -53,10 +57,10 @@ function TraceView({ events }: { events: DecodedEvent[] }) {
 
 export default function EventsPage() {
   const [events, setEvents] = useState<DecodedEvent[]>([]);
-  const [contractFilter, setContractFilter] = useState("");
-  const [topicFilter, setTopicFilter] = useState("");
+  const [contractFilter, setContractFilter] = useState('');
+  const [topicFilter, setTopicFilter] = useState('');
   const [isPolling, setIsPolling] = useState(false);
-  const [lastCursor, setLastCursor] = useState("");
+  const [lastCursor, setLastCursor] = useState('');
 
   useEffect(() => {
     if (!isPolling) return;
@@ -71,8 +75,8 @@ export default function EventsPage() {
           filters.push({ topics: [[topicFilter]] });
         }
         const result = await server.getEvents({
-          startLedger: lastCursor ? undefined : 0,
-          filters: filters.length > 0 ? filters : undefined,
+          filters: filters,
+          ...(lastCursor ? { cursor: lastCursor } : { startLedger: 0 }),
           limit: 20,
         });
         const decoded = result.events.map(decodeRpcEvent);
@@ -81,53 +85,51 @@ export default function EventsPage() {
           setLastCursor(result.latestLedger.toString());
         }
       } catch (e) {
-        console.error("Failed to fetch events:", e);
+        console.error('Failed to fetch events:', e);
       }
     }, 5000);
     return () => clearInterval(interval);
   }, [isPolling, contractFilter, topicFilter, lastCursor]);
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-black mb-6 text-red-500">SOROBAN EVENT LISTENER</h1>
+    <div className="min-h-screen bg-black p-6 text-white">
+      <div className="mx-auto max-w-7xl">
+        <h1 className="mb-6 text-3xl font-black text-red-500">SOROBAN EVENT LISTENER</h1>
 
         {/* Controls */}
-        <div className="bg-zinc-900 border border-white/10 rounded-lg p-4 mb-6 space-y-4">
-          <div className="flex gap-4 items-end">
+        <div className="mb-6 space-y-4 rounded-lg border border-white/10 bg-zinc-900 p-4">
+          <div className="flex items-end gap-4">
             <div className="flex-1">
-              <label className="block text-xs font-bold text-gray-400 mb-2">CONTRACT ID</label>
+              <label className="mb-2 block text-xs font-bold text-gray-400">CONTRACT ID</label>
               <input
                 type="text"
                 value={contractFilter}
                 onChange={(e) => setContractFilter(e.target.value)}
                 placeholder="C..."
-                className="w-full bg-black border border-white/20 rounded px-3 py-2 text-sm font-mono"
+                className="w-full rounded border border-white/20 bg-black px-3 py-2 font-mono text-sm"
               />
             </div>
             <div className="flex-1">
-              <label className="block text-xs font-bold text-gray-400 mb-2">TOPIC FILTER</label>
+              <label className="mb-2 block text-xs font-bold text-gray-400">TOPIC FILTER</label>
               <input
                 type="text"
                 value={topicFilter}
                 onChange={(e) => setTopicFilter(e.target.value)}
                 placeholder="transfer"
-                className="w-full bg-black border border-white/20 rounded px-3 py-2 text-sm font-mono"
+                className="w-full rounded border border-white/20 bg-black px-3 py-2 font-mono text-sm"
               />
             </div>
             <button
               onClick={() => setIsPolling(!isPolling)}
-              className={`px-6 py-2 rounded font-bold text-sm ${
-                isPolling
-                  ? "bg-red-600 hover:bg-red-700"
-                  : "bg-green-600 hover:bg-green-700"
+              className={`rounded px-6 py-2 text-sm font-bold ${
+                isPolling ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
               }`}
             >
-              {isPolling ? "STOP" : "START"}
+              {isPolling ? 'STOP' : 'START'}
             </button>
             <button
               onClick={() => setEvents([])}
-              className="px-6 py-2 rounded font-bold text-sm bg-zinc-700 hover:bg-zinc-600"
+              className="rounded bg-zinc-700 px-6 py-2 text-sm font-bold hover:bg-zinc-600"
             >
               CLEAR
             </button>
@@ -140,30 +142,37 @@ export default function EventsPage() {
         {/* Event List */}
         <div className="space-y-3">
           {events.length === 0 && (
-            <div className="bg-zinc-900 border border-white/10 rounded-lg p-8 text-center text-gray-500">
-              {isPolling ? "Listening for events..." : "Click START to begin listening"}
+            <div className="rounded-lg border border-white/10 bg-zinc-900 p-8 text-center text-gray-500">
+              {isPolling ? 'Listening for events...' : 'Click START to begin listening'}
             </div>
           )}
           {events.map((evt, i) => (
-            <div key={`${evt.id}-${i}`} className="bg-zinc-900 border border-white/10 rounded-lg p-4">
-              <div className="flex items-start justify-between mb-3">
+            <div
+              key={`${evt.id}-${i}`}
+              className="rounded-lg border border-white/10 bg-zinc-900 p-4"
+            >
+              <div className="mb-3 flex items-start justify-between">
                 <div>
                   <span className="text-xs font-bold text-red-500">{evt.type}</span>
-                  <span className="text-xs text-gray-500 ml-3">Ledger {evt.ledger}</span>
-                  <span className="text-xs text-gray-500 ml-3">{new Date(evt.ledgerClosedAt).toLocaleTimeString()}</span>
+                  <span className="ml-3 text-xs text-gray-500">Ledger {evt.ledger}</span>
+                  <span className="ml-3 text-xs text-gray-500">
+                    {new Date(evt.ledgerClosedAt).toLocaleTimeString()}
+                  </span>
                 </div>
-                <span className="text-xs font-mono text-gray-400">{evt.contractId.slice(0, 8)}...</span>
+                <span className="font-mono text-xs text-gray-400">
+                  {evt.contractId.slice(0, 8)}...
+                </span>
               </div>
               <div className="space-y-2">
                 <div>
                   <span className="text-xs font-bold text-gray-400">TOPICS:</span>
-                  <pre className="text-xs font-mono bg-black p-2 rounded mt-1 overflow-x-auto">
+                  <pre className="mt-1 overflow-x-auto rounded bg-black p-2 font-mono text-xs">
                     {JSON.stringify(evt.topics, null, 2)}
                   </pre>
                 </div>
                 <div>
                   <span className="text-xs font-bold text-gray-400">VALUE:</span>
-                  <pre className="text-xs font-mono bg-black p-2 rounded mt-1 overflow-x-auto">
+                  <pre className="mt-1 overflow-x-auto rounded bg-black p-2 font-mono text-xs">
                     {JSON.stringify(evt.value, null, 2)}
                   </pre>
                 </div>

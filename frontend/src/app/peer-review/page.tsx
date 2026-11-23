@@ -1,6 +1,10 @@
-"use client";
+'use client';
 
-import PeerReviewDashboard from "@/components/review/PeerReviewDashboard";
+import dynamic from 'next/dynamic';
+
+const PeerReviewDashboard = dynamic(() => import('@/components/review/PeerReviewDashboard'), {
+  ssr: false,
+});
 
 export default function PeerReviewPage() {
   return <PeerReviewDashboard />;

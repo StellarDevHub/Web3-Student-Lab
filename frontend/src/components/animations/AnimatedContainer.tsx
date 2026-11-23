@@ -21,17 +21,7 @@ interface AnimatedContainerProps {
 }
 
 export const AnimatedContainer = React.forwardRef<HTMLDivElement, AnimatedContainerProps>(
-  (
-    {
-      children,
-      variant = 'fadeIn',
-      delay = 0,
-      duration,
-      className = '',
-      animated = true,
-    },
-    ref
-  ) => {
+  ({ children, variant = 'fadeIn', delay = 0, duration, className = '', animated = true }, ref) => {
     if (!animated) {
       return (
         <div ref={ref} className={className}>
@@ -102,8 +92,6 @@ export const AnimatedContainerWithPresence: React.FC<
   AnimatedContainerProps & { isVisible: boolean }
 > = ({ isVisible, ...props }) => {
   return (
-    <AnimatePresence mode="wait">
-      {isVisible && <AnimatedContainer {...props} />}
-    </AnimatePresence>
+    <AnimatePresence mode="wait">{isVisible && <AnimatedContainer {...props} />}</AnimatePresence>
   );
 };

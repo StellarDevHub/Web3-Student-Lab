@@ -1,155 +1,273 @@
-import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
-import pg from 'pg';
+import config from '../config/env.config.js';
+import { encryptionMiddleware } from '../middleware/prismaEncryption.js';
+import { getWorkspaceId } from '../middleware/WorkspaceContext.js';
+import logger from '../utils/logger.js';
+import { rowLevelSecurityExtension, withWorkspaceTransaction } from './prismaMiddleware.js';
 import { getDatabaseRoleForOperation } from './requestContext.js';
-
-const DEFAULT_DATABASE_URL =
-  'postgresql://postgres:postgres@localhost:5432/web3-student-lab?schema=public';
-
-const writeConnectionString =
-  process.env.DATABASE_URL ||
-  DEFAULT_DATABASE_URL;
-const readConnectionString = process.env.READ_DATABASE_URL || writeConnectionString;
-
-const parsePoolOption = (value: string | undefined, fallback: number): number => {
-  const parsed = Number.parseInt(value ?? '', 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return fallback;
-  }
-
-  return parsed;
-};
-
-const poolConfig: pg.PoolConfig = {
-  max: parsePoolOption(process.env.DB_POOL_MAX, 20),
-  idleTimeoutMillis: parsePoolOption(process.env.DB_POOL_IDLE_TIMEOUT_MS, 10000),
-  connectionTimeoutMillis: parsePoolOption(process.env.DB_POOL_CONNECTION_TIMEOUT_MS, 5000),
-};
-
-const hasDedicatedReadReplica = readConnectionString !== writeConnectionString;
+import { workspaceModels } from './workspaceModels.js';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
-  prismaWrite: PrismaClient | undefined;
-  prismaRead: PrismaClient | undefined;
-  writePool: pg.Pool | undefined;
-  readPool: pg.Pool | undefined;
+  readPrisma: PrismaClient | undefined;
 };
 
-const writePool =
-  globalForPrisma.writePool ??
-  new pg.Pool({
-    connectionString: writeConnectionString,
-    ...poolConfig,
+import { PrismaPg } from '@prisma/adapter-pg';
+// @ts-ignore
+import pkg from 'pg';
+const { Pool } = pkg;
+
+const createPool = (connectionString: string) => {
+  const useSSL =
+    process.env.NODE_ENV !== 'test' &&
+    !connectionString.includes('sslmode=disable') &&
+    !connectionString.includes('localhost') &&
+    !connectionString.includes('127.0.0.1');
+
+  const normalizedConnectionString = useSSL
+    ? connectionString.replace(/sslmode=[^&]+/, 'sslmode=no-verify')
+    : connectionString;
+
+  return new Pool({
+    connectionString: normalizedConnectionString,
+    ssl: useSSL ? { rejectUnauthorized: false } : false
   });
-
-const readPool = hasDedicatedReadReplica
-  ? globalForPrisma.readPool ??
-    new pg.Pool({
-      connectionString: readConnectionString,
-      ...poolConfig,
-    })
-  : writePool;
-
-const writeAdapter = new PrismaPg(writePool);
-const readAdapter = hasDedicatedReadReplica ? new PrismaPg(readPool) : writeAdapter;
-
-const prismaWrite = globalForPrisma.prismaWrite ?? new PrismaClient({ adapter: writeAdapter });
-const prismaRead = hasDedicatedReadReplica
-  ? globalForPrisma.prismaRead ?? new PrismaClient({ adapter: readAdapter })
-  : prismaWrite;
-
-const getClientForOperation = (operation: string): PrismaClient => {
-  if (!hasDedicatedReadReplica) {
-    return prismaWrite;
-  }
-
-  const role = getDatabaseRoleForOperation(operation);
-  return role === 'read' ? prismaRead : prismaWrite;
 };
 
-const isModelDelegate = (value: unknown): value is Record<string, unknown> => {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
+const primaryConnectionString = `${process.env.DATABASE_URL}`;
+const readReplicaConnectionString = config.db.readReplicaUrl || primaryConnectionString;
 
-  return 'findUnique' in value && 'create' in value;
-};
+const primaryPool = createPool(primaryConnectionString);
+const readPool = createPool(readReplicaConnectionString);
 
-const createModelDelegateProxy = (modelName: string): object => {
-  return new Proxy(
-    {},
-    {
-      get(_target, operationKey: string | symbol) {
-        const operationName = String(operationKey);
-        const client = getClientForOperation(operationName);
-        const delegate = (client as unknown as Record<string, unknown>)[modelName] as
-          | Record<string, unknown>
-          | undefined;
-        const operation = delegate?.[operationKey as keyof typeof delegate];
+const primaryAdapter = new PrismaPg(primaryPool);
+const readAdapter = new PrismaPg(readPool);
 
-        if (typeof operation === 'function') {
-          return operation.bind(delegate);
+const basePrisma = globalForPrisma.prisma ?? new PrismaClient({ adapter: primaryAdapter });
+const baseReadPrisma = globalForPrisma.readPrisma ?? new PrismaClient({ adapter: readAdapter });
+
+const workspaceExtension = {
+  name: 'workspace-isolation',
+  query: {
+    $allModels: {
+      async $allOperations({ model, operation, args, query }: { model?: string; operation?: string; args?: any; query: (args: any) => Promise<any> }) {
+        if (!model || !workspaceModels.has(model)) {
+          return query(args);
         }
 
-        return operation;
+        const workspaceId = getWorkspaceId();
+        if (!workspaceId) {
+          return query(args);
+        }
+
+        const mutableArgs = (args ?? {}) as Record<string, any>;
+
+        if (
+          [
+            'findFirst',
+            'findFirstOrThrow',
+            'findMany',
+            'count',
+            'aggregate',
+            'groupBy',
+            'update',
+            'updateMany',
+            'delete',
+            'deleteMany',
+          ].includes(operation!)
+        ) {
+          mutableArgs.where = { ...(mutableArgs.where ?? {}), workspaceId };
+          return query(mutableArgs);
+        }
+
+        if (operation === 'create') {
+          mutableArgs.data = { ...(mutableArgs.data ?? {}), workspaceId };
+          return query(mutableArgs);
+        }
+
+        if (operation === 'createMany' && Array.isArray(mutableArgs.data)) {
+          mutableArgs.data = mutableArgs.data.map((record: Record<string, any>) => ({
+            ...record,
+            workspaceId,
+          }));
+          return query(mutableArgs);
+        }
+
+        if (operation === 'upsert') {
+          mutableArgs.create = { ...(mutableArgs.create ?? {}), workspaceId };
+          mutableArgs.update = { ...(mutableArgs.update ?? {}), workspaceId };
+          return query(mutableArgs);
+        }
+
+        if (operation === 'findUnique' || operation === 'findUniqueOrThrow') {
+          const result = await query(mutableArgs);
+          if (result && (result as Record<string, unknown>).workspaceId !== workspaceId) {
+            return operation === 'findUnique'
+              ? null
+              : query({ ...mutableArgs, where: { id: '__missing__' } });
+          }
+          return result;
+        }
+
+        return query(mutableArgs);
       },
-    }
-  );
+    },
+  },
 };
 
-const prismaProxy = new Proxy(prismaWrite as PrismaClient, {
-  get(target, property, receiver) {
-    if (property === '$connect') {
-      return () => prismaWrite.$connect();
+// The RLS extension must be applied last so it runs innermost: its `query(args)`
+// is then a lazy Prisma promise that can join the set_config batch transaction.
+const prisma = basePrisma
+  .$extends(workspaceExtension)
+  .$extends(rowLevelSecurityExtension(basePrisma as any));
+const readPrisma = baseReadPrisma
+  .$extends(workspaceExtension)
+  .$extends(rowLevelSecurityExtension(baseReadPrisma as any));
+
+// Read-replica health & circuit breaker state
+let readReplicaHealthy = true;
+let replicaFailureCount = 0;
+let replicaCircuitOpenUntil = 0;
+
+const getReplicaFailureThreshold = () => config.db?.replica?.failureThreshold ?? 3;
+const getReplicaCooldownMs = () => config.db?.replica?.cooldownMs ?? 30000;
+const getReplicaCheckIntervalMs = () => config.db?.replica?.checkIntervalMs ?? 10000;
+const getReplicaLagWindowMs = () => config.db?.replica?.replicationLagWindowMs ?? 1000;
+
+const markReadReplicaFailure = () => {
+  replicaFailureCount += 1;
+  if (replicaFailureCount >= getReplicaFailureThreshold()) {
+    readReplicaHealthy = false;
+    replicaCircuitOpenUntil = Date.now() + getReplicaCooldownMs();
+    logger.warn('Read replica circuit opened', { until: replicaCircuitOpenUntil });
+  }
+};
+
+const probeReadReplica = async () => {
+  try {
+    await readPool.query('SELECT 1');
+    // success
+    replicaFailureCount = 0;
+    readReplicaHealthy = true;
+    replicaCircuitOpenUntil = 0;
+    logger.info('Read replica probe succeeded, circuit closed');
+  } catch (err) {
+    replicaCircuitOpenUntil = Date.now() + getReplicaCooldownMs();
+    logger.warn('Read replica probe failed', { err });
+  }
+};
+
+const checkReadReplicaHealth = async () => {
+  // If circuit is open, avoid frequent checks until cooldown expires
+  if (!readReplicaHealthy && Date.now() < replicaCircuitOpenUntil) return;
+
+  try {
+    const res = await readPool.query(
+      "SELECT EXTRACT(EPOCH FROM (now() - pg_last_xact_replay_timestamp())) * 1000 AS lag_ms"
+    );
+    const lagMs = res?.rows?.[0]?.lag_ms;
+    const lagWindow = getReplicaLagWindowMs();
+
+    if (lagMs === null || lagMs === undefined) {
+      throw new Error('pg_last_xact_replay_timestamp returned null (replica may not be streaming)');
     }
 
-    if (property === '$disconnect') {
-      return async () => {
-        await prismaWrite.$disconnect();
-        if (hasDedicatedReadReplica) {
-          await prismaRead.$disconnect();
-        }
-
-        await writePool.end();
-        if (hasDedicatedReadReplica) {
-          await readPool.end();
-        }
-      };
+    if (Number(lagMs) > lagWindow) {
+      throw new Error(`replica lag ${lagMs}ms exceeds window ${lagWindow}ms`);
     }
 
-    if (property === '$queryRaw' || property === '$queryRawUnsafe') {
-      const client = getClientForOperation('findMany');
-      const operation = (client as unknown as Record<string, unknown>)[property as string];
-      if (typeof operation === 'function') {
-        return operation.bind(client);
-      }
+    // healthy
+    replicaFailureCount = 0;
+    readReplicaHealthy = true;
+  } catch (err) {
+    logger.warn('Read replica health check failed', { err: String(err), failureCount: replicaFailureCount });
+    markReadReplicaFailure();
+  }
 
-      return operation;
-    }
+  // If circuit was open and cooldown expired, probe once
+  if (!readReplicaHealthy && Date.now() >= replicaCircuitOpenUntil) {
+    await probeReadReplica();
+  }
+};
 
-    const value = Reflect.get(target as object, property, receiver);
-
-    if (typeof value === 'function') {
-      return value.bind(prismaWrite);
-    }
-
-    if (typeof property === 'string' && isModelDelegate(value)) {
-      return createModelDelegateProxy(property);
-    }
-
-    return value;
-  },
-});
-
-export const prisma = globalForPrisma.prisma ?? prismaProxy;
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-  globalForPrisma.prismaWrite = prismaWrite;
-  globalForPrisma.prismaRead = prismaRead;
-  globalForPrisma.writePool = writePool;
-  globalForPrisma.readPool = readPool;
+// Start periodic health checks
+if (process.env.NODE_ENV !== 'test') {
+  const replicaTimer = setInterval(() => {
+    void checkReadReplicaHealth();
+  }, getReplicaCheckIntervalMs());
+  if (typeof replicaTimer.unref === 'function') {
+    replicaTimer.unref();
+  }
 }
 
-export default prisma;
+const routingExtension = {
+  name: 'read-replica-routing',
+  query: {
+    $allModels: {
+      async $allOperations({ model, operation, args, query }: { model?: string; operation?: string; args?: any; query: (args: any) => Promise<any> }) {
+          const dbRole = getDatabaseRoleForOperation(operation!);
+
+        if (dbRole === 'read' && readReplicaHealthy) {
+          const modelClient = readPrisma[model as keyof typeof readPrisma];
+          if (modelClient && typeof modelClient[operation as keyof typeof modelClient] === 'function') {
+            try {
+              return (modelClient[operation as keyof typeof modelClient] as any)(args);
+            } catch (error) {
+              logger.warn(
+                `Read replica query failed for ${model}.${operation}, falling back to primary:`,
+                error
+              );
+              // mark failure for circuit breaker
+              try {
+                markReadReplicaFailure();
+              } catch (e) {
+                logger.warn('Failed to mark read replica failure', { err: String(e) });
+              }
+            }
+          }
+        } else if (dbRole === 'read' && !readReplicaHealthy) {
+          logger.debug('Skipping read replica route because replica circuit is open; using primary');
+        }
+
+        const modelClient = prisma[model as keyof typeof prisma];
+        if (modelClient && typeof modelClient[operation as keyof typeof modelClient] === 'function') {
+          return (modelClient[operation as keyof typeof modelClient] as any)(args);
+        }
+
+        return query(args);
+      },
+    },
+  },
+};
+
+const encryptionExt = encryptionMiddleware();
+
+const routedPrisma = prisma.$extends(routingExtension).$extends(encryptionExt);
+
+if (typeof (basePrisma as any).$use === 'function') {
+  (basePrisma as any).$use(async (params: any, next: any) => {
+    if (
+      params.model === 'AuditLog' &&
+      ['update', 'delete', 'updateMany', 'deleteMany'].includes(params.action)
+    ) {
+      throw new Error('AuditLog records are immutable and cannot be modified or deleted');
+    }
+    return next(params);
+  });
+}
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = basePrisma;
+  globalForPrisma.readPrisma = baseReadPrisma;
+}
+
+/**
+ * Interactive transaction on the primary with the current workspace context
+ * applied for its whole duration (BE-005). Use this instead of
+ * `prisma.$transaction(async (tx) => ...)` for workspace-scoped work.
+ */
+const workspaceTransaction = <R>(fn: (tx: typeof prisma) => Promise<R>, options?: Record<string, unknown>) =>
+  withWorkspaceTransaction(prisma as any, fn as any, options) as Promise<R>;
+
+export { prisma, readPrisma, workspaceTransaction };
+export default routedPrisma as PrismaClient;

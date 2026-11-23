@@ -1,51 +1,53 @@
-# Contributing to Web3 Student Lab
+# Contributing to Web3 Student Lab 🎓⛓️
 
-First off, thank you for considering contributing to Web3 Student Lab! It's people like you that
-make Web3 Student Lab such a great learning tool for everyone.
+Thank you for your interest in contributing to Web3 Student Lab! We welcome contributions from developers, students, and open-source enthusiasts.
 
-## 1. Where do I go from here?
+---
 
-If you've noticed a bug or have a feature request, make sure to check our
-[Issues](https://github.com/your-repo/issues) to see if someone else has already created a ticket.
-If not, go ahead and make one!
+## 📝 Commit Conventions (Conventional Commits)
 
-## 2. Fork & create a branch
+This repository enforces the **[Conventional Commits specification](https://www.conventionalcommits.org/)**. All commit messages and Pull Request titles must follow this structured format:
 
-If this is something you think you can fix, then fork Web3 Student Lab and create a branch with a
-descriptive name.
+```text
+<type>(<scope>): <short description>
+```
 
-Before committing, read [Git Commit Guidelines](CONTRIBUTING_GIT.md) for required commit prefixes
-and commit message format.
+### Commit Types
 
-## 3. Get the code working locally
+| Type | Description | Example |
+| ---- | ----------- | ------- |
+| `feat` | A new feature or capability | `feat(security): implement password strength meter and HIBP breach check` |
+| `fix` | A bug fix | `fix(playground): resolve compilation timeout in web worker` |
+| `docs` | Documentation updates | `docs(readme): add development automation scripts guide` |
+| `style` | Formatting, missing semi-colons, no code logic change | `style(frontend): format navbar layout using Tailwind` |
+| `refactor` | Code refactoring without changing behavior | `refactor(backend): clean up Redis client connection pool` |
+| `perf` | Performance improvement | `perf(simulator): optimize Canvas rendering for block graph` |
+| `test` | Adding or updating tests | `test(auth): add unit test for password entropy estimator` |
+| `build` | Changes affecting build system or dependencies | `build(deps): add @commitlint devDependencies` |
+| `ci` | Changes to CI/CD workflows | `ci(github): add release drafter and commitlint workflows` |
+| `chore` | Maintenance tasks | `chore(repo): organize root scripts into scripts/` |
 
-### Development Tooling
+---
 
-To contribute to the smart contracts, you'll need the following Rust tools:
+## 🚀 Pull Request Guidelines
 
-- **Rust & Cargo**: Follow instructions at [rust-lang.org](https://www.rust-lang.org/tools/install).
-- **Clippy**: Run `rustup component add clippy`.
-- **WASM Target**: Run `rustup target add wasm32-unknown-unknown`.
+1. **Title Format**: Ensure your Pull Request title uses Conventional Commits (e.g. `feat(security): add HaveIBeenPwned password check`).
+2. **Issue Linking**: Include closing keywords in the PR body (e.g., `Fixes #1194`, `Closes #1200`).
+3. **Automated Testing**: Verify all unit tests pass before submitting.
+4. **Clean Git History**: Pre-commit hooks will validate commit messages using `commitlint`.
 
-### Setup
+---
 
-- Clone your fork locally.
-- Run `npm install` at the root path to set up Git hooks.
-- Run `npm install` in both `frontend` and `backend` directories.
-- Start the servers using `npm run dev`.
+## 🛠 Local Setup
 
-## 4. Implement your fix or feature
+```bash
+# Clone the repository
+git clone https://github.com/StellarDevHub/Web3-Student-Lab.git
+cd Web3-Student-Lab
 
-At this point, you're ready to make your changes! Feel free to ask for help; everyone is a beginner
-at first.
+# Install root dependencies
+pnpm install
 
-> [!IMPORTANT] Please review our [Security Best Practices](docs/SECURITY.md) and
-> [CI/CD Pipeline Guide](docs/CICD_GUIDE.md) before making any changes related to secrets, sensitive
-> data, or smart contracts.
-
-## 5. Make a Pull Request
-
-At this point, you should switch back to your master branch and make sure it's up to date with Web3
-Student Lab's master branch. Then, create a Pull Request against our main repository.
-
-We will review your PR, and once approved, it will be merged into the project!
+# Start local dev environment
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+```

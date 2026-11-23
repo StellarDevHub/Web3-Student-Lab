@@ -34,7 +34,7 @@ export class SnapshotManager {
   }
 
   public restoreSnapshot(id: string) {
-    const snapshot = this.snapshots.find(s => s.id === id);
+    const snapshot = this.snapshots.find((s) => s.id === id);
     if (snapshot) {
       this.doc.transact(() => {
         // Clear all shared types to ensure a clean restoration

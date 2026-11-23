@@ -12,7 +12,10 @@ export class CollaborationProviderFixed {
 
   // Memory management
   private observers: Array<() => void> = [];
-  private eventListeners: Map<'connection-close' | 'status' | 'connection-error' | 'sync', Array<(...args: any[]) => void>> = new Map();
+  private eventListeners: Map<
+    'connection-close' | 'status' | 'connection-error' | 'sync',
+    Array<(...args: any[]) => void>
+  > = new Map();
   private cleanupCallbacks: Array<() => void> = [];
 
   constructor(roomName: string) {
@@ -26,7 +29,20 @@ export class CollaborationProviderFixed {
     this.provider = new WebsocketProvider(wsUrl, roomName, this.doc);
     this.awareness = this.provider.awareness;
 
-    const colors = ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#4ade80', '#2dd4bf', '#22d3ee', '#38bdf8', '#818cf8', '#a78bfa', '#e879f9', '#f472b6'];
+    const colors = [
+      '#f87171',
+      '#fb923c',
+      '#fbbf24',
+      '#a3e635',
+      '#4ade80',
+      '#2dd4bf',
+      '#22d3ee',
+      '#38bdf8',
+      '#818cf8',
+      '#a78bfa',
+      '#e879f9',
+      '#f472b6',
+    ];
     const randomColor = colors[Math.floor(Math.random() * colors.length)];
 
     this.localUser = {
@@ -71,7 +87,10 @@ export class CollaborationProviderFixed {
   }
 
   // Safe event listener management
-  public addEventListener(event: 'connection-close' | 'status' | 'connection-error' | 'sync', callback: (...args: any[]) => void): void {
+  public addEventListener(
+    event: 'connection-close' | 'status' | 'connection-error' | 'sync',
+    callback: (...args: any[]) => void
+  ): void {
     if (this.isDestroyed) return;
 
     if (!this.eventListeners.has(event)) {
@@ -86,7 +105,10 @@ export class CollaborationProviderFixed {
     }
   }
 
-  public removeEventListener(event: 'connection-close' | 'status' | 'connection-error' | 'sync', callback: (...args: any[]) => void): void {
+  public removeEventListener(
+    event: 'connection-close' | 'status' | 'connection-error' | 'sync',
+    callback: (...args: any[]) => void
+  ): void {
     if (this.isDestroyed) return;
 
     const listeners = this.eventListeners.get(event);
@@ -155,7 +177,7 @@ export class CollaborationProviderFixed {
     }
 
     let listenerCount = 0;
-    this.eventListeners.forEach(listeners => {
+    this.eventListeners.forEach((listeners) => {
       listenerCount += listeners.length;
     });
 
@@ -182,7 +204,7 @@ export class CollaborationProviderFixed {
     try {
       // Clean up all event listeners
       this.eventListeners.forEach((listeners, event) => {
-        listeners.forEach(callback => {
+        listeners.forEach((callback) => {
           if (this.provider) {
             this.provider.off(event, callback);
           }
@@ -191,7 +213,7 @@ export class CollaborationProviderFixed {
       this.eventListeners.clear();
 
       // Clean up all observers
-      this.observers.forEach(callback => {
+      this.observers.forEach((callback) => {
         try {
           callback();
         } catch (error) {
@@ -216,7 +238,7 @@ export class CollaborationProviderFixed {
       }
 
       // Run cleanup callbacks
-      this.cleanupCallbacks.forEach(callback => {
+      this.cleanupCallbacks.forEach((callback) => {
         try {
           callback();
         } catch (error) {
@@ -313,7 +335,7 @@ export class CollaborationProviderFactory {
       }
     });
 
-    toDelete.forEach(roomName => {
+    toDelete.forEach((roomName) => {
       this.destroyProvider(roomName);
     });
 
@@ -333,7 +355,7 @@ export class CollaborationProviderFactory {
 
   static destroyAllProviders(): void {
     const roomNames = Array.from(this.providers.keys());
-    roomNames.forEach(roomName => {
+    roomNames.forEach((roomName) => {
       this.destroyProvider(roomName);
     });
 
@@ -348,7 +370,7 @@ export class CollaborationProviderFactory {
   static getStats(): { providerCount: number; totalMemoryUsage: number } {
     let totalMemoryUsage = 0;
 
-    this.providers.forEach(provider => {
+    this.providers.forEach((provider) => {
       const usage = provider.getMemoryUsage();
       totalMemoryUsage += usage.docSize;
     });

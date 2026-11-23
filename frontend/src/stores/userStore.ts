@@ -66,6 +66,7 @@ export interface UserState {
       title: string;
       url: string;
       addedAt: string;
+      tags?: string[];
     }>;
     notes: Array<{
       id: string;
@@ -85,9 +86,13 @@ export interface UserActions {
   addAchievement: (achievement: UserStats['achievements'][0]) => void;
   setCurrentCourse: (courseId: string) => void;
   completeModule: (moduleId: string) => void;
-  addBookmark: (bookmark: Omit<UserState['learningPath']['bookmarks'][0], 'id' | 'addedAt'>) => void;
+  addBookmark: (
+    bookmark: Omit<UserState['learningPath']['bookmarks'][0], 'id' | 'addedAt'>
+  ) => void;
   removeBookmark: (bookmarkId: string) => void;
-  addNote: (note: Omit<UserState['learningPath']['notes'][0], 'id' | 'createdAt' | 'updatedAt'>) => void;
+  addNote: (
+    note: Omit<UserState['learningPath']['notes'][0], 'id' | 'createdAt' | 'updatedAt'>
+  ) => void;
   updateNote: (noteId: string, content: string) => void;
   deleteNote: (noteId: string) => void;
   incrementStudyTime: (minutes: number) => void;
@@ -170,7 +175,7 @@ export const useUserStore = create<UserStore>()(
 
           addAchievement: (achievement) => {
             const currentAchievements = get().stats.achievements;
-            const exists = currentAchievements.find(a => a.id === achievement.id);
+            const exists = currentAchievements.find((a) => a.id === achievement.id);
             if (!exists) {
               set({
                 stats: {
@@ -222,7 +227,7 @@ export const useUserStore = create<UserStore>()(
             set({
               learningPath: {
                 ...get().learningPath,
-                bookmarks: bookmarks.filter(b => b.id !== bookmarkId),
+                bookmarks: bookmarks.filter((b) => b.id !== bookmarkId),
               },
             });
           },
@@ -248,7 +253,7 @@ export const useUserStore = create<UserStore>()(
             set({
               learningPath: {
                 ...get().learningPath,
-                notes: notes.map(note =>
+                notes: notes.map((note) =>
                   note.id === noteId
                     ? { ...note, content, updatedAt: new Date().toISOString() }
                     : note
@@ -262,7 +267,7 @@ export const useUserStore = create<UserStore>()(
             set({
               learningPath: {
                 ...get().learningPath,
-                notes: notes.filter(note => note.id !== noteId),
+                notes: notes.filter((note) => note.id !== noteId),
               },
             });
           },
@@ -285,7 +290,9 @@ export const useUserStore = create<UserStore>()(
 
             if (lastActive) {
               const lastActiveDate = new Date(lastActive);
-              const daysDiff = Math.floor((Date.now() - lastActiveDate.getTime()) / (1000 * 60 * 60 * 24));
+              const daysDiff = Math.floor(
+                (Date.now() - lastActiveDate.getTime()) / (1000 * 60 * 60 * 24)
+              );
 
               if (daysDiff === 1) {
                 // Consecutive day
@@ -332,14 +339,14 @@ export const useUserStore = create<UserStore>()(
 // Selectors for optimized re-renders
 export const useUser = () => {
   const store = useUserStore();
-  
+
   return {
     // User state
     preferences: store.preferences,
     stats: store.stats,
     profile: store.profile,
     learningPath: store.learningPath,
-    
+
     // User actions
     updatePreferences: store.updatePreferences,
     updateStats: store.updateStats,

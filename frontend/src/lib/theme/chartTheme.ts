@@ -90,9 +90,7 @@ export function getTooltipStyle(theme: ChartTheme) {
     padding: '8px 12px',
     borderRadius: '4px',
     fontSize: '12px',
-    boxShadow: theme === 'dark'
-      ? '0 4px 6px rgba(0, 0, 0, 0.5)'
-      : '0 4px 6px rgba(0, 0, 0, 0.1)',
+    boxShadow: theme === 'dark' ? '0 4px 6px rgba(0, 0, 0, 0.5)' : '0 4px 6px rgba(0, 0, 0, 0.1)',
   };
 }
 

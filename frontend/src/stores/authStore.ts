@@ -12,12 +12,7 @@ export interface AuthState {
 
 export interface AuthActions {
   login: (email: string, password: string) => Promise<void>;
-  register: (
-    email: string,
-    password: string,
-    firstName: string,
-    lastName: string,
-  ) => Promise<void>;
+  register: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
   logout: () => void;
   clearError: () => void;
   setLoading: (loading: boolean) => void;
@@ -45,7 +40,7 @@ export const useAuthStore = create<AuthStore>()(
             set({ isLoading: true, error: null });
             try {
               const response = await authAPI.login({ email, password });
-              
+
               set({
                 user: response.user,
                 token: response.token,
@@ -67,7 +62,7 @@ export const useAuthStore = create<AuthStore>()(
             email: string,
             password: string,
             firstName: string,
-            lastName: string,
+            lastName: string
           ) => {
             set({ isLoading: true, error: null });
             try {
@@ -134,7 +129,7 @@ export const useAuthStore = create<AuthStore>()(
 // Selectors for optimized re-renders
 export const useAuth = () => {
   const store = useAuthStore();
-  
+
   return {
     // Auth state
     user: store.user,
@@ -142,7 +137,7 @@ export const useAuth = () => {
     isAuthenticated: store.isAuthenticated,
     isLoading: store.isLoading,
     error: store.error,
-    
+
     // Auth actions
     login: store.login,
     register: store.register,

@@ -9,7 +9,15 @@ interface SliderProps extends React.InputHTMLAttributes<HTMLInputElement> {
   step?: number;
 }
 
-export function Slider({ className, value = 0, onValueChange, min = 0, max = 100, step = 1, ...props }: SliderProps) {
+export function Slider({
+  className,
+  value = 0,
+  onValueChange,
+  min = 0,
+  max = 100,
+  step = 1,
+  ...props
+}: SliderProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onValueChange?.(parseFloat(e.target.value));
   };
@@ -22,10 +30,7 @@ export function Slider({ className, value = 0, onValueChange, min = 0, max = 100
       step={step}
       value={value}
       onChange={handleChange}
-      className={cn(
-        'w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer',
-        className
-      )}
+      className={cn('h-2 w-full cursor-pointer appearance-none rounded-lg bg-gray-200', className)}
       {...props}
     />
   );

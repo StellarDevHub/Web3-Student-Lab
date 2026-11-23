@@ -1,0 +1,1022 @@
+#![no_std]
+use soroban_sdk::{
+    contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error, Address,
+    Env, Symbol, Vec,
+};
+
+mod dispute;
+mod escrow;
+
+// ---------------------------------------------------------------------------
+// Typed event schemas — SC-HARD-02 migration
+// ---------------------------------------------------------------------------
+
+/// Emitted when a new developer profile is registered.
+#[contractevent]
+pub struct DeveloperRegistered {
+    pub developer: Address,
+}
+
+/// Emitted when a new team is created.
+#[contractevent]
+pub struct TeamCreated {
+    pub creator: Address,
+    pub team_id: u64,
+    pub name: Symbol,
+}
+
+/// Emitted when a developer submits a join request.
+#[contractevent]
+pub struct JoinRequested {
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a join request is accepted.
+#[contractevent]
+pub struct JoinAccepted {
+    pub creator: Address,
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a developer is invited to a team.
+#[contractevent]
+pub struct DeveloperInvited {
+    pub creator: Address,
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a developer accepts a team invitation.
+#[contractevent]
+pub struct InvitationAccepted {
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a developer leaves a team.
+#[contractevent]
+pub struct TeamLeft {
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a member is removed from a team.
+#[contractevent]
+pub struct MemberRemoved {
+    pub creator: Address,
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a team is closed.
+#[contractevent]
+pub struct TeamClosed {
+    pub creator: Address,
+    pub team_id: u64,
+}
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum MatchingError {
+    NotInitialized = 1,
+    AlreadyInitialized = 2,
+    Unauthorized = 3,
+    DeveloperNotFound = 4,
+    TeamNotFound = 5,
+    AlreadyInTeam = 6,
+    TeamFull = 7,
+    TeamClosed = 8,
+    NoActiveRequest = 9,
+    NoActiveInvitation = 10,
+    InvalidSkillVerificationContract = 11,
+    AlreadyRegistered = 12,
+}
+
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SkillLevel {
+    Beginner = 0,
+    Intermediate = 1,
+    Advanced = 2,
+    Expert = 3,
+}
+
+#[soroban_sdk::contractclient(name = "SkillVerificationClient")]
+pub trait SkillVerification {
+    fn verify_skill(
+        env: soroban_sdk::Env,
+        user: soroban_sdk::Address,
+        skill: soroban_sdk::Symbol,
+        min_level: SkillLevel,
+    ) -> bool;
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Developer {
+    pub address: Address,
+    pub skills: Vec<Symbol>,
+    pub preferred_role: Symbol,
+    pub team_id: u64, // 0 means no team
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Team {
+    pub id: u64,
+    pub creator: Address,
+    pub name: Symbol,
+    pub required_skills: Vec<Symbol>,
+    pub required_roles: Vec<Symbol>,
+    pub members: Vec<Address>,
+    pub max_members: u32,
+    pub closed: bool,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub enum DataKey {
+    Admin,
+    SkillVerifier,
+    NextTeamId,
+    Developer(Address),
+    Team(u64),
+    JoinRequests(u64),    // Vec<Address>
+    Invitations(Address), // Vec<u64>
+    AllDevelopers,        // Vec<Address>
+}
+
+#[contract]
+pub struct HackathonTeamMatching;
+
+#[contractimpl]
+impl HackathonTeamMatching {
+    /// Initialize the contract with admin and skill verification contract addresses
+    pub fn initialize(env: Env, admin: Address, skill_verifier: Address) {
+        if env.storage().instance().has(&DataKey::Admin) {
+            panic_with_error!(&env, MatchingError::AlreadyInitialized);
+        }
+        env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage()
+            .instance()
+            .set(&DataKey::SkillVerifier, &skill_verifier);
+        env.storage().instance().set(&DataKey::NextTeamId, &1u64);
+        env.storage()
+            .persistent()
+            .set(&DataKey::AllDevelopers, &Vec::<Address>::new(&env));
+    }
+
+    /// Register a developer profile
+    pub fn register_developer(
+        env: Env,
+        developer: Address,
+        skills: Vec<Symbol>,
+        preferred_role: Symbol,
+    ) {
+        developer.require_auth();
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Developer(developer.clone()))
+        {
+            panic_with_error!(&env, MatchingError::AlreadyRegistered);
+        }
+
+        let dev = Developer {
+            address: developer.clone(),
+            skills,
+            preferred_role,
+            team_id: 0,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::Developer(developer.clone()), &dev);
+
+        let mut all_devs: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AllDevelopers)
+            .unwrap_or(Vec::new(&env));
+        all_devs.push_back(developer.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::AllDevelopers, &all_devs);
+
+        env.events()
+            .publish_event(&DeveloperRegistered { developer });
+    }
+
+    /// Retrieve a developer profile
+    pub fn get_developer(env: Env, developer: Address) -> Option<Developer> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Developer(developer))
+    }
+
+    /// Create a team
+    pub fn create_team(
+        env: Env,
+        creator: Address,
+        name: Symbol,
+        required_skills: Vec<Symbol>,
+        required_roles: Vec<Symbol>,
+        max_members: u32,
+    ) -> u64 {
+        creator.require_auth();
+
+        let mut creator_dev = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Developer(creator.clone()))
+            .unwrap_or(Developer {
+                address: creator.clone(),
+                skills: Vec::new(&env),
+                preferred_role: Symbol::new(&env, "creator"),
+                team_id: 0,
+            });
+
+        if creator_dev.team_id != 0 {
+            panic_with_error!(&env, MatchingError::AlreadyInTeam);
+        }
+
+        let team_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextTeamId)
+            .unwrap_or(1);
+        env.storage()
+            .instance()
+            .set(&DataKey::NextTeamId, &(team_id + 1));
+
+        let mut members = Vec::new(&env);
+        members.push_back(creator.clone());
+
+        let team = Team {
+            id: team_id,
+            creator: creator.clone(),
+            name: name.clone(),
+            required_skills,
+            required_roles,
+            members,
+            max_members,
+            closed: false,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Team(team_id), &team);
+
+        creator_dev.team_id = team_id;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Developer(creator.clone()), &creator_dev);
+
+        env.events().publish_event(&TeamCreated {
+            creator,
+            team_id,
+            name,
+        });
+        team_id
+    }
+
+    /// Retrieve a team
+    pub fn get_team(env: Env, team_id: u64) -> Option<Team> {
+        env.storage().persistent().get(&DataKey::Team(team_id))
+    }
+
+    /// A developer requests to join a team
+    pub fn request_to_join(env: Env, developer: Address, team_id: u64) {
+        developer.require_auth();
+
+        let dev = env
+            .storage()
+            .persistent()
+            .get::<_, Developer>(&DataKey::Developer(developer.clone()))
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::DeveloperNotFound))
+            .unwrap();
+
+        if dev.team_id != 0 {
+            panic_with_error!(&env, MatchingError::AlreadyInTeam);
+        }
+
+        let team = env
+            .storage()
+            .persistent()
+            .get::<_, Team>(&DataKey::Team(team_id))
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::TeamNotFound))
+            .unwrap();
+
+        if team.closed {
+            panic_with_error!(&env, MatchingError::TeamClosed);
+        }
+        if team.members.len() >= team.max_members {
+            panic_with_error!(&env, MatchingError::TeamFull);
+        }
+
+        let mut requests: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::JoinRequests(team_id))
+            .unwrap_or(Vec::new(&env));
+
+        let mut exists = false;
+        for r in requests.iter() {
+            if r == developer {
+                exists = true;
+                break;
+            }
+        }
+        if !exists {
+            requests.push_back(developer.clone());
+            env.storage()
+                .persistent()
+                .set(&DataKey::JoinRequests(team_id), &requests);
+        }
+
+        env.events()
+            .publish_event(&JoinRequested { developer, team_id });
+    }
+
+    /// Accept a developer's join request (team creator only)
+    pub fn accept_join_request(env: Env, creator: Address, developer: Address, team_id: u64) {
+        creator.require_auth();
+
+        let mut team = env
+            .storage()
+            .persistent()
+            .get::<_, Team>(&DataKey::Team(team_id))
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::TeamNotFound))
+            .unwrap();
+
+        if team.creator != creator {
+            panic_with_error!(&env, MatchingError::Unauthorized);
+        }
+        if team.closed {
+            panic_with_error!(&env, MatchingError::TeamClosed);
+        }
+        if team.members.len() >= team.max_members {
+            panic_with_error!(&env, MatchingError::TeamFull);
+        }
+
+        let mut requests: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::JoinRequests(team_id))
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::NoActiveRequest))
+            .unwrap();
+
+        let mut found_index = None;
+        for i in 0..requests.len() {
+            if requests.get(i).unwrap() == developer {
+                found_index = Some(i);
+                break;
+            }
+        }
+
+        let idx = found_index
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::NoActiveRequest))
+            .unwrap();
+        requests.remove(idx);
+        env.storage()
+            .persistent()
+            .set(&DataKey::JoinRequests(team_id), &requests);
+
+        let mut dev = env
+            .storage()
+            .persistent()
+            .get::<_, Developer>(&DataKey::Developer(developer.clone()))
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::DeveloperNotFound))
+            .unwrap();
+
+        if dev.team_id != 0 {
+            panic_with_error!(&env, MatchingError::AlreadyInTeam);
+        }
+
+        dev.team_id = team_id;
+        team.members.push_back(developer.clone());
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Developer(developer.clone()), &dev);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Team(team_id), &team);
+
+        env.events().publish_event(&JoinAccepted {
+            creator,
+            developer,
+            team_id,
+        });
+    }
+
+    /// Invite a developer to join the team (team creator only)
+    pub fn invite_developer(env: Env, creator: Address, developer: Address, team_id: u64) {
+        creator.require_auth();
+
+        let team = env
+            .storage()
+            .persistent()
+            .get::<_, Team>(&DataKey::Team(team_id))
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::TeamNotFound))
+            .unwrap();
+
+        if team.creator != creator {
+            panic_with_error!(&env, MatchingError::Unauthorized);
+        }
+        if team.closed {
+            panic_with_error!(&env, MatchingError::TeamClosed);
+        }
+        if team.members.len() >= team.max_members {
+            panic_with_error!(&env, MatchingError::TeamFull);
+        }
+
+        let dev = env
+            .storage()
+            .persistent()
+            .get::<_, Developer>(&DataKey::Developer(developer.clone()))
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::DeveloperNotFound))
+            .unwrap();
+
+        if dev.team_id != 0 {
+            panic_with_error!(&env, MatchingError::AlreadyInTeam);
+        }
+
+        let mut invites: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Invitations(developer.clone()))
+            .unwrap_or(Vec::new(&env));
+
+        let mut exists = false;
+        for id in invites.iter() {
+            if id == team_id {
+                exists = true;
+                break;
+            }
+        }
+        if !exists {
+            invites.push_back(team_id);
+            env.storage()
+                .persistent()
+                .set(&DataKey::Invitations(developer.clone()), &invites);
+        }
+
+        env.events().publish_event(&DeveloperInvited {
+            creator,
+            developer,
+            team_id,
+        });
+    }
+
+    /// Accept a team's invitation (developer only)
+    pub fn accept_invitation(env: Env, developer: Address, team_id: u64) {
+        developer.require_auth();
+
+        let mut dev = env
+            .storage()
+            .persistent()
+            .get::<_, Developer>(&DataKey::Developer(developer.clone()))
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::DeveloperNotFound))
+            .unwrap();
+
+        if dev.team_id != 0 {
+            panic_with_error!(&env, MatchingError::AlreadyInTeam);
+        }
+
+        let mut team = env
+            .storage()
+            .persistent()
+            .get::<_, Team>(&DataKey::Team(team_id))
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::TeamNotFound))
+            .unwrap();
+
+        if team.closed {
+            panic_with_error!(&env, MatchingError::TeamClosed);
+        }
+        if team.members.len() >= team.max_members {
+            panic_with_error!(&env, MatchingError::TeamFull);
+        }
+
+        let mut invites: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Invitations(developer.clone()))
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::NoActiveInvitation))
+            .unwrap();
+
+        let mut found_index = None;
+        for i in 0..invites.len() {
+            if invites.get(i).unwrap() == team_id {
+                found_index = Some(i);
+                break;
+            }
+        }
+
+        let idx = found_index
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::NoActiveInvitation))
+            .unwrap();
+        invites.remove(idx);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Invitations(developer.clone()), &invites);
+
+        dev.team_id = team_id;
+        team.members.push_back(developer.clone());
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Developer(developer.clone()), &dev);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Team(team_id), &team);
+
+        env.events()
+            .publish_event(&InvitationAccepted { developer, team_id });
+    }
+
+    /// Leave the current team (non-creator member only)
+    pub fn leave_team(env: Env, developer: Address, team_id: u64) {
+        developer.require_auth();
+
+        let mut dev = env
+            .storage()
+            .persistent()
+            .get::<_, Developer>(&DataKey::Developer(developer.clone()))
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::DeveloperNotFound))
+            .unwrap();
+
+        if dev.team_id != team_id {
+            panic_with_error!(&env, MatchingError::Unauthorized);
+        }
+
+        let mut team = env
+            .storage()
+            .persistent()
+            .get::<_, Team>(&DataKey::Team(team_id))
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::TeamNotFound))
+            .unwrap();
+
+        if team.closed {
+            panic_with_error!(&env, MatchingError::TeamClosed);
+        }
+        if team.creator == developer {
+            panic_with_error!(&env, MatchingError::Unauthorized);
+        }
+
+        let mut found_index = None;
+        for i in 0..team.members.len() {
+            if team.members.get(i).unwrap() == developer {
+                found_index = Some(i);
+                break;
+            }
+        }
+
+        let idx = found_index
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::DeveloperNotFound))
+            .unwrap();
+        team.members.remove(idx);
+        dev.team_id = 0;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Developer(developer.clone()), &dev);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Team(team_id), &team);
+
+        env.events().publish_event(&TeamLeft { developer, team_id });
+    }
+
+    /// Remove a member from the team (team creator only)
+    pub fn remove_member(env: Env, creator: Address, developer: Address, team_id: u64) {
+        creator.require_auth();
+
+        let mut team = env
+            .storage()
+            .persistent()
+            .get::<_, Team>(&DataKey::Team(team_id))
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::TeamNotFound))
+            .unwrap();
+
+        if team.creator != creator {
+            panic_with_error!(&env, MatchingError::Unauthorized);
+        }
+        if team.closed {
+            panic_with_error!(&env, MatchingError::TeamClosed);
+        }
+        if developer == creator {
+            panic_with_error!(&env, MatchingError::Unauthorized);
+        }
+
+        let mut found_index = None;
+        for i in 0..team.members.len() {
+            if team.members.get(i).unwrap() == developer {
+                found_index = Some(i);
+                break;
+            }
+        }
+
+        let idx = found_index
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::DeveloperNotFound))
+            .unwrap();
+        team.members.remove(idx);
+
+        let mut dev = env
+            .storage()
+            .persistent()
+            .get::<_, Developer>(&DataKey::Developer(developer.clone()))
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::DeveloperNotFound))
+            .unwrap();
+
+        if dev.team_id == team_id {
+            dev.team_id = 0;
+            env.storage()
+                .persistent()
+                .set(&DataKey::Developer(developer.clone()), &dev);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Team(team_id), &team);
+
+        env.events().publish_event(&MemberRemoved {
+            creator,
+            developer,
+            team_id,
+        });
+    }
+
+    /// Close the team, finalizing members (team creator only)
+    pub fn close_team(env: Env, creator: Address, team_id: u64) {
+        creator.require_auth();
+
+        let mut team = env
+            .storage()
+            .persistent()
+            .get::<_, Team>(&DataKey::Team(team_id))
+            .ok_or_else(|| panic_with_error!(&env, MatchingError::TeamNotFound))
+            .unwrap();
+
+        if team.creator != creator {
+            panic_with_error!(&env, MatchingError::Unauthorized);
+        }
+
+        team.closed = true;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Team(team_id), &team);
+
+        env.events().publish_event(&TeamClosed { creator, team_id });
+    }
+
+    /// Find matching teams for a developer
+    pub fn find_matching_teams(env: Env, developer: Address) -> Vec<u64> {
+        let dev = match env
+            .storage()
+            .persistent()
+            .get::<_, Developer>(&DataKey::Developer(developer))
+        {
+            Some(d) => d,
+            None => return Vec::new(&env),
+        };
+
+        let next_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextTeamId)
+            .unwrap_or(1);
+        let mut matched_teams = Vec::new(&env);
+
+        for id in 1..next_id {
+            if let Some(team) = env
+                .storage()
+                .persistent()
+                .get::<_, Team>(&DataKey::Team(id))
+            {
+                if team.closed || team.members.len() >= team.max_members {
+                    continue;
+                }
+
+                // Check role match
+                let mut role_match = false;
+                for r in team.required_roles.iter() {
+                    if r == dev.preferred_role {
+                        role_match = true;
+                        break;
+                    }
+                }
+
+                // Check skill match
+                let mut skill_match = false;
+                for s in team.required_skills.iter() {
+                    for ds in dev.skills.iter() {
+                        if s == ds {
+                            skill_match = true;
+                            break;
+                        }
+                    }
+                    if skill_match {
+                        break;
+                    }
+                }
+
+                if role_match || skill_match {
+                    matched_teams.push_back(id);
+                }
+            }
+        }
+
+        matched_teams
+    }
+
+    /// Find matching developers for a team
+    pub fn find_matching_developers(env: Env, team_id: u64) -> Vec<Address> {
+        let team = match env
+            .storage()
+            .persistent()
+            .get::<_, Team>(&DataKey::Team(team_id))
+        {
+            Some(t) => t,
+            None => return Vec::new(&env),
+        };
+
+        let all_devs: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AllDevelopers)
+            .unwrap_or(Vec::new(&env));
+
+        let mut matched_devs = Vec::new(&env);
+
+        for dev_addr in all_devs.iter() {
+            if let Some(dev) = env
+                .storage()
+                .persistent()
+                .get::<_, Developer>(&DataKey::Developer(dev_addr.clone()))
+            {
+                if dev.team_id != 0 {
+                    continue;
+                }
+
+                // Check role match
+                let mut role_match = false;
+                for r in team.required_roles.iter() {
+                    if r == dev.preferred_role {
+                        role_match = true;
+                        break;
+                    }
+                }
+
+                // Check skill match
+                let mut skill_match = false;
+                for s in team.required_skills.iter() {
+                    for ds in dev.skills.iter() {
+                        if s == ds {
+                            skill_match = true;
+                            break;
+                        }
+                    }
+                    if skill_match {
+                        break;
+                    }
+                }
+
+                if role_match || skill_match {
+                    matched_devs.push_back(dev_addr);
+                }
+            }
+        }
+
+        matched_devs
+    }
+
+    /// Check if a developer's skill is verified via the SkillVerificationContract
+    pub fn check_skill_verified(env: Env, developer: Address, skill: Symbol) -> bool {
+        let verifier_opt: Option<Address> = env.storage().instance().get(&DataKey::SkillVerifier);
+        if let Some(verifier) = verifier_opt {
+            let client = SkillVerificationClient::new(&env, &verifier);
+            client.verify_skill(&developer, &skill, &SkillLevel::Beginner)
+        } else {
+            false
+        }
+    }
+
+    /// Deposit milestone funds for a team, paid to its creator after approval.
+    /// The sponsor appoints an independent arbiter multisig.
+    pub fn create_escrow(
+        env: Env,
+        sponsor: Address,
+        team_id: u64,
+        token: Address,
+        amounts: Vec<i128>,
+        expires_at: u64,
+        arbiters: Vec<Address>,
+        arbiter_threshold: u32,
+    ) -> u64 {
+        sponsor.require_auth();
+
+        let team = env
+            .storage()
+            .persistent()
+            .get::<_, Team>(&DataKey::Team(team_id))
+            .unwrap_or_else(|| panic_with_error!(&env, escrow::EscrowError::TeamNotFound));
+
+        let now = env.ledger().timestamp();
+        if expires_at <= now {
+            panic_with_error!(&env, escrow::EscrowError::InvalidExpiration);
+        }
+        if amounts.is_empty() || team.members.is_empty() {
+            panic_with_error!(&env, escrow::EscrowError::InvalidMilestones);
+        }
+        if arbiters.is_empty() || arbiter_threshold == 0 || arbiter_threshold > arbiters.len() {
+            panic_with_error!(&env, escrow::EscrowError::InvalidArbiters);
+        }
+        for i in 0..arbiters.len() {
+            let arbiter = arbiters.get(i).unwrap();
+            if arbiter == sponsor || team.members.contains(&arbiter) {
+                panic_with_error!(&env, escrow::EscrowError::InvalidArbiters);
+            }
+            for j in 0..i {
+                if arbiters.get(j).unwrap() == arbiter {
+                    panic_with_error!(&env, escrow::EscrowError::InvalidArbiters);
+                }
+            }
+        }
+
+        let mut total = 0i128;
+        let mut milestones = Vec::new(&env);
+        for amount in amounts.iter() {
+            if amount <= 0 {
+                panic_with_error!(&env, escrow::EscrowError::InvalidMilestones);
+            }
+            total = total
+                .checked_add(amount)
+                .unwrap_or_else(|| panic_with_error!(&env, escrow::EscrowError::AmountOverflow));
+            milestones.push_back(escrow::Milestone {
+                amount,
+                status: escrow::MilestoneStatus::Pending,
+                sponsor_voted: false,
+                sponsor_approved: false,
+                team_approvals: Vec::new(&env),
+                team_rejections: Vec::new(&env),
+                arbiter_release_votes: Vec::new(&env),
+                arbiter_refund_votes: Vec::new(&env),
+            });
+        }
+
+        let contract_address = env.current_contract_address();
+        soroban_sdk::token::Client::new(&env, &token).transfer(&sponsor, &contract_address, &total);
+
+        let id: u64 = env
+            .storage()
+            .instance()
+            .get(&escrow::EscrowKey::NextId)
+            .unwrap_or(1);
+        let next_id = id
+            .checked_add(1)
+            .unwrap_or_else(|| panic_with_error!(&env, escrow::EscrowError::AmountOverflow));
+        env.storage()
+            .instance()
+            .set(&escrow::EscrowKey::NextId, &next_id);
+        let record = escrow::HackathonEscrow {
+            id,
+            sponsor: sponsor.clone(),
+            team_id,
+            team_recipient: team.creator,
+            team_members: team.members,
+            token,
+            milestones,
+            expires_at,
+            arbiters,
+            arbiter_threshold,
+        };
+        escrow::store(&env, &record);
+        env.events().publish(
+            (Symbol::new(&env, "escrow_created"), id),
+            (sponsor, team_id, total),
+        );
+        id
+    }
+
+    /// Retrieve an escrow and its milestone states.
+    pub fn get_escrow(env: Env, escrow_id: u64) -> Option<escrow::HackathonEscrow> {
+        escrow::load(&env, escrow_id)
+    }
+
+    /// Vote on a milestone. Any rejection opens a dispute; unanimous approvals release funds.
+    pub fn vote_milestone(
+        env: Env,
+        voter: Address,
+        escrow_id: u64,
+        milestone_index: u32,
+        approve: bool,
+    ) {
+        voter.require_auth();
+        let mut record = escrow::load_or_fail(&env, escrow_id);
+        if env.ledger().timestamp() >= record.expires_at {
+            panic_with_error!(&env, escrow::EscrowError::EscrowExpired);
+        }
+        let mut milestone = escrow::get_milestone(&env, &record, milestone_index);
+        if milestone.status != escrow::MilestoneStatus::Pending {
+            panic_with_error!(&env, escrow::EscrowError::MilestoneNotPending);
+        }
+
+        if voter == record.sponsor {
+            if milestone.sponsor_voted {
+                panic_with_error!(&env, escrow::EscrowError::AlreadyVoted);
+            }
+            milestone.sponsor_voted = true;
+            milestone.sponsor_approved = approve;
+        } else if record.team_members.contains(&voter) {
+            if milestone.team_approvals.contains(&voter)
+                || milestone.team_rejections.contains(&voter)
+            {
+                panic_with_error!(&env, escrow::EscrowError::AlreadyVoted);
+            }
+            if approve {
+                milestone.team_approvals.push_back(voter);
+            } else {
+                milestone.team_rejections.push_back(voter);
+            }
+        } else {
+            panic_with_error!(&env, escrow::EscrowError::NotParticipant);
+        }
+
+        if !approve {
+            milestone.status = escrow::MilestoneStatus::Disputed;
+        } else if milestone.sponsor_approved
+            && milestone.team_approvals.len() == record.team_members.len()
+        {
+            escrow::release_milestone(&env, &record, &mut milestone);
+        }
+        escrow::set_milestone(&mut record, milestone_index, milestone);
+        escrow::store(&env, &record);
+    }
+
+    /// Cast a multisig arbiter decision on a disputed milestone.
+    pub fn resolve_dispute(
+        env: Env,
+        arbiter: Address,
+        escrow_id: u64,
+        milestone_index: u32,
+        release_to_team: bool,
+    ) {
+        arbiter.require_auth();
+        let mut record = escrow::load_or_fail(&env, escrow_id);
+        if env.ledger().timestamp() >= record.expires_at {
+            panic_with_error!(&env, escrow::EscrowError::EscrowExpired);
+        }
+        let mut milestone = escrow::get_milestone(&env, &record, milestone_index);
+        if milestone.status != escrow::MilestoneStatus::Disputed {
+            panic_with_error!(&env, escrow::EscrowError::NotDisputed);
+        }
+        let resolved = dispute::cast_vote(&env, &record, &mut milestone, &arbiter, release_to_team);
+        if resolved {
+            if release_to_team {
+                escrow::release_milestone(&env, &record, &mut milestone);
+            } else {
+                escrow::refund_milestone(&env, &record, &mut milestone);
+            }
+        }
+        escrow::set_milestone(&mut record, milestone_index, milestone);
+        escrow::store(&env, &record);
+    }
+
+    /// Refund all pending or disputed milestones after the hackathon expiration.
+    pub fn refund_expired(env: Env, escrow_id: u64) -> i128 {
+        let mut record = escrow::load_or_fail(&env, escrow_id);
+        if env.ledger().timestamp() < record.expires_at {
+            panic_with_error!(&env, escrow::EscrowError::NotExpired);
+        }
+
+        let mut refund_amount = 0i128;
+        for index in 0..record.milestones.len() {
+            let mut milestone = record.milestones.get(index).unwrap();
+            if milestone.status == escrow::MilestoneStatus::Pending
+                || milestone.status == escrow::MilestoneStatus::Disputed
+            {
+                refund_amount = refund_amount
+                    .checked_add(milestone.amount)
+                    .unwrap_or_else(|| {
+                        panic_with_error!(&env, escrow::EscrowError::AmountOverflow)
+                    });
+                milestone.status = escrow::MilestoneStatus::Refunded;
+                record.milestones.set(index, milestone);
+            }
+        }
+        if refund_amount > 0 {
+            soroban_sdk::token::Client::new(&env, &record.token).transfer(
+                &env.current_contract_address(),
+                &record.sponsor,
+                &refund_amount,
+            );
+        }
+        escrow::store(&env, &record);
+        refund_amount
+    }
+}
+
+#[cfg(test)]
+mod test;

@@ -22,18 +22,21 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ roomId }) => {
     };
   }, [provider]);
 
-  const handleMount = useCallback((editor: Editor) => {
-    setEditor(editor);
-    const cm = new CanvasManager(editor);
-    const sm = new SyncManager(provider.doc, editor);
-    setCanvasManager(cm);
-    setSyncManager(sm);
-    sm.syncWithYjs();
-  }, [provider.doc]);
+  const handleMount = useCallback(
+    (editor: Editor) => {
+      setEditor(editor);
+      const cm = new CanvasManager(editor);
+      const sm = new SyncManager(provider.doc, editor);
+      setCanvasManager(cm);
+      setSyncManager(sm);
+      sm.syncWithYjs();
+    },
+    [provider.doc]
+  );
 
   const handleAddShape = (type: string) => {
     if (!canvasManager) return;
-    
+
     if (type === 'contract') canvasManager.addSorobanContract(400, 300);
     else if (type === 'account') canvasManager.addStellarAccount(400, 300);
     else if (type === 'asset') canvasManager.addAsset(400, 300);
@@ -43,18 +46,15 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ roomId }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#09090b] relative overflow-hidden">
-      <Toolbar 
-        onAddShape={handleAddShape} 
-        onExport={() => canvasManager?.exportAsPNG()} 
-      />
+    <div className="relative flex h-full flex-col overflow-hidden bg-[#09090b]">
+      <Toolbar onAddShape={handleAddShape} onExport={() => canvasManager?.exportAsPNG()} />
 
-      <div className="flex-grow w-full h-full tldraw-dark">
-        <Tldraw 
-          inferDarkMode 
+      <div className="tldraw-dark h-full w-full flex-grow">
+        <Tldraw
+          inferDarkMode
           onMount={handleMount}
           persistenceKey={`whiteboard-${roomId}`}
-          className="w-full h-full"
+          className="h-full w-full"
         />
       </div>
     </div>

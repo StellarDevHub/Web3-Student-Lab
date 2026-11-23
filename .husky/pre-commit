@@ -1,1 +1,18 @@
-npx lint-staged
+#!/bin/sh
+echo "🔍 Running pre-commit hooks (Malware scan, ESLint & Prettier)..."
+
+echo "🛡️ Scanning for malicious supply-chain indicators..."
+./scripts/scan-malicious-indicators.sh || {
+  echo ""
+  echo "❌ Pre-commit scan failed: Malicious or prohibited patterns detected!"
+  exit 1
+}
+
+npx lint-staged || {
+  echo ""
+  echo "❌ Pre-commit lint/format check failed!"
+  echo "💡 Emergency hotfix bypass: git commit --no-verify"
+  exit 1
+}
+
+echo "✅ Pre-commit checks passed successfully."

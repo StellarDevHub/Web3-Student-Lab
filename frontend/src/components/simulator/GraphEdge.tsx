@@ -26,16 +26,16 @@ export const GraphEdge: React.FC<GraphEdgeProps> = ({ edge }) => {
       <motion.circle
         r={3}
         fill="#ef4444"
-        initial={{ offsetDistance: "0%" }}
-        animate={{ offsetDistance: "100%" }}
+        initial={{ offsetDistance: '0%' }}
+        animate={{ offsetDistance: '100%' }}
         transition={{
           duration: 1.5,
           repeat: Infinity,
-          ease: "linear",
+          ease: 'linear',
         }}
         style={{
           offsetPath: `path('M ${source.x} ${source.y} L ${target.x} ${target.y}')`,
-          boxShadow: '0 0 10px #ef4444'
+          boxShadow: '0 0 10px #ef4444',
         }}
       />
       {/* Label for asset/amount */}

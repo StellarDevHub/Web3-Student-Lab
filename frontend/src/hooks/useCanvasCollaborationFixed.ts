@@ -29,12 +29,18 @@ interface CollaborationState {
 
 // Memory leak prevention utilities
 class YjsMemoryManager {
-  private static instances = new Map<string, { doc: Y.Doc; provider: WebsocketProvider; lastAccess: number }>();
+  private static instances = new Map<
+    string,
+    { doc: Y.Doc; provider: WebsocketProvider; lastAccess: number }
+  >();
   private static cleanupInterval: NodeJS.Timeout | null = null;
   private static readonly MAX_INACTIVE_TIME = 5 * 60 * 1000; // 5 minutes
   private static readonly MAX_INSTANCES = 10;
 
-  static getInstance(roomId: string, userId: string): { doc: Y.Doc; provider: WebsocketProvider } | null {
+  static getInstance(
+    roomId: string,
+    userId: string
+  ): { doc: Y.Doc; provider: WebsocketProvider } | null {
     const key = `${roomId}-${userId}`;
     const existing = this.instances.get(key);
 
@@ -46,7 +52,12 @@ class YjsMemoryManager {
     return null;
   }
 
-  static setInstance(roomId: string, userId: string, doc: Y.Doc, provider: WebsocketProvider): void {
+  static setInstance(
+    roomId: string,
+    userId: string,
+    doc: Y.Doc,
+    provider: WebsocketProvider
+  ): void {
     const key = `${roomId}-${userId}`;
 
     // Clean up old instances if we have too many
@@ -101,7 +112,7 @@ class YjsMemoryManager {
       }
     });
 
-    toDelete.forEach(key => {
+    toDelete.forEach((key) => {
       const [roomId, userId] = key.split('-');
       this.removeInstance(roomId, userId);
     });
@@ -141,7 +152,7 @@ class YjsMemoryManager {
 
   static forceCleanup(): void {
     const keys = Array.from(this.instances.keys());
-    keys.forEach(key => {
+    keys.forEach((key) => {
       const [roomId, userId] = key.split('-');
       this.removeInstance(roomId, userId);
     });
@@ -163,7 +174,7 @@ export function useCanvasCollaborationFixed(roomId: string, userId: string) {
 
   const cleanup = useCallback(() => {
     // Clean up all observers
-    observersRef.current.forEach(cleanupFn => {
+    observersRef.current.forEach((cleanupFn) => {
       try {
         cleanupFn();
       } catch (error) {
@@ -233,7 +244,6 @@ export function useCanvasCollaborationFixed(roomId: string, userId: string) {
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:1234';
     const provider = new WebsocketProvider(wsUrl, `canvas-${roomId}`, doc, {
       connect: true,
-      awareness: true,
     });
 
     providerRef.current = provider;
@@ -339,7 +349,7 @@ export function useSharedCanvasFixed(doc: Y.Doc | null) {
 
     return () => {
       // Clean up observers
-      observersRef.current.forEach(cleanupFn => {
+      observersRef.current.forEach((cleanupFn) => {
         try {
           cleanupFn();
         } catch (error) {

@@ -25,7 +25,7 @@ export function WizardProgress({
 
   return (
     <div className="w-full">
-      <div className="flex justify-between mb-2">
+      <div className="mb-2 flex justify-between">
         {stepLabels.map((label, index) => {
           const stepNumber = index + 1;
           const isCompleted = stepNumber < currentStep;
@@ -42,13 +42,9 @@ export function WizardProgress({
                 initial={false}
                 animate={{
                   scale: isCurrent ? 1.1 : 1,
-                  backgroundColor: isCompleted
-                    ? '#16a34a'
-                    : isCurrent
-                      ? '#dc2626'
-                      : '#27272a',
+                  backgroundColor: isCompleted ? '#16a34a' : isCurrent ? '#dc2626' : '#27272a',
                 }}
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mb-2 border-2 ${
+                className={`mb-2 flex h-8 w-8 items-center justify-center rounded-full border-2 text-sm font-bold ${
                   isCompleted
                     ? 'border-green-600 text-white'
                     : isCurrent
@@ -57,12 +53,7 @@ export function WizardProgress({
                 }`}
               >
                 {isCompleted ? (
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -75,12 +66,8 @@ export function WizardProgress({
                 )}
               </motion.div>
               <span
-                className={`text-xs font-medium text-center hidden sm:block ${
-                  isCurrent
-                    ? 'text-red-500'
-                    : isCompleted
-                      ? 'text-green-500'
-                      : 'text-zinc-500'
+                className={`hidden text-center text-xs font-medium sm:block ${
+                  isCurrent ? 'text-red-500' : isCompleted ? 'text-green-500' : 'text-zinc-500'
                 }`}
               >
                 {label}
@@ -90,17 +77,19 @@ export function WizardProgress({
         })}
       </div>
 
-      <div className="relative h-2 bg-zinc-800 rounded-full overflow-hidden">
+      <div className="relative h-2 overflow-hidden rounded-full bg-zinc-800">
         <motion.div
-          className="absolute top-0 left-0 h-full bg-gradient-to-r from-red-600 to-red-500 rounded-full"
+          className="absolute top-0 left-0 h-full rounded-full bg-gradient-to-r from-red-600 to-red-500"
           initial={{ width: 0 }}
           animate={{ width: `${progress}%` }}
           transition={{ duration: 0.3, ease: 'easeInOut' }}
         />
       </div>
 
-      <div className="flex justify-between mt-2 text-xs text-zinc-500 font-mono">
-        <span>Step {currentStep} of {totalSteps}</span>
+      <div className="mt-2 flex justify-between font-mono text-xs text-zinc-500">
+        <span>
+          Step {currentStep} of {totalSteps}
+        </span>
         <span>{Math.round(progress)}% Complete</span>
       </div>
     </div>

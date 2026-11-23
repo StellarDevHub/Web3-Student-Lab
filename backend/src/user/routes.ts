@@ -1,12 +1,13 @@
 import { Prisma } from '@prisma/client';
 import { Request, Response, Router } from 'express';
 import { authenticate } from '../auth/auth.middleware.js';
-import { normalizeSorobanDid } from '../auth/auth.service.js';
+import { DidValidationError, validateStudentDidCompatibility } from '../auth/auth.service.js';
 import prisma from '../db/index.js';
 import { markUserWriteToPrimary } from '../db/requestContext.js';
 import { linkDidToCertificates } from '../routes/certificates.js';
+import logger from '../utils/logger.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @route   GET /api/user/profile
@@ -64,7 +65,16 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
       did?: string | null;
     };
 
-    const normalizedDid = normalizeSorobanDid(did);
+    const existingStudent = await prisma.student.findUnique({
+      where: { id: req.user.id },
+      select: { walletAddress: true },
+    });
+
+    const normalizedDid = validateStudentDidCompatibility({
+      did,
+      walletAddress: existingStudent?.walletAddress ?? null,
+      expectedNetwork: process.env.STELLAR_NETWORK || 'testnet',
+    });
     const updateData: {
       email?: string;
       firstName?: string;
@@ -116,7 +126,12 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
       updatedAt: student.updatedAt.toISOString(),
     });
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('Invalid DID format')) {
+    if (error instanceof DidValidationError) {
+      logger.warn('Rejected DID update on user profile', {
+        route: '/api/v1/user/profile',
+        userId: req.user?.id,
+        reason: error.message,
+      });
       res.status(400).json({ error: error.message });
       return;
     }
@@ -128,6 +143,56 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
 
     res.status(500).json({ error: 'Failed to update user profile' });
   }
+});
+
+import { anonymizationService } from '../services/anonymizationService.js';
+
+/**
+ * @route   DELETE /api/user/me
+ * @desc    GDPR Account Deletion & Cryptographic Anonymization Pipeline (Issue #1115)
+ * @access  Private
+ */
+router.delete(['/me', '/delete'], authenticate, async (req: Request, res: Response) => {
+  try {
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    const receipt = await anonymizationService.deleteAndAnonymizeStudent(req.user.id);
+    res.status(200).json(receipt);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('not found')) {
+      res.status(404).json({ error: error.message });
+      return;
+    }
+    res.status(500).json({ error: 'Failed to process GDPR account deletion' });
+  }
+});
+
+/**
+ * @route   GET /api/user/onboarding
+ * @desc    Get user onboarding state (mocked)
+ * @access  Private
+ */
+router.get('/onboarding', authenticate, async (req: Request, res: Response) => {
+  // Mock response for now, replace with actual DB query if schema is updated
+  res.json({
+    hasCompletedWalletCreation: false,
+    hasReceivedTokens: false,
+    hasDeployedContract: false,
+    currentStepIndex: 0,
+  });
+});
+
+/**
+ * @route   PUT /api/user/onboarding
+ * @desc    Update user onboarding state (mocked)
+ * @access  Private
+ */
+router.put('/onboarding', authenticate, async (req: Request, res: Response) => {
+  // Mock response for now
+  res.json({ success: true });
 });
 
 export default router;

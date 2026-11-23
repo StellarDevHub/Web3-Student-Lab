@@ -36,8 +36,7 @@ export const AnimatedForm: React.FC<AnimatedFormProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [successes, setSuccesses] = useState<Record<string, string>>({});
 
-  const { feedback, isVisible, showSuccess, showError, dismiss } =
-    useAnimationFeedback();
+  const { feedback, isVisible, showSuccess, showError, dismiss } = useAnimationFeedback();
   const { isLoading, withLoading } = useLoadingAnimation();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -79,8 +78,7 @@ export const AnimatedForm: React.FC<AnimatedFormProps> = ({
         setErrors({});
         showSuccess('Form submitted successfully!');
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : 'An error occurred';
+        const errorMessage = error instanceof Error ? error.message : 'An error occurred';
         showError(errorMessage);
       }
     });
@@ -88,9 +86,7 @@ export const AnimatedForm: React.FC<AnimatedFormProps> = ({
 
   return (
     <AnimatedContainer variant="slideInUp" className="w-full max-w-md">
-      {title && (
-        <h2 className="mb-6 text-2xl font-bold text-white">{title}</h2>
-      )}
+      {title && <h2 className="mb-6 text-2xl font-bold text-white">{title}</h2>}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {fields.map((field, index) => (
@@ -133,8 +129,7 @@ export const AnimatedForm: React.FC<AnimatedFormProps> = ({
 
 // Example usage component
 export const AnimationShowcase: React.FC = () => {
-  const { feedback, isVisible, showSuccess, showError, dismiss } =
-    useAnimationFeedback();
+  const { feedback, isVisible, showSuccess, showError, dismiss } = useAnimationFeedback();
   const [loadingType, setLoadingType] = useState<
     'spinner' | 'dots' | 'pulse' | 'bars' | 'skeleton'
   >('spinner');
@@ -143,7 +138,7 @@ export const AnimationShowcase: React.FC = () => {
     <div className="space-y-8 p-6">
       <section>
         <h2 className="mb-4 text-2xl font-bold">Button Animations</h2>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex flex-wrap gap-2">
           <AnimatedButton>Default</AnimatedButton>
           <AnimatedButton variant="secondary">Secondary</AnimatedButton>
           <AnimatedButton variant="outline">Outline</AnimatedButton>
@@ -154,10 +149,8 @@ export const AnimationShowcase: React.FC = () => {
 
       <section>
         <h2 className="mb-4 text-2xl font-bold">Feedback Animations</h2>
-        <div className="flex gap-2 flex-wrap">
-          <AnimatedButton onClick={() => showSuccess('Success!')}>
-            Show Success
-          </AnimatedButton>
+        <div className="flex flex-wrap gap-2">
+          <AnimatedButton onClick={() => showSuccess('Success!')}>Show Success</AnimatedButton>
           <AnimatedButton onClick={() => showError('Something went wrong')} variant="danger">
             Show Error
           </AnimatedButton>
@@ -171,7 +164,7 @@ export const AnimationShowcase: React.FC = () => {
 
       <section>
         <h2 className="mb-4 text-2xl font-bold">Loading Animations</h2>
-        <div className="flex gap-4 flex-wrap mb-4">
+        <div className="mb-4 flex flex-wrap gap-4">
           {['spinner', 'dots', 'pulse', 'bars', 'skeleton'].map((type) => (
             <AnimatedButton
               key={type}

@@ -12,17 +12,17 @@ export function Switch({ checked, onCheckedChange, className, ...props }: Switch
   };
 
   return (
-    <label className="relative inline-flex items-center cursor-pointer">
+    <label className="relative inline-flex cursor-pointer items-center">
       <input
         type="checkbox"
         checked={checked}
         onChange={handleChange}
-        className="sr-only peer"
+        className="peer sr-only"
         {...props}
       />
       <div
         className={cn(
-          'peer relative h-6 w-11 rounded-full bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600',
+          "peer relative h-6 w-11 rounded-full bg-gray-200 peer-checked:bg-blue-600 peer-focus:ring-4 peer-focus:ring-blue-300 peer-focus:outline-none after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white dark:border-gray-600 dark:bg-gray-700 dark:peer-focus:ring-blue-800",
           className
         )}
       />

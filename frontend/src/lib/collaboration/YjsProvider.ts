@@ -18,7 +18,20 @@ export class CollaborationProvider {
     this.provider = new WebsocketProvider(wsUrl, roomName, this.doc);
     this.awareness = this.provider.awareness;
 
-    const colors = ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#4ade80', '#2dd4bf', '#22d3ee', '#38bdf8', '#818cf8', '#a78bfa', '#e879f9', '#f472b6'];
+    const colors = [
+      '#f87171',
+      '#fb923c',
+      '#fbbf24',
+      '#a3e635',
+      '#4ade80',
+      '#2dd4bf',
+      '#22d3ee',
+      '#38bdf8',
+      '#818cf8',
+      '#a78bfa',
+      '#e879f9',
+      '#f472b6',
+    ];
     const randomColor = colors[Math.floor(Math.random() * colors.length)];
 
     this.localUser = {

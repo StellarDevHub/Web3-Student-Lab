@@ -98,19 +98,15 @@ export abstract class SearchService<T> {
     const executionTime = `${Date.now() - startTime}ms`;
 
     // Build pagination metadata
-    const pagination = this.paginationHelper.buildPaginationMetadata(
-      options,
-      total,
-      data.length
-    );
+    const pagination = this.paginationHelper.buildPaginationMetadata(options, total, data.length);
 
     return {
       data,
       pagination,
       metadata: {
-        query: options.query,
-        filters: options.filters,
-        sortBy: options.sort,
+        query: options.query ?? '',
+        filters: options.filters ?? {},
+        sortBy: options.sort ?? '',
         executionTime,
         totalResults: total,
       },

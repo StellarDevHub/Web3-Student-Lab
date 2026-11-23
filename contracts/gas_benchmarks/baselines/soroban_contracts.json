@@ -1,0 +1,224 @@
+{
+  "commit": "HEAD",
+  "timestamp": "2026-10-14T16:01:20Z",
+  "soroban_sdk_version": "28.0.0",
+  "endpoints": [
+    {
+      "endpoint": "certificate_nft::mint_certificate",
+      "cpu_insns": 65319,
+      "mem_bytes": 31759,
+      "success": true,
+      "note": "Mints NFT certificate"
+    },
+    {
+      "endpoint": "dao_governance::initialize",
+      "cpu_insns": 45146,
+      "mem_bytes": 20050,
+      "success": true,
+      "note": "Initialises DAO"
+    },
+    {
+      "endpoint": "dao_governance::grant_credits",
+      "cpu_insns": 68362,
+      "mem_bytes": 31499,
+      "success": true,
+      "note": "Grants voice credits"
+    },
+    {
+      "endpoint": "dao_governance::create_proposal",
+      "cpu_insns": 99618,
+      "mem_bytes": 50805,
+      "success": true,
+      "note": "Creates proposal"
+    },
+    {
+      "endpoint": "dao_governance::vote",
+      "cpu_insns": 176849,
+      "mem_bytes": 77990,
+      "success": true,
+      "note": "Quadratic vote"
+    },
+    {
+      "endpoint": "dao_governance::finalize",
+      "cpu_insns": 91741,
+      "mem_bytes": 43902,
+      "success": true,
+      "note": "Finalizes proposal"
+    },
+    {
+      "endpoint": "dao_governance::execute",
+      "cpu_insns": 138376,
+      "mem_bytes": 60329,
+      "success": true,
+      "note": "Executes passed proposal"
+    },
+    {
+      "endpoint": "dao_governance::get_proposal",
+      "cpu_insns": 63725,
+      "mem_bytes": 37650,
+      "success": true,
+      "note": "Views proposal"
+    },
+    {
+      "endpoint": "dao_governance::credits_of",
+      "cpu_insns": 36800,
+      "mem_bytes": 22328,
+      "success": true,
+      "note": "Views member credits"
+    },
+    {
+      "endpoint": "dao_governance::vote_of",
+      "cpu_insns": 34958,
+      "mem_bytes": 22810,
+      "success": true,
+      "note": "Views voter record"
+    },
+    {
+      "endpoint": "hello_world::hello",
+      "cpu_insns": 14008,
+      "mem_bytes": 6072,
+      "success": true,
+      "note": "Returns greeting vec"
+    },
+    {
+      "endpoint": "payment_gateway::initialize",
+      "cpu_insns": 43532,
+      "mem_bytes": 20079,
+      "success": true,
+      "note": "Initialises gateway"
+    },
+    {
+      "endpoint": "payment_gateway::deposit",
+      "cpu_insns": 73641,
+      "mem_bytes": 35727,
+      "success": true,
+      "note": "Deposits tokens"
+    },
+    {
+      "endpoint": "payment_gateway::get_balance",
+      "cpu_insns": 35662,
+      "mem_bytes": 23521,
+      "success": true,
+      "note": "Views balance"
+    },
+    {
+      "endpoint": "payment_gateway::process_payment",
+      "cpu_insns": 149624,
+      "mem_bytes": 77530,
+      "success": true,
+      "note": "Processes payment with fee"
+    },
+    {
+      "endpoint": "payment_gateway::get_payment",
+      "cpu_insns": 53712,
+      "mem_bytes": 39250,
+      "success": true,
+      "note": "Views payment record"
+    },
+    {
+      "endpoint": "payment_gateway::get_admin",
+      "cpu_insns": 22712,
+      "mem_bytes": 16096,
+      "success": true,
+      "note": "Views admin"
+    },
+    {
+      "endpoint": "payment_gateway::is_paused",
+      "cpu_insns": 22592,
+      "mem_bytes": 16096,
+      "success": true,
+      "note": "Checks pause status"
+    },
+    {
+      "endpoint": "payment_gateway::withdraw",
+      "cpu_insns": 78490,
+      "mem_bytes": 36496,
+      "success": true,
+      "note": "Withdraws tokens"
+    },
+    {
+      "endpoint": "payment_gateway::refund",
+      "cpu_insns": 167677,
+      "mem_bytes": 77992,
+      "success": true,
+      "note": "Refunds payment"
+    },
+    {
+      "endpoint": "payment_gateway::pause",
+      "cpu_insns": 56474,
+      "mem_bytes": 28651,
+      "success": true,
+      "note": "Pauses gateway"
+    },
+    {
+      "endpoint": "payment_gateway::unpause",
+      "cpu_insns": 56965,
+      "mem_bytes": 28923,
+      "success": true,
+      "note": "Unpauses gateway"
+    },
+    {
+      "endpoint": "payment_gateway::update_fee_bps",
+      "cpu_insns": 57993,
+      "mem_bytes": 29219,
+      "success": true,
+      "note": "Updates fee basis points"
+    },
+    {
+      "endpoint": "payment_gateway::transfer_admin",
+      "cpu_insns": 60396,
+      "mem_bytes": 29491,
+      "success": true,
+      "note": "Transfers admin role"
+    },
+    {
+      "endpoint": "smart_vault::deposit",
+      "cpu_insns": 79865,
+      "mem_bytes": 35759,
+      "success": true,
+      "note": "Deposits tokens for shares"
+    },
+    {
+      "endpoint": "smart_vault::shares_of",
+      "cpu_insns": 32152,
+      "mem_bytes": 21193,
+      "success": true,
+      "note": "Views user shares"
+    },
+    {
+      "endpoint": "smart_vault::assets_of",
+      "cpu_insns": 33140,
+      "mem_bytes": 21329,
+      "success": true,
+      "note": "Views user asset value"
+    },
+    {
+      "endpoint": "smart_vault::withdraw",
+      "cpu_insns": 92837,
+      "mem_bytes": 38521,
+      "success": true,
+      "note": "Withdraws proportional assets"
+    },
+    {
+      "endpoint": "smart_vault::stake",
+      "cpu_insns": 50491,
+      "mem_bytes": 24513,
+      "success": true,
+      "note": "Marks vault as staked"
+    },
+    {
+      "endpoint": "smart_vault::harvest",
+      "cpu_insns": 97795,
+      "mem_bytes": 41499,
+      "success": true,
+      "note": "Harvests accrued rewards"
+    },
+    {
+      "endpoint": "smart_vault::compound",
+      "cpu_insns": 134761,
+      "mem_bytes": 47574,
+      "success": true,
+      "note": "Harvest + auto-redeposit"
+    }
+  ]
+}

@@ -54,6 +54,15 @@ interface UseEnrollmentWizardReturn {
   setValidationErrors: (errors: Record<string, string[]>) => void;
 }
 
+function getValidationStepKey(step: number): string {
+  return `step${step}`;
+}
+
+function areErrorsEqual(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((error, index) => error === right[index]);
+}
+
 export function useEnrollmentWizard(
   options: UseEnrollmentWizardOptions = {}
 ): UseEnrollmentWizardReturn {
@@ -70,13 +79,21 @@ export function useEnrollmentWizard(
   });
 
   const autoSaveStarted = useRef(false);
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     if (!autoSaveStarted.current) {
       autoSaveStarted.current = true;
-      wizardPersistence.startAutoSave(() => state, (savedState) => {
-        setState((prev) => ({ ...prev, lastSaved: savedState.lastSaved }));
-      });
+      wizardPersistence.startAutoSave(
+        () => stateRef.current,
+        (savedState) => {
+          setState((prev) => ({ ...prev, lastSaved: savedState.lastSaved }));
+        }
+      );
     }
 
     return () => {
@@ -95,10 +112,37 @@ export function useEnrollmentWizard(
       ...prev,
       validationErrors: {
         ...prev.validationErrors,
-        [`step${state.currentStep}`]: result.errors,
+        [getValidationStepKey(state.currentStep)]: result.errors,
       },
     }));
     return result;
+  }, [state.currentStep, state.steps, course, completedCourseIds]);
+
+  useEffect(() => {
+    const result = validateStep(state.currentStep, state.steps, course, completedCourseIds);
+    setValidationResult((prev) => {
+      if (prev.isValid === result.isValid && areErrorsEqual(prev.errors, result.errors)) {
+        return prev;
+      }
+      return result;
+    });
+
+    setState((prev) => {
+      const stepKey = getValidationStepKey(prev.currentStep);
+      const currentErrors = prev.validationErrors[stepKey] || [];
+
+      if (areErrorsEqual(currentErrors, result.errors)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        validationErrors: {
+          ...prev.validationErrors,
+          [stepKey]: result.errors,
+        },
+      };
+    });
   }, [state.currentStep, state.steps, course, completedCourseIds]);
 
   const canProceed = validationResult.isValid;

@@ -74,11 +74,11 @@ export const Web3Login: React.FC<Web3LoginProps> = ({
     <div className={`web3-login ${className}`}>
       {walletAddress ? (
         <div className="flex flex-col space-y-4">
-          <div className="flex items-center space-x-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+          <div className="flex items-center space-x-3 rounded-lg border border-green-200 bg-green-50 p-4">
             <CheckCircle className="h-5 w-5 text-green-600" />
             <div className="flex-1">
               <p className="text-sm font-medium text-green-900">Wallet Connected</p>
-              <p className="text-xs text-green-700 font-mono">
+              <p className="font-mono text-xs text-green-700">
                 {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
               </p>
             </div>
@@ -86,7 +86,7 @@ export const Web3Login: React.FC<Web3LoginProps> = ({
 
           <button
             onClick={handleDisconnect}
-            className="flex items-center justify-center space-x-2 w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+            className="flex w-full items-center justify-center space-x-2 rounded-lg bg-gray-100 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-200"
           >
             <Wallet className="h-4 w-4" />
             <span>Disconnect Wallet</span>
@@ -97,7 +97,7 @@ export const Web3Login: React.FC<Web3LoginProps> = ({
           <button
             onClick={handleConnectWallet}
             disabled={isLoading}
-            className="flex items-center justify-center space-x-2 w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors font-medium"
+            className="flex w-full items-center justify-center space-x-2 rounded-lg bg-blue-600 px-4 py-3 font-medium text-white transition-colors hover:bg-blue-700 disabled:bg-blue-400"
           >
             {isLoading ? (
               <>
@@ -113,13 +113,13 @@ export const Web3Login: React.FC<Web3LoginProps> = ({
           </button>
 
           {error && (
-            <div className="flex items-start space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+            <div className="flex items-start space-x-2 rounded-lg border border-red-200 bg-red-50 p-3">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-600" />
               <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
 
-          <div className="text-xs text-gray-500 text-center">
+          <div className="text-center text-xs text-gray-500">
             <p>Connect your Ethereum wallet to sign in securely.</p>
             <p className="mt-1">Requires MetaMask or compatible wallet.</p>
           </div>

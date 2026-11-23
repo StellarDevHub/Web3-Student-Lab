@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import { Trash2, Activity, AlertTriangle, CheckCircle } from 'lucide-react';
@@ -22,9 +22,9 @@ export function MemoryMonitor() {
 
   useEffect(() => {
     updateStats();
-    
+
     const interval = setInterval(updateStats, 5000); // Update every 5 seconds
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -50,17 +50,23 @@ export function MemoryMonitor() {
 
   const getStatusColor = (status: 'good' | 'warning' | 'critical') => {
     switch (status) {
-      case 'good': return 'text-green-600';
-      case 'warning': return 'text-yellow-600';
-      case 'critical': return 'text-red-600';
+      case 'good':
+        return 'text-green-600';
+      case 'warning':
+        return 'text-yellow-600';
+      case 'critical':
+        return 'text-red-600';
     }
   };
 
   const getStatusIcon = (status: 'good' | 'warning' | 'critical') => {
     switch (status) {
-      case 'good': return <CheckCircle className="w-4 h-4" />;
-      case 'warning': return <AlertTriangle className="w-4 h-4" />;
-      case 'critical': return <AlertTriangle className="w-4 h-4" />;
+      case 'good':
+        return <CheckCircle className="h-4 w-4" />;
+      case 'warning':
+        return <AlertTriangle className="h-4 w-4" />;
+      case 'critical':
+        return <AlertTriangle className="h-4 w-4" />;
     }
   };
 
@@ -72,16 +78,14 @@ export function MemoryMonitor() {
 
   return (
     <div className="fixed bottom-4 left-4 z-40">
-      <div className={`bg-white rounded-lg shadow-lg border ${
-        isExpanded ? 'w-80' : 'w-auto'
-      }`}>
+      <div className={`rounded-lg border bg-white shadow-lg ${isExpanded ? 'w-80' : 'w-auto'}`}>
         {/* Header */}
-        <div 
-          className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50"
+        <div
+          className="flex cursor-pointer items-center justify-between p-3 hover:bg-gray-50"
           onClick={() => setIsExpanded(!isExpanded)}
         >
           <div className="flex items-center space-x-2">
-            <Activity className="w-4 h-4 text-blue-600" />
+            <Activity className="h-4 w-4 text-blue-600" />
             <span className="text-sm font-medium">Memory Monitor</span>
             <div className={`flex items-center space-x-1 ${getStatusColor(memoryStatus)}`}>
               {getStatusIcon(memoryStatus)}
@@ -92,70 +96,68 @@ export function MemoryMonitor() {
 
         {/* Expanded Content */}
         {isExpanded && (
-          <div className="border-t border-gray-200 p-4 space-y-3">
+          <div className="space-y-3 border-t border-gray-200 p-4">
             {/* Stats */}
             <div className="space-y-2">
-              <div className="flex justify-between items-center">
+              <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Yjs Instances:</span>
                 <span className="text-sm font-medium">{stats.instanceCount}</span>
               </div>
-              <div className="flex justify-between items-center">
+              <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Memory Usage:</span>
                 <span className="text-sm font-medium">{formatMemoryUsage(stats.memoryUsage)}</span>
               </div>
               {lastCleanup && (
-                <div className="flex justify-between items-center">
+                <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Last Cleanup:</span>
-                  <span className="text-sm font-medium">
-                    {lastCleanup.toLocaleTimeString()}
-                  </span>
+                  <span className="text-sm font-medium">{lastCleanup.toLocaleTimeString()}</span>
                 </div>
               )}
             </div>
 
             {/* Memory Status Indicator */}
-            <div className="pt-2 border-t border-gray-200">
-              <div className="flex items-center justify-between mb-2">
+            <div className="border-t border-gray-200 pt-2">
+              <div className="mb-2 flex items-center justify-between">
                 <span className="text-sm text-gray-600">Memory Status:</span>
                 <div className={`flex items-center space-x-1 ${getStatusColor(memoryStatus)}`}>
                   {getStatusIcon(memoryStatus)}
                   <span className="text-xs capitalize">{memoryStatus}</span>
                 </div>
               </div>
-              
+
               {memoryStatus === 'warning' && (
-                <div className="text-xs text-yellow-600 bg-yellow-50 p-2 rounded">
+                <div className="rounded bg-yellow-50 p-2 text-xs text-yellow-600">
                   Memory usage is getting high. Consider closing unused collaboration sessions.
                 </div>
               )}
-              
+
               {memoryStatus === 'critical' && (
-                <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
+                <div className="rounded bg-red-50 p-2 text-xs text-red-600">
                   Critical memory usage detected! Force cleanup recommended.
                 </div>
               )}
             </div>
 
             {/* Actions */}
-            <div className="pt-2 border-t border-gray-200 space-y-2">
+            <div className="space-y-2 border-t border-gray-200 pt-2">
               <button
                 onClick={handleForceCleanup}
-                className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition-colors"
+                className="flex w-full items-center justify-center space-x-2 rounded bg-red-500 px-3 py-2 text-sm text-white transition-colors hover:bg-red-600"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="h-4 w-4" />
                 <span>Force Cleanup</span>
               </button>
-              
+
               <button
                 onClick={updateStats}
-                className="w-full px-3 py-2 bg-gray-100 text-gray-700 text-sm rounded hover:bg-gray-200 transition-colors"
+                className="w-full rounded bg-gray-100 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-200"
               >
                 Refresh Stats
               </button>
             </div>
 
             {/* Info */}
-            <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+            <div className="rounded bg-gray-50 p-2 text-xs text-gray-500">
               <div className="space-y-1">
                 <p>• Yjs instances are automatically cleaned up after 5 minutes of inactivity</p>
                 <p>• Maximum 10 concurrent instances allowed</p>

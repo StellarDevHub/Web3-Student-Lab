@@ -1,21 +1,17 @@
-"use client";
+'use client';
 
-import { WorkspaceLayout } from "@/hooks/useLayoutPersistence";
+import { WorkspaceLayout } from '@/hooks/useLayoutPersistence';
 import {
-    DndContext,
-    DragEndEvent,
-    PointerSensor,
-    closestCenter,
-    useSensor,
-    useSensors,
-} from "@dnd-kit/core";
-import {
-    SortableContext,
-    arrayMove,
-    rectSortingStrategy,
-} from "@dnd-kit/sortable";
-import { ReactNode } from "react";
-import DraggablePanel from "./DraggablePanel";
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import { SortableContext, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable';
+import { ReactNode } from 'react';
+import DraggablePanel from './DraggablePanel';
 
 // Snap-to-grid modifier — snaps drag delta to 8px grid
 function snapToGrid(args: { transform: { x: number; y: number; scaleX: number; scaleY: number } }) {
@@ -40,9 +36,7 @@ interface Props {
 }
 
 export default function LayoutGrid({ layout, editMode, panels, onLayoutChange }: Props) {
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const orderedPanels = [...layout.panels].sort((a, b) => a.order - b.order);
 
@@ -52,9 +46,10 @@ export default function LayoutGrid({ layout, editMode, panels, onLayoutChange }:
 
     const oldIndex = orderedPanels.findIndex((p) => p.id === active.id);
     const newIndex = orderedPanels.findIndex((p) => p.id === over.id);
-    const reordered = arrayMove(orderedPanels, oldIndex, newIndex).map(
-      (p, i) => ({ ...p, order: i }),
-    );
+    const reordered = arrayMove(orderedPanels, oldIndex, newIndex).map((p, i) => ({
+      ...p,
+      order: i,
+    }));
 
     onLayoutChange({ panels: reordered });
   }
@@ -72,11 +67,8 @@ export default function LayoutGrid({ layout, editMode, panels, onLayoutChange }:
       modifiers={[snapToGrid]}
       onDragEnd={handleDragEnd}
     >
-      <SortableContext
-        items={orderedPanels.map((p) => p.id)}
-        strategy={rectSortingStrategy}
-      >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <SortableContext items={orderedPanels.map((p) => p.id)} strategy={rectSortingStrategy}>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {orderedPanels.map((panel) => {
             const def = panels.find((p) => p.id === panel.id);
             if (!def) return null;

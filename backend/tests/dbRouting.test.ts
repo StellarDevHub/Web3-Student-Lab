@@ -1,9 +1,9 @@
 import {
-    clearDbRoutingStateForTests,
-    getDatabaseRoleForOperation,
-    markUserWriteToPrimary,
-    runWithDbRoutingContext,
-    setDbRoutingUserId,
+  clearDbRoutingStateForTests,
+  getDatabaseRoleForOperation,
+  markUserWriteToPrimary,
+  runWithDbRoutingContext,
+  setDbRoutingUserId,
 } from '../src/db/requestContext.js';
 
 describe('DB routing context', () => {
@@ -57,5 +57,40 @@ describe('DB routing context', () => {
 
   it('defaults to primary outside request context', () => {
     expect(getDatabaseRoleForOperation('findMany')).toBe('primary');
+  });
+
+  it('isolates lag window per user', () => {
+    runWithDbRoutingContext('GET', () => {
+      setDbRoutingUserId('student-1');
+      markUserWriteToPrimary('student-1');
+
+      expect(getDatabaseRoleForOperation('findUnique')).toBe('primary');
+
+      setDbRoutingUserId('student-2');
+      expect(getDatabaseRoleForOperation('findUnique')).toBe('read');
+
+      jest.advanceTimersByTime(1001);
+
+      setDbRoutingUserId('student-1');
+      expect(getDatabaseRoleForOperation('findUnique')).toBe('read');
+    });
+  });
+
+  it('respects a custom lag window from environment', () => {
+    process.env.DB_REPLICATION_LAG_WINDOW_MS = '2000';
+    runWithDbRoutingContext('GET', () => {
+      setDbRoutingUserId('student-1');
+      markUserWriteToPrimary('student-1');
+
+      expect(getDatabaseRoleForOperation('findUnique')).toBe('primary');
+
+      jest.advanceTimersByTime(1500);
+
+      expect(getDatabaseRoleForOperation('findUnique')).toBe('primary');
+
+      jest.advanceTimersByTime(600);
+
+      expect(getDatabaseRoleForOperation('findUnique')).toBe('read');
+    });
   });
 });

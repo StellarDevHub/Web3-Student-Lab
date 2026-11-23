@@ -8,7 +8,10 @@ interface OfflineNotificationProps {
   autoHideDuration?: number;
 }
 
-export function OfflineNotification({ onClose, autoHideDuration = 5000 }: OfflineNotificationProps) {
+export function OfflineNotification({
+  onClose,
+  autoHideDuration = 5000,
+}: OfflineNotificationProps) {
   const [isOnline, setIsOnline] = useState(true);
   const [isVisible, setIsVisible] = useState(false);
 
@@ -47,9 +50,25 @@ export function OfflineNotification({ onClose, autoHideDuration = 5000 }: Offlin
     onClose?.();
   };
 
+  const handleRetry = () => {
+    // navigator.onLine can lag the actual network state on some platforms;
+    // a manual retry re-checks it directly rather than waiting on the next
+    // 'online' event, and reloads immediately if it already agrees we're back.
+    if (navigator.onLine) {
+      window.location.reload();
+      return;
+    }
+    setIsOnline(false);
+    setIsVisible(true);
+  };
+
   if (isOnline) {
     return (
-      <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-2 duration-300">
+      <div
+        role="status"
+        aria-live="polite"
+        className="animate-in slide-in-from-bottom-2 fixed right-4 bottom-4 z-50 duration-300"
+      >
         <div className="flex items-center gap-3 rounded-lg bg-green-900 px-4 py-3 text-green-100 shadow-lg backdrop-blur-sm">
           <Wifi className="h-5 w-5 flex-shrink-0" />
           <div className="flex-1">
@@ -58,7 +77,7 @@ export function OfflineNotification({ onClose, autoHideDuration = 5000 }: Offlin
           </div>
           <button
             onClick={handleClose}
-            className="ml-2 rounded p-1 hover:bg-green-800 transition-colors"
+            className="ml-2 rounded p-1 transition-colors hover:bg-green-800"
             aria-label="Close notification"
           >
             <X className="h-4 w-4" />
@@ -69,16 +88,28 @@ export function OfflineNotification({ onClose, autoHideDuration = 5000 }: Offlin
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-2 duration-300">
+    <div
+      role="status"
+      aria-live="polite"
+      className="animate-in slide-in-from-bottom-2 fixed right-4 bottom-4 z-50 duration-300"
+    >
       <div className="flex items-center gap-3 rounded-lg bg-amber-900 px-4 py-3 text-amber-100 shadow-lg backdrop-blur-sm">
         <WifiOff className="h-5 w-5 flex-shrink-0 animate-pulse" />
         <div className="flex-1">
           <p className="text-sm font-medium">Offline Mode</p>
-          <p className="text-xs opacity-90">Cached content is available. Core features may be limited.</p>
+          <p className="text-xs opacity-90">
+            Cached content is available. Core features may be limited.
+          </p>
         </div>
         <button
+          onClick={handleRetry}
+          className="ml-2 shrink-0 rounded px-2 py-1 text-xs font-semibold whitespace-nowrap transition-colors hover:bg-amber-800"
+        >
+          Retry
+        </button>
+        <button
           onClick={handleClose}
-          className="ml-2 rounded p-1 hover:bg-amber-800 transition-colors"
+          className="ml-1 rounded p-1 transition-colors hover:bg-amber-800"
           aria-label="Close notification"
         >
           <X className="h-4 w-4" />

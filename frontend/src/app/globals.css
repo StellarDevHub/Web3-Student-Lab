@@ -1,91 +1,216 @@
-@import "tailwindcss";
-@source "../**/*.{ts,tsx}";
+@import 'tailwindcss';
+@source '../**/*.{ts,tsx}';
+
+/* react-loading-skeleton overrides */
+.react-loading-skeleton {
+  --base-color: rgba(255, 255, 255, 0.05) !important;
+  --highlight-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Custom skeleton shimmer effect for layout stability */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.12) 37%,
+    rgba(255, 255, 255, 0.04) 63%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  will-change: background-position;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    animation: none !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+  }
+}
 
 :root {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f4f4f5;
-  --bg-tertiary: #e4e4e7;
-  --text-primary: #000000;
-  --text-secondary: #71717a;
-  --border-color: rgba(0, 0, 0, 0.1);
-  --background: var(--bg-primary);
-  --foreground: var(--text-primary);
+  --bg: #ffffff;
+  --bg-panel: rgba(240, 240, 240, 0.78);
+  --bg-panel-strong: #e5e5e5;
+  --text-strong: #000000;
+  --text: #1a1a1a;
+  --muted: #666666;
+  --line: rgba(0, 0, 0, 0.11);
+  --brand: #d8481f;
+  --brand-strong: #c2410c;
+  --brand-soft: #ffedd5;
+  --accent: #0f766e;
+  --success: #059669;
+  --warning: #d97706;
+  --body-bg:
+    radial-gradient(circle at top left, rgba(240, 100, 45, 0.05), transparent 28%),
+    radial-gradient(circle at 80% 10%, rgba(37, 181, 164, 0.05), transparent 22%),
+    linear-gradient(180deg, #f8fafc 0%, #ffffff 45%, #f1f5f9 100%);
+  --background: var(--bg);
+  --foreground: var(--text);
 }
 
 .dark {
-  --bg-primary: #000000;
-  --bg-secondary: #09090b;
-  --bg-tertiary: #18181b;
-  --text-primary: #ffffff;
-  --text-secondary: #a1a1aa;
-  --border-color: rgba(255, 255, 255, 0.1);
-  --background: var(--bg-primary);
-  --foreground: var(--text-primary);
+  --bg: #09111d;
+  --bg-panel: rgba(14, 21, 32, 0.78);
+  --bg-panel-strong: #121d2b;
+  --text-strong: #f6f7fb;
+  --text: #d8deea;
+  --muted: #94a0b8;
+  --line: rgba(255, 255, 255, 0.11);
+  --brand: #d8481f;
+  --brand-strong: #f0642d;
+  --brand-soft: #ffd2c4;
+  --accent: #25b5a4;
+  --success: #34c789;
+  --warning: #f3a63c;
+  --body-bg:
+    radial-gradient(circle at top left, rgba(240, 100, 45, 0.18), transparent 28%),
+    radial-gradient(circle at 80% 10%, rgba(37, 181, 164, 0.12), transparent 22%),
+    linear-gradient(180deg, #07101a 0%, #09111d 45%, #0b1320 100%);
+  --background: var(--bg);
+  --foreground: var(--text);
+}
+
+.oled {
+  --bg: #000000;
+  --bg-panel: #000000;
+  --bg-panel-strong: #000000;
+  --text-strong: #ffffff;
+  --text: #ffffff;
+  --muted: #cccccc;
+  --line: #555555;
+  --brand: #ffaa00;
+  --brand-strong: #ffcc00;
+  --brand-soft: #ff8800;
+  --accent: #00ffff;
+  --success: #00ff00;
+  --warning: #ffcc00;
+  --body-bg: #000000;
+  --background: var(--bg);
+  --foreground: var(--text);
 }
 
 @theme inline {
+  --font-sans: var(--font-outfit), var(--font-inter), 'Outfit', 'Inter', 'Sora', 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-bg-primary: var(--bg-primary);
-  --color-bg-secondary: var(--bg-secondary);
-  --color-bg-tertiary: var(--bg-tertiary);
-  --color-text-primary: var(--text-primary);
-  --color-text-secondary: var(--text-secondary);
-  --color-border-theme: var(--border-color);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+/* Aspect Ratio Containers for ZERO Layout Shift */
+.aspect-chart {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  min-height: 250px;
+}
+
+.aspect-badge {
+  aspect-ratio: 1 / 1;
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.aspect-skeleton {
+  aspect-ratio: 4 / 1;
+  width: 100%;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 html {
   scroll-behavior: smooth;
 }
 
-/* Skip to main content link for keyboard/screen reader users */
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--body-bg);
+  color: var(--text);
+  font-family: var(--font-sans), sans-serif;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
 .skip-to-content {
   position: absolute;
   top: -100%;
   left: 0;
-  z-index: 9999;
-  padding: 0.75rem 1.5rem;
-  background: #dc2626;
-  color: #fff;
-  font-weight: 700;
-  font-size: 0.875rem;
-  text-decoration: none;
-  border-radius: 0 0 0.5rem 0;
-  transition: top 0.2s;
+  z-index: 999;
+  padding: 0.75rem 1rem;
+  border-bottom-right-radius: 0.75rem;
+  background: white;
+  color: #111827;
+  font-weight: 600;
 }
 
 .skip-to-content:focus {
   top: 0;
 }
 
-/* Screen reader only utility */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
-}
-
-/* Visible focus styles for keyboard navigation */
 :focus-visible {
-  outline: 2px solid #dc2626;
+  outline: 2px solid var(--brand-strong);
   outline-offset: 2px;
 }
 
-/* Respect reduced motion preferences */
+.glass-panel {
+  border: 1px solid var(--line);
+  background: var(--bg-panel);
+  backdrop-filter: blur(18px);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.eyebrow::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--brand-strong);
+  box-shadow: 0 0 0 0.3rem rgba(216, 72, 31, 0.12);
+}
+
+.surface-card {
+  border: 1px solid var(--line);
+  border-radius: 1.5rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)), var(--bg-panel);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -97,72 +222,314 @@ html {
   }
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+.skip-link {
+  position: fixed;
+  top: -100%;
+  left: 0;
+  z-index: 9999;
+  padding: 0.75rem 1rem;
+  border-bottom-right-radius: 0.75rem;
+  background: white;
+  color: #111827;
+  font-weight: 600;
+  font-size: 0.875rem;
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 0.1),
+    0 2px 4px -2px rgb(0 0 0 / 0.1);
+  transition: top 0.1s ease-in-out;
 }
 
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
+.skip-link:focus {
+  top: 0;
+  outline: 2px solid var(--brand-strong);
+  outline-offset: 2px;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 5px;
+.skip-link-group .skip-link:not(:first-child) {
+  left: 14rem;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #555;
+.skip-link-group .skip-link:nth-child(3) {
+  left: 28rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  ::-webkit-scrollbar-track {
-    background: #1a1a1a;
+[data-focus-visible-added]:focus-visible {
+  outline: 2px solid var(--brand-strong);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+[role='tab']:focus-visible,
+[role='menuitem']:focus-visible,
+[role='option']:focus-visible,
+[role='radio']:focus-visible,
+[role='switch']:focus-visible {
+  outline: 2px solid var(--brand-strong);
+  outline-offset: 2px;
+}
+
+[aria-current='page'] {
+  font-weight: 600;
+}
+
+@media (forced-colors: active) {
+  .skip-link:focus {
+    outline: 3px solid ButtonText;
   }
-
-  ::-webkit-scrollbar-thumb {
-    background: #444;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: #666;
+  :focus-visible {
+    outline: 3px solid ButtonText;
   }
 }
 
-/* Line clamp utility */
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+/* ─── Issue #711: Lesson Viewer – Dark Mode Code Block Overrides ───────────
+ *
+ * Scope Prism.js / Shiki CSS custom properties to the lesson viewer so that
+ * switching the site theme seamlessly swaps code highlight backgrounds and
+ * token colours without touching the global stylesheet or third-party bundles.
+ *
+ * Strategy:
+ *  - `.lesson-viewer` wraps all markdown-rendered lesson content.
+ *  - The `dark` selector matches Tailwind's dark-mode class strategy
+ *    (`class` strategy on <html>).
+ *  - Custom properties override Prism / Shiki tokens at the component scope.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* Light-mode defaults (already in effect unless .dark is present) */
+.lesson-viewer pre,
+.lesson-viewer code {
+  --code-bg: #f4f6fa;
+  --code-fg: #1e2430;
+  --code-border: rgba(0, 0, 0, 0.08);
+  --code-selection: rgba(37, 181, 164, 0.25);
+
+  /* Prism token overrides */
+  --prism-bg: var(--code-bg);
+  --prism-default: var(--code-fg);
+  --prism-comment: #6b7280;
+  --prism-keyword: #7c3aed;
+  --prism-string: #059669;
+  --prism-number: #d97706;
+  --prism-function: #2563eb;
+  --prism-operator: #db2777;
+  --prism-punctuation: #6b7280;
+
+  /* Shiki CSS variable tokens */
+  --shiki-color-background: var(--code-bg);
+  --shiki-color-text: var(--code-fg);
+  --shiki-token-comment: var(--prism-comment);
+  --shiki-token-keyword: var(--prism-keyword);
+  --shiki-token-string: var(--prism-string);
+  --shiki-token-number: var(--prism-number);
+  --shiki-token-function: var(--prism-function);
+  --shiki-token-operator: var(--prism-operator);
+  --shiki-token-punctuation: var(--prism-punctuation);
 }
 
-/* Active scale animation */
-.active\:scale-98:active {
-  transform: scale(0.98);
+/* Dark-mode overrides – activated by Tailwind's html.dark class */
+.dark .lesson-viewer pre,
+.dark .lesson-viewer code {
+  --code-bg: #0d1520;
+  --code-fg: #cdd6f4;
+  --code-border: rgba(255, 255, 255, 0.08);
+  --code-selection: rgba(37, 181, 164, 0.2);
+
+  --prism-bg: var(--code-bg);
+  --prism-default: var(--code-fg);
+  --prism-comment: #6c7a8e;
+  --prism-keyword: #cba6f7;
+  --prism-string: #a6e3a1;
+  --prism-number: #fab387;
+  --prism-function: #89b4fa;
+  --prism-operator: #f38ba8;
+  --prism-punctuation: #7f849c;
+
+  --shiki-color-background: var(--code-bg);
+  --shiki-color-text: var(--code-fg);
+  --shiki-token-comment: var(--prism-comment);
+  --shiki-token-keyword: var(--prism-keyword);
+  --shiki-token-string: var(--prism-string);
+  --shiki-token-number: var(--prism-number);
+  --shiki-token-function: var(--prism-function);
+  --shiki-token-operator: var(--prism-operator);
+  --shiki-token-punctuation: var(--prism-punctuation);
 }
 
+/* Apply the resolved custom properties to actual elements */
+.lesson-viewer pre {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  overflow-x: auto;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.lesson-viewer code {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  font-family: var(--font-mono, 'JetBrains Mono', 'SFMono-Regular', monospace);
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+
+/* Inline code inside prose */
+.lesson-viewer p code,
+.lesson-viewer li code {
+  padding: 0.15em 0.4em;
+  border-radius: 0.3rem;
+  border: 1px solid var(--code-border);
+}
+
+/* Selection highlight */
+.lesson-viewer pre ::selection,
+.lesson-viewer code ::selection {
+  background: var(--code-selection);
+}
+
+/* Prism.js token colour bindings */
+.lesson-viewer .token.comment,
+.lesson-viewer .token.block-comment,
+.lesson-viewer .token.prolog,
+.lesson-viewer .token.doctype,
+.lesson-viewer .token.cdata {
+  color: var(--prism-comment);
+}
+
+.lesson-viewer .token.keyword,
+.lesson-viewer .token.important,
+.lesson-viewer .token.atrule,
+.lesson-viewer .token.builtin {
+  color: var(--prism-keyword);
+}
+
+.lesson-viewer .token.string,
+.lesson-viewer .token.char,
+.lesson-viewer .token.attr-value {
+  color: var(--prism-string);
+}
+
+.lesson-viewer .token.number,
+.lesson-viewer .token.boolean {
+  color: var(--prism-number);
+}
+
+.lesson-viewer .token.function,
+.lesson-viewer .token.function-name {
+  color: var(--prism-function);
+}
+
+.lesson-viewer .token.operator,
+.lesson-viewer .token.entity,
+.lesson-viewer .token.url {
+  color: var(--prism-operator);
+}
+
+.lesson-viewer .token.punctuation {
+  color: var(--prism-punctuation);
+}
+
+/* ─── Playground execution status bar ─────────────────────────────────────── */
 @keyframes shimmer {
   0% {
-    background-position: -1000px 0;
+    transform: translateX(-100%);
   }
   100% {
-    background-position: 1000px 0;
+    transform: translateX(200%);
   }
 }
 
-.skeleton-shimmer {
-  animation: shimmer 2s infinite linear;
-  background: #18181b;
-  background-image: linear-gradient(
-    to right,
-    #18181b 0%,
-    #27272a 20%,
-    #18181b 40%,
-    #18181b 100%
-  );
-  background-repeat: no-repeat;
-  background-size: 1000px 100%;
+/* Thin themed scrollbar shared by simulator-style panels */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #ef4444;
 }
 
+/* ─── Issue #1337: Dynamic Theme Engine – HSL Design Tokens ────────────────
+ * Semantic HSL color tokens used by the contrast-aware theming engine.
+ * HSL makes it trivial to derive accessible lightness steps while holding
+ * hue/saturation constant, which is what guarantees WCAG AAA contrast across
+ * dark and light modes.
+ * ─────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Base brand hue (orange) held constant across themes; only lightness shifts. */
+  --hsl-brand-h: 18;
+  --hsl-brand-s: 88%;
+  --hsl-brand-l-dark: 55%;
+  --hsl-brand-l-light: 45%;
+
+  /* Surface HSL tokens – lightness is the theme axis. */
+  --hsl-surface-bg-h: 210;
+  --hsl-surface-bg-s: 12%;
+  --hsl-surface-bg-l-dark: 8%;
+  --hsl-surface-bg-l-light: 98%;
+
+  --hsl-surface-panel-h: 210;
+  --hsl-surface-panel-s: 10%;
+  --hsl-surface-panel-l-dark: 14%;
+  --hsl-surface-panel-l-light: 94%;
+
+  /* Text HSL tokens – contrast is derived from the gap between text and bg L. */
+  --hsl-text-h: 210;
+  --hsl-text-s: 8%;
+  --hsl-text-l-dark: 88%;
+  --hsl-text-l-light: 12%;
+
+  --hsl-muted-h: 210;
+  --hsl-muted-s: 6%;
+  --hsl-muted-l-dark: 52%;
+  --hsl-muted-l-light: 42%;
+}
+
+.dark {
+  --hsl-bg: hsl(var(--hsl-surface-bg-h), var(--hsl-surface-bg-s), var(--hsl-surface-bg-l-dark));
+  --hsl-panel: hsl(var(--hsl-surface-panel-h), var(--hsl-surface-panel-s), var(--hsl-surface-panel-l-dark));
+  --hsl-text: hsl(var(--hsl-text-h), var(--hsl-text-s), var(--hsl-text-l-dark));
+  --hsl-muted: hsl(var(--hsl-muted-h), var(--hsl-muted-s), var(--hsl-muted-l-dark));
+  --hsl-brand: hsl(var(--hsl-brand-h), var(--hsl-brand-s), var(--hsl-brand-l-dark));
+}
+
+html:not(.dark) {
+  --hsl-bg: hsl(var(--hsl-surface-bg-h), var(--hsl-surface-bg-s), var(--hsl-surface-bg-l-light));
+  --hsl-panel: hsl(var(--hsl-surface-panel-h), var(--hsl-surface-panel-s), var(--hsl-surface-panel-l-light));
+  --hsl-text: hsl(var(--hsl-text-h), var(--hsl-text-s), var(--hsl-text-l-light));
+  --hsl-muted: hsl(var(--hsl-muted-h), var(--hsl-muted-s), var(--hsl-muted-l-light));
+  --hsl-brand: hsl(var(--hsl-brand-h), var(--hsl-brand-s), var(--hsl-brand-l-light));
+}
+
+/* Code syntax highlight tokens tuned for WCAG AAA contrast on both themes.
+ * Foreground lightness is chosen so contrast against the code bg is >= 7:1. */
+.lesson-viewer pre,
+.lesson-viewer code {
+  --code-hsl-bg-h: 210;
+  --code-hsl-bg-s: 10%;
+  --code-hsl-bg-l-dark: 6%;
+  --code-hsl-bg-l-light: 96%;
+  --code-hsl-fg-h: 210;
+  --code-hsl-fg-s: 6%;
+  --code-hsl-fg-l-dark: 92%;
+  --code-hsl-fg-l-light: 14%;
+}
+
+.dark .lesson-viewer pre,
+.dark .lesson-viewer code {
+  --code-bg: hsl(var(--code-hsl-bg-h), var(--code-hsl-bg-s), var(--code-hsl-bg-l-dark));
+  --code-fg: hsl(var(--code-hsl-fg-h), var(--code-hsl-fg-s), var(--code-hsl-fg-l-dark));
+}
+
+html:not(.dark) .lesson-viewer pre,
+html:not(.dark) .lesson-viewer code {
+  --code-bg: hsl(var(--code-hsl-bg-h), var(--code-hsl-bg-s), var(--code-hsl-bg-l-light));
+  --code-fg: hsl(var(--code-hsl-fg-h), var(--code-hsl-fg-s), var(--code-hsl-fg-l-light));
+}

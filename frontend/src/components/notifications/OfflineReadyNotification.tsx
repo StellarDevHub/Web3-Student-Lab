@@ -54,7 +54,7 @@ export function OfflineReadyNotification({
   };
 
   return (
-    <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-2 duration-300">
+    <div className="animate-in slide-in-from-top-2 fixed top-4 right-4 z-50 duration-300">
       <div className="flex items-center gap-3 rounded-lg bg-gradient-to-r from-purple-900 to-purple-800 px-4 py-3 text-purple-100 shadow-lg backdrop-blur-sm">
         <CheckCircle className="h-5 w-5 flex-shrink-0 text-purple-300" />
         <div className="flex-1">
@@ -65,7 +65,7 @@ export function OfflineReadyNotification({
         </div>
         <button
           onClick={handleDismiss}
-          className="ml-2 rounded p-1 hover:bg-purple-700 transition-colors"
+          className="ml-2 rounded p-1 transition-colors hover:bg-purple-700"
           aria-label="Close notification"
         >
           <X className="h-4 w-4" />

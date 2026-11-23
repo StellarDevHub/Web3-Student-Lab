@@ -14,19 +14,16 @@ export function useAnimationFeedback() {
   const [feedback, setFeedback] = useState<AnimationFeedback | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 
-  const showFeedback = useCallback(
-    (type: FeedbackType, message: string, duration = 3000) => {
-      setFeedback({ type, message, duration });
-      setIsVisible(true);
+  const showFeedback = useCallback((type: FeedbackType, message: string, duration = 3000) => {
+    setFeedback({ type, message, duration });
+    setIsVisible(true);
 
-      const timer = setTimeout(() => {
-        setIsVisible(false);
-      }, duration);
+    const timer = setTimeout(() => {
+      setIsVisible(false);
+    }, duration);
 
-      return () => clearTimeout(timer);
-    },
-    []
-  );
+    return () => clearTimeout(timer);
+  }, []);
 
   const showSuccess = useCallback(
     (message: string, duration?: number) => {
@@ -80,7 +77,7 @@ export function useLoadingAnimation() {
   const stopLoading = useCallback(() => setIsLoading(false), []);
 
   const withLoading = useCallback(
-    async <T,>(fn: () => Promise<T>): Promise<T | null> => {
+    async <T>(fn: () => Promise<T>): Promise<T | null> => {
       startLoading();
       try {
         const result = await fn();

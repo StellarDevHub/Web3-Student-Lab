@@ -92,7 +92,7 @@ export const useEditorStore = create<EditorStore>()(
 
         addCollaborator: (collaborator: EditorState['collaborators'][0]) => {
           const collaborators = get().collaborators;
-          const exists = collaborators.find(c => c.id === collaborator.id);
+          const exists = collaborators.find((c) => c.id === collaborator.id);
           if (!exists) {
             set({ collaborators: [...collaborators, collaborator] });
           }
@@ -100,15 +100,13 @@ export const useEditorStore = create<EditorStore>()(
 
         removeCollaborator: (id: string) => {
           const collaborators = get().collaborators;
-          set({ collaborators: collaborators.filter(c => c.id !== id) });
+          set({ collaborators: collaborators.filter((c) => c.id !== id) });
         },
 
         updateCollaboratorCursor: (id: string, cursor: { line: number; column: number }) => {
           const collaborators = get().collaborators;
           set({
-            collaborators: collaborators.map(c =>
-              c.id === id ? { ...c, cursor } : c
-            )
+            collaborators: collaborators.map((c) => (c.id === id ? { ...c, cursor } : c)),
           });
         },
 
@@ -155,8 +153,7 @@ export const useEditor = () => {
     removeCollaborator: store.removeCollaborator,
     updateCollaboratorCursor: store.updateCollaboratorCursor,
     reset: store.reset,
-
-      };
+  };
 };
 
 // Selective selectors

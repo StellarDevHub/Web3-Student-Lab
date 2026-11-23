@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useNotifications } from "@/contexts/NotificationContext";
-import { useState } from "react";
-import { NotificationSidebar } from "./NotificationSidebar";
+import { useNotifications } from '@/contexts/NotificationContext';
+import { useState } from 'react';
+import { NotificationSidebar } from './NotificationSidebar';
 
-export function NotificationBell() {
+export default function NotificationBell() {
   const { unreadCount } = useNotifications();
   const [open, setOpen] = useState(false);
 
@@ -12,11 +12,11 @@ export function NotificationBell() {
     <>
       <button
         onClick={() => setOpen(true)}
-        aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
-        className="relative w-10 h-10 rounded-full bg-zinc-900 border border-white/10 flex items-center justify-center hover:border-red-500/50 transition-colors group"
+        aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
+        className="group relative flex h-10 w-10 items-center justify-center rounded-full transition-colors bg-transparent hover:bg-white/5"
       >
         <svg
-          className="w-5 h-5 text-gray-500 group-hover:text-white transition-colors"
+          className="h-5 w-5 text-gray-400 transition-colors group-hover:text-white"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -29,8 +29,8 @@ export function NotificationBell() {
           />
         </svg>
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[9px] font-black flex items-center justify-center">
-            {unreadCount > 99 ? "99+" : unreadCount}
+          <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-black text-white">
+            {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
       </button>

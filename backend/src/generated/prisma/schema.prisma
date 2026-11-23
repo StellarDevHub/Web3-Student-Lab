@@ -1,0 +1,101 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Student {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  enrollments  Enrollment[]
+  certificates Certificate[]
+  feedback     Feedback[]
+
+  @@map("students")
+}
+
+model Course {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  instructor  String
+  credits     Int      @default(3)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  enrollments  Enrollment[]
+  certificates Certificate[]
+  feedback     Feedback[]
+
+  @@map("courses")
+}
+
+model Certificate {
+  id              String   @id @default(cuid())
+  studentId       String
+  courseId        String
+  issuedAt        DateTime @default(now())
+  certificateHash String?
+  status          String   @default("pending")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@map("certificates")
+}
+
+model Enrollment {
+  id         String   @id @default(cuid())
+  studentId  String
+  courseId   String
+  enrolledAt DateTime @default(now())
+  status     String   @default("active")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, courseId])
+  @@map("enrollments")
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  studentId String
+  courseId  String
+  rating    Int // Rating from 1 to 5
+  review    String? // Optional text review
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, courseId]) // One review per student per course
+  @@map("feedback")
+}
+
+model LearningProgress {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  completedLessons String[] // Array of strings for PostgreSQL
+  currentModule    String   @default("mod-1")
+  percentage       Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("learning_progress")
+}

@@ -3,8 +3,9 @@ import { authenticate } from '../auth/auth.middleware.js';
 import { getStudentDashboard, getStats } from './dashboard.service.js';
 import { getAggregatedDashboardData } from '../services/bff.service.js';
 import logger from '../utils/logger.js';
+import * as hashController from './hash.controller.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @route   GET /api/dashboard/stats
@@ -64,6 +65,10 @@ router.get('/student/:studentId', async (req: Request, res: Response) => {
     }
   }
 });
+
+// Hash Function Demo Routes
+router.post('/hash-demo', hashController.generateHash);
+router.get('/hash-demo/:studentId', hashController.getSimulations);
 
 // Modular route export
 export default router;

@@ -2,15 +2,12 @@
  * Soroban developer tools utilities
  * ScVal decoder, RPC helpers, fee stats
  */
-import { rpc, scValToNative, xdr } from "@stellar/stellar-sdk";
+import { rpc, scValToNative, xdr } from '@stellar/stellar-sdk';
+import { getPublicEnv } from './env';
 
-export const SOROBAN_RPC_URL =
-  process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ||
-  "https://soroban-testnet.stellar.org";
+export const SOROBAN_RPC_URL = getPublicEnv().sorobanRpcUrl;
 
-export const HORIZON_URL =
-  process.env.NEXT_PUBLIC_HORIZON_URL ||
-  "https://horizon-testnet.stellar.org";
+export const HORIZON_URL = getPublicEnv().horizonUrl;
 
 // ─── ScVal Decoder ────────────────────────────────────────────────────────────
 
@@ -32,35 +29,35 @@ export function decodeScVal(val: xdr.ScVal): DecodedValue {
   } catch {
     // Fallback manual decode for edge cases
     switch (val.switch().name) {
-      case "scvVoid":
+      case 'scvVoid':
         return null;
-      case "scvBool":
+      case 'scvBool':
         return val.b();
-      case "scvU32":
+      case 'scvU32':
         return val.u32();
-      case "scvI32":
+      case 'scvI32':
         return val.i32();
-      case "scvU64":
+      case 'scvU64':
         return Number(val.u64().toBigInt());
-      case "scvI64":
+      case 'scvI64':
         return Number(val.i64().toBigInt());
-      case "scvU128":
+      case 'scvU128':
         return String(val.u128().hi().toBigInt() * BigInt(2 ** 64) + val.u128().lo().toBigInt());
-      case "scvI128":
+      case 'scvI128':
         return String(val.i128().hi().toBigInt() * BigInt(2 ** 64) + val.i128().lo().toBigInt());
-      case "scvBytes":
-        return Buffer.from(val.bytes()).toString("hex");
-      case "scvString":
-        return Buffer.from(val.str()).toString("utf8");
-      case "scvSymbol":
+      case 'scvBytes':
+        return Buffer.from(val.bytes()).toString('hex');
+      case 'scvString':
+        return Buffer.from(val.str()).toString('utf8');
+      case 'scvSymbol':
         return val.sym().toString();
-      case "scvAddress":
+      case 'scvAddress':
         return val.address().toString();
-      case "scvVec": {
+      case 'scvVec': {
         const vec = val.vec();
         return vec ? vec.map(decodeScVal) : [];
       }
-      case "scvMap": {
+      case 'scvMap': {
         const map = val.map();
         if (!map) return {};
         const obj: { [key: string]: DecodedValue } = {};
@@ -93,7 +90,7 @@ export interface DecodedEvent {
 export function decodeRpcEvent(raw: rpc.Api.EventResponse): DecodedEvent {
   const topics = raw.topic.map((t) => {
     try {
-      return decodeScVal(xdr.ScVal.fromXDR(t, "base64"));
+      return decodeScVal(xdr.ScVal.fromXDR(t, 'base64'));
     } catch {
       return t;
     }
@@ -101,7 +98,7 @@ export function decodeRpcEvent(raw: rpc.Api.EventResponse): DecodedEvent {
 
   let value: DecodedValue = null;
   try {
-    value = decodeScVal(xdr.ScVal.fromXDR(raw.value, "base64"));
+    value = decodeScVal(xdr.ScVal.fromXDR(raw.value, 'base64'));
   } catch {
     value = raw.value;
   }
@@ -134,7 +131,7 @@ export interface FeeStats {
 
 export async function fetchFeeStats(): Promise<FeeStats> {
   const res = await fetch(`${HORIZON_URL}/fee_stats`);
-  if (!res.ok) throw new Error("Failed to fetch fee stats");
+  if (!res.ok) throw new Error('Failed to fetch fee stats');
   const data = await res.json();
   const lf = data.last_ledger_base_fee;
   const fp = data.fee_charged;
@@ -155,7 +152,7 @@ export async function fetchFeeStats(): Promise<FeeStats> {
 export interface StorageEntry {
   key: DecodedValue;
   value: DecodedValue;
-  durability: "persistent" | "temporary" | "instance";
+  durability: 'persistent' | 'temporary' | 'instance';
   rawKey: string;
   rawValue: string;
 }
@@ -171,7 +168,7 @@ export async function fetchContractStorage(contractId: string): Promise<StorageE
     const instanceKey = xdr.LedgerKey.contractData(
       new xdr.LedgerKeyContractData({
         contract: xdr.ScAddress.scAddressTypeContract(
-          xdr.Hash.fromXDR(Buffer.from(contractId.replace(/^C/, ""), "base64"))
+          xdr.Hash.fromXDR(Buffer.from(contractId.replace(/^C/, ''), 'base64'))
         ),
         key: xdr.ScVal.scvLedgerKeyContractInstance(),
         durability: xdr.ContractDataDurability.persistent(),
@@ -179,14 +176,14 @@ export async function fetchContractStorage(contractId: string): Promise<StorageE
     );
     const result = await server.getLedgerEntries(instanceKey);
     for (const item of result.entries) {
-      if (item.val.switch().name === "contractData") {
+      if (item.val.switch().name === 'contractData') {
         const cd = item.val.contractData();
         entries.push({
           key: decodeScVal(cd.key()),
           value: decodeScVal(cd.val()),
-          durability: "instance",
-          rawKey: cd.key().toXDR("base64"),
-          rawValue: cd.val().toXDR("base64"),
+          durability: 'instance',
+          rawKey: cd.key().toXDR('base64'),
+          rawValue: cd.val().toXDR('base64'),
         });
       }
     }

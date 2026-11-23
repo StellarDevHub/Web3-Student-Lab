@@ -1,0 +1,3 @@
+# Generated benchmark logs — keep the directory, ignore the output files.
+*
+!.gitignore

@@ -24,31 +24,21 @@ export function WizardNavigation({
   isSubmitting = false,
 }: WizardNavigationProps) {
   return (
-    <div className="flex justify-between items-center pt-8 border-t border-zinc-800">
+    <div className="flex items-center justify-between border-t border-zinc-800 pt-8">
       <motion.button
         whileHover={canGoBack ? { x: -4 } : {}}
         whileTap={canGoBack ? { scale: 0.95 } : {}}
         onClick={onBack}
         disabled={!canGoBack || isSubmitting}
-        className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium text-sm uppercase tracking-wider transition-all ${
+        className={`flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-medium tracking-wider uppercase transition-all ${
           canGoBack && !isSubmitting
-            ? 'text-white bg-zinc-800 hover:bg-zinc-700 border border-zinc-700'
-            : 'text-zinc-600 bg-zinc-900 border border-zinc-800 cursor-not-allowed'
+            ? 'border border-zinc-700 bg-zinc-800 text-white hover:bg-zinc-700'
+            : 'cursor-not-allowed border border-zinc-800 bg-zinc-900 text-zinc-600'
         }`}
         type="button"
       >
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M15 19l-7-7 7-7"
-          />
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
         Back
       </motion.button>
@@ -59,20 +49,16 @@ export function WizardNavigation({
           whileTap={canProceed ? { scale: 0.98 } : {}}
           onClick={onSubmit}
           disabled={!canProceed || isSubmitting}
-          className={`flex items-center gap-2 px-8 py-3 rounded-lg font-bold text-sm uppercase tracking-wider transition-all shadow-lg ${
+          className={`flex items-center gap-2 rounded-lg px-8 py-3 text-sm font-bold tracking-wider uppercase shadow-lg transition-all ${
             canProceed && !isSubmitting
-              ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-600/25'
-              : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+              ? 'bg-red-600 text-white shadow-red-600/25 hover:bg-red-700'
+              : 'cursor-not-allowed bg-zinc-800 text-zinc-500'
           }`}
           type="submit"
         >
           {isSubmitting ? (
             <>
-              <svg
-                className="animate-spin h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
+              <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle
                   className="opacity-25"
                   cx="12"
@@ -92,12 +78,7 @@ export function WizardNavigation({
           ) : (
             <>
               Complete Enrollment
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -114,26 +95,16 @@ export function WizardNavigation({
           whileTap={canProceed ? { scale: 0.98 } : {}}
           onClick={onNext}
           disabled={!canProceed || isSubmitting}
-          className={`flex items-center gap-2 px-8 py-3 rounded-lg font-bold text-sm uppercase tracking-wider transition-all shadow-lg ${
+          className={`flex items-center gap-2 rounded-lg px-8 py-3 text-sm font-bold tracking-wider uppercase shadow-lg transition-all ${
             canProceed && !isSubmitting
-              ? 'bg-white text-black hover:bg-zinc-200 shadow-white/10'
-              : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+              ? 'bg-white text-black shadow-white/10 hover:bg-zinc-200'
+              : 'cursor-not-allowed bg-zinc-800 text-zinc-500'
           }`}
           type="button"
         >
           Continue
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 5l7 7-7 7"
-            />
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </motion.button>
       )}

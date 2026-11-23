@@ -1,0 +1,15 @@
+{
+  "contracts": [
+    {
+      "id": "example-token",
+      "network": "testnet",
+      "address": "GCEXAMPLETOKENADDRESS",
+      "expectedHash": ""
+    }
+  ],
+  "rpcs": {
+    "testnet": ["https://soroban-testnet.example/rpc"],
+    "futurenet": ["https://soroban-futurenet.example/rpc"],
+    "mainnet": ["https://soroban-mainnet.example/rpc"]
+  }
+}

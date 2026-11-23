@@ -10,9 +10,10 @@ interface ThemedComponentProps {
 }
 
 // Example component showing how to use theme colors
-export const ThemedCard: React.FC<
-  ThemedComponentProps & { title?: string }
-> = ({ children, title }) => {
+export const ThemedCard: React.FC<ThemedComponentProps & { title?: string }> = ({
+  children,
+  title,
+}) => {
   const { colors, isDark } = useThemeMode();
 
   return (
@@ -25,10 +26,7 @@ export const ThemedCard: React.FC<
       className="rounded-lg border p-4 transition-colors duration-300"
     >
       {title && (
-        <h3
-          style={{ color: colors.text.primary }}
-          className="mb-2 font-semibold"
-        >
+        <h3 style={{ color: colors.text.primary }} className="mb-2 font-semibold">
           {title}
         </h3>
       )}
@@ -60,10 +58,8 @@ export const ThemeSwitcher: React.FC = () => {
         <span className="text-sm text-gray-400">Theme:</span>
         <select
           value={theme}
-          onChange={(e) =>
-            setThemeMode(e.target.value as 'light' | 'dark' | 'system')
-          }
-          className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+          onChange={(e) => setThemeMode(e.target.value as 'light' | 'dark' | 'system')}
+          className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1 text-sm text-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
         >
           <option value="light">Light</option>
           <option value="dark">Dark</option>

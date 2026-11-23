@@ -52,16 +52,7 @@ export const AnimatedButton = React.forwardRef<HTMLButtonElement, AnimatedButton
         whileTap={!isDisabled ? 'tap' : undefined}
         transition={ANIMATION_TOKENS.transitions.button}
         disabled={isDisabled}
-        className={`
-          relative inline-flex items-center justify-center gap-2
-          rounded-lg font-medium transition-colors
-          ${variantStyles[variant]}
-          ${sizeStyles[size]}
-          ${fullWidth ? 'w-full' : ''}
-          ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-          focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-black
-          ${className}
-        `}
+        className={`relative inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors ${variantStyles[variant]} ${sizeStyles[size]} ${fullWidth ? 'w-full' : ''} ${isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-black focus:outline-none ${className} `}
         {...props}
       >
         {isLoading && (

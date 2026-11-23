@@ -1,6 +1,13 @@
-# Frontend build output
+# Build output
 .next/
-out/
+dist/
+
+# Dependencies
 node_modules/
-*.log
-pnpm-lock.yaml
+
+# Generated
+.next/
+
+# Large generated/third-party files
+src/components/rewards/RewardsDashboard.tsx
+src/components/subscriptions/SubscriptionDashboard.tsx

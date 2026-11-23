@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef } from 'react';
 
 interface ResourceGaugeProps {
   label: string;
@@ -13,14 +13,14 @@ interface ResourceGaugeProps {
 
 function valueColor(value: number, warningAt: number, criticalAt: number): string {
   if (value >= criticalAt) {
-    return "#ef4444";
+    return '#ef4444';
   }
 
   if (value >= warningAt) {
-    return "#f59e0b";
+    return '#f59e0b';
   }
 
-  return "#10b981";
+  return '#10b981';
 }
 
 export function ResourceGauge({
@@ -29,7 +29,7 @@ export function ResourceGauge({
   max,
   warningAt,
   criticalAt,
-  unit = "%",
+  unit = '%',
 }: ResourceGaugeProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animatedValueRef = useRef(0);
@@ -40,7 +40,7 @@ export function ResourceGauge({
       return;
     }
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext('2d');
     if (!ctx) {
       return;
     }
@@ -69,33 +69,33 @@ export function ResourceGauge({
       const activeEnd = start + (end - start) * ratio;
 
       ctx.lineWidth = 14;
-      ctx.lineCap = "round";
+      ctx.lineCap = 'round';
 
       ctx.beginPath();
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
       ctx.arc(centerX, centerY, radius, start, end, false);
       ctx.stroke();
 
       const gradient = ctx.createLinearGradient(20, 0, width - 20, 0);
       const activeColor = valueColor(displayValue, warningAt, criticalAt);
       gradient.addColorStop(0, activeColor);
-      gradient.addColorStop(1, "#ffffff");
+      gradient.addColorStop(1, '#ffffff');
 
       ctx.beginPath();
       ctx.strokeStyle = gradient;
       ctx.arc(centerX, centerY, radius, start, activeEnd, false);
       ctx.stroke();
 
-      ctx.fillStyle = "#ffffff";
-      ctx.textAlign = "center";
-      ctx.font = "700 14px var(--font-geist-mono), monospace";
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.font = '700 14px var(--font-geist-mono), monospace';
       ctx.fillText(label.toUpperCase(), centerX, 24);
 
-      ctx.font = "800 32px var(--font-geist-sans), sans-serif";
+      ctx.font = '800 32px var(--font-geist-sans), sans-serif';
       ctx.fillText(`${Math.round(displayValue)}${unit}`, centerX, 88);
 
-      ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
-      ctx.font = "600 11px var(--font-geist-mono), monospace";
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.font = '600 11px var(--font-geist-mono), monospace';
       ctx.fillText(`threshold ${warningAt}${unit}`, centerX, 108);
     };
 
@@ -122,5 +122,13 @@ export function ResourceGauge({
     };
   }, [criticalAt, label, max, value, unit, warningAt]);
 
-  return <canvas ref={canvasRef} aria-label={`${label} resource gauge`} />;
+  return (
+    <>
+      <canvas ref={canvasRef} role="img" aria-label={`${label} resource gauge`} />
+      {/* Visually hidden live region so screen readers announce value changes */}
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {`${label}: ${Math.round(value)}${unit}`}
+      </span>
+    </>
+  );
 }

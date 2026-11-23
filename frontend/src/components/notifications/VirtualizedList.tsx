@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from 'react';
 
 interface VirtualizedListProps<T> {
   items: T[];
@@ -28,8 +28,8 @@ export function VirtualizedList<T>({
     const el = scrollRef.current;
     if (!el) return;
     const handler = () => setScrollTop(el.scrollTop);
-    el.addEventListener("scroll", handler, { passive: true });
-    return () => el.removeEventListener("scroll", handler);
+    el.addEventListener('scroll', handler, { passive: true });
+    return () => el.removeEventListener('scroll', handler);
   }, []);
 
   const totalHeight = items.length * itemHeight;
@@ -42,11 +42,11 @@ export function VirtualizedList<T>({
   return (
     <div
       ref={scrollRef}
-      style={{ height: containerHeight, overflowY: "auto" }}
+      style={{ height: containerHeight, overflowY: 'auto' }}
       className="relative"
     >
-      <div style={{ height: totalHeight, position: "relative" }}>
-        <div style={{ position: "absolute", top: startIndex * itemHeight, width: "100%" }}>
+      <div style={{ height: totalHeight, position: 'relative' }}>
+        <div style={{ position: 'absolute', top: startIndex * itemHeight, width: '100%' }}>
           {visibleItems.map((item, i) => (
             <div key={startIndex + i} style={{ height: itemHeight }}>
               {renderItem(item, startIndex + i)}

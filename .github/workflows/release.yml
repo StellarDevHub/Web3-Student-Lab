@@ -1,0 +1,49 @@
+name: Build Release Artifacts & Notify
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build_release_assets:
+    name: Build WASM Contracts & Frontend Release Bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain for Soroban
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build Soroban Contract WASM Artifacts
+        run: |
+          cd contracts
+          cargo build --target wasm32-unknown-unknown --release
+          mkdir -p ../release_artifacts/wasm
+          cp target/wasm32-unknown-unknown/release/*.wasm ../release_artifacts/wasm/ || true
+          cd ..
+
+      - name: Package Frontend Release Archive
+        run: |
+          mkdir -p release_artifacts/frontend
+          tar -czf release_artifacts/frontend/frontend-release.tar.gz -C frontend .
+
+      - name: Attach Artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release_artifacts/wasm/*.wasm
+            release_artifacts/frontend/frontend-release.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify Team Webhooks (Discord / Slack)
+        if: always()
+        run: |
+          if [ -n "$DISCORD_WEBHOOK" ]; then
+            curl -H "Content-Type: application/json" -X POST -d "{\"content\": \"🚀 **New Platform Release Published!** Version: ${{ github.event.release.tag_name }} is now live. Releases: ${{ github.event.release.html_url }}\"}" "$DISCORD_WEBHOOK" || true
+          fi
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
