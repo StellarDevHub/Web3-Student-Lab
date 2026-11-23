@@ -28,6 +28,23 @@ function getStringQuery(value: unknown): string | undefined {
 }
 
 /**
+ * Expose the deployed Soroban contract ID consistently, including for
+ * older certificate rows created before the address was persisted.
+ * Do not turn an unset deployment setting into a made-up placeholder.
+ */
+function withCanonicalContractAddress<T extends { contractAddress?: string | null }>(certificate: T) {
+  const configuredAddress = process.env.CERTIFICATE_CONTRACT_ID?.trim();
+  const storedAddress = certificate.contractAddress?.trim();
+  const candidate = configuredAddress || storedAddress;
+  const contractAddress =
+    candidate && !/^(?:GUNKNOWNCONTRACT|UNKNOWN|X+)$/i.test(candidate)
+      ? candidate
+      : undefined;
+
+  return { ...certificate, contractAddress };
+}
+
+/**
  * Certificate Controller
  * Handles all certificate-related HTTP endpoints
  */
@@ -131,7 +148,7 @@ export class CertificateController {
         return;
       }
 
-      res.status(200).json(certificate);
+      res.status(200).json(withCanonicalContractAddress(certificate));
     } catch (error) {
       logger.error(
         `Get certificate error: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -153,7 +170,11 @@ export class CertificateController {
       }
 
       const certificates = await certificateService.getCertificatesByStudent(studentId);
-      res.status(200).json({ studentId, count: certificates.length, certificates });
+      res.status(200).json({
+        studentId,
+        count: certificates.length,
+        certificates: certificates.map(withCanonicalContractAddress),
+      });
     } catch (error) {
       logger.error(
         `Get student certificates error: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -184,7 +205,7 @@ export class CertificateController {
       const issuerDid =
         process.env.ISSUER_DID ||
         'did:stellar:GBRPYHIL2CI3FYQMWVUGE62KMGOBQKLCYJ3HLKBUBIW5VZH4S4MNOWT';
-      const contractAddress = process.env.CERTIFICATE_CONTRACT_ID || 'GUNKNOWNCONTRACT';
+      const contractAddress = process.env.CERTIFICATE_CONTRACT_ID?.trim() || '';
       const network = process.env.STELLAR_NETWORK || 'stellar-testnet';
 
       const mintData: Parameters<typeof certificateService.mintCertificate>[0] = {
@@ -203,7 +224,11 @@ export class CertificateController {
       );
 
       logger.info(`Certificate minted: ${result.id}`, { certificateId: result.id });
-      res.status(201).json({ success: true, certificate: result, metadata: result.metadata });
+      res.status(201).json({
+        success: true,
+        certificate: withCanonicalContractAddress(result),
+        metadata: result.metadata,
+      });
     } catch (error) {
       logger.error(
         `Mint certificate error: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -244,7 +269,11 @@ export class CertificateController {
       });
       res
         .status(200)
-        .json({ success: true, certificate: result, message: 'Certificate revoked successfully' });
+        .json({
+          success: true,
+          certificate: withCanonicalContractAddress(result),
+          message: 'Certificate revoked successfully',
+        });
     } catch (error) {
       logger.error(`Revoke error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       if (error instanceof UnauthorizedIssuerError) {
@@ -287,8 +316,8 @@ export class CertificateController {
       });
       res.status(200).json({
         success: true,
-        original: result.original,
-        newCertificate: result.new,
+        original: withCanonicalContractAddress(result.original),
+        newCertificate: withCanonicalContractAddress(result.new),
         message: 'Certificate reissued successfully',
       });
     } catch (error) {
@@ -316,7 +345,7 @@ export class CertificateController {
         const result = await certificateService.getCertificatesByStatus(status, pagination.pageSize, pagination.offset);
         const paginationMetadata = buildPaginatedResponse(result.certificates, result.total, pagination.page, pagination.pageSize, pagination.offset);
         res.status(200).json({
-          certificates: result.certificates,
+          certificates: result.certificates.map(withCanonicalContractAddress),
           total: result.total,
           pagination: paginationMetadata.pagination,
         });
