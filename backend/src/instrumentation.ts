@@ -23,6 +23,7 @@
  * helper below is safe to call unconditionally.
  */
 
+import { getHeapStatistics } from 'node:v8';
 import {
   context,
   propagation,
@@ -43,6 +44,42 @@ export const tracer = trace.getTracer(SERVICE_NAME);
 
 /** Serialised W3C trace-context headers carried inside job / message payloads. */
 export type TraceCarrier = Record<string, string>;
+
+const HEAP_ALERT_RATIO = Number(process.env.HEAP_ALERT_RATIO) || 0.85;
+const HEAP_CHECK_INTERVAL_MS = Number(process.env.HEAP_CHECK_INTERVAL_MS) || 60_000;
+
+let heapMonitor: NodeJS.Timeout | null = null;
+
+/**
+ * Periodically compare V8 heap usage against the old-space limit and warn when
+ * it crosses `HEAP_ALERT_RATIO`. Returns a stop function.
+ */
+export function startHeapMonitor(): () => void {
+  if (heapMonitor) return stopHeapMonitor;
+
+  heapMonitor = setInterval(() => {
+    const { used_heap_size, heap_size_limit } = getHeapStatistics();
+    const ratio = used_heap_size / heap_size_limit;
+    if (ratio >= HEAP_ALERT_RATIO) {
+      logger.warn('Heap usage above alert threshold', {
+        usedHeapMb: Math.round(used_heap_size / 1048576),
+        limitMb: Math.round(heap_size_limit / 1048576),
+        ratio: Number(ratio.toFixed(3)),
+        threshold: HEAP_ALERT_RATIO,
+      });
+    }
+  }, HEAP_CHECK_INTERVAL_MS);
+  heapMonitor.unref();
+
+  return stopHeapMonitor;
+}
+
+function stopHeapMonitor(): void {
+  if (heapMonitor) {
+    clearInterval(heapMonitor);
+    heapMonitor = null;
+  }
+}
 
 interface ShutdownableSdk {
   shutdown(): Promise<void>;

@@ -1,6 +1,7 @@
 import http from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
 import { YjsDocumentManager } from './services/yjsDocumentManager.js';
+import { startHeapInstrumentation, stopHeapInstrumentation } from './instrumentation.js';
 
 const port = process.env.WS_PORT || 1234;
 const HEARTBEAT_INTERVAL_MS = parseInt(process.env.WS_HEARTBEAT_INTERVAL_MS || '30000', 10);
@@ -49,6 +50,17 @@ wss.on('connection', (conn: WebSocket, req) => {
   liveConnections.add(conn);
   conn.on('pong', () => liveConnections.add(conn));
 
+  // Release per-connection references as soon as the socket closes or errors,
+  // so subscriber maps in YjsDocumentManager never retain dead sockets.
+  const release = () => {
+    liveConnections.delete(conn);
+    conn.removeAllListeners('pong');
+    conn.removeAllListeners('message');
+    conn.removeAllListeners('error');
+  };
+  conn.once('close', release);
+  conn.once('error', release);
+
   void documents.setupConnection(conn, roomName);
 });
 
@@ -65,10 +77,12 @@ const heartbeat = setInterval(() => {
 }, HEARTBEAT_INTERVAL_MS);
 
 documents.startSnapshotting();
+startHeapInstrumentation();
 
 const shutdown = async (signal: string) => {
   console.log(`Collaboration server received ${signal}, flushing documents...`);
   clearInterval(heartbeat);
+  stopHeapInstrumentation();
   wss.clients.forEach((conn) => conn.close(1001, 'server shutting down'));
   server.close();
   await documents.shutdown();

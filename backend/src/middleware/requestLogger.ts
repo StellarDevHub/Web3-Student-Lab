@@ -15,6 +15,11 @@
  *   UUID v4 so it can be used as an OTel trace-id with no changes.  To wire up
  *   an OTel exporter later, configure the OTEL_EXPORTER_* env vars and import
  *   @opentelemetry/sdk-node — no code changes required here.
+ *
+ * Memory note (BE-088):
+ *   Per-request listeners on `res` are removed on response completion/close so
+ *   that long-lived processes do not accumulate listener references. The
+ *   wrapped `res.send` is restored after the response finishes.
  */
 
 import { NextFunction, Request, Response } from 'express';
@@ -118,9 +123,22 @@ export const detailedRequestLogger = (req: Request, res: Response, next: NextFun
         contentType: res.get('Content-Type'),
       });
 
+      // Restore the original send so the wrapper closure is released.
+      res.send = originalSend as typeof res.send;
       clearCorrelationId();
       return originalSend(data);
     };
+
+    // Ensure correlation context is cleared even if send() is never called
+    // (e.g. streamed responses, aborted connections). Using `once` guarantees
+    // the listener is removed after firing, preventing listener accumulation.
+    const cleanup = (): void => {
+      res.removeListener('finish', cleanup);
+      res.removeListener('close', cleanup);
+      clearCorrelationId();
+    };
+    res.once('finish', cleanup);
+    res.once('close', cleanup);
 
     next();
   });

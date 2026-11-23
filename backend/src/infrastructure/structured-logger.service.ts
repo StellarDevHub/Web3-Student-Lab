@@ -1,13 +1,21 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as winston from 'winston';
+import * as v8 from 'v8';
 
 /**
  * BE-037: Structured JSON Logger with Sensitive PII Auto-Redaction & Masking Rules.
  * Automatically detects and masks authorization tokens, passwords, and PII before logging.
+ *
+ * BE-088: Heap threshold monitoring. Emits a structured warning when V8 old-space
+ * usage exceeds 85% of its maximum, so operators are alerted before OOM occurs.
  */
 @Injectable()
 export class StructuredLoggerService {
   private logger!: winston.Logger;
+  private heapMonitorTimer?: NodeJS.Timeout;
+  private heapAlertActive = false;
+  private readonly heapAlertThreshold = 0.85;
+  private readonly heapCheckIntervalMs = Number(process.env.HEAP_CHECK_INTERVAL_MS) || 30_000;
   private readonly redactionPatterns = [
     { pattern: /Bearer\s+[A-Za-z0-9_-]+/gi, mask: 'Bearer [REDACTED]' },
     { pattern: /authorization:\s*[^\s,}]+/gi, mask: 'authorization: [REDACTED]' },
@@ -26,6 +34,7 @@ export class StructuredLoggerService {
 
   constructor() {
     this.initializeLogger();
+    this.startHeapMonitor();
   }
 
   private initializeLogger(): void {
@@ -75,6 +84,59 @@ export class StructuredLoggerService {
       },
       transports,
     });
+  }
+
+  /**
+   * BE-088: Periodically sample V8 heap statistics and raise a structured
+   * alert when old-space usage crosses 85% of its configured maximum.
+   * The timer is unref'd so it never keeps the process alive.
+   */
+  private startHeapMonitor(): void {
+    this.heapMonitorTimer = setInterval(() => this.checkHeapUsage(), this.heapCheckIntervalMs);
+    this.heapMonitorTimer.unref();
+  }
+
+  checkHeapUsage(): { usedRatio: number; alerted: boolean } {
+    const stats = v8.getHeapSpaceStatistics();
+    const oldSpace = stats.find((s) => s.space_name === 'old_space');
+    const limit = oldSpace ? oldSpace.space_size + oldSpace.space_available_size : v8.getHeapStatistics().heap_size_limit;
+    const used = oldSpace ? oldSpace.space_used_size : process.memoryUsage().heapUsed;
+    const usedRatio = limit > 0 ? used / limit : 0;
+
+    if (usedRatio >= this.heapAlertThreshold) {
+      if (!this.heapAlertActive) {
+        this.heapAlertActive = true;
+        this.logger.warn('Heap usage above threshold', {
+          alert: 'HEAP_THRESHOLD_EXCEEDED',
+          usedRatio: Number(usedRatio.toFixed(4)),
+          thresholdRatio: this.heapAlertThreshold,
+          usedBytes: used,
+          limitBytes: limit,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      return { usedRatio, alerted: true };
+    }
+
+    if (this.heapAlertActive) {
+      this.heapAlertActive = false;
+      this.logger.info('Heap usage recovered below threshold', {
+        alert: 'HEAP_THRESHOLD_RECOVERED',
+        usedRatio: Number(usedRatio.toFixed(4)),
+        timestamp: new Date().toISOString(),
+      });
+    }
+    return { usedRatio, alerted: false };
+  }
+
+  /**
+   * Stop background monitoring (call on application shutdown).
+   */
+  onModuleDestroy(): void {
+    if (this.heapMonitorTimer) {
+      clearInterval(this.heapMonitorTimer);
+      this.heapMonitorTimer = undefined;
+    }
   }
 
   /**
