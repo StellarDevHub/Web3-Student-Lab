@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
+    "typecheck": "tsc --noEmit",
     "start": "next start --webpack",
     "test": "vitest run --coverage",
     "test:watch": "vitest"
