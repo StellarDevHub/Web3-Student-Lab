@@ -18,6 +18,7 @@ import { TutorialProvider } from '@/contexts/TutorialContext';
 import { WalletProvider } from '@/contexts/WalletContext';
 import { Web3OnboardingProvider } from '@/contexts/Web3OnboardingContext';
 import { I18nProvider } from '@/i18n';
+import { SocketWorkerProvider } from './providers';
 import type { Metadata, Viewport } from 'next';
 import { Inter, Outfit } from 'next/font/google';
 import './globals.css';
@@ -63,7 +64,8 @@ export default function RootLayout({
     >
       <body className="bg-background text-foreground min-h-screen antialiased overflow-x-hidden" suppressHydrationWarning>
         <QueryProvider>
-          <ThemeProvider>
+          <SocketWorkerProvider>
+            <ThemeProvider>
           <WalletProvider>
             <AuthProvider>
               <I18nProvider>
@@ -95,7 +97,8 @@ export default function RootLayout({
               </I18nProvider>
             </AuthProvider>
           </WalletProvider>
-          </ThemeProvider>
+            </ThemeProvider>
+          </SocketWorkerProvider>
         </QueryProvider>
       </body>
     </html>
