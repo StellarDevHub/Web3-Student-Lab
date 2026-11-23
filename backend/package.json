@@ -46,6 +46,7 @@
     "@prisma/client": "^7.10.0",
     "@prisma/config": "^7.8.0",
     "@sentry/node": "^10.71.0",
+    "@simplewebauthn/server": "^14.1.0",
     "@stellar/stellar-sdk": "^14.6.1",
     "@types/ioredis": "^4.28.10",
     "@types/json2csv": "^5.0.7",
