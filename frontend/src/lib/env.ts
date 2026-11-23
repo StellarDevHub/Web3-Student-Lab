@@ -241,8 +241,10 @@ export function validatePublicEnv(source: NodeJS.ProcessEnv = process.env): EnvV
     errors.push('NEXT_PUBLIC_WS_URL: required in production but not set');
   }
 
-  const rawApiUrl = data.NEXT_PUBLIC_API_URL ?? (production ? FALLBACK_RENDER_API_URL : DEFAULT_DEV_API_URL);
-  const rawWsUrl = data.NEXT_PUBLIC_WS_URL ?? (production ? FALLBACK_RENDER_WS_URL : DEFAULT_DEV_WS_URL);
+  const defaultApiUrl = production ? '' : DEFAULT_DEV_API_URL;
+  const defaultWsUrl = production ? '' : DEFAULT_DEV_WS_URL;
+  const rawApiUrl = data.NEXT_PUBLIC_API_URL ?? defaultApiUrl;
+  const rawWsUrl = data.NEXT_PUBLIC_WS_URL ?? defaultWsUrl;
 
   const apiUrl = rawApiUrl ? rawApiUrl.replace(/\/+$/, '') : '';
   const wsUrl = rawWsUrl ? rawWsUrl.replace(/\/+$/, '') : '';
@@ -274,15 +276,15 @@ export function validatePublicEnv(source: NodeJS.ProcessEnv = process.env): EnvV
       api: {
         isFallback: isFallbackApiUrl,
         service: 'api',
-        url: apiUrl || (production ? FALLBACK_RENDER_API_URL : DEFAULT_DEV_API_URL),
-        defaultUrl: production ? FALLBACK_RENDER_API_URL : DEFAULT_DEV_API_URL,
+        url: apiUrl || defaultApiUrl,
+        defaultUrl: defaultApiUrl,
         envVarName: 'NEXT_PUBLIC_API_URL',
       },
       ws: {
         isFallback: isFallbackWsUrl,
         service: 'ws',
-        url: wsUrl || (production ? FALLBACK_RENDER_WS_URL : DEFAULT_DEV_WS_URL),
-        defaultUrl: production ? FALLBACK_RENDER_WS_URL : DEFAULT_DEV_WS_URL,
+        url: wsUrl || defaultWsUrl,
+        defaultUrl: defaultWsUrl,
         envVarName: 'NEXT_PUBLIC_WS_URL',
       },
       sorobanRpc: {
@@ -397,9 +399,9 @@ export async function checkServiceHealth(
   const url =
     customUrl ||
     (service === 'api'
-      ? env.apiUrl || (isProduction() ? FALLBACK_RENDER_API_URL : DEFAULT_DEV_API_URL)
+      ? env.apiUrl || (isProduction() ? '' : DEFAULT_DEV_API_URL)
       : service === 'ws'
-        ? env.wsUrl || (isProduction() ? FALLBACK_RENDER_WS_URL : DEFAULT_DEV_WS_URL)
+        ? env.wsUrl || (isProduction() ? '' : DEFAULT_DEV_WS_URL)
         : service === 'sorobanRpc'
           ? env.sorobanRpcUrl
           : env.horizonUrl);
