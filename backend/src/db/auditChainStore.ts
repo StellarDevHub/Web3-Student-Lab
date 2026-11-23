@@ -11,6 +11,9 @@
  * sequence, so a deleted row always leaves a detectable gap.
  *
  * An in-memory implementation is provided for tests and local development.
+ *
+ * BE-081 additions: `readRange` supports the immutable archiver by exporting
+ * verified entries in sequence order without mutating chain state.
  */
 
 import prisma from './index.js';
@@ -59,6 +62,8 @@ export interface AuditChainStore {
   getEntry(sequence: bigint): Promise<AuditChainRecord | null>;
   /** Entries with `sequence > afterSequence`, ascending, at most `limit`. */
   readBatch(afterSequence: bigint, limit: number): Promise<AuditChainRecord[]>;
+  /** Entries in `[fromSequence, toSequence]`, ascending, full records. */
+  readRange(fromSequence: bigint, toSequence: bigint): Promise<AuditChainRecord[]>;
   /** Entry hashes in `[fromSequence, toSequence]`, ascending by sequence. */
   readHashes(fromSequence: bigint, toSequence: bigint): Promise<Array<{ sequence: bigint; entryHash: string }>>;
 
@@ -106,6 +111,13 @@ export class PrismaAuditChainStore implements AuditChainStore {
       where: { sequence: { gt: afterSequence } },
       orderBy: { sequence: 'asc' },
       take: limit,
+    });
+  }
+
+  readRange(fromSequence: bigint, toSequence: bigint): Promise<AuditChainRecord[]> {
+    return db.auditChainEntry.findMany({
+      where: { sequence: { gte: fromSequence, lte: toSequence } },
+      orderBy: { sequence: 'asc' },
     });
   }
 
@@ -176,6 +188,12 @@ export class InMemoryAuditChainStore implements AuditChainStore {
       .filter((e) => e.sequence > afterSequence)
       .sort((a, b) => (a.sequence < b.sequence ? -1 : 1))
       .slice(0, limit);
+  }
+
+  async readRange(fromSequence: bigint, toSequence: bigint): Promise<AuditChainRecord[]> {
+    return this.entries
+      .filter((e) => e.sequence >= fromSequence && e.sequence <= toSequence)
+      .sort((a, b) => (a.sequence < b.sequence ? -1 : 1));
   }
 
   async readHashes(fromSequence: bigint, toSequence: bigint): Promise<Array<{ sequence: bigint; entryHash: string }>> {
