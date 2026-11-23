@@ -354,7 +354,7 @@ export class CertificateController {
 
       const result = await certificateService.getAllCertificates(pagination.pageSize, pagination.offset);
       res.status(200).json({
-        certificates: result.certificates,
+        certificates: result.certificates.map(withCanonicalContractAddress),
         total: result.total,
         pagination: buildPaginatedResponse(result.certificates, result.total, pagination.page, pagination.pageSize, pagination.offset).pagination,
       });
