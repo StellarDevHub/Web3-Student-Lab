@@ -1,8 +1,70 @@
 import type { NextConfig } from 'next';
 import path from 'path';
+import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'zlib';
+
+const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+const PUBLIC_SWR_CACHE_CONTROL = 'public, max-age=0, s-maxage=60, stale-while-revalidate=604800';
+
+const COMPRESSIBLE_ASSET = /\.(?:js|mjs|css|json|svg|txt|xml)$/i;
+
+const COMPRESSED_CONTENT_TYPES: Record<string, string> = {
+  js: 'application/javascript; charset=utf-8',
+  mjs: 'application/javascript; charset=utf-8',
+  css: 'text/css; charset=utf-8',
+  json: 'application/json; charset=utf-8',
+  svg: 'image/svg+xml',
+  txt: 'text/plain; charset=utf-8',
+  xml: 'application/xml; charset=utf-8',
+};
+
+// FE-100: emit .br/.gz siblings for every text asset so the CDN (or the
+// middleware content negotiation) can serve pre-compressed payloads instead of
+// compressing the same chunks again on every origin request.
+class PrecompressedAssetsPlugin {
+  apply(compiler: any): void {
+    const { Compilation, sources } = compiler.webpack;
+
+    compiler.hooks.thisCompilation.tap('PrecompressedAssetsPlugin', (compilation: any) => {
+      compilation.hooks.processAssets.tap(
+        {
+          name: 'PrecompressedAssetsPlugin',
+          stage: Compilation.PROCESS_ASSETS_STAGE_OPTIMIZE_TRANSFER,
+        },
+        (assets: Record<string, any>) => {
+          for (const [name, asset] of Object.entries(assets)) {
+            if (!COMPRESSIBLE_ASSET.test(name) || /\.(?:br|gz|map)$/i.test(name)) {
+              continue;
+            }
+
+            const source = asset.source();
+            const input = Buffer.isBuffer(source) ? source : Buffer.from(String(source ?? ''));
+            if (input.length === 0) continue;
+
+            const brotli = brotliCompressSync(input, {
+              params: {
+                [zlibConstants.BROTLI_PARAM_QUALITY]: 6,
+                [zlibConstants.BROTLI_PARAM_SIZE_HINT]: input.length,
+              },
+            });
+            const gzip = gzipSync(input, { level: 9 });
+
+            compilation.emitAsset(`${name}.br`, new sources.RawSource(brotli));
+            compilation.emitAsset(`${name}.gz`, new sources.RawSource(gzip));
+          }
+        },
+      );
+    });
+  }
+}
 
 const withBundleAnalyzer = process.env.ANALYZE === 'true'
-  ? require('@next/bundle-analyzer')({ enabled: true })
+  ? require('@next/bundle-analyzer')({
+      enabled: true,
+      analyzerMode: 'static',
+      openAnalyzer: false,
+      generateStatsFile: true,
+      statsFilename: 'client-stats.json',
+    })
   : (config: NextConfig) => config;
 
 const nextConfig: NextConfig = {
@@ -16,6 +78,11 @@ const nextConfig: NextConfig = {
     ];
 
     config.plugins = config.plugins || [];
+
+    // FE-100: pre-compress only client assets emitted by a production build.
+    if (!dev && !isServer) {
+      config.plugins.push(new PrecompressedAssetsPlugin());
+    }
 
     if (config.output) {
       config.output.environment = {
@@ -120,19 +187,81 @@ const nextConfig: NextConfig = {
     formats: ['image/webp', 'image/avif'],
     minimumCacheTTL: 60 * 60 * 24 * 30,
   },
-  // Immutable CDN cache headers for static assets — FE-HARD-50
+  // FE-100: immutable hashed chunks, pre-compressed variants and SWR for
+  // dynamic public endpoints.
   async headers() {
+    const immutableHeaders = [
+      { key: 'Cache-Control', value: IMMUTABLE_CACHE_CONTROL },
+      { key: 'Vary', value: 'Accept-Encoding' },
+    ];
+
+    const precompressedHeaders = (encoding: 'br' | 'gzip') => [
+      ...immutableHeaders,
+      { key: 'Content-Encoding', value: encoding },
+    ];
+
+    // Middleware rewrites these URLs to the .br/.gz sibling emitted at build
+    // time. Next.js forbids middleware from setting Content-Encoding, so the
+    // encoding header is attached here using the same Accept-Encoding match.
+    const negotiatedEncodingHeaders = ['js', 'mjs', 'css', 'json', 'svg', 'txt', 'xml'].flatMap(
+      (extension) => [
+        {
+          source: `/_next/static/:path*.${extension}`,
+          has: [
+            {
+              type: 'header' as const,
+              key: 'Accept-Encoding',
+              value: '^(?!.*br).*gzip.*',
+            },
+          ],
+          headers: [{ key: 'Content-Encoding', value: 'gzip' }],
+        },
+        {
+          source: `/_next/static/:path*.${extension}`,
+          has: [{ type: 'header' as const, key: 'Accept-Encoding', value: '.*br.*' }],
+          headers: [{ key: 'Content-Encoding', value: 'br' }],
+        },
+      ],
+    );
+
+    const publicApiRoutes = [
+      '/api/courses/:path*',
+      '/api/public/:path*',
+      '/api/seo/:path*',
+      '/api/tokenomics/:path*',
+      '/api/certificates/explorer/:path*',
+      '/api/triage/leaderboard',
+      '/api/v1/courses/:path*',
+      '/api/v1/certificates/:path*',
+      '/api/v1/health/:path*',
+    ];
+
     return [
       {
         // Next.js hashed static chunks — safe to cache forever
         source: '/_next/static/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
-          },
-        ],
+        headers: immutableHeaders,
       },
+      ...negotiatedEncodingHeaders,
+      {
+        // Pre-compressed variants emitted by PrecompressedAssetsPlugin
+        source: '/_next/static/:path*.br',
+        headers: precompressedHeaders('br'),
+      },
+      {
+        source: '/_next/static/:path*.gz',
+        headers: precompressedHeaders('gzip'),
+      },
+      ...Object.entries(COMPRESSED_CONTENT_TYPES).flatMap(([extension, contentType]) => [
+        {
+          source: `/_next/static/:path*.${extension}.br`,
+          headers: [{ key: 'Content-Type', value: contentType }],
+        },
+        {
+          source: `/_next/static/:path*.${extension}.gz`,
+          headers: [{ key: 'Content-Type', value: contentType }],
+        },
+      ]),
       {
         // Public folder assets (images, fonts, manifest)
         source: '/static/:path*',
@@ -149,10 +278,19 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
+            value: IMMUTABLE_CACHE_CONTROL,
           },
         ],
       },
+      ...publicApiRoutes.map((source) => ({
+        source,
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: PUBLIC_SWR_CACHE_CONTROL,
+          },
+        ],
+      })),
     ];
   },
   experimental: {

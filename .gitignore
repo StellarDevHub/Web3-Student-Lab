@@ -262,6 +262,7 @@ backend/dist/
 !commitlint.config.js
 !commitlint.config.cjs
 !frontend/public/sw.js
+!frontend/scripts/check-bundle-size.js
 
 
 # temp error logs
