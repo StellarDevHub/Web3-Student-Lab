@@ -25,6 +25,7 @@ import { ContractSearch } from '@/components/playground/ContractSearch';
 import { ExecutionStatusBar } from '@/components/playground/ExecutionStatusBar';
 import { useAccessibilityAudit } from '@/hooks/useAccessibilityAudit';
 import { usePlaygroundExecution } from '@/hooks/usePlaygroundExecution';
+import { formatBytes } from '@/services/stellar/simulator';
 import { AssistantPanel } from '@/components/playground/AssistantPanel';
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -161,6 +162,7 @@ impl HelloContract {
     compile,
     cancel,
     reset: resetExecution,
+    memoryUsage,
   } = usePlaygroundExecution();
 
   const isCompiling =
@@ -460,6 +462,15 @@ impl HelloContract {
               onReset={resetExecution}
               className="mt-2"
             />
+            {memoryUsage && (
+              <p
+                className="mt-2 text-[10px] tracking-widest text-gray-500 uppercase"
+                data-testid="wasm-memory-usage"
+              >
+                WASM memory peak: {formatBytes(memoryUsage.peakBytes)} /{' '}
+                {formatBytes(memoryUsage.limitBytes)}
+              </p>
+            )}
           </div>
 
           {/* Terminal Output or PR Simulation */}
