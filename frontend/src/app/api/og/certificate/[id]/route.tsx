@@ -1,8 +1,6 @@
 import { ImageResponse } from 'next/og';
 import { NextRequest } from 'next/server';
 
-export const runtime = 'nodejs';
-
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> | { id: string } }
