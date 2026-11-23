@@ -177,13 +177,14 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // 5. Strict CSP with nonce — FE-HARD-49
-  const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
-  const response = NextResponse.next();
-  response.headers.set(NONCE_HEADER, nonce);
-
+  // 5. Strict CSP with a fresh cryptographic nonce for every request.
+  const nonceBytes = crypto.getRandomValues(new Uint8Array(16));
+  let nonceBinary = '';
+  nonceBytes.forEach((byte) => {
+    nonceBinary += String.fromCharCode(byte);
+  });
+  const nonce = btoa(nonceBinary);
   const isDev = process.env.NODE_ENV === 'development';
-
   const hostname = request.nextUrl.hostname;
   const isLocalhost =
     hostname === 'localhost' ||
@@ -191,9 +192,8 @@ export async function middleware(request: NextRequest) {
     hostname === '::1' ||
     hostname === '[::1]';
 
-  const cspDirectives: Record<string, string[]> = isDev
+  const directives: Record<string, string[]> = isDev
     ? {
-        // Development: allow unsafe-eval for HMR / source maps only
         'default-src': ["'self'"],
         'script-src': ["'self'", "'unsafe-eval'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
         'style-src': ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
@@ -218,60 +218,53 @@ export async function middleware(request: NextRequest) {
         'worker-src': ["'self'", 'blob:'],
         'manifest-src': ["'self'"],
       }
-    : (() => {
-        const directives: Record<string, string[]> = {
-          // Production: nonce-based, no unsafe-inline / unsafe-eval
-          'default-src': ["'self'"],
-          'script-src': [`'nonce-${nonce}'`, "'strict-dynamic'", "'self'"],
-          // No unsafe-inline in production — CSS modules and CSS vars only
-          'style-src': ["'self'"],
-          'img-src': ["'self'", 'data:', 'blob:', 'https:'],
-          'font-src': ["'self'", 'data:'],
-          'connect-src': [
-            "'self'",
-            process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080',
-            (process.env.NEXT_PUBLIC_WS_URL || 'wss://localhost:8080').replace(/^https/, 'wss').replace(/^http/, 'ws'),
-            (process.env.NEXT_PUBLIC_WS_URL || 'wss://localhost:8080').replace(/^wss?/, 'wss'),
-            'https://soroban-testnet.stellar.org',
-            'https://soroban-test.stellar.org:443',
-            'https://horizon-testnet.stellar.org',
-            'https://stellar.expert',
-          ],
-          'frame-src': ["'none'"],
-          'object-src': ["'none'"],
-          'base-uri': ["'self'"],
-          'form-action': ["'self'"],
-          'frame-ancestors': ["'none'"],
-          'block-all-mixed-content': [],
-          'upgrade-insecure-requests': [],
-          'worker-src': ["'self'", 'blob:'],
-          'manifest-src': ["'self'"],
-        };
+    : {
+        'default-src': ["'self'"],
+        'script-src': [`'nonce-${nonce}'`, "'strict-dynamic'", "'self'"],
+        'style-src': ["'self'"],
+        'img-src': ["'self'", 'data:', 'blob:', 'https:'],
+        'font-src': ["'self'", 'data:'],
+        'connect-src': [
+          "'self'",
+          process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080',
+          (process.env.NEXT_PUBLIC_WS_URL || 'wss://localhost:8080').replace(/^https/, 'wss').replace(/^http/, 'ws'),
+          (process.env.NEXT_PUBLIC_WS_URL || 'wss://localhost:8080').replace(/^wss?/, 'wss'),
+          'https://soroban-testnet.stellar.org',
+          'https://soroban-test.stellar.org:443',
+          'https://horizon-testnet.stellar.org',
+          'https://stellar.expert',
+        ],
+        'frame-src': ["'none'"],
+        'object-src': ["'none'"],
+        'base-uri': ["'self'"],
+        'form-action': ["'self'"],
+        'frame-ancestors': ["'none'"],
+        'block-all-mixed-content': [],
+        'upgrade-insecure-requests': [],
+        'worker-src': ["'self'", 'blob:'],
+        'manifest-src': ["'self'"],
+      };
 
-        // WebKit (Safari, and the Playwright webkit runner) applies both
-        // mixed-content directives to plain-HTTP localhost requests as well,
-        // upgrading http://localhost to https://localhost and breaking every
-        // stylesheet/script on local runs and the E2E webServer. Those
-        // directives protect nothing on localhost, so drop them there.
-        if (isLocalhost) {
-          delete directives['block-all-mixed-content'];
-          delete directives['upgrade-insecure-requests'];
-        }
-
-        return directives;
-      })();
-
-  const cspValue = Object.entries(cspDirectives)
-    .map(([directive, values]) => {
-      if (values.length === 0) return directive;
-      return `${directive} ${values.join(' ')}`;
-    })
+  if (!isDev && isLocalhost) {
+    delete directives['block-all-mixed-content'];
+    delete directives['upgrade-insecure-requests'];
+  }
+  const cspValue = Object.entries(directives)
+    .map(([directive, values]) => values.length ? `${directive} ${values.join(' ')}` : directive)
     .join('; ');
+  const reportUri = process.env.NEXT_PUBLIC_CSP_REPORT_URI || '/api/security/csp-report';
+  const cspWithReports = `${cspValue}; report-uri ${reportUri}`;
+  const reportOnly = !isDev && process.env.NEXT_PUBLIC_CSP_REPORT_ONLY === 'true';
 
-  response.headers.set('Content-Security-Policy', cspValue);
+  // Next.js reads the request CSP to apply this nonce to its generated scripts.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(NONCE_HEADER, nonce);
+  requestHeaders.set('Content-Security-Policy', cspWithReports);
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  response.headers.set(NONCE_HEADER, nonce);
   response.headers.set(
-    'Content-Security-Policy-Report-Only',
-    `${cspValue}; report-uri ${process.env.NEXT_PUBLIC_CSP_REPORT_URI || '/api/security/csp-report'}`,
+    reportOnly ? 'Content-Security-Policy-Report-Only' : 'Content-Security-Policy',
+    cspWithReports,
   );
 
   // HSTS — FE-HARD-49: enforce HTTPS in production

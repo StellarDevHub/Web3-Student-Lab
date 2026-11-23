@@ -12,6 +12,7 @@ import { CourseNotificationListener, ToastContainer } from '@/components/notific
 import { OfflineSyncHandler } from '@/components/OfflineSyncHandler';
 import { SkipLink } from '@/components/ui/SkipLink';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { CSPNonceProvider } from '@/contexts/CSPNonceContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { Providers as ThemeProvider } from '@/lib/theme/providers';
 import { TutorialProvider } from '@/contexts/TutorialContext';
@@ -19,6 +20,7 @@ import { WalletProvider } from '@/contexts/WalletContext';
 import { Web3OnboardingProvider } from '@/contexts/Web3OnboardingContext';
 import { I18nProvider } from '@/i18n';
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import { Inter, Outfit } from 'next/font/google';
 import './globals.css';
 
@@ -49,11 +51,13 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
+
   return (
     <html
       lang="en"
@@ -62,41 +66,43 @@ export default function RootLayout({
       className={`${inter.variable} ${outfit.variable} overflow-x-hidden`}
     >
       <body className="bg-background text-foreground min-h-screen antialiased overflow-x-hidden" suppressHydrationWarning>
-        <QueryProvider>
-          <ThemeProvider>
-          <WalletProvider>
-            <AuthProvider>
-              <I18nProvider>
-                <NotificationProvider>
-                  <CourseNotificationListener />
-                  <Web3OnboardingProvider>
-                    <KeyboardShortcutsProvider>
-                      <TutorialProvider>
-                        <SkipLink
-                          targets={[
-                            { id: 'main-content', label: 'Skip to main content' },
-                            { id: 'primary-navigation', label: 'Skip to navigation' },
-                          ]}
-                        />
-                        <Navbar />
-                        <ResiliencyBanner />
-                        <DeferredRenderWarningModal />
-                        <OfflineSyncHandler />
-                        <main id="main-content" className="flex-grow outline-none" tabIndex={-1}>
-                          <WalletGate>{children}</WalletGate>
-                        </main>
-                        <ToastContainer />
-                        <DeferredCommandPalette />
-                        <DeferredOfflineNotification />
-                      </TutorialProvider>
-                    </KeyboardShortcutsProvider>
-                  </Web3OnboardingProvider>
-                </NotificationProvider>
-              </I18nProvider>
-            </AuthProvider>
-          </WalletProvider>
-          </ThemeProvider>
-        </QueryProvider>
+        <CSPNonceProvider nonce={nonce}>
+          <QueryProvider>
+            <ThemeProvider>
+              <WalletProvider>
+                <AuthProvider>
+                  <I18nProvider>
+                    <NotificationProvider>
+                      <CourseNotificationListener />
+                      <Web3OnboardingProvider>
+                        <KeyboardShortcutsProvider>
+                          <TutorialProvider>
+                            <SkipLink
+                              targets={[
+                                { id: 'main-content', label: 'Skip to main content' },
+                                { id: 'primary-navigation', label: 'Skip to navigation' },
+                              ]}
+                            />
+                            <Navbar />
+                            <ResiliencyBanner />
+                            <DeferredRenderWarningModal />
+                            <OfflineSyncHandler />
+                            <main id="main-content" className="flex-grow outline-none" tabIndex={-1}>
+                              <WalletGate>{children}</WalletGate>
+                            </main>
+                            <ToastContainer />
+                            <DeferredCommandPalette />
+                            <DeferredOfflineNotification />
+                          </TutorialProvider>
+                        </KeyboardShortcutsProvider>
+                      </Web3OnboardingProvider>
+                    </NotificationProvider>
+                  </I18nProvider>
+                </AuthProvider>
+              </WalletProvider>
+            </ThemeProvider>
+          </QueryProvider>
+        </CSPNonceProvider>
       </body>
     </html>
   );
