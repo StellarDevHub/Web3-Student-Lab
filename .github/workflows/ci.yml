@@ -88,6 +88,9 @@ jobs:
       - name: Install dependencies
         working-directory: ./frontend
         run: npm ci
+      - name: TypeScript typecheck
+        working-directory: ./frontend
+        run: npm run typecheck
       - name: Build
         working-directory: ./frontend
         run: npm run build
