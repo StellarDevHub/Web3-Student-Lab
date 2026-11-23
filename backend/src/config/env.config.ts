@@ -34,13 +34,48 @@ export const config = {
   db: {
     url: getEnvVar('DATABASE_URL'),
     readReplicaUrl: getEnvVar('DATABASE_READ_REPLICA_URL', ''),
+    replica: {
+      checkIntervalMs: parseInt(getEnvVar('DB_REPLICA_CHECK_INTERVAL_MS', '10000'), 10),
+      failureThreshold: parseInt(getEnvVar('DB_REPLICA_FAILURE_THRESHOLD', '3'), 10),
+      cooldownMs: parseInt(getEnvVar('DB_REPLICA_COOLDOWN_MS', '30000'), 10),
+      replicationLagWindowMs: parseInt(getEnvVar('DB_REPLICATION_LAG_WINDOW_MS', '1000'), 10),
+    },
   },
   redis: {
-    url: getEnvVar('REDIS_URL', 'redis://localhost:6379'),
+    url: getEnvVar('REDIS_URL'), // Required
   },
   security: {
     jwtSecret: getEnvVar('JWT_SECRET'), // Required
     jwtExpiresIn: getEnvVar('JWT_EXPIRES_IN', '7d'),
+  },
+
+  /**
+   * Payload encryption key rotation configuration.
+   *
+   * Keys are loaded dynamically from PAYLOAD_ENCRYPTION_KEY_v<N> env vars by
+   * EncryptionKeyManager rather than being read here, so this section only
+   * holds rotation-related tunables that benefit from centralised config access.
+   */
+  encryption: {
+    /**
+     * Comma-separated list of field paths that are encrypted at rest.
+     * Informational — used by the rotation CLI / admin endpoint to know
+     * which Prisma fields to iterate when migrating ciphertexts.
+     * Example: "Student.githubAccessToken,WebhookSubscription.secret"
+     */
+    encryptedFields: process.env.ENCRYPTED_FIELDS || '',
+
+    /**
+     * Maximum number of rows to re-encrypt per rotation batch request.
+     * Prevents a single HTTP call from running for too long.
+     */
+    rotationBatchSize: parseInt(process.env.ENCRYPTION_ROTATION_BATCH_SIZE || '100', 10),
+
+    /**
+     * If true, the GET /api/v1/security/key-versions endpoint is enabled.
+     * Keep disabled in production unless accessed through an admin-only gateway.
+     */
+    exposeKeyVersionEndpoint: process.env.ENCRYPTION_EXPOSE_KEY_VERSIONS !== 'false',
   },
   stellar: {
     network: getEnvVar('STELLAR_NETWORK', 'testnet'),
@@ -52,6 +87,20 @@ export const config = {
     certificateValidityDays: parseInt(getEnvVar('CERTIFICATE_VALIDITY_DAYS', '365'), 10),
     issuerName: process.env.ISSUER_NAME || 'Web3 Student Lab',
     issuerDid: process.env.ISSUER_DID || 'did:stellar:GBRPYHIL2CI3FYQMWVUGE62KMGOBQKLCYJ3HLKBUBIW5VZH4S4MNOWT',
+  },
+  /**
+   * AWS KMS / HSM key management (BE-HARD-32 / #1423).
+   * When enabled, administrative and faucet transactions are signed inside KMS
+   * and no plaintext Stellar secret is read from disk.
+   */
+  kms: {
+    region: process.env.AWS_REGION || 'us-east-1',
+    keyId: process.env.AWS_KMS_KEY_ID || '',
+    /** Public key of the KMS-held Ed25519 key (non-secret). */
+    masterPublicKey: process.env.PLATFORM_MASTER_PUBLIC_KEY || '',
+    useKmsSigner: process.env.USE_KMS_SIGNER === 'true',
+    required: process.env.KMS_REQUIRED === 'true' || environment === 'production',
+    signingAlgorithm: process.env.KMS_SIGNING_ALGORITHM || 'ED25519_SHA_512',
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY || '',
@@ -84,6 +133,10 @@ export const config = {
     compress: process.env.BACKUP_COMPRESS !== 'false',
     tempDir: getEnvVar('BACKUP_TEMP_DIR', '/tmp/backups'),
   },
+  graphql: {
+    maxDepth: parseInt(getEnvVar('GRAPHQL_MAX_DEPTH', '6'), 10),
+    maxComplexity: parseInt(getEnvVar('GRAPHQL_MAX_COMPLEXITY', '100'), 10),
+  },
 
   /**
    * Helper to safely log configuration without exposing secrets
@@ -91,6 +144,7 @@ export const config = {
   getSafeConfig() {
     return {
       app: this.app,
+      graphql: this.graphql,
       redis: { url: this.maskSecret(this.redis.url) },
       db: { url: this.maskSecret(this.db.url) },
       security: {
@@ -101,8 +155,22 @@ export const config = {
         ...this.stellar,
         issuerSecretKey: this.stellar.issuerSecretKey ? '***REDACTED***' : '',
       },
+      kms: {
+        region: this.kms.region,
+        keyId: this.kms.keyId ? this.maskSecret(this.kms.keyId) : '',
+        masterPublicKey: this.kms.masterPublicKey,
+        useKmsSigner: this.kms.useKmsSigner,
+        required: this.kms.required,
+        signingAlgorithm: this.kms.signingAlgorithm,
+      },
       openai: {
         apiKey: this.openai.apiKey ? '***REDACTED***' : '',
+      },
+      encryption: {
+        encryptedFields: this.encryption.encryptedFields,
+        rotationBatchSize: this.encryption.rotationBatchSize,
+        exposeKeyVersionEndpoint: this.encryption.exposeKeyVersionEndpoint,
+        // Key material is never stored in config — it lives in PAYLOAD_ENCRYPTION_KEY_v<N> env vars
       },
       backup: {
         s3: {

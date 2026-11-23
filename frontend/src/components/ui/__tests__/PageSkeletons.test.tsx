@@ -13,6 +13,12 @@ import {
   VerifyPageSkeleton,
   AnalyticsDashboardSkeleton,
   AdminContentSkeleton,
+  PerformanceMetricsSkeleton,
+  CertificatesAnalyticsSkeleton,
+  SubscriptionsSkeleton,
+  BrainstormSkeleton,
+  QuizSkeleton,
+  BridgeTrackerSkeleton,
 } from '../skeletons/PageSkeletons';
 import { SkeletonThemeWrapper } from '../SkeletonThemeWrapper';
 import { WithSkeleton } from '../WithSkeleton';
@@ -63,7 +69,10 @@ describe('PageSkeletons', () => {
   describe('CertificatesVaultSkeleton', () => {
     it('renders with aria-label', () => {
       const { container } = render(<CertificatesVaultSkeleton />);
-      expect(container.firstElementChild).toHaveAttribute('aria-label', 'Loading certificates vault');
+      expect(container.firstElementChild).toHaveAttribute(
+        'aria-label',
+        'Loading certificates vault'
+      );
     });
 
     it('renders certificate card skeletons', () => {
@@ -76,7 +85,10 @@ describe('PageSkeletons', () => {
   describe('CertificateDetailSkeleton', () => {
     it('renders with aria-label', () => {
       const { container } = render(<CertificateDetailSkeleton />);
-      expect(container.firstElementChild).toHaveAttribute('aria-label', 'Loading certificate details');
+      expect(container.firstElementChild).toHaveAttribute(
+        'aria-label',
+        'Loading certificate details'
+      );
     });
   });
 
@@ -111,7 +123,10 @@ describe('PageSkeletons', () => {
   describe('AnalyticsDashboardSkeleton', () => {
     it('renders with aria-label', () => {
       const { container } = render(<AnalyticsDashboardSkeleton />);
-      expect(container.firstElementChild).toHaveAttribute('aria-label', 'Loading analytics dashboard');
+      expect(container.firstElementChild).toHaveAttribute(
+        'aria-label',
+        'Loading analytics dashboard'
+      );
     });
 
     it('renders metric card skeletons', () => {
@@ -128,6 +143,63 @@ describe('PageSkeletons', () => {
     });
   });
 
+  describe('PerformanceMetricsSkeleton', () => {
+    it('renders with aria-busy and aria-label', () => {
+      render(<PerformanceMetricsSkeleton />);
+      expect(screen.getByLabelText('Loading performance metrics')).toBeInTheDocument();
+      expect(screen.getByLabelText('Loading performance metrics')).toHaveAttribute(
+        'aria-busy',
+        'true'
+      );
+    });
+  });
+
+  describe('CertificatesAnalyticsSkeleton', () => {
+    it('renders with aria-busy and aria-label', () => {
+      render(<CertificatesAnalyticsSkeleton />);
+      expect(screen.getByLabelText('Loading certificates analytics')).toBeInTheDocument();
+      expect(screen.getByLabelText('Loading certificates analytics')).toHaveAttribute(
+        'aria-busy',
+        'true'
+      );
+    });
+  });
+
+  describe('SubscriptionsSkeleton', () => {
+    it('renders with aria-busy and aria-label', () => {
+      render(<SubscriptionsSkeleton />);
+      expect(screen.getByLabelText('Loading subscriptions')).toBeInTheDocument();
+      expect(screen.getByLabelText('Loading subscriptions')).toHaveAttribute('aria-busy', 'true');
+    });
+  });
+
+  describe('BrainstormSkeleton', () => {
+    it('renders with aria-busy and aria-label', () => {
+      render(<BrainstormSkeleton />);
+      expect(screen.getByLabelText('Loading brainstorm session')).toBeInTheDocument();
+      expect(screen.getByLabelText('Loading brainstorm session')).toHaveAttribute(
+        'aria-busy',
+        'true'
+      );
+    });
+  });
+
+  describe('QuizSkeleton', () => {
+    it('renders with aria-busy and aria-label', () => {
+      render(<QuizSkeleton />);
+      expect(screen.getByLabelText('Loading quiz arena')).toBeInTheDocument();
+      expect(screen.getByLabelText('Loading quiz arena')).toHaveAttribute('aria-busy', 'true');
+    });
+  });
+
+  describe('BridgeTrackerSkeleton', () => {
+    it('renders with aria-busy and aria-label', () => {
+      render(<BridgeTrackerSkeleton />);
+      expect(screen.getByLabelText('Loading bridge tracker')).toBeInTheDocument();
+      expect(screen.getByLabelText('Loading bridge tracker')).toHaveAttribute('aria-busy', 'true');
+    });
+  });
+
   describe('Skeleton heights match loaded content', () => {
     it('DashboardSkeleton stat cards have correct height', () => {
       render(<DashboardSkeleton />);
@@ -140,16 +212,19 @@ describe('PageSkeletons', () => {
 
 describe('SkeletonThemeWrapper', () => {
   beforeEach(() => {
-    vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query: string) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })));
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }))
+    );
   });
 
   it('renders children', () => {
@@ -162,14 +237,17 @@ describe('SkeletonThemeWrapper', () => {
   });
 
   it('disables animation when prefers-reduced-motion is set', () => {
-    vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query: string) => ({
-      matches: query === '(prefers-reduced-motion: reduce)',
-      media: query,
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })));
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockImplementation((query: string) => ({
+        matches: query === '(prefers-reduced-motion: reduce)',
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }))
+    );
 
     const { container } = render(
       <SkeletonThemeWrapper>
@@ -243,13 +321,7 @@ describe('Button loading states for async actions', () => {
 describe('Error states', () => {
   it('error state renders with retry action', () => {
     const onRetry = vi.fn();
-    render(
-      <ErrorFallback
-        message="Failed to load data"
-        onRetry={onRetry}
-        variant="card"
-      />
-    );
+    render(<ErrorFallback message="Failed to load data" onRetry={onRetry} variant="card" />);
     expect(screen.getByText('Failed to load data')).toBeInTheDocument();
     expect(screen.getByText('Try again')).toBeInTheDocument();
   });

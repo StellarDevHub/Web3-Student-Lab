@@ -37,6 +37,11 @@ export interface CurriculumSearchParams {
   courseId?: string;
   limit: number;
   offset: number;
+  cursor?: {
+    rank: number;
+    title: string;
+    id: string;
+  };
 }
 
 /** A parameterised SQL statement ready for `$queryRawUnsafe(text, ...values)`. */
@@ -122,6 +127,7 @@ export function buildCurriculumSearchQuery(params: CurriculumSearchParams): Para
 
   const queryParam = bind(params.query);
   const workspaceParam = bind(params.workspaceId);
+  const rankExpr = `ts_rank("searchVector", websearch_to_tsquery('english', ${queryParam}))`;
 
   const where: string[] = [
     `"workspaceId" = ${workspaceParam}`,
@@ -137,16 +143,28 @@ export function buildCurriculumSearchQuery(params: CurriculumSearchParams): Para
   if (params.courseId) {
     where.push(`"courseId" = ${bind(params.courseId)}`);
   }
+  if (params.cursor) {
+    const cursorRank = bind(params.cursor.rank);
+    const cursorTitle = bind(params.cursor.title);
+    const cursorId = bind(params.cursor.id);
+    where.push(
+      `(\n` +
+        `  ${rankExpr} < ${cursorRank}\n` +
+        `  OR (${rankExpr} = ${cursorRank} AND "title" > ${cursorTitle})\n` +
+        `  OR (${rankExpr} = ${cursorRank} AND "title" = ${cursorTitle} AND "id" > ${cursorId})\n` +
+        `)`
+    );
+  }
 
   const limitParam = bind(params.limit);
   const offsetParam = bind(params.offset);
 
   const text = [
     'SELECT "id", "entityType", "entityId", "courseId", "title", "content", "difficulty",',
-    `       ts_rank("searchVector", websearch_to_tsquery('english', ${queryParam})) AS rank`,
+    `       ${rankExpr} AS rank`,
     'FROM "curriculum_search_entries"',
     `WHERE ${where.join('\n  AND ')}`,
-    'ORDER BY rank DESC, "title" ASC',
+    'ORDER BY rank DESC, "title" ASC, "id" ASC',
     `LIMIT ${limitParam} OFFSET ${offsetParam}`,
   ].join('\n');
 

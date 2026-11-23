@@ -28,7 +28,7 @@ export const registerSchema = z.object({
     ),
   walletAddress: z
     .string()
-    .regex(/^G[A-Z2-7]{55}$/, 'Invalid Stellar wallet address format')
+    .regex(/^[GCMa-zA-Z0-9]{55,56}$/, 'Invalid Stellar wallet address format')
     .optional()
     .or(z.literal('')),
 });
@@ -50,7 +50,7 @@ export const web3NonceSchema = z.object({
   walletAddress: z
     .string()
     .min(1, 'Wallet address is required')
-    .regex(/^G[A-Z2-7]{55}$/, 'Invalid Stellar wallet address format'),
+    .regex(/^[GCMa-zA-Z0-9]{55,56}$/, 'Invalid Stellar wallet address format'),
 });
 
 /**

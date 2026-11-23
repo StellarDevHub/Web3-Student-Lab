@@ -122,5 +122,13 @@ export function ResourceGauge({
     };
   }, [criticalAt, label, max, value, unit, warningAt]);
 
-  return <canvas ref={canvasRef} aria-label={`${label} resource gauge`} />;
+  return (
+    <>
+      <canvas ref={canvasRef} role="img" aria-label={`${label} resource gauge`} />
+      {/* Visually hidden live region so screen readers announce value changes */}
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {`${label}: ${Math.round(value)}${unit}`}
+      </span>
+    </>
+  );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { CelebrationOverlay } from '@/app/components/CompletionCelebration';
 import quizMachine from '@/lib/quizMachine';
 import { quizQuestions } from '@/lib/quizQuestions';
 import { Player } from '@lottiefiles/react-lottie-player';
@@ -81,6 +82,23 @@ export default function QuizEngine() {
 
   const handleDragOver = (event: React.DragEvent<HTMLButtonElement>) => {
     event.preventDefault();
+  };
+
+  const handleReorderKey = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    index: number
+  ) => {
+    const { dragOrder } = current.context;
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+
+    const targetIndex =
+      event.key === 'ArrowUp' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= dragOrder.length) return;
+
+    event.preventDefault();
+    const nextOrder = [...dragOrder];
+    [nextOrder[index], nextOrder[targetIndex]] = [nextOrder[targetIndex], nextOrder[index]];
+    send({ type: 'UPDATE_ORDER', order: nextOrder });
   };
 
   return (
@@ -212,7 +230,9 @@ export default function QuizEngine() {
                             onDragStart={(event) => handleDragStart(event, index)}
                             onDragOver={handleDragOver}
                             onDrop={(event) => handleDrop(event, index)}
-                            className="rounded-3xl border border-white/10 bg-white/5 px-5 py-4 text-left text-base text-gray-200 transition hover:border-red-500/40 hover:bg-white/10"
+                            onKeyDown={(event) => handleReorderKey(event, index)}
+                            aria-label={`${segment}. Step ${index + 1} of ${current.context.dragOrder.length}. Use Arrow Up or Arrow Down to reorder.`}
+                            className="rounded-3xl border border-white/10 bg-white/5 px-5 py-4 text-left text-base text-gray-200 transition hover:border-red-500/40 hover:bg-white/10 focus:border-red-500 focus:outline-none"
                           >
                             <span className="text-xs tracking-[0.25em] text-red-500 uppercase">
                               Step {index + 1}
@@ -315,13 +335,26 @@ export default function QuizEngine() {
                     <p className="text-sm tracking-[0.35em] text-gray-400 uppercase">
                       Time Remaining
                     </p>
-                    <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className="mt-3 h-3 overflow-hidden rounded-full bg-white/10"
+                      role="progressbar"
+                      aria-valuenow={Math.round(percentage)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label="Time remaining"
+                    >
                       <div
                         className="h-full rounded-full bg-red-500 transition-all duration-500"
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
-                    <p className="mt-2 text-3xl font-black text-white">{timeLeft}s</p>
+                    <p
+                      className="mt-2 text-3xl font-black text-white"
+                      role="timer"
+                      aria-label={`${timeLeft} seconds remaining`}
+                    >
+                      {timeLeft}s
+                    </p>
                   </div>
 
                   <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
@@ -433,14 +466,16 @@ export default function QuizEngine() {
           )}
 
           {isCompleteState && (
-            <motion.section
-              key="complete"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.35 }}
-              className="rounded-[40px] border border-white/10 bg-[#111111]/90 p-10 shadow-[0_0_40px_rgba(0,0,0,0.28)]"
-            >
+            <>
+              <CelebrationOverlay />
+              <motion.section
+                key="complete"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.35 }}
+                className="rounded-[40px] border border-white/10 bg-[#111111]/90 p-10 shadow-[0_0_40px_rgba(0,0,0,0.28)]"
+              >
               <div className="space-y-8 text-center">
                 <p className="text-sm tracking-[0.35em] text-red-500 uppercase">Quiz Complete</p>
                 <h2 className="text-5xl font-black text-white">Final Score</h2>
@@ -466,6 +501,7 @@ export default function QuizEngine() {
                 </div>
               </div>
             </motion.section>
+            </>
           )}
         </AnimatePresence>
       </div>

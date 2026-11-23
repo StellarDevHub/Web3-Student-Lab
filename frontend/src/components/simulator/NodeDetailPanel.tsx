@@ -1,7 +1,8 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Activity, ExternalLink, Shield, Wallet, X } from 'lucide-react';
-import React from 'react';
+import React, { useRef } from 'react';
 import { NetworkNode } from '../../lib/visualization/ForceSimulation';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface NodeDetailPanelProps {
   node: NetworkNode;
@@ -10,6 +11,14 @@ interface NodeDetailPanelProps {
 
 export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onClose }) => {
   const shouldReduceMotion = useReducedMotion();
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(panelRef, {
+    enabled: true,
+    initialFocus: true,
+    returnFocusOnDeactivate: true,
+    onEscape: onClose,
+  });
 
   return (
     <AnimatePresence>
@@ -18,6 +27,7 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, onClose 
         animate={{ x: 0, opacity: 1 }}
         exit={shouldReduceMotion ? { opacity: 0 } : { x: '100%', opacity: 0 }}
         transition={shouldReduceMotion ? { duration: 0 } : undefined}
+        ref={panelRef}
         className="absolute top-0 right-0 z-30 flex h-full w-full sm:w-80 flex-col gap-6 border-l border-white/10 bg-black/95 p-6 backdrop-blur-xl"
         role="dialog"
         aria-modal="true"

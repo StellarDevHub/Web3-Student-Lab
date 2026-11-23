@@ -315,7 +315,7 @@ impl PrSimulation {
     ///
     /// This view is callable by anyone (no auth) so the playground can
     /// pre-validate changes before submitting a full simulation.
-    pub fn classify_change(env: Env, change: StorageChange) -> ChangeSeverity {
+    pub fn classify_change(_env: Env, change: StorageChange) -> ChangeSeverity {
         // If types are identical, the change is always safe.
         if change.old_type == change.new_type {
             return ChangeSeverity::Safe;
@@ -373,6 +373,7 @@ mod tests {
     fn setup() -> (Env, PrSimulationClient<'static>, Address) {
         let env = Env::default();
         env.mock_all_auths();
+        env.ledger().with_mut(|l| l.timestamp = 100);
         let contract_id = env.register(PrSimulation, ());
         let client = PrSimulationClient::new(&env, &contract_id);
         let admin = Address::generate(&env);

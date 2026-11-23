@@ -191,12 +191,15 @@ export function compareLicenses(licenseAId: string, licenseBId: string): License
         (c.licenseA === b.id && c.licenseB === a.id)
     );
   if (directMatch) {
-    compatibility = {
+    const compatibilityData: LicenseCompatibility = {
       licenseA: a.id,
       licenseB: b.id,
       compatibility: directMatch.compatibility,
-      conditions: directMatch.conditions,
     };
+    if (directMatch.conditions) {
+      compatibilityData.conditions = directMatch.conditions;
+    }
+    compatibility = compatibilityData;
   }
 
   // Find similarities
@@ -341,15 +344,19 @@ export function checkCompatibility(
   );
 
   if (match) {
-    return {
-      status: 'success',
+    const result = {
+      status: 'success' as const,
       data: {
         licenseA: a.id,
         licenseB: b.id,
         compatibility: match.compatibility,
-        conditions: match.conditions,
       },
     };
+    const conditions = (match as { conditions?: string }).conditions;
+    if (conditions) {
+      (result.data as any).conditions = conditions;
+    }
+    return result;
   }
 
   return {

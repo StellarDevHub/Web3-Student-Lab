@@ -1,40 +1,44 @@
 'use client';
 
 import { useI18n } from '@/i18n';
-import { Course, coursesAPI } from '@/lib/api';
+import { Course, CourseDataSource, coursesAPI } from '@/lib/api';
+import { usePrefetch } from '@/hooks/usePrefetch';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, BookOpen, Search, Sparkles } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState, useCallback } from 'react';
-import { ErrorBoundary, ErrorFallback, CourseListSkeleton } from '@/components/ui';
+import { useState } from 'react';
+import { ErrorBoundary, ErrorFallback, CourseListSkeleton, DemoDataBanner } from '@/components/ui';
 
 export default function CoursesPage() {
   const { t } = useI18n();
-  const [courses, setCourses] = useState<Course[]>([]);
   const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Course grids can be long: skip viewport prefetching and prefetch on hover/focus intent instead.
+  const { prefetch, handleMouseEnter, handleMouseLeave } = usePrefetch();
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await coursesAPI.getAll();
-      setCourses(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load courses');
-      setCourses([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: ['courses'],
+    queryFn: () => coursesAPI.getAllWithSource(),
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
 
-  useEffect(() => {
-    let mounted = true;
-    load();
-    return () => {
-      mounted = false;
-    };
-  }, [load]);
+  const courses: Course[] = Array.isArray(data?.courses) ? data!.courses : [];
+  const dataSource: CourseDataSource = data?.dataSource ?? 'live';
+  const demoMessage: string | undefined = data?.message;
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : 'Failed to load courses'
+    : null;
+  const load = () => {
+    void refetch();
+  };
 
   const filteredCourses = courses.filter((course) => {
     const haystack =
@@ -53,6 +57,7 @@ export default function CoursesPage() {
         <div className="absolute top-0 left-[20%] w-[50%] h-[30%] rounded-full bg-[radial-gradient(circle,rgba(220,38,38,0.1),transparent_70%)] blur-[100px] pointer-events-none" />
         
         <div className="mx-auto max-w-7xl px-4 pt-20 sm:px-6 lg:px-8 relative z-10">
+          {!loading && dataSource === 'demo' && <DemoDataBanner message={demoMessage} />}
           <section className="grid gap-12 lg:grid-cols-[1fr_1fr] items-end mb-16">
             <div className="space-y-6">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-red-500/30 bg-red-500/10 text-red-400 text-[10px] font-black tracking-widest uppercase shadow-[0_0_20px_rgba(220,38,38,0.2)]">
@@ -111,6 +116,11 @@ export default function CoursesPage() {
                 <Link
                   key={course.id}
                   href={`/courses/${course.id}`}
+                  prefetch={false}
+                  onMouseEnter={() => handleMouseEnter(`/courses/${course.id}`)}
+                  onMouseLeave={handleMouseLeave}
+                  onFocus={() => prefetch(`/courses/${course.id}`)}
+                  onTouchStart={() => prefetch(`/courses/${course.id}`)}
                   className="group relative flex flex-col justify-between bg-zinc-900/40 border border-white/5 p-8 rounded-[2rem] overflow-hidden transition-all hover:-translate-y-2 hover:bg-zinc-900/80 hover:border-red-500/40 hover:shadow-[0_20px_40px_rgba(0,0,0,0.5)]"
                 >
                   <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity transform group-hover:scale-110">

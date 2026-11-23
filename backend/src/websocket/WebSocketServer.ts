@@ -5,6 +5,7 @@ import { socketAuthMiddleware } from './middleware/auth.middleware.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.middleware.js';
 import { ConnectionManager } from './ConnectionManager.js';
 import { EventRouter } from './EventRouter.js';
+import { getWebSocketCluster } from './WebSocketCluster.js';
 
 let io: Server;
 const connectionManager = new ConnectionManager();
@@ -24,6 +25,10 @@ export const initializeWebSocket = (server: HttpServer) => {
   io.use(rateLimitMiddleware);
 
   const eventRouter = new EventRouter(io, connectionManager);
+  const cluster = getWebSocketCluster();
+  void cluster.start().catch((error) => {
+    logger.error('Failed to start WebSocket cluster consumer', error);
+  });
 
   io.on('connection', (socket: Socket) => {
     logger.info(`New WebSocket connection established: ${socket.id}`);
@@ -31,8 +36,45 @@ export const initializeWebSocket = (server: HttpServer) => {
     connectionManager.addConnection(socket);
     eventRouter.registerHandlers(socket);
 
+    const userId = String(socket.data.user?.id ?? '');
+    const lastEventId =
+      socket.handshake.auth?.lastEventId ?? socket.handshake.headers['last-event-id'];
+
+    cluster.registerSocket(socket, {
+      userId,
+      rooms: [`user:${userId}`],
+    });
+
+    if (lastEventId) {
+      void cluster.resume(socket.id, String(lastEventId)).catch((error) => {
+        logger.error(`Failed to replay missed events for ${socket.id}`, error);
+      });
+    }
+
+    socket.on('resume', (eventId: string) => {
+      if (typeof eventId !== 'string' || !eventId) {
+        return;
+      }
+      void cluster.resume(socket.id, eventId).catch((error) => {
+        logger.error(`Failed to replay missed events for ${socket.id}`, error);
+      });
+    });
+
+    socket.on('room:join', (room: string) => {
+      if (typeof room === 'string') {
+        cluster.addRoom(socket.id, room);
+      }
+    });
+
+    socket.on('room:leave', (room: string) => {
+      if (typeof room === 'string') {
+        cluster.removeRoom(socket.id, room);
+      }
+    });
+
     socket.on('disconnect', (reason) => {
       logger.info(`WebSocket disconnected: ${socket.id}. Reason: ${reason}`);
+      cluster.unregisterSocket(socket.id);
       connectionManager.removeConnection(socket.id);
     });
   });
@@ -47,3 +89,36 @@ export const getIO = () => {
   }
   return io;
 };
+
+/**
+ * Singleton helper class that subscription.controller.ts and similar callers
+ * use to broadcast events without holding a direct reference to the io Server.
+ */
+export class WebSocketServer {
+  private static _instance: WebSocketServer | null = null;
+
+  static getInstance(): WebSocketServer {
+    if (!WebSocketServer._instance) {
+      WebSocketServer._instance = new WebSocketServer();
+    }
+    return WebSocketServer._instance;
+  }
+
+  /** Emit an event to all sockets belonging to a specific user. */
+  broadcastToUser(userId: string, event: { type: string; payload?: unknown; data?: unknown }): void {
+    try {
+      getIO().to(`user:${userId}`).emit(event.type, event.payload ?? event.data ?? null);
+    } catch {
+      // io not yet initialised (e.g. during tests) — swallow silently.
+    }
+  }
+
+  /** Emit an event to all connected sockets. */
+  broadcast(event: { type: string; payload?: unknown; data?: unknown }): void {
+    try {
+      getIO().emit(event.type, event.payload ?? event.data ?? null);
+    } catch {
+      // io not yet initialised — swallow silently.
+    }
+  }
+}

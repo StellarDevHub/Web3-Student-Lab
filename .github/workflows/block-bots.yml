@@ -1,0 +1,48 @@
+name: Block Bot Contributions
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+  issues:
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  block-bots:
+    if: endsWith(github.actor, '[bot]') || github.event.sender.type == 'Bot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close bot PR or issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const isPR = !!context.payload.pull_request;
+            const issue_number = context.issue.number;
+            const comment = `Automated bot contributions, PRs, and issues are strictly blocked in this repository per security policy.`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue_number,
+              body: comment
+            });
+
+            if (isPR) {
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: issue_number,
+                state: 'closed'
+              });
+            } else {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue_number,
+                state: 'closed'
+              });
+            }
+            core.setFailed('Blocked automated bot activity.');

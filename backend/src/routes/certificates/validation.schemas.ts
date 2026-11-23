@@ -128,3 +128,27 @@ export const QRCodeOptionsSchema = z.object({
 });
 
 export type QRCodeOptions = z.infer<typeof QRCodeOptionsSchema>;
+
+// Merkle cohort schemas
+export const AnchorMerkleCohortSchema = z.object({
+  cohortId: z.string().min(1, 'cohortId is required').max(100, 'cohortId too long'),
+  rootHash: z.string().min(1, 'rootHash is required').max(128, 'rootHash too long'),
+});
+
+export type AnchorMerkleCohortRequest = z.infer<typeof AnchorMerkleCohortSchema>;
+
+export const VerifyMerkleInclusionSchema = z.object({
+  cohortId: z.string().min(1, 'cohortId is required'),
+  leafHash: z.string().min(1, 'leafHash is required').max(128, 'leafHash too long'),
+  proof: z.array(z.string().min(1).max(128)).min(1, 'proof must not be empty').max(64, 'proof too large'),
+});
+
+export type VerifyMerkleInclusionRequest = z.infer<typeof VerifyMerkleInclusionSchema>;
+
+// OpenBadges v3.0 export schema
+export const OpenBadgesExportSchema = z.object({
+  format: z.enum(['json-ld', 'assertion']).default('json-ld'),
+  includeSignedAssertion: z.boolean().optional().default(false),
+});
+
+export type OpenBadgesExportRequest = z.infer<typeof OpenBadgesExportSchema>;

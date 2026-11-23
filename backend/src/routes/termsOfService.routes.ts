@@ -7,7 +7,7 @@ import {
   hasTosAcceptance,
 } from '../services/termsOfService.service.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @route   GET /api/v1/roadmap/tos

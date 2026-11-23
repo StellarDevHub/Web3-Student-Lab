@@ -222,9 +222,11 @@ Choose one of the following options.
 
 #### Option A: Use Docker Compose
 
-From the project root:
+From the project root (recommended: Postgres + standalone Redis only):
 
 ```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# Or start just the database:
 docker compose up -d db
 ```
 

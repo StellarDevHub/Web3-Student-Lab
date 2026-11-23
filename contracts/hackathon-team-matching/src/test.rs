@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, vec, Address, Env};
+use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, token, vec, Address, Env};
 
 // --- Mock Skill Verifier Contract ---
 #[contract]
@@ -330,4 +330,148 @@ fn test_check_skill_verified() {
 
     // "solidity" is not verified in MockSkillVerifier
     assert!(!client.check_skill_verified(&dev, &Symbol::new(&env, "solidity")));
+}
+
+#[test]
+fn test_escrow_releases_only_after_sponsor_and_entire_team_approve() {
+    let (env, _, _, client, contract_id) = setup();
+    let sponsor = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token_id = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_client = token::Client::new(&env, &token_id);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
+    token_admin_client.mint(&sponsor, &300);
+
+    let team_lead = Address::generate(&env);
+    let team_id = client.create_team(
+        &team_lead,
+        &Symbol::new(&env, "builders"),
+        &vec![&env],
+        &vec![&env],
+        &3,
+    );
+    let member = Address::generate(&env);
+    client.register_developer(&member, &vec![&env], &Symbol::new(&env, "engineer"));
+    client.invite_developer(&team_lead, &member, &team_id);
+    client.accept_invitation(&member, &team_id);
+
+    let arbiters = vec![&env, Address::generate(&env), Address::generate(&env)];
+    let escrow_id = client.create_escrow(
+        &sponsor,
+        &team_id,
+        &token_id,
+        &vec![&env, 100i128, 200i128],
+        &100,
+        &arbiters,
+        &2,
+    );
+
+    client.vote_milestone(&sponsor, &escrow_id, &0, &true);
+    assert_eq!(token_client.balance(&team_lead), 0);
+    client.vote_milestone(&team_lead, &escrow_id, &0, &true);
+    assert_eq!(token_client.balance(&team_lead), 0);
+    client.vote_milestone(&member, &escrow_id, &0, &true);
+    assert_eq!(token_client.balance(&team_lead), 100);
+    assert_eq!(token_client.balance(&contract_id), 200);
+
+    let stored = client.get_escrow(&escrow_id).unwrap();
+    assert_eq!(
+        stored.milestones.get(0).unwrap().status,
+        escrow::MilestoneStatus::Released
+    );
+}
+
+#[test]
+fn test_arbiter_threshold_resolves_a_disputed_milestone() {
+    let (env, _, _, client, contract_id) = setup();
+    let sponsor = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token_id = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_client = token::Client::new(&env, &token_id);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
+    token_admin_client.mint(&sponsor, &100);
+
+    let team_lead = Address::generate(&env);
+    let team_id = client.create_team(
+        &team_lead,
+        &Symbol::new(&env, "builders"),
+        &vec![&env],
+        &vec![&env],
+        &2,
+    );
+    let arbiter_one = Address::generate(&env);
+    let arbiter_two = Address::generate(&env);
+    let escrow_id = client.create_escrow(
+        &sponsor,
+        &team_id,
+        &token_id,
+        &vec![&env, 100i128],
+        &100,
+        &vec![&env, arbiter_one.clone(), arbiter_two.clone()],
+        &2,
+    );
+
+    client.vote_milestone(&sponsor, &escrow_id, &0, &false);
+    client.resolve_dispute(&arbiter_one, &escrow_id, &0, &true);
+    assert_eq!(token_client.balance(&team_lead), 0);
+    assert_eq!(token_client.balance(&contract_id), 100);
+
+    client.resolve_dispute(&arbiter_two, &escrow_id, &0, &true);
+    assert_eq!(token_client.balance(&team_lead), 100);
+    assert_eq!(token_client.balance(&contract_id), 0);
+}
+
+#[test]
+fn test_unclaimed_milestones_refund_after_expiration() {
+    let (env, _, _, client, contract_id) = setup();
+    let sponsor = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token_id = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_client = token::Client::new(&env, &token_id);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
+    token_admin_client.mint(&sponsor, &300);
+
+    let team_lead = Address::generate(&env);
+    let team_id = client.create_team(
+        &team_lead,
+        &Symbol::new(&env, "builders"),
+        &vec![&env],
+        &vec![&env],
+        &2,
+    );
+    let arbiter = Address::generate(&env);
+    let escrow_id = client.create_escrow(
+        &sponsor,
+        &team_id,
+        &token_id,
+        &vec![&env, 100i128, 200i128],
+        &100,
+        &vec![&env, arbiter],
+        &1,
+    );
+    client.vote_milestone(&sponsor, &escrow_id, &0, &true);
+    client.vote_milestone(&team_lead, &escrow_id, &0, &true);
+    assert_eq!(token_client.balance(&team_lead), 100);
+
+    env.ledger().with_mut(|ledger| ledger.timestamp = 100);
+    assert_eq!(client.refund_expired(&escrow_id), 200);
+    assert_eq!(client.refund_expired(&escrow_id), 0);
+    assert_eq!(token_client.balance(&sponsor), 200);
+    assert_eq!(token_client.balance(&contract_id), 0);
+    assert_eq!(
+        client
+            .get_escrow(&escrow_id)
+            .unwrap()
+            .milestones
+            .get(1)
+            .unwrap()
+            .status,
+        escrow::MilestoneStatus::Refunded
+    );
 }

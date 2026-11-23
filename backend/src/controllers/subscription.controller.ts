@@ -1,8 +1,10 @@
 import { NextFunction, Request, Response } from 'express';
 import { subscriptionService } from '../services/subscription.service.js';
 import logger from '../utils/logger.js';
-import { ApiResponse, asyncHandler } from '../utils/response.js';
+import { ApiResponse } from '../utils/response.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 import { WebSocketServer } from '../websocket/WebSocketServer.js';
+import { redisConnection } from '../utils/redis.js';
 
 export const subscriptionController = {
   // Get all subscription plans
@@ -14,7 +16,7 @@ export const subscriptionController = {
 
   // Get specific plan by tier
   getPlan: asyncHandler(async (req: Request, res: Response) => {
-    const { tier } = req.params;
+    const tier = req.params.tier as string;
 
     const plan = await subscriptionService.getPlanByTier(tier);
 
@@ -54,7 +56,9 @@ export const subscriptionController = {
     });
 
     // Invalidate cache for user subscriptions
-    await redisConnection.del(`user_subscriptions:${userId}`);
+    const redisClient = (await import('../cache/RedisClient.js')).default;
+    const client = redisClient.getClient();
+    if (client) await client.del(`user_subscriptions:${userId}`);
 
     // Notify via WebSocket
     WebSocketServer.getInstance().broadcastToUser(userId, {
@@ -72,7 +76,7 @@ export const subscriptionController = {
   // Cancel subscription
   cancelSubscription: asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.id;
-    const { subscriptionId } = req.params;
+    const subscriptionId = req.params.subscriptionId as string;
 
     if (!userId) {
       return res.status(401).json(ApiResponse.error('User not authenticated'));
@@ -98,7 +102,7 @@ export const subscriptionController = {
   // Renew subscription
   renewSubscription: asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.id;
-    const { subscriptionId } = req.params;
+    const subscriptionId = req.params.subscriptionId as string;
 
     if (!userId) {
       return res.status(401).json(ApiResponse.error('User not authenticated'));
@@ -129,7 +133,7 @@ export const subscriptionController = {
   // Get specific subscription
   getSubscription: asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.id;
-    const { subscriptionId } = req.params;
+    const subscriptionId = req.params.subscriptionId as string;
 
     if (!userId) {
       return res.status(401).json(ApiResponse.error('User not authenticated'));
@@ -148,7 +152,7 @@ export const subscriptionController = {
   // Get subscription payment history
   getSubscriptionPayments: asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.id;
-    const { subscriptionId } = req.params;
+    const subscriptionId = req.params.subscriptionId as string;
 
     if (!userId) {
       return res.status(401).json(ApiResponse.error('User not authenticated'));
@@ -212,7 +216,9 @@ export const subscriptionController = {
     });
 
     // Invalidate plans cache
-    await redisConnection.del('subscription_plans');
+    const redisClient = (await import('../cache/RedisClient.js')).default;
+    const client = redisClient.getClient();
+    if (client) await client.del('subscription_plans');
 
     // Broadcast plan update
     WebSocketServer.getInstance().broadcast({

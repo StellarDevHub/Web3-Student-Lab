@@ -11,7 +11,8 @@ export const cacheMiddleware = (ttlSeconds: number = 300) => {
       }
 
       const cacheKey = `cache:${req.originalUrl}:${req.user?.id || 'anonymous'}`;
-      const cachedData = await redisConnection.get(cacheKey);
+      const client = redisConnection;
+      const cachedData = client ? await client.get(cacheKey) : null;
 
       if (cachedData) {
         const data = JSON.parse(cachedData);
@@ -23,7 +24,7 @@ export const cacheMiddleware = (ttlSeconds: number = 300) => {
       res.json = function (data: any) {
         // Only cache successful responses
         if (res.statusCode === 200) {
-          redisConnection.setex(cacheKey, ttlSeconds, JSON.stringify(data)).catch((err) => {
+          client?.setex(cacheKey, ttlSeconds, JSON.stringify(data)).catch((err: unknown) => {
             console.error('Cache set error:', err);
           });
         }

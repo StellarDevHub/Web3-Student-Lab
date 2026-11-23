@@ -138,7 +138,11 @@ export default function VerifyPage() {
 
               <div className="grid gap-6 md:grid-cols-2">
                 <InfoCard label="Credential" value={result.certificate?.name || 'Unknown'} />
-                <InfoCard label="Status" value={result.isValid ? 'Active' : 'Unavailable'} isValid={result.isValid} />
+                <InfoCard
+                  label="Status"
+                  value={result.status === 'REVOKED' ? 'REVOKED' : result.status === 'REISSUED' ? 'REISSUED' : result.isValid ? 'Active' : 'Unavailable'}
+                  isValid={result.isValid}
+                />
                 <InfoCard
                   label="Token ID"
                   value={String(
@@ -157,13 +161,16 @@ export default function VerifyPage() {
                 />
               </div>
 
-              {result.revocationInfo && (
-                <div className="mt-8 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6 backdrop-blur-sm">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500 mb-3">
-                    Revocation Details
+              {result.status === 'REVOKED' && result.revocationInfo && (
+                <div className="mt-8 rounded-2xl border border-red-500/40 bg-red-500/10 p-6 backdrop-blur-sm animate-pulse">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-red-500 mb-3">
+                    Revocation Notice
                   </h3>
-                  <p className="text-sm font-medium text-amber-200/80">
+                  <p className="text-sm font-medium text-red-200/80">
                     Reason: <span className="text-white">{result.revocationInfo.reason || 'Not supplied'}</span>
+                  </p>
+                  <p className="text-xs text-red-300/70 mt-2">
+                    This certificate has been revoked and is no longer valid. Contact the issuer for a replacement.
                   </p>
                 </div>
               )}

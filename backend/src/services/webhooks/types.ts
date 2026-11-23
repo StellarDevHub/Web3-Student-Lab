@@ -1,5 +1,6 @@
 export type WebhookEventName =
   | 'lab.completed'
+  | 'course.completed'
   | 'contract.deployed'
   | 'certificate.minted'
   | 'onchain.event'
@@ -33,10 +34,17 @@ export interface WebhookDeliveryRequest {
   destination: WebhookDestination;
   event: WebhookEventPayload;
   metadata?: Record<string, unknown>;
+  idempotencyKey?: string;
 }
 
 export interface WebhookDeliveryJobData extends WebhookDeliveryRequest {
   deliveryId: string;
+  /**
+   * traceId from the HTTP request that triggered this job (Issue #981).
+   * Workers call logWithTraceId(traceId, …) so job logs are correlated
+   * with the originating request.
+   */
+  traceId?: string;
 }
 
 export interface DeadLetterWebhookJob extends WebhookDeliveryJobData {
@@ -51,5 +59,22 @@ export interface SignedWebhookHeaders {
   'x-webhook-event': string;
   'x-webhook-signature': string;
   'x-webhook-timestamp': string;
+  'x-hub-signature-256': string;
+  'x-webhook-nonce': string;
+  'x-webhook-unix-timestamp': string;
+}
+
+export type WebhookDeliveryState = 'pending' | 'delivered' | 'failed' | 'dead-letted';
+
+export interface WebhookDeliveryHistoryEntry {
+  idempotencyKey: string;
+  state: WebhookDeliveryState;
+  deliveryId: string;
+  destinationUrl: string;
+  eventId: string;
+  eventType: WebhookEventName;
+  updatedAt: string;
+  attemptsMade?: number;
+  error?: string;
 }
 

@@ -662,6 +662,156 @@ describe('Curriculum & Progress Integration Tests', () => {
       expect(response.body.progress.completedLessons).not.toContain('course-1-lesson-1');
     });
 
+    it('should accept whole-state progress updates (roadmap node ids)', async () => {
+      // Arrange: Register student
+      const student = await registerStudent('wholestate@example.com');
+
+      // Act: Replace progress with the roadmap-style whole state
+      const response = await request(app)
+        .patch('/api/v1/learning/courses/course-1/progress')
+        .set('Authorization', `Bearer ${student.token}`)
+        .send({
+          completedLessons: ['soroban-level-1', 'soroban-level-2'],
+          currentModuleId: 'soroban-level-2',
+          percentage: 66,
+          status: 'in_progress',
+        })
+        .expect(200);
+
+      // Assert: Whole state stored as provided
+      expect(response.body.progress.completedLessons).toEqual([
+        'soroban-level-1',
+        'soroban-level-2',
+      ]);
+      expect(response.body.progress.currentModuleId).toBe('soroban-level-2');
+      expect(response.body.progress.percentage).toBe(66);
+      expect(response.body.progress.status).toBe('in_progress');
+
+      // Verify persistence in database
+      const dbProgress = await prisma.learningProgress.findUnique({
+        where: {
+          studentId_courseId: {
+            studentId: student.userId,
+            courseId: 'course-1',
+          },
+        },
+      });
+
+      expect(dbProgress?.completedLessons).toEqual([
+        'soroban-level-1',
+        'soroban-level-2',
+      ]);
+    });
+
+    it('should support resume updates that only move the current module', async () => {
+      // Arrange: Register student and create progress
+      const student = await registerStudent('resume@example.com');
+
+      await request(app)
+        .patch('/api/v1/learning/courses/course-1/progress')
+        .set('Authorization', `Bearer ${student.token}`)
+        .send({
+          lessonId: 'course-1-lesson-1',
+          status: 'completed',
+        })
+        .expect(200);
+
+      // Act: Resume at a later module without toggling lessons
+      const response = await request(app)
+        .patch('/api/v1/learning/courses/course-1/progress')
+        .set('Authorization', `Bearer ${student.token}`)
+        .send({
+          currentModuleId: 'course-1-module-2',
+        })
+        .expect(200);
+
+      // Assert: Current module updated, lessons preserved
+      expect(response.body.progress.currentModuleId).toBe('course-1-module-2');
+      expect(response.body.progress.completedLessons).toEqual([
+        'course-1-lesson-1',
+      ]);
+    });
+
+    it('should reject stale updates with a 409 conflict and the server state', async () => {
+      // Arrange: Register student and create progress
+      const student = await registerStudent('conflict@example.com');
+
+      const first = await request(app)
+        .patch('/api/v1/learning/courses/course-1/progress')
+        .set('Authorization', `Bearer ${student.token}`)
+        .send({
+          lessonId: 'course-1-lesson-1',
+          status: 'completed',
+        })
+        .expect(200);
+
+      const freshUpdatedAt = first.body.progress.updatedAt;
+      expect(typeof freshUpdatedAt).toBe('string');
+
+      // Another session writes newer progress
+      await request(app)
+        .patch('/api/v1/learning/courses/course-1/progress')
+        .set('Authorization', `Bearer ${student.token}`)
+        .send({
+          lessonId: 'course-1-lesson-2',
+          status: 'completed',
+        })
+        .expect(200);
+
+      // Act: Stale client replays its old snapshot
+      const staleResponse = await request(app)
+        .patch('/api/v1/learning/courses/course-1/progress')
+        .set('Authorization', `Bearer ${student.token}`)
+        .send({
+          completedLessons: ['course-1-lesson-1'],
+          currentModuleId: 'course-1-module-1',
+          percentage: 25,
+          status: 'in_progress',
+          baseUpdatedAt: freshUpdatedAt,
+        })
+        .expect(409);
+
+      // Assert: Conflict surfaces the authoritative server state
+      expect(staleResponse.body.error).toContain('another session');
+      expect(staleResponse.body.progress.completedLessons).toEqual([
+        'course-1-lesson-1',
+        'course-1-lesson-2',
+      ]);
+    });
+
+    it('should accept writes whose concurrency token matches', async () => {
+      // Arrange: Register student and create progress
+      const student = await registerStudent('no-conflict@example.com');
+
+      const first = await request(app)
+        .patch('/api/v1/learning/courses/course-1/progress')
+        .set('Authorization', `Bearer ${student.token}`)
+        .send({
+          lessonId: 'course-1-lesson-1',
+          status: 'completed',
+        })
+        .expect(200);
+
+      const freshUpdatedAt = first.body.progress.updatedAt;
+
+      // Act: Write with a matching token
+      const response = await request(app)
+        .patch('/api/v1/learning/courses/course-1/progress')
+        .set('Authorization', `Bearer ${student.token}`)
+        .send({
+          lessonId: 'course-1-lesson-2',
+          status: 'completed',
+          baseUpdatedAt: freshUpdatedAt,
+        })
+        .expect(200);
+
+      // Assert: Update applied
+      expect(response.body.progress.completedLessons).toEqual([
+        'course-1-lesson-1',
+        'course-1-lesson-2',
+      ]);
+    });
+
     it('should validate required fields in request body', async () => {
       // Arrange: Register student
       const student = await registerStudent('missingfields@example.com');

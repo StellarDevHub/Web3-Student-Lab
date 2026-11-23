@@ -10,7 +10,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, Address, BytesN, Env,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, Address, BytesN,
+    ContractExecutable, Env,
 };
 
 /// Storage keys specifically for the Proxy/Admin logic, matching the `proxy` crate.
@@ -55,7 +56,7 @@ impl StudentRecordV1 {
             .set(&ProxyDataKey::ImplementationWasm, &new_implementation);
 
         env.deployer()
-            .update_current_contract_wasm(new_implementation);
+            .update_current_contract(ContractExecutable::Wasm(new_implementation));
     }
 
     pub fn get_implementation(env: Env) -> BytesN<32> {

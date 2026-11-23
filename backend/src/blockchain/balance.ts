@@ -2,7 +2,7 @@ import { Horizon } from '@stellar/stellar-sdk';
 import { Request, Response, Router } from 'express';
 import { HORIZON_URL } from '../config/rpcConfig.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * GET /api/blockchain/balance/:publicKey

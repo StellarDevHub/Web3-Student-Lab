@@ -11,10 +11,10 @@ const CHECK_RESPONSE = {
     {
       name: 'soroban-sdk',
       currentVersion: '21.7.6',
-      latestVersion: '22.0.7',
+      latestVersion: '26.1.0',
       isOutdated: true,
       updateType: 'major',
-      releaseNotes: 'Protocol 22 support.',
+      releaseNotes: 'Protocol 26 support.',
     },
     {
       name: 'num-integer',
@@ -33,7 +33,7 @@ const UPDATE_RESPONSE = {
   status: 'success',
   updated: ['soroban-sdk'],
   failed: [],
-  suggestedCargoToml: '[dependencies]\nsoroban-sdk = "22.0.7"\n',
+  suggestedCargoToml: '[dependencies]\nsoroban-sdk = "26.1.0"\n',
 };
 
 beforeEach(() => {
@@ -68,7 +68,7 @@ describe('DependencyUpdatePanel', () => {
     await waitFor(() => {
       expect(screen.getByText('soroban-sdk')).toBeDefined();
     });
-    expect(screen.getByText('22.0.7')).toBeDefined();
+    expect(screen.getByText('26.1.0')).toBeDefined();
   });
 
   it('shows up-to-date summary count', async () => {
@@ -116,7 +116,7 @@ describe('DependencyUpdatePanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /apply.*update/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/1 updated/i)).toBeDefined();
+      expect(screen.getAllByText((_, element) => element?.textContent === '1 updated').length).toBeGreaterThan(0);
     });
   });
 

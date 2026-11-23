@@ -23,8 +23,10 @@ export interface UseIdeaGeneratorResult {
   idea: ProjectIdea | null;
   isGenerating: boolean;
   error: string | null;
-  /** True when the displayed idea came from the local template fallback. */
+  /** True when the displayed idea came from a fallback (backend safe-mock or local template). */
   isFallback: boolean;
+  /** Actionable explanation of why a fallback idea is being shown, if any. */
+  fallbackMessage: string | null;
   /** Validation errors for the supplied filters (empty when valid). */
   generate: (filters: IdeaFilters) => Promise<void>;
 }
@@ -34,6 +36,7 @@ export function useIdeaGenerator(): UseIdeaGeneratorResult {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isFallback, setIsFallback] = useState(false);
+  const [fallbackMessage, setFallbackMessage] = useState<string | null>(null);
 
   const generate = useCallback(async (filters: IdeaFilters = DEFAULT_FILTERS) => {
     const validation = validateFilters(filters);
@@ -45,17 +48,23 @@ export function useIdeaGenerator(): UseIdeaGeneratorResult {
     setIsGenerating(true);
     setError(null);
     try {
-      const result = await generatorAPI.generateIdea(buildGeneratorParams(filters));
-      setIdea(result);
-      setIsFallback(false);
+      const result = await generatorAPI.generateIdeaWithStatus(buildGeneratorParams(filters));
+      setIdea(result.idea);
+      setIsFallback(result.fromMock);
+      setFallbackMessage(result.fromMock ? result.message ?? null : null);
     } catch {
-      // Graceful degradation: synthesise locally from domain templates.
+      // Network/HTTP failure reaching the backend at all: graceful
+      // degradation via local template synthesis so the user always
+      // gets a relevant result.
       setIdea(generateLocalIdea(filters));
       setIsFallback(true);
+      setFallbackMessage(
+        'The idea generator is temporarily unreachable, so we generated an example idea locally instead.'
+      );
     } finally {
       setIsGenerating(false);
     }
   }, []);
 
-  return { idea, isGenerating, error, isFallback, generate };
+  return { idea, isGenerating, error, isFallback, fallbackMessage, generate };
 }

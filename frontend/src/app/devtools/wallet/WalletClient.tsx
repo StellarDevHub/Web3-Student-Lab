@@ -1,8 +1,9 @@
 'use client';
 
+import { BalanceViewer } from '@/components/wallet/BalanceViewer';
 import { useWallet, WALLET_PROVIDERS } from '@/contexts/WalletContext';
-import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import { useState } from 'react';
 
 const TransactionStateChart = dynamic(
   () => import('@/components/wallet/TransactionStateChart').then(mod => mod.TransactionStateChart),
@@ -45,35 +46,38 @@ function WalletPageImpl() {
         <h1 className="mb-6 text-3xl font-black text-red-500">WALLET CONNECT</h1>
 
         {publicKey ? (
-          <div className="rounded-lg border border-green-500/30 bg-zinc-900 p-6">
-            <div className="mb-4 flex items-center gap-3">
-              <span className="h-3 w-3 animate-pulse rounded-full bg-green-500" />
-              <span className="text-sm font-bold text-green-400">CONNECTED — {activeWallet}</span>
+          <>
+            <div className="rounded-lg border border-green-500/30 bg-zinc-900 p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <span className="h-3 w-3 animate-pulse rounded-full bg-green-500" />
+                <span className="text-sm font-bold text-green-400">CONNECTED — {activeWallet}</span>
+              </div>
+              <div className="mb-4 rounded bg-black p-3 font-mono text-sm break-all text-gray-300">
+                {publicKey}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => navigator.clipboard.writeText(publicKey)}
+                  className="rounded bg-zinc-700 px-4 py-2 text-sm font-bold hover:bg-zinc-600"
+                >
+                  COPY ADDRESS
+                </button>
+                <button
+                  onClick={disconnect}
+                  className="rounded bg-red-600 px-4 py-2 text-sm font-bold hover:bg-red-700"
+                >
+                  DISCONNECT
+                </button>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="rounded bg-zinc-700 px-4 py-2 text-sm font-bold hover:bg-zinc-600"
+                >
+                  SWITCH WALLET
+                </button>
+              </div>
             </div>
-            <div className="mb-4 rounded bg-black p-3 font-mono text-sm break-all text-gray-300">
-              {publicKey}
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => navigator.clipboard.writeText(publicKey)}
-                className="rounded bg-zinc-700 px-4 py-2 text-sm font-bold hover:bg-zinc-600"
-              >
-                COPY ADDRESS
-              </button>
-              <button
-                onClick={disconnect}
-                className="rounded bg-red-600 px-4 py-2 text-sm font-bold hover:bg-red-700"
-              >
-                DISCONNECT
-              </button>
-              <button
-                onClick={() => setShowModal(true)}
-                className="rounded bg-zinc-700 px-4 py-2 text-sm font-bold hover:bg-zinc-600"
-              >
-                SWITCH WALLET
-              </button>
-            </div>
-          </div>
+            <BalanceViewer />
+          </>
         ) : (
           <div className="rounded-lg border border-white/10 bg-zinc-900 p-8 text-center">
             <div className="mb-4 text-6xl">🔗</div>

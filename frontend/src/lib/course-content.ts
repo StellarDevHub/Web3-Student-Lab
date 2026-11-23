@@ -107,6 +107,225 @@ const COURSE_CONTENT: Record<string, CourseContent> = {
     ],
     tools: ['AMM simulators', 'Spreadsheet modeling', 'Protocol dashboards', 'Explorer tooling'],
   },
+  'course-1': {
+    level: 'Intermediate',
+    duration: '4 weeks',
+    summary:
+      'Master the art of writing, testing, and deploying Rust-based smart contracts on the Stellar Soroban virtual machine.',
+    outcomes: [
+      'Understand Soroban contract anatomy, functions, and symbols',
+      'Write safe state mutations with instance and persistent storage',
+      'Test contracts thoroughly using the Rust test framework and mock environments',
+    ],
+    modules: [
+      {
+        title: 'Soroban foundations',
+        description: 'Build a mental model for Soroban contracts, state, and execution flow.',
+      },
+      {
+        title: 'Writing safe contracts',
+        description: 'Cover testing, auth checks, and defensive patterns for contract development.',
+      },
+    ],
+    deliverables: ['A stateful counter and vault contract', 'A complete cargo test suite', 'Testnet deployment checklist'],
+    tools: ['Rust', 'Soroban SDK', 'Stellar CLI', 'Freighter'],
+  },
+  'course-2': {
+    level: 'Beginner',
+    duration: '2 weeks',
+    summary:
+      'Learn the core concepts of the Stellar network: accounts, assets, trustlines, anchors, and fast transaction settlement.',
+    outcomes: [
+      'Create and fund Stellar accounts with public/private key pairs',
+      'Establish trustlines and perform cross-asset payments',
+      'Understand how Federated Byzantine Agreement achieves fast finality',
+    ],
+    modules: [
+      {
+        title: 'Stellar network basics',
+        description: 'Learn how accounts, balances, and trustlines work together.',
+      },
+      {
+        title: 'Consensus and operations',
+        description: 'Explore how transactions settle and how Stellar reaches agreement.',
+      },
+    ],
+    deliverables: ['Funded testnet account setup', 'Custom asset issuance script', 'Payment simulation walkthrough'],
+    tools: ['Stellar Laboratory', 'Horizon API', 'Stellar Expert', 'Freighter'],
+  },
+  'course-3': {
+    level: 'Intermediate',
+    duration: '6 weeks',
+    summary:
+      'Build full-stack decentralized applications combining Next.js 16, React 19, Freighter wallet authentication, and Soroban contract RPCs.',
+    outcomes: [
+      'Integrate Freighter and web3 wallet connection workflows',
+      'Invoke Soroban smart contract methods from React components',
+      'Handle optimistic UI updates and on-chain transaction receipts',
+    ],
+    modules: [
+      {
+        title: 'Frontend foundations',
+        description: 'Set up a Next.js app that can interact with web3 services safely.',
+      },
+      {
+        title: 'Application integration',
+        description: 'Connect frontend screens to backend services and contract calls.',
+      },
+    ],
+    deliverables: ['Full-stack DApp with wallet connect', 'Interactive contract interaction panel', 'Production Vercel deployment'],
+    tools: ['Next.js 16', 'React 19', 'Tailwind CSS', 'Soroban Client SDK'],
+  },
+  'course-4': {
+    level: 'Advanced',
+    duration: '5 weeks',
+    summary:
+      'Deep dive into WASM memory models, Rust architectural patterns, reentrancy guards, TTL rent management, and contract security auditing.',
+    outcomes: [
+      'Manage WASM memory layouts and optimize contract binary size',
+      'Implement TTL storage extensions and rent restoration strategies',
+      'Audit contracts against reentrancy, integer overflow, and auth bypasses',
+    ],
+    modules: [
+      {
+        title: 'Rust primitives for smart contracts',
+        description: 'Master Rust memory management, traits, and error handling for Soroban.',
+      },
+      {
+        title: 'Contract security architecture',
+        description: 'Audit and secure contracts against reentrancy and auth bypasses.',
+      },
+    ],
+    deliverables: ['Optimized WASM contract build', 'Security audit checklist and exploit test', 'Storage TTL keeper script'],
+    tools: ['Rust', 'Soroban CLI', 'WASM Tools', 'Cargo Audit'],
+  },
+  'course-5': {
+    level: 'Advanced',
+    duration: '6 weeks',
+    summary:
+      'Build constant-product DEX liquidity pools, TWAP price oracles, multi-hop swaps, and atomic cross-contract arbitrage on Stellar.',
+    outcomes: [
+      'Implement constant product formula math with overflow-checked arithmetic',
+      'Mint and burn liquidity provider (LP) tokens with fee distribution',
+      'Construct manipulation-resistant TWAP oracles and flash swap mechanics',
+    ],
+    modules: [
+      {
+        title: 'DeFi mechanics & constant product AMMs',
+        description: 'Learn Automated Market Maker math, liquidity pools, and swap mechanics.',
+      },
+      {
+        title: 'Oracles and flash swaps',
+        description: 'Integrate price oracles safely and execute atomic arbitrage transactions.',
+      },
+    ],
+    deliverables: ['Constant-product AMM contract', 'TWAP oracle integration script', 'Multi-pool arbitrage simulator'],
+    tools: ['Soroban SDK', 'AMM Math Models', 'Stellar DEX', 'Horizon Streamer'],
+  },
+  'blockchain-foundations': {
+    level: 'Beginner',
+    duration: '3 weeks',
+    summary:
+      'Understand cryptographic hashes, blocks, asymmetric key cryptography, and Federated Byzantine Agreement consensus.',
+    outcomes: [
+      'Implement cryptographic SHA-256 block hashing',
+      'Derive Ed25519 keypairs and sign transactions',
+      'Simulate Federated Byzantine Agreement quorum slice intersections',
+    ],
+    modules: [
+      {
+        title: 'Cryptographic hashes & blocks',
+        description: 'Understand immutability, block headers, and cryptographic security.',
+      },
+      {
+        title: 'Wallets, keys, and signatures',
+        description: 'Asymmetric cryptography, public/private keys, and transaction signing.',
+      },
+      {
+        title: 'The Stellar consensus protocol',
+        description: 'Federated Byzantine Agreement, quorum slices, and network safety.',
+      },
+    ],
+    deliverables: ['Block hashing implementation in Rust', 'Keypair generator structure', 'Quorum slice intersection validator'],
+    tools: ['Rust Playground', 'Stellar CLI', 'Explorer Tooling'],
+  },
+  'smart-contracts': {
+    level: 'Intermediate',
+    duration: '4 weeks',
+    summary:
+      'Learn how programmable agreements power Web3 products with practical Soroban Rust contract exercises and tests.',
+    outcomes: [
+      'Write Soroban contracts with strict require_auth() access control',
+      'Manage Temporary, Instance, and Persistent state storage tiers',
+      'Build unit and integration tests using cargo test and mock environments',
+    ],
+    modules: [
+      {
+        title: 'Contract architecture & environment',
+        description: 'Explore Soroban contract execution and WASM environments.',
+      },
+      {
+        title: 'Persistent state & authorization',
+        description: 'Persistent state storage and cryptographic signature verification.',
+      },
+      {
+        title: 'Comprehensive testing strategies',
+        description: 'Comprehensive unit testing and authorization mocking.',
+      },
+    ],
+    deliverables: ['Calculator contract implementation', 'Vault contract with authorization', 'Complete unit test suite'],
+    tools: ['Soroban SDK', 'Rust', 'Cargo Test', 'Monaco Editor'],
+  },
+  'open-source': {
+    level: 'All Levels',
+    duration: '2 weeks',
+    summary:
+      'Practice triaging real GitHub issues, managing Git feature branches and rebases, and submitting production-grade pull requests.',
+    outcomes: [
+      'Triage and write minimal reproducible bug reports',
+      'Master git feature branching, rebasing, and clean history',
+      'Craft semantic, production-grade pull requests with automated test coverage',
+    ],
+    modules: [
+      {
+        title: 'Triaging & reproducing issues',
+        description: 'Reproducing bugs and writing minimal reproducible examples.',
+      },
+      {
+        title: 'Advanced Git workflows',
+        description: 'Clean git history, rebasing, and upstream synchronization.',
+      },
+      {
+        title: 'The art of the pull request',
+        description: 'Writing professional PRs and responding to code reviews.',
+      },
+    ],
+    deliverables: ['Structured GitHub bug report', 'Git rebase command workflow', 'Production-grade PR description'],
+    tools: ['Git CLI', 'GitHub PRs', 'Markdown', 'Monaco Diff Viewer'],
+  },
+  'dao-governance': {
+    level: 'Advanced',
+    duration: '4 weeks',
+    summary:
+      'Explore decentralized governance, on-chain proposals, quorum calculation, and sybil-resistant quadratic voting contracts on Stellar.',
+    outcomes: [
+      'Design on-chain proposal state machines with execution delays',
+      'Implement quadratic voting algorithms that prevent whale dominance',
+      'Deploy timelocked execution controllers for treasury management',
+    ],
+    modules: [
+      {
+        title: 'Governance primitives & state machines',
+        description: 'Proposals, voting periods, quorum thresholds, and timelocks.',
+      },
+      {
+        title: 'Quadratic voting math & Sybil resistance',
+        description: 'Sybil resistance, credit allocation, and quadratic cost curves.',
+      },
+    ],
+    deliverables: ['DAO governance contract', 'Quadratic voting tally engine', 'Timelocked executor module'],
+    tools: ['Soroban SDK', 'Quadratic Voting Simulator', 'Stellar CLI'],
+  },
 };
 
 const DEFAULT_CONTENT: CourseContent = {

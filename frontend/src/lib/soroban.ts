@@ -1,12 +1,13 @@
+import { getPublicEnv } from './env';
+
 // Dynamic imports for Stellar SDK to reduce initial bundle size
 // and allow for better code splitting
 const getStellarSDK = async () => {
   return await import('@stellar/stellar-sdk');
 };
 
-const SOROBAN_RPC_URL =
-  process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || 'https://soroban-test.stellar.org:443';
-const CERTIFICATE_CONTRACT_ID = process.env.NEXT_PUBLIC_CERTIFICATE_CONTRACT_ID || '';
+const SOROBAN_RPC_URL = getPublicEnv().sorobanRpcUrl;
+const CERTIFICATE_CONTRACT_ID = getPublicEnv().certificateContractId ?? '';
 
 export interface CertificateData {
   symbol: string;

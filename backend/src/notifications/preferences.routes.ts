@@ -8,7 +8,7 @@ import {
 import { validateBody } from '../utils/validation.js';
 import { z } from 'zod';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 const preferencesService = NotificationPreferencesService.getInstance();
 
 const createSchema = z.object({

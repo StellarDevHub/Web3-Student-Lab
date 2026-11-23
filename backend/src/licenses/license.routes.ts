@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Open Source License Guide - Express Routes
  *
@@ -7,9 +6,14 @@
  */
 import { Request, Response, Router } from 'express';
 import logger from '../utils/logger.js';
+import { getQueryBoolean, getQueryInt } from '../utils/queryParams.js';
 import * as licenseService from './license.service.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
+
+const getQueryString = (value: unknown): string | undefined => {
+  return typeof value === 'string' ? value : undefined;
+};
 
 /**
  * @openapi
@@ -65,33 +69,35 @@ const router = Router();
  */
 router.get('/', (req: Request, res: Response) => {
   try {
-    const {
-      category,
-      useCase,
-      search,
-      allowsCommercial,
-      allowsModification,
-      requiresDisclosure,
-      requiresSameLicense,
-      popularity,
-      tags,
-      page,
-      limit,
-    } = req.query;
+    const category = getQueryString(req.query.category);
+    const useCase = getQueryString(req.query.useCase);
+    const search = getQueryString(req.query.search);
+    const popularity = getQueryString(req.query.popularity);
+    const tags = getQueryString(req.query.tags);
+
 
     const filter: Record<string, unknown> = {};
     if (category) filter.category = category;
     if (useCase) filter.useCase = useCase;
     if (search) filter.search = search;
-    if (allowsCommercial !== undefined) filter.allowsCommercial = allowsCommercial === 'true';
-    if (allowsModification !== undefined) filter.allowsModification = allowsModification === 'true';
-    if (requiresDisclosure !== undefined) filter.requiresDisclosure = requiresDisclosure === 'true';
-    if (requiresSameLicense !== undefined) filter.requiresSameLicense = requiresSameLicense === 'true';
+    if (req.query.allowsCommercial !== undefined) {
+      filter.allowsCommercial = getQueryBoolean(req.query.allowsCommercial);
+    }
+    if (req.query.allowsModification !== undefined) {
+      filter.allowsModification = getQueryBoolean(req.query.allowsModification);
+    }
+    if (req.query.requiresDisclosure !== undefined) {
+      filter.requiresDisclosure = getQueryBoolean(req.query.requiresDisclosure);
+    }
+    if (req.query.requiresSameLicense !== undefined) {
+      filter.requiresSameLicense = getQueryBoolean(req.query.requiresSameLicense);
+    }
     if (popularity) filter.popularity = popularity;
-    if (tags) filter.tags = (tags as string).split(',');
+    if (tags) filter.tags = tags.split(',');
 
-    const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 50));
+    const pageNum = Math.max(1, getQueryInt(req.query.page, 1));
+    const limitNum = Math.min(100, Math.max(1, getQueryInt(req.query.limit, 50)));
+
 
     const result = licenseService.getLicenses(
       Object.keys(filter).length > 0 ? (filter as any) : undefined,
@@ -206,10 +212,10 @@ router.get('/use-cases', (_req: Request, res: Response) => {
  */
 router.get('/recommend/:useCase', (req: Request, res: Response) => {
   try {
-    const { useCase } = req.params;
+    const useCase = getQueryString(req.params.useCase);
     const validUseCases = ['personal', 'commercial', 'saas', 'library', 'documentation', 'educational'];
-    if (!validUseCases.includes(useCase)) {
-      res.status(400).json({ status: 'error', error: `Invalid use case '${useCase}'. Valid values: ${validUseCases.join(', ')}` });
+    if (!useCase || !validUseCases.includes(useCase)) {
+      res.status(400).json({ status: 'error', error: `Invalid use case '${useCase ?? 'undefined'}'. Valid values: ${validUseCases.join(', ')}` });
       return;
     }
     const result = licenseService.getRecommendations(useCase as any);
@@ -258,20 +264,12 @@ router.get('/recommend/:useCase', (req: Request, res: Response) => {
  */
 router.get('/quick-recommend', (req: Request, res: Response) => {
   try {
-    const {
-      wantsCommercial = 'true',
-      wantsModifications = 'true',
-      wantsPatentProtection = 'false',
-      acceptsCopyleft = 'false',
-      isLibrary = 'false',
-    } = req.query;
-
     const result = licenseService.quickRecommend(
-      wantsCommercial === 'true',
-      wantsModifications === 'true',
-      wantsPatentProtection === 'true',
-      acceptsCopyleft === 'true',
-      isLibrary === 'true'
+      getQueryBoolean(req.query.wantsCommercial, true),
+      getQueryBoolean(req.query.wantsModifications, true),
+      getQueryBoolean(req.query.wantsPatentProtection, false),
+      getQueryBoolean(req.query.acceptsCopyleft, false),
+      getQueryBoolean(req.query.isLibrary, false)
     );
     res.json(result);
   } catch (error) {
@@ -307,14 +305,15 @@ router.get('/quick-recommend', (req: Request, res: Response) => {
  */
 router.get('/compare', (req: Request, res: Response) => {
   try {
-    const { a, b } = req.query;
+    const a = getQueryString(req.query.a);
+    const b = getQueryString(req.query.b);
 
     if (!a || !b) {
       res.status(400).json({ status: 'error', error: 'Both license IDs (a and b) are required' });
       return;
     }
 
-    const result = licenseService.compareLicenses(a as string, b as string);
+    const result = licenseService.compareLicenses(a, b);
     if (result.status === 'error') {
       res.status(404).json(result);
       return;
@@ -351,14 +350,15 @@ router.get('/compare', (req: Request, res: Response) => {
  */
 router.get('/compatibility', (req: Request, res: Response) => {
   try {
-    const { a, b } = req.query;
+    const a = getQueryString(req.query.a);
+    const b = getQueryString(req.query.b);
 
     if (!a || !b) {
       res.status(400).json({ status: 'error', error: 'Both license IDs (a and b) are required' });
       return;
     }
 
-    const result = licenseService.checkCompatibility(a as string, b as string);
+    const result = licenseService.checkCompatibility(a, b);
     if (result.status === 'error') {
       res.status(404).json(result);
       return;
@@ -388,8 +388,12 @@ router.get('/compatibility', (req: Request, res: Response) => {
  */
 router.get('/:licenseId/compatible', (req: Request, res: Response) => {
   try {
-    const { licenseId } = req.params;
+    const licenseId = getQueryString(req.params.licenseId);
+    if (!licenseId) {
+      return res.status(400).json({ status: 'error', error: 'licenseId is required' });
+    }
     const result = licenseService.getCompatibleLicenses(licenseId);
+
     if (result.status === 'error') {
       res.status(404).json(result);
       return;
@@ -421,8 +425,12 @@ router.get('/:licenseId/compatible', (req: Request, res: Response) => {
  */
 router.get('/spdx/:spdxId', (req: Request, res: Response) => {
   try {
-    const { spdxId } = req.params;
+    const spdxId = getQueryString(req.params.spdxId);
+    if (!spdxId) {
+      return res.status(400).json({ status: 'error', error: 'spdxId is required' });
+    }
     const result = licenseService.getLicenseBySpdxId(spdxId);
+
     if (result.status === 'error') {
       res.status(404).json(result);
       return;
@@ -454,8 +462,12 @@ router.get('/spdx/:spdxId', (req: Request, res: Response) => {
  */
 router.get('/:licenseId', (req: Request, res: Response) => {
   try {
-    const { licenseId } = req.params;
+    const licenseId = getQueryString(req.params.licenseId);
+    if (!licenseId) {
+      return res.status(400).json({ status: 'error', error: 'licenseId is required' });
+    }
     const result = licenseService.getLicenseById(licenseId);
+
     if (result.status === 'error') {
       res.status(404).json(result);
       return;

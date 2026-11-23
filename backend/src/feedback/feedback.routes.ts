@@ -10,7 +10,7 @@ import {
 } from './feedback.service.js';
 import { CreateFeedbackRequest, UpdateFeedbackRequest } from './types.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @route   POST /api/feedback

@@ -51,6 +51,8 @@ export enum CertificateStatus {
   EXPIRED = 'EXPIRED',
   PENDING = 'PENDING',
   FAILED = 'FAILED',
+  /** Not a persisted status — returned when a certificate cannot be found. */
+  INVALID = 'invalid',
 }
 
 // Certificate entity with DB fields - matches Prisma output
@@ -72,6 +74,7 @@ export interface Certificate {
   revocationReason?: string | null;
   revokedBy?: string | null;
   previousVersionId?: string | null;
+  contentHash?: string | null;
   createdAt: Date;
   updatedAt: Date;
   // Relations

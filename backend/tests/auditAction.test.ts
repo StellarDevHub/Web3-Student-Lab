@@ -4,7 +4,8 @@ import { Request, Response } from 'express';
 const mockLogRequestAudit = jest.fn().mockResolvedValue(undefined as never);
 
 jest.mock('../src/utils/audit.js', () => ({
-  logRequestAudit: mockLogRequestAudit,
+  __esModule: true,
+  logRequestAudit: (...args: unknown[]) => mockLogRequestAudit(...args),
   logAudit: jest.fn(),
 }));
 

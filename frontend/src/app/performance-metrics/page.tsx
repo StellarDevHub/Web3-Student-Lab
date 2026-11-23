@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePerformanceMetrics } from '@/hooks/usePerformanceMetrics';
 import PerformanceMetricsDashboard from '@/components/performance-metrics/PerformanceMetricsDashboard';
 import ContributionPerformanceProfiler from '@/components/performance-metrics/ContributionPerformanceProfiler';
+import CoreWebVitalsMonitor from '@/components/performance-metrics/CoreWebVitalsMonitor';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -17,7 +18,8 @@ import { motion } from 'framer-motion';
  */
 export default function PerformanceMetricsPage() {
   const { user } = useAuth();
-  const { metrics, timeSpent, isLoading, error, isFallback } = usePerformanceMetrics(user?.id);
+  const { metrics, timeSpent, isLoading, isFallback, dataSource, lastVerifiedAt, retry } =
+    usePerformanceMetrics(user?.id);
 
   return (
     <div className="bg-background text-foreground relative min-h-screen overflow-hidden pb-20 transition-colors duration-200">
@@ -68,8 +70,8 @@ export default function PerformanceMetricsPage() {
             Performance <span className="text-red-600">Metrics</span>
           </h1>
           <p className="text-text-secondary text-lg font-light tracking-wide">
-            Track your learning progress, time invested, completion rates, and the
-            achievements you&apos;ve unlocked.
+            Track your learning progress, time invested, completion rates, and the achievements
+            you&apos;ve unlocked.
           </p>
         </motion.div>
 
@@ -82,11 +84,16 @@ export default function PerformanceMetricsPage() {
             metrics={metrics}
             timeSpent={timeSpent}
             isLoading={isLoading}
-            error={error}
             isFallback={isFallback}
+            dataSource={dataSource}
+            lastVerifiedAt={lastVerifiedAt}
+            onRetry={retry}
           />
           <div className="mt-8">
             <ContributionPerformanceProfiler />
+          </div>
+          <div className="mt-8">
+            <CoreWebVitalsMonitor />
           </div>
         </motion.div>
       </main>

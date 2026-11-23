@@ -227,6 +227,49 @@ const snippetCompletions: CompletionTemplate[] = [
   },
 ];
 
+const advancedMacroCompletions: CompletionTemplate[] = [
+  {
+    label: '#[contract] full scaffold',
+    insertText: '#[contract]\npub struct ${1:ContractName};\n\n#[contracterror]\n#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]\n#[repr(u32)]\npub enum Error {\n\t${2:AlreadyInitialized = 1},\n\t${3:NotFound = 2},\n}\n\n#[contractimpl]\nimpl ${1:ContractName} {\n\tpub fn new(env: Env) -> ${1:ContractName} {\n\t\t${1:ContractName}\n\t}\n\t\n\tpub fn ${4:method_name}(env: Env, ${5:param}: ${6:param_type}) -> ${7:return_type} {\n\t\t$0\n\t}\n}',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    detail: 'Full contract scaffold with error enum',
+    documentation: 'Creates a complete Soroban contract with #[contract], #[contracterror], and #[contractimpl] with Env injection and error handling.',
+    kind: 'Snippet',
+  },
+  {
+    label: '#[contractimpl] with Env',
+    insertText: '#[contractimpl]\nimpl ${1:ContractName} {\n\tpub fn ${2:method_name}(env: Env, ${3:param}: ${4:param_type}) -> Result<${5:return_type}, Error> {\n\t\t$0\n\t}\n}',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    detail: 'Contract impl with Env and error handling',
+    documentation: 'Creates a #[contractimpl] impl block with methods that include Env injection and Result<T, Error> error handling for Soroban v22.',
+    kind: 'Snippet',
+  },
+  {
+    label: '#[contracterror] enum',
+    insertText: '#[contracterror]\n#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]\n#[repr(u32)]\npub enum Error {\n\t${1:ErrorName = 1},\n\t${2:AnotherError = 2},\n}',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    detail: 'Contract error enum',
+    documentation: 'Creates a #[contracterror] enum with proper derives for Soroban error handling.',
+    kind: 'Snippet',
+  },
+  {
+    label: 'constructor with Env',
+    insertText: 'pub fn new(env: Env) -> ${1:ContractName} {\n\t${1:ContractName}\n}',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    detail: 'Contract constructor with Env',
+    documentation: 'Creates a constructor function with Env parameter for contract initialization.',
+    kind: 'Snippet',
+  },
+  {
+    label: 'method with error handling',
+    insertText: 'pub fn ${1:method_name}(env: Env, ${2:param}: ${3:param_type}) -> Result<${4:return_type}, Error> {\n\t$0\n}',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    detail: 'Method with Result and Error',
+    documentation: 'Creates a method that returns Result<T, Error> for proper error handling in Soroban contracts.',
+    kind: 'Snippet',
+  },
+];
+
 function createCompletionItem(
   monacoApi: typeof monaco,
   item: CompletionTemplate,
@@ -286,6 +329,13 @@ function registerProvider(monacoApi: typeof monaco, languageId: string) {
         if (context.looksLikeContract) {
           suggestions.push(
             ...snippetCompletions.map((item) => createCompletionItem(monacoApi, item, range))
+          );
+        }
+
+        // Advanced macro completions triggered by typing #[contract, #[contractimpl, or #[contracterror
+        if (/#\[contract/.test(linePrefix) || /#\[/i.test(linePrefix)) {
+          suggestions.push(
+            ...advancedMacroCompletions.map((item) => createCompletionItem(monacoApi, item, range))
           );
         }
 

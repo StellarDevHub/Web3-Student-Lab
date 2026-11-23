@@ -41,7 +41,7 @@ export class CertificateAnalytics {
       {} as Record<string, number>
     );
 
-    // Get verifications count (placeholder)
+    // Get persisted verification count. Falls back safely if analytics storage is unavailable.
     const totalVerifications = await this.getTotalVerifications();
 
     // Get various issued counts
@@ -131,9 +131,17 @@ export class CertificateAnalytics {
     return result;
   }
 
-  // Placeholder methods - would be implemented with real analytics tables
   private async getTotalVerifications(): Promise<number> {
-    return 0;
+    try {
+      return await prisma.certificateVerificationEvent.count();
+    } catch (error) {
+      logger.error(
+        `Failed to aggregate certificate verification events: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+      return 0;
+    }
   }
 }
 

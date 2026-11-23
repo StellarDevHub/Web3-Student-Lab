@@ -30,7 +30,7 @@ export const enqueueDLQ = async (payload: WebhookDeliveryJobData, error: string)
     error,
   };
 
-  await webhookDeadLetterQueue.add(payload.event.type, deadLetterJob);
+  await webhookDeadLetterQueue.add(payload.event.type as any, deadLetterJob);
 };
 
 export const dequeueWebhook = async (): Promise<null> => {

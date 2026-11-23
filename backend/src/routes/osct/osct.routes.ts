@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { estimateGas, validateGasRequest } from '../../services/gasEstimation.service.js';
 import logger from '../../utils/logger.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @route POST /api/v1/osct/gas-estimate

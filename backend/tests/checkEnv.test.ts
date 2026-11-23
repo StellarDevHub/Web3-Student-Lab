@@ -87,7 +87,9 @@ describe('Environment Variable Guard', () => {
       process.env.JWT_SECRET = 'this-is-a-very-long-secret-key-that-is-at-least-32-chars';
       process.env.NODE_ENV = 'production';
       process.env.REDIS_URL = 'redis://localhost:6379';
-      // Missing production variables
+      // Clear production variables that may be set from .env.test
+      delete process.env.STELLAR_ISSUER_SECRET_KEY;
+      delete process.env.STELLAR_ISSUER_PUBLIC_KEY;
 
       expect(() => validateEnvironment()).toThrow(EnvironmentValidationError);
       expect(() => validateEnvironment()).toThrow(
@@ -119,6 +121,42 @@ describe('Environment Variable Guard', () => {
       validateEnvironment();
 
       expect(process.env.PORT).toBe('8080');
+      expect(process.env.STELLAR_NETWORK).toBe('testnet');
+    });
+
+    it('should set default value for NODE_ENV when not set', () => {
+      process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
+      process.env.JWT_SECRET = 'this-is-a-very-long-secret-key-that-is-at-least-32-chars';
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      // Explicitly unset NODE_ENV so it falls back to the default
+      delete process.env.NODE_ENV;
+
+      validateEnvironment();
+
+      expect(process.env.NODE_ENV).toBe('development');
+    });
+
+    it('should set default value for SOROBAN_RPC_URL when missing', () => {
+      process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
+      process.env.JWT_SECRET = 'this-is-a-very-long-secret-key-that-is-at-least-32-chars';
+      process.env.NODE_ENV = 'development';
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      delete process.env.SOROBAN_RPC_URL;
+
+      validateEnvironment();
+
+      expect(process.env.SOROBAN_RPC_URL).toBe('https://soroban-testnet.stellar.org');
+    });
+
+    it('should set default value for STELLAR_NETWORK when missing', () => {
+      process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
+      process.env.JWT_SECRET = 'this-is-a-very-long-secret-key-that-is-at-least-32-chars';
+      process.env.NODE_ENV = 'development';
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      delete process.env.STELLAR_NETWORK;
+
+      validateEnvironment();
+
       expect(process.env.STELLAR_NETWORK).toBe('testnet');
     });
 

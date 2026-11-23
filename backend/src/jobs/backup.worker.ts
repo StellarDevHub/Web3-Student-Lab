@@ -1,15 +1,12 @@
-import { Job, Worker } from 'bullmq';
-import { execSync, spawn } from 'child_process';
-import { createReadStream, createWriteStream, unlinkSync, mkdirSync, readdirSync, statSync } from 'fs';
-import { join } from 'path';
-import { Readable } from 'stream';
-import { createGzip } from 'zlib';
-import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
+import { Job, Worker } from 'bullmq';
+import { spawn } from 'child_process';
+import { createReadStream, createWriteStream, mkdirSync, statSync, unlinkSync } from 'fs';
+import { join } from 'path';
 import config from '../config/env.config.js';
 import logger from '../utils/logger.js';
-import { redisConnection } from '../utils/redis.js';
-import { backupQueue, BACKUP_QUEUE_NAME } from './backup.queue.js';
+import { BACKUP_QUEUE_NAME, backupQueue } from './backup.queue.js';
 
 interface BackupJobData {
   type: 'scheduled' | 'manual';

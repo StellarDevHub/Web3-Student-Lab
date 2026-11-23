@@ -12,7 +12,7 @@ export interface SearchOptions {
 const searchOptionsSchema = z
   .object({
     query: z.string().optional(),
-    filters: z.record(z.any()).optional(),
+    filters: z.record(z.string(), z.any()).optional(),
     sort: z.string().optional(),
     page: z.number().int().min(1).optional(),
     limit: z.number().int().min(1).max(100).optional(),
@@ -29,15 +29,19 @@ export class SearchValidator {
       searchOptionsSchema.parse(options);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new Error(`Invalid search options: ${error.errors.map((e) => e.message).join(', ')}`);
+        throw new Error(
+          `Invalid search options: ${error.issues.map((e) => e.message).join(', ')}`
+        );
+
       }
       throw error;
     }
   }
 
   validateSortField(sort: string, allowedFields: string[]): void {
-    const [field] = sort.split(':');
+    const field = sort.split(':')[0] ?? '';
     if (!allowedFields.includes(field)) {
+
       throw new Error(`Invalid sort field: ${field}. Allowed fields: ${allowedFields.join(', ')}`);
     }
   }

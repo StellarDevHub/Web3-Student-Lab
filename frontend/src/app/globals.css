@@ -7,7 +7,58 @@
   --highlight-color: rgba(255, 255, 255, 0.1) !important;
 }
 
+/* Custom skeleton shimmer effect for layout stability */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.12) 37%,
+    rgba(255, 255, 255, 0.04) 63%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  will-change: background-position;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    animation: none !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+  }
+}
+
 :root {
+  --bg: #ffffff;
+  --bg-panel: rgba(240, 240, 240, 0.78);
+  --bg-panel-strong: #e5e5e5;
+  --text-strong: #000000;
+  --text: #1a1a1a;
+  --muted: #666666;
+  --line: rgba(0, 0, 0, 0.11);
+  --brand: #d8481f;
+  --brand-strong: #c2410c;
+  --brand-soft: #ffedd5;
+  --accent: #0f766e;
+  --success: #059669;
+  --warning: #d97706;
+  --body-bg:
+    radial-gradient(circle at top left, rgba(240, 100, 45, 0.05), transparent 28%),
+    radial-gradient(circle at 80% 10%, rgba(37, 181, 164, 0.05), transparent 22%),
+    linear-gradient(180deg, #f8fafc 0%, #ffffff 45%, #f1f5f9 100%);
+  --background: var(--bg);
+  --foreground: var(--text);
+}
+
+.dark {
   --bg: #09111d;
   --bg-panel: rgba(14, 21, 32, 0.78);
   --bg-panel-strong: #121d2b;
@@ -21,15 +72,56 @@
   --accent: #25b5a4;
   --success: #34c789;
   --warning: #f3a63c;
+  --body-bg:
+    radial-gradient(circle at top left, rgba(240, 100, 45, 0.18), transparent 28%),
+    radial-gradient(circle at 80% 10%, rgba(37, 181, 164, 0.12), transparent 22%),
+    linear-gradient(180deg, #07101a 0%, #09111d 45%, #0b1320 100%);
+  --background: var(--bg);
+  --foreground: var(--text);
+}
+
+.oled {
+  --bg: #000000;
+  --bg-panel: #000000;
+  --bg-panel-strong: #000000;
+  --text-strong: #ffffff;
+  --text: #ffffff;
+  --muted: #cccccc;
+  --line: #555555;
+  --brand: #ffaa00;
+  --brand-strong: #ffcc00;
+  --brand-soft: #ff8800;
+  --accent: #00ffff;
+  --success: #00ff00;
+  --warning: #ffcc00;
+  --body-bg: #000000;
   --background: var(--bg);
   --foreground: var(--text);
 }
 
 @theme inline {
-  --font-sans: "Sora", "Segoe UI", sans-serif;
-  --font-mono: "JetBrains Mono", "SFMono-Regular", monospace;
+  --font-sans: var(--font-outfit), var(--font-inter), 'Outfit', 'Inter', 'Sora', 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+}
+
+/* Aspect Ratio Containers for ZERO Layout Shift */
+.aspect-chart {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  min-height: 250px;
+}
+
+.aspect-badge {
+  aspect-ratio: 1 / 1;
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.aspect-skeleton {
+  aspect-ratio: 4 / 1;
+  width: 100%;
 }
 
 * {
@@ -43,10 +135,7 @@ html {
 body {
   min-height: 100vh;
   margin: 0;
-  background:
-    radial-gradient(circle at top left, rgba(240, 100, 45, 0.18), transparent 28%),
-    radial-gradient(circle at 80% 10%, rgba(37, 181, 164, 0.12), transparent 22%),
-    linear-gradient(180deg, #07101a 0%, #09111d 45%, #0b1320 100%);
+  background: var(--body-bg);
   color: var(--text);
   font-family: var(--font-sans), sans-serif;
 }
@@ -118,8 +207,7 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 1.5rem;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
-    var(--bg-panel);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)), var(--bg-panel);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
 }
 
@@ -145,7 +233,9 @@ textarea {
   color: #111827;
   font-weight: 600;
   font-size: 0.875rem;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 0.1),
+    0 2px 4px -2px rgb(0 0 0 / 0.1);
   transition: top 0.1s ease-in-out;
 }
 
@@ -169,16 +259,16 @@ textarea {
   border-radius: 0.25rem;
 }
 
-[role="tab"]:focus-visible,
-[role="menuitem"]:focus-visible,
-[role="option"]:focus-visible,
-[role="radio"]:focus-visible,
-[role="switch"]:focus-visible {
+[role='tab']:focus-visible,
+[role='menuitem']:focus-visible,
+[role='option']:focus-visible,
+[role='radio']:focus-visible,
+[role='switch']:focus-visible {
   outline: 2px solid var(--brand-strong);
   outline-offset: 2px;
 }
 
-[aria-current="page"] {
+[aria-current='page'] {
   font-weight: 600;
 }
 
@@ -241,7 +331,7 @@ textarea {
   --code-bg: #0d1520;
   --code-fg: #cdd6f4;
   --code-border: rgba(255, 255, 255, 0.08);
-  --code-selection: rgba(37, 181, 164, 0.20);
+  --code-selection: rgba(37, 181, 164, 0.2);
 
   --prism-bg: var(--code-bg);
   --prism-default: var(--code-fg);
@@ -271,7 +361,9 @@ textarea {
   border-radius: 0.75rem;
   padding: 1.25rem 1.5rem;
   overflow-x: auto;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .lesson-viewer code {
@@ -301,28 +393,52 @@ textarea {
 .lesson-viewer .token.block-comment,
 .lesson-viewer .token.prolog,
 .lesson-viewer .token.doctype,
-.lesson-viewer .token.cdata { color: var(--prism-comment); }
+.lesson-viewer .token.cdata {
+  color: var(--prism-comment);
+}
 
 .lesson-viewer .token.keyword,
 .lesson-viewer .token.important,
 .lesson-viewer .token.atrule,
-.lesson-viewer .token.builtin { color: var(--prism-keyword); }
+.lesson-viewer .token.builtin {
+  color: var(--prism-keyword);
+}
 
 .lesson-viewer .token.string,
 .lesson-viewer .token.char,
-.lesson-viewer .token.attr-value { color: var(--prism-string); }
+.lesson-viewer .token.attr-value {
+  color: var(--prism-string);
+}
 
 .lesson-viewer .token.number,
-.lesson-viewer .token.boolean { color: var(--prism-number); }
+.lesson-viewer .token.boolean {
+  color: var(--prism-number);
+}
 
 .lesson-viewer .token.function,
-.lesson-viewer .token.function-name { color: var(--prism-function); }
+.lesson-viewer .token.function-name {
+  color: var(--prism-function);
+}
 
 .lesson-viewer .token.operator,
 .lesson-viewer .token.entity,
-.lesson-viewer .token.url { color: var(--prism-operator); }
+.lesson-viewer .token.url {
+  color: var(--prism-operator);
+}
 
-.lesson-viewer .token.punctuation { color: var(--prism-punctuation); }
+.lesson-viewer .token.punctuation {
+  color: var(--prism-punctuation);
+}
+
+/* ─── Playground execution status bar ─────────────────────────────────────── */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
 
 /* Thin themed scrollbar shared by simulator-style panels */
 .custom-scrollbar::-webkit-scrollbar {
@@ -338,4 +454,82 @@ textarea {
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #ef4444;
+}
+
+/* ─── Issue #1337: Dynamic Theme Engine – HSL Design Tokens ────────────────
+ * Semantic HSL color tokens used by the contrast-aware theming engine.
+ * HSL makes it trivial to derive accessible lightness steps while holding
+ * hue/saturation constant, which is what guarantees WCAG AAA contrast across
+ * dark and light modes.
+ * ─────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Base brand hue (orange) held constant across themes; only lightness shifts. */
+  --hsl-brand-h: 18;
+  --hsl-brand-s: 88%;
+  --hsl-brand-l-dark: 55%;
+  --hsl-brand-l-light: 45%;
+
+  /* Surface HSL tokens – lightness is the theme axis. */
+  --hsl-surface-bg-h: 210;
+  --hsl-surface-bg-s: 12%;
+  --hsl-surface-bg-l-dark: 8%;
+  --hsl-surface-bg-l-light: 98%;
+
+  --hsl-surface-panel-h: 210;
+  --hsl-surface-panel-s: 10%;
+  --hsl-surface-panel-l-dark: 14%;
+  --hsl-surface-panel-l-light: 94%;
+
+  /* Text HSL tokens – contrast is derived from the gap between text and bg L. */
+  --hsl-text-h: 210;
+  --hsl-text-s: 8%;
+  --hsl-text-l-dark: 88%;
+  --hsl-text-l-light: 12%;
+
+  --hsl-muted-h: 210;
+  --hsl-muted-s: 6%;
+  --hsl-muted-l-dark: 52%;
+  --hsl-muted-l-light: 42%;
+}
+
+.dark {
+  --hsl-bg: hsl(var(--hsl-surface-bg-h), var(--hsl-surface-bg-s), var(--hsl-surface-bg-l-dark));
+  --hsl-panel: hsl(var(--hsl-surface-panel-h), var(--hsl-surface-panel-s), var(--hsl-surface-panel-l-dark));
+  --hsl-text: hsl(var(--hsl-text-h), var(--hsl-text-s), var(--hsl-text-l-dark));
+  --hsl-muted: hsl(var(--hsl-muted-h), var(--hsl-muted-s), var(--hsl-muted-l-dark));
+  --hsl-brand: hsl(var(--hsl-brand-h), var(--hsl-brand-s), var(--hsl-brand-l-dark));
+}
+
+html:not(.dark) {
+  --hsl-bg: hsl(var(--hsl-surface-bg-h), var(--hsl-surface-bg-s), var(--hsl-surface-bg-l-light));
+  --hsl-panel: hsl(var(--hsl-surface-panel-h), var(--hsl-surface-panel-s), var(--hsl-surface-panel-l-light));
+  --hsl-text: hsl(var(--hsl-text-h), var(--hsl-text-s), var(--hsl-text-l-light));
+  --hsl-muted: hsl(var(--hsl-muted-h), var(--hsl-muted-s), var(--hsl-muted-l-light));
+  --hsl-brand: hsl(var(--hsl-brand-h), var(--hsl-brand-s), var(--hsl-brand-l-light));
+}
+
+/* Code syntax highlight tokens tuned for WCAG AAA contrast on both themes.
+ * Foreground lightness is chosen so contrast against the code bg is >= 7:1. */
+.lesson-viewer pre,
+.lesson-viewer code {
+  --code-hsl-bg-h: 210;
+  --code-hsl-bg-s: 10%;
+  --code-hsl-bg-l-dark: 6%;
+  --code-hsl-bg-l-light: 96%;
+  --code-hsl-fg-h: 210;
+  --code-hsl-fg-s: 6%;
+  --code-hsl-fg-l-dark: 92%;
+  --code-hsl-fg-l-light: 14%;
+}
+
+.dark .lesson-viewer pre,
+.dark .lesson-viewer code {
+  --code-bg: hsl(var(--code-hsl-bg-h), var(--code-hsl-bg-s), var(--code-hsl-bg-l-dark));
+  --code-fg: hsl(var(--code-hsl-fg-h), var(--code-hsl-fg-s), var(--code-hsl-fg-l-dark));
+}
+
+html:not(.dark) .lesson-viewer pre,
+html:not(.dark) .lesson-viewer code {
+  --code-bg: hsl(var(--code-hsl-bg-h), var(--code-hsl-bg-s), var(--code-hsl-bg-l-light));
+  --code-fg: hsl(var(--code-hsl-fg-h), var(--code-hsl-fg-s), var(--code-hsl-fg-l-light));
 }

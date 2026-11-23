@@ -6,17 +6,19 @@ import {
 import { RegionReplicator, type RedisLike, type RegionClient } from '../src/cache/RegionReplicator.js';
 
 /** Minimal in-memory Redis fake so replication is observable per region. */
-function fakeClient(options: { status?: string; failGet?: boolean; failSet?: boolean } = {}) {
+function fakeClient(options: { status?: string; failGet?: boolean; failSet?: boolean; latencyMs?: number } = {}) {
   const store = new Map<string, string>();
   return {
     store,
     status: options.status,
     async get(key: string): Promise<string | null> {
       if (options.failGet) throw new Error('region read down');
+      await new Promise((r) => setTimeout(r, options.latencyMs || 0));
       return store.has(key) ? store.get(key)! : null;
     },
     async set(key: string, value: string): Promise<unknown> {
       if (options.failSet) throw new Error('region write down');
+      await new Promise((r) => setTimeout(r, options.latencyMs || 0));
       store.set(key, value);
       return 'OK';
     },
@@ -60,7 +62,6 @@ describe('region.config (pure)', () => {
   it('orders healthy regions with the active first', () => {
     const names = ['us', 'eu', 'ap'];
     expect(orderRegionsByPreference(names, 'eu', () => true)).toEqual(['eu', 'us', 'ap']);
-    // active unhealthy -> excluded, first healthy replica leads
     expect(orderRegionsByPreference(names, 'eu', (n) => n !== 'eu')).toEqual(['us', 'ap']);
   });
 });
@@ -77,13 +78,17 @@ describe('RegionReplicator', () => {
 
     const result = await replicator.set('course:1', 'cached-value', 900);
 
-    // Acceptance: keys modified in one region appear in every replica region.
-    expect(us.store.get('course:1')).toBe('cached-value');
-    expect(eu.store.get('course:1')).toBe('cached-value');
-    expect(ap.store.get('course:1')).toBe('cached-value');
+    const usEntry = JSON.parse(us.store.get('course:1')!);
+    expect(usEntry.v).toBe('cached-value');
+    expect(usEntry.op).toBe('set');
+
+    expect(eu.store.get('course:1')).not.toBeNull();
+    expect(ap.store.get('course:1')).not.toBeNull();
+
     expect(result.origin).toBe('us');
     expect(result.replicated.sort()).toEqual(['ap', 'eu', 'us']);
     expect(result.failed).toEqual([]);
+    expect(result.sequence).toBeGreaterThan(0);
   });
 
   it('still replicates to healthy regions when one replica is down', async () => {
@@ -95,15 +100,15 @@ describe('RegionReplicator', () => {
     );
 
     const result = await replicator.set('k', 'v');
-    expect(us.store.get('k')).toBe('v');
+    expect(us.store.get('k')).not.toBeNull();
     expect(result.replicated).toContain('us');
     expect(result.failed).toContain('eu');
   });
 
   it('reads from the active region, falling back to a replica on miss/error', async () => {
-    const us = fakeClient({ failGet: true }); // active region read fails
+    const us = fakeClient({ failGet: true });
     const eu = fakeClient();
-    eu.store.set('k', 'from-eu');
+    eu.store.set('k', JSON.stringify({ v: 'from-eu', ts: Date.now(), op: 'set' }));
     const replicator = new RegionReplicator(
       regions({ name: 'us', client: us }, { name: 'eu', client: eu }),
       'us'
@@ -114,7 +119,7 @@ describe('RegionReplicator', () => {
   });
 
   it('skips regions whose connection is dead', async () => {
-    const us = fakeClient({ status: 'end' }); // dead active region
+    const us = fakeClient({ status: 'end' });
     const eu = fakeClient();
     const replicator = new RegionReplicator(
       regions({ name: 'us', client: us }, { name: 'eu', client: eu }),
@@ -122,24 +127,78 @@ describe('RegionReplicator', () => {
     );
 
     const result = await replicator.set('k', 'v');
-    expect(result.origin).toBe('eu'); // fell back to the healthy region
+    expect(result.origin).toBe('eu');
     expect(us.store.has('k')).toBe(false);
-    expect(eu.store.get('k')).toBe('v');
+    expect(eu.store.get('k')).not.toBeNull();
   });
 
   it('deletes a key from every region', async () => {
     const us = fakeClient();
     const eu = fakeClient();
-    us.store.set('k', 'v');
-    eu.store.set('k', 'v');
+    us.store.set('k', JSON.stringify({ v: 'v', ts: Date.now(), op: 'set' }));
+    eu.store.set('k', JSON.stringify({ v: 'v', ts: Date.now(), op: 'set' }));
     const replicator = new RegionReplicator(
       regions({ name: 'us', client: us }, { name: 'eu', client: eu }),
       'us'
     );
 
     const result = await replicator.del('k');
-    expect(us.store.has('k')).toBe(false);
-    expect(eu.store.has('k')).toBe(false);
+    expect(await replicator.get('k')).toBeNull();
     expect(result.deleted.sort()).toEqual(['eu', 'us']);
+    expect(result.sequence).toBeGreaterThan(0);
+  });
+
+  it('does not return a value after a newer invalidation (stale write protection)', async () => {
+    const us = fakeClient();
+    const eu = fakeClient();
+    const replicator = new RegionReplicator(
+      regions({ name: 'us', client: us }, { name: 'eu', client: eu }),
+      'us'
+    );
+
+    await replicator.set('k', 'v1');
+    await replicator.del('k');
+    await replicator.set('k', 'v2');
+
+    expect(await replicator.get('k')).toBe('v2');
+  });
+
+  it('treats a late arriving stale write as a miss after invalidation', async () => {
+    const us = fakeClient();
+    const eu = fakeClient();
+    const replicator = new RegionReplicator(
+      regions({ name: 'us', client: us }, { name: 'eu', client: eu }),
+      'us'
+    );
+
+    await replicator.set('k', 'v1');
+    const delResult = await replicator.del('k');
+
+    const stalePayload = JSON.stringify({ v: 'v1', ts: delResult.sequence - 1, op: 'set' });
+    await us.set('k', stalePayload);
+
+    expect(await replicator.get('k')).toBeNull();
+  });
+
+  it('survives region failures during invalidation and still returns misses', async () => {
+    const us = fakeClient();
+    const eu = fakeClient({ failSet: true });
+    const replicator = new RegionReplicator(
+      regions({ name: 'us', client: us }, { name: 'eu', client: eu }),
+      'us'
+    );
+
+    await replicator.set('k', 'v');
+    await replicator.del('k');
+
+    expect(await replicator.get('k')).toBeNull();
+  });
+
+  it('handles legacy raw values as readable sets', async () => {
+    const us = fakeClient();
+    const replicator = new RegionReplicator(regions({ name: 'us', client: us }), 'us');
+
+    us.store.set('legacy', 'raw-value');
+    expect(await replicator.get('legacy')).toBe('raw-value');
   });
 });

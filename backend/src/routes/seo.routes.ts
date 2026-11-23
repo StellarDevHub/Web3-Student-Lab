@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { simulatorSeoService } from '../services/seo/simulatorSeo.service.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 router.get('/simulator/meta/:slug', async (req, res) => {
   const { slug } = req.params;

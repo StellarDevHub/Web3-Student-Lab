@@ -4,17 +4,6 @@ import { ThemeProvider } from 'next-themes';
 import { ReactNode, useEffect, useState } from 'react';
 
 export function Providers({ children }: { children: ReactNode }) {
-  const [mounted, setMounted] = useState(false);
-
-  // Prevent FOUC by waiting for hydration
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return <>{children}</>;
-  }
-
   return (
     <ThemeProvider
       attribute="class"
@@ -22,6 +11,7 @@ export function Providers({ children }: { children: ReactNode }) {
       enableSystem
       disableTransitionOnChange={false}
       storageKey="web3-lab-theme"
+      themes={['light', 'dark', 'oled']}
     >
       {children}
     </ThemeProvider>

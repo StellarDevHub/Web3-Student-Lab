@@ -1,12 +1,18 @@
 'use client';
 
-import { CollaborativeCanvas } from '@/components/CollaborativeCanvas';
+import dynamic from 'next/dynamic';
 import { EncryptedRoomChat } from '@/components/collaboration/EncryptedRoomChat';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
+import { getApiEndpoint } from '@/lib/env';
+import { BrainstormSkeleton } from '@/components/ui/skeletons/PageSkeletons';
 
-import { Suspense } from 'react';
+// ReactFlow + html2canvas + jsPDF are only needed once a session is open.
+const CollaborativeCanvas = dynamic(
+  () => import('@/components/CollaborativeCanvas').then((mod) => mod.CollaborativeCanvas),
+  { ssr: false, loading: () => <div className="h-[480px] w-full animate-pulse rounded-2xl bg-zinc-900/40" aria-busy="true" />, },
+);
 
 function BrainstormContent() {
   const searchParams = useSearchParams();
@@ -41,11 +47,10 @@ function BrainstormContent() {
 
     const syncCanvas = async () => {
       setIsLoading(true);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
       const token = localStorage.getItem('token');
 
       try {
-        const response = await fetch(`${apiUrl}/canvas/room/${roomId}`, {
+        const response = await fetch(getApiEndpoint(`/canvas/room/${roomId}`), {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -97,11 +102,10 @@ function BrainstormContent() {
 
   const handleDownloadJSON = async () => {
     setIsLoading(true);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
     const token = localStorage.getItem('token');
 
     try {
-      const response = await fetch(`${apiUrl}/canvas/room/${roomId}`, {
+      const response = await fetch(getApiEndpoint(`/canvas/room/${roomId}`), {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -221,13 +225,7 @@ function BrainstormContent() {
 
 export default function BrainstormPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
-        </div>
-      }
-    >
+    <Suspense fallback={<BrainstormSkeleton />}>
       <BrainstormContent />
     </Suspense>
   );

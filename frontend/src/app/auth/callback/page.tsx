@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { authAPI } from '@/lib/api';
 
 function GitHubCallbackContent() {
   const router = useRouter();
@@ -11,54 +12,42 @@ function GitHubCallbackContent() {
 
   useEffect(() => {
     const error = searchParams.get('error');
-    const token = searchParams.get('token');
-    const refreshToken = searchParams.get('refreshToken');
-    const userEmail = searchParams.get('userEmail');
-    const userName = searchParams.get('userName');
-    const userId = searchParams.get('userId');
-    const isNewUser = searchParams.get('isNewUser') === 'true';
+    const ticket = searchParams.get('ticket');
+
+    // Clean up legacy refreshToken from localStorage
+    localStorage.removeItem('refreshToken');
 
     if (error) {
       setStatus('error');
-      setMessage(decodeURIComponent(error));
+      setMessage(error);
       return;
     }
 
-    if (token && userId) {
-      // Store auth data
-      localStorage.setItem('token', token);
-      if (refreshToken) {
-        localStorage.setItem('refreshToken', refreshToken);
-      }
-      if (userId) {
-        localStorage.setItem('userId', userId);
-      }
-      if (userName) {
-        localStorage.setItem('userName', decodeURIComponent(userName));
-      }
-
-      const user = {
-        id: userId,
-        email: userEmail || '',
-        name: userName ? decodeURIComponent(userName) : 'GitHub User',
-      };
-      localStorage.setItem('user', JSON.stringify(user));
-
-      setStatus('success');
-      setMessage('Login successful! Redirecting...');
-
-      // Redirect to dashboard or complete profile if new user
-      setTimeout(() => {
-        if (isNewUser) {
-          router.replace('/auth/register?from=github');
-        } else {
-          router.replace('/dashboard');
-        }
-      }, 1000);
-    } else {
+    if (!ticket) {
       setStatus('error');
       setMessage('Invalid OAuth response. Please try again.');
+      return;
     }
+
+    let active = true;
+    authAPI.completeOAuthTicket(ticket).then((response) => {
+      if (!active) return;
+      localStorage.setItem('token', response.accessToken || response.token);
+      localStorage.setItem('userId', response.user.id);
+      localStorage.setItem('userName', response.user.name);
+      localStorage.setItem('user', JSON.stringify(response.user));
+      setStatus('success');
+      setMessage('Login successful! Redirecting...');
+      window.setTimeout(() => {
+        router.replace(response.isNewUser ? '/auth/register?from=github' : '/dashboard');
+      }, 1000);
+    }).catch(() => {
+      if (!active) return;
+      setStatus('error');
+      setMessage('The login ticket is invalid or expired. Please try again.');
+    });
+
+    return () => { active = false; };
   }, [searchParams, router]);
 
   return (

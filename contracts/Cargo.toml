@@ -1,39 +1,73 @@
 [package]
 name = "soroban-certificate-contract"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 
+# Workspace root for all buildable Soroban contract crates under contracts/.
+# See docs/contracts/WORKSPACE.md for membership criteria and contributor guidance.
 [workspace]
 members = [
     ".",
-    "proxy",
+    "amm",
+    "auth_checker",
+    "certificate_nft",
+    "commit_reveal_rng",
+    "content_management_system",
+    "continuous_bonding_curve",
+    "course_proxy",
+    "cross_chain_client",
+    "dao_governance",
+    "did_registry",
+    "fractional_nft_vault",
+    "freelance-platform",
+    "gas_benchmarks",
+    "hackathon-team-matching",
+    "hello_world",
     "implementation_v1",
     "implementation_v2",
-    "smart_vault",
-    "payment_streaming",
-    "payment_gateway",
-    "commit_reveal_rng",
-    "quadratic_funding",
+    "lending_pool",
     "multisig_wallet_timelock",
-    "course_proxy",
-    "auth_checker",
-    "cross_chain_client",
-    "freelance-platform",
+    "oracle_aggregator",
+    "parametric_insurance",
+    "payment_gateway",
+    "payment_streaming",
     "pr_simulation",
-    "hackathon-team-matching",
-    "content_management_system",
+    "proxy",
+    "quadratic_funding",
+    "quadratic_voting",
+    "smart_vault",
+    "sybil_resistance",
     "testnet_faucet_integration",
+    "token_migration",
+    "zk_proof_verifier",
+    "certificate",
+    "storage_ttl_manager",
+    "peer_review",
+    "contract_events",
     "automated_testing_suite",
-    "cicd_pipeline"
 ]
+# Incomplete or non-crate directories under contracts/ must not be listed as members.
+exclude = [
+    "cicd_pipeline",
+]
+# All contract crates are now fully reconciled into the workspace.
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+overflow-checks = true
+strip = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-soroban-sdk = "22.0.0"
+soroban-sdk = "28.0.0"
 
 [dev-dependencies]
-soroban-sdk = { version = "22.0.0", features = ["testutils"] }
-rand = { version = "0.8", features = ["small_rng"] }
+soroban-sdk = { version = "28.0.0", features = ["testutils"] }
+rand = { version = "0.9", features = ["small_rng"] }
 ed25519-dalek = { version = "2", default-features = false, features = ["std", "rand_core"] }
+proptest = "1"

@@ -435,6 +435,8 @@ export function registerSorobanCodeActions(monacoApi: typeof monaco) {
   });
 }
 
+export { registerSorobanDocumentFormattingEditProvider, initializeRustfmtWasm, isRustfmtReady } from './SorobanFormatter';
+
 export function detectSorobanContext(source: string) {
   const trimmed = source.trim();
   const firstNonEmptyLine =

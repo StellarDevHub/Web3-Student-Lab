@@ -1,6 +1,6 @@
-// @ts-nocheck
 import { Request, Response } from 'express';
 import { HashService } from './hash.service.js';
+import { getQueryString } from '../utils/queryParams.js';
 
 export const generateHash = async (req: Request, res: Response) => {
   try {
@@ -17,7 +17,8 @@ export const generateHash = async (req: Request, res: Response) => {
 
 export const getSimulations = async (req: Request, res: Response) => {
   try {
-    const { studentId } = req.params;
+    const studentId = getQueryString(req.params.studentId);
+
     if (!studentId) {
       return res.status(400).json({ success: false, error: 'studentId is required' });
     }

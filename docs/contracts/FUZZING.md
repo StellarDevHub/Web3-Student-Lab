@@ -1,12 +1,58 @@
 # Soroban Contract Fuzzing Guide
 
-This document describes the fuzzing setup implemented for the Web3 Student Lab Soroban contracts.
+This document describes the property/fuzz testing setup for the Web3 Student Lab Soroban contracts.
+
+> **Note:** `contracts/src/fuzz.rs`, described in an earlier version of this
+> guide, is not part of the compiled crate — it has no `mod fuzz;`
+> declaration in `lib.rs`, and it targets a `CertificateContract` /
+> `CertificateContractClient` that does not exist anywhere in the current
+> codebase (only as unrelated local mocks inside two other test files). It
+> predates the current module layout and was never reachable. The sections
+> below describing `cargo test --lib fuzz` are stale; use the commands in
+> "Running the property tests" instead. Resurrecting `fuzz.rs` against a
+> real certificate contract is a larger, separate undertaking than this
+> guide covers.
 
 ## Overview
 
-The fuzzing module (`contracts/src/fuzz.rs`) implements property-based testing to find edge cases in
-the Certificate and Token contract logic. Since Soroban-SDK doesn't have native cargo-fuzz
-integration, we use structured property-based testing with deterministic pseudo-random inputs.
+Property tests use [`proptest`](https://docs.rs/proptest) (a `[dev-dependencies]`
+entry in `contracts/Cargo.toml`) to generate randomized inputs against real,
+compiled contract logic — currently `contracts/src/payment_gateway.rs`. Each
+`proptest! { ... }` block is a normal `#[test]` function under the hood, so
+it runs as part of `cargo test --lib` with no separate invocation needed.
+
+## Running the property tests
+
+```bash
+cd contracts
+cargo test --lib prop_
+```
+
+Runs both property tests:
+- `payment_gateway::tests::prop_dispute_resolution_conserves_tokens` — accounting invariant
+- `payment_gateway::tests::prop_only_payer_or_merchant_can_open_dispute` — authorization invariant
+
+### Determinism and bounded execution
+
+Each block sets `ProptestConfig::with_cases(32)`, capping how many randomized
+cases run per property so CI runtime stays short and predictable.
+
+### Reproducing a CI failure locally
+
+If a property test fails, proptest automatically writes the minimized
+failing input to `contracts/proptest-regressions/payment_gateway.txt` (one
+line per failing property, keyed by test name). That file is **not**
+gitignored — commit it alongside the fix so the regression is deterministic
+on every future run: proptest reads it back in and replays the recorded case
+first, before generating any new random ones. To manually reproduce:
+
+```bash
+cd contracts
+cargo test --lib prop_dispute_resolution_conserves_tokens -- --nocapture
+```
+
+The regression file (if present) is picked up automatically — no seed or
+flag needs to be passed by hand.
 
 ## Target Edge Cases
 

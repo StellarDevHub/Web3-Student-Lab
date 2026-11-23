@@ -1,16 +1,16 @@
-// @ts-nocheck
-import type { StorageAssetRecord } from './types.js';
+import type { Prisma } from '@prisma/client';
+import prisma from '../../db/index.js';
+import type { StorageAssetKind, StorageAssetRecord } from './types.js';
 
 const getPrisma = async () => {
-  const module = await import('../../db/index.js');
-  return module.default;
+  return prisma;
 };
 
 export const upsertStorageAsset = async (asset: {
   resourceType: string;
   resourceId: string;
   name: string;
-  kind: string;
+  kind: StorageAssetKind;
   provider: string;
   cid: string;
   ipfsUri: string;
@@ -22,8 +22,8 @@ export const upsertStorageAsset = async (asset: {
   metadata?: Record<string, unknown> | null;
   error?: string | null;
 }): Promise<StorageAssetRecord> => {
-  const prisma = await getPrisma();
-  return prisma.decentralizedAsset.upsert({
+  const prismaClient = await getPrisma();
+  const record = await prismaClient.decentralizedAsset.upsert({
     where: {
       workspaceId_resourceType_resourceId_name: {
         workspaceId: 'default',
@@ -33,7 +33,7 @@ export const upsertStorageAsset = async (asset: {
       },
     },
     update: {
-      kind: asset.kind,
+      kind: asset.kind as string,
       provider: asset.provider,
       cid: asset.cid,
       ipfsUri: asset.ipfsUri,
@@ -42,16 +42,17 @@ export const upsertStorageAsset = async (asset: {
       sizeBytes: asset.sizeBytes ?? null,
       status: asset.status ?? 'pinned',
       referenceCount: asset.referenceCount ?? 1,
-      metadata: asset.metadata ?? null,
+      metadata: (asset.metadata ?? null) as Prisma.InputJsonValue,
       error: asset.error ?? null,
-      pinnedAt: asset.status === 'pinned' ? new Date() : undefined,
+      pinnedAt: asset.status === 'pinned' ? new Date() : (undefined as any),
       unpinnedAt: null,
     },
     create: {
+      workspaceId: 'default',
       resourceType: asset.resourceType,
       resourceId: asset.resourceId,
       name: asset.name,
-      kind: asset.kind,
+      kind: asset.kind as string,
       provider: asset.provider,
       cid: asset.cid,
       ipfsUri: asset.ipfsUri,
@@ -60,11 +61,13 @@ export const upsertStorageAsset = async (asset: {
       sizeBytes: asset.sizeBytes ?? null,
       status: asset.status ?? 'pinned',
       referenceCount: asset.referenceCount ?? 1,
-      metadata: asset.metadata ?? null,
+      metadata: (asset.metadata ?? null) as Prisma.InputJsonValue,
       error: asset.error ?? null,
-      pinnedAt: asset.status === 'pinned' ? new Date() : null,
+      pinnedAt: new Date(),
     },
-  });
+  }) as unknown as StorageAssetRecord;
+
+  return record;
 };
 
 export const markAssetFailed = async (
@@ -73,8 +76,8 @@ export const markAssetFailed = async (
   name: string,
   error: string
 ): Promise<void> => {
-  const prisma = await getPrisma();
-  await prisma.decentralizedAsset.upsert({
+  const prismaClient = await getPrisma();
+  await prismaClient.decentralizedAsset.upsert({
     where: {
       workspaceId_resourceType_resourceId_name: {
         workspaceId: 'default',
@@ -103,19 +106,21 @@ export const markAssetFailed = async (
 };
 
 export const listUnreferencedAssets = async (olderThan: Date): Promise<StorageAssetRecord[]> => {
-  const prisma = await getPrisma();
-  return prisma.decentralizedAsset.findMany({
+  const prismaClient = await getPrisma();
+  const records = await prismaClient.decentralizedAsset.findMany({
     where: {
       referenceCount: { lte: 0 },
       OR: [{ unpinnedAt: null }, { unpinnedAt: { lt: olderThan } }],
       status: { in: ['pinned', 'failed', 'unreferenced'] },
     },
-  });
+  }) as unknown as StorageAssetRecord[];
+
+  return records;
 };
 
 export const markAssetUnpinned = async (cid: string): Promise<void> => {
-  const prisma = await getPrisma();
-  await prisma.decentralizedAsset.updateMany({
+  const prismaClient = await getPrisma();
+  await prismaClient.decentralizedAsset.updateMany({
     where: { cid },
     data: {
       status: 'unpinned',
@@ -129,8 +134,8 @@ export const markAssetsUnreferenced = async (
   resourceType: string,
   resourceId: string
 ): Promise<void> => {
-  const prisma = await getPrisma();
-  await prisma.decentralizedAsset.updateMany({
+  const prismaClient = await getPrisma();
+  await prismaClient.decentralizedAsset.updateMany({
     where: {
       resourceType,
       resourceId,

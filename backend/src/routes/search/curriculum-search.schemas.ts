@@ -14,6 +14,9 @@ export const curriculumSearchQuerySchema = z.object({
   courseId: z.string().trim().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   offset: z.coerce.number().int().min(0).default(0),
+  cursorRank: z.coerce.number().min(0).optional(),
+  cursorTitle: z.string().trim().optional(),
+  cursorId: z.string().trim().optional(),
 });
 
 export type CurriculumSearchQuery = z.infer<typeof curriculumSearchQuerySchema>;

@@ -15,7 +15,7 @@ Four MVP-critical features added across the Web3 Student Lab curriculum modules.
 
 Each feature follows the **lib → hook → component → route** pattern (frontend) and **service → route → test** pattern (backend).
 
-## Tests
+##Tests
 
 ```bash
 # Frontend unit tests

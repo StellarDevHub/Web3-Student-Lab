@@ -1,10 +1,8 @@
 'use client';
 
-import {
-  useAwareness,
-  useCanvasCollaboration,
-  useSharedCanvas,
-} from '@/hooks/useCanvasCollaboration';
+import { useCollaborativeEditor } from '@/hooks/useCollaborativeEditor';
+import { useAwareness, useSharedCanvas } from '@/hooks/useCanvasCollaboration';
+import { ReconnectBanner } from '@/components/collaboration/ReconnectBanner';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -29,8 +27,20 @@ interface CollaborativeCanvasProps {
 export function CollaborativeCanvas({ roomId, userId, onCanvasReady }: CollaborativeCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [showConflictResolver, setShowConflictResolver] = useState(false);
 
-  const { doc, awareness, isConnected } = useCanvasCollaboration(roomId, userId);
+  // Use the safe reconnect hook instead of the plain useCanvasCollaboration.
+  const {
+    doc,
+    awareness,
+    isConnected,
+    reconnectStatus,
+    hasConflict,
+    pendingUpdateCount,
+    reconnect,
+    dismissConflict,
+  } = useCollaborativeEditor(roomId, userId);
+
   const {
     nodes,
     edges,
@@ -40,6 +50,7 @@ export function CollaborativeCanvas({ roomId, userId, onCanvasReady }: Collabora
     addEdge: addCanvasEdge,
     deleteEdge,
   } = useSharedCanvas(doc);
+
   const remoteUsers = useAwareness(awareness);
 
   useEffect(() => {
@@ -226,6 +237,21 @@ export function CollaborativeCanvas({ roomId, userId, onCanvasReady }: Collabora
 
   return (
     <div className="flex h-full flex-col">
+      {/* ----------------------------------------------------------------- */}
+      {/* Reconnect / conflict banner (zero-height when not needed)          */}
+      {/* ----------------------------------------------------------------- */}
+      <ReconnectBanner
+        status={reconnectStatus}
+        pendingUpdateCount={pendingUpdateCount}
+        hasConflict={hasConflict}
+        onReconnect={reconnect}
+        onReviewConflict={() => setShowConflictResolver(true)}
+        onDismissConflict={dismissConflict}
+      />
+
+      {/* ----------------------------------------------------------------- */}
+      {/* Toolbar                                                             */}
+      {/* ----------------------------------------------------------------- */}
       <div className="flex flex-col gap-3 border-b border-gray-200 bg-white px-6 py-4 md:flex-row md:items-center md:justify-between dark:border-gray-700 dark:bg-gray-900">
         <div className="space-y-2">
           <div className="flex items-center gap-3">
@@ -234,7 +260,8 @@ export function CollaborativeCanvas({ roomId, userId, onCanvasReady }: Collabora
             </h1>
             <span
               className={`h-3 w-3 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-rose-500'}`}
-              title={isConnected ? 'Connected' : 'Disconnected'}
+              aria-label={isConnected ? 'Connected' : 'Disconnected'}
+              title={isConnected ? 'Connected' : reconnectStatus === 'reconnecting' ? 'Reconnecting…' : 'Disconnected'}
             />
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -298,6 +325,9 @@ export function CollaborativeCanvas({ roomId, userId, onCanvasReady }: Collabora
         </div>
       </div>
 
+      {/* ----------------------------------------------------------------- */}
+      {/* Collaborator presence bar                                          */}
+      {/* ----------------------------------------------------------------- */}
       <div className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
         <span>
           {remoteUsers.length > 0
@@ -311,6 +341,7 @@ export function CollaborativeCanvas({ roomId, userId, onCanvasReady }: Collabora
               className="inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white"
               style={{ backgroundColor: user.color }}
               title={user.name}
+              aria-label={`Collaborator: ${user.name}`}
             >
               {user.name.charAt(0)}
             </span>
@@ -318,6 +349,9 @@ export function CollaborativeCanvas({ roomId, userId, onCanvasReady }: Collabora
         </div>
       </div>
 
+      {/* ----------------------------------------------------------------- */}
+      {/* Canvas                                                              */}
+      {/* ----------------------------------------------------------------- */}
       <div ref={canvasRef} className="relative flex-1 overflow-hidden bg-slate-950">
         {doc ? (
           <ReactFlow
@@ -346,6 +380,54 @@ export function CollaborativeCanvas({ roomId, userId, onCanvasReady }: Collabora
           </div>
         )}
       </div>
+
+      {/* ----------------------------------------------------------------- */}
+      {/* Conflict resolver modal (lazy – only rendered when triggered)      */}
+      {/* ----------------------------------------------------------------- */}
+      {showConflictResolver && doc && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Conflict review"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        >
+          <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-auto rounded-xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-white">Review Remote Changes</h2>
+              <button
+                type="button"
+                aria-label="Close conflict review"
+                onClick={() => {
+                  setShowConflictResolver(false);
+                  dismissConflict();
+                }}
+                className="rounded p-1 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                </svg>
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-zinc-400">
+              The shared canvas was updated while you were disconnected. Your pending edits have
+              been merged automatically using Yjs CRDT.  If anything looks wrong, you can undo
+              recent changes from the canvas toolbar.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowConflictResolver(false);
+                  dismissConflict();
+                }}
+                className="rounded-lg bg-zinc-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-600"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

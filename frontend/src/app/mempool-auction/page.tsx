@@ -1,6 +1,7 @@
 'use client';
 
 import { BlockHistory } from '@/components/mempool-auction/BlockHistory';
+import { LiveFeeMarket } from '@/components/mempool-auction/LiveFeeMarket';
 import { MempoolGrid } from '@/components/mempool-auction/MempoolGrid';
 import { useMempoolSimulator } from '@/hooks/useMempoolSimulator';
 import { MAX_FEE_BID, MIN_FEE_BID, selectForBlock, totalGas } from '@/lib/mempool';
@@ -81,6 +82,13 @@ export default function MempoolAuctionPage() {
               Reset
             </button>
           </div>
+        </div>
+
+        {/* Live Stellar Testnet fee market (Issue #1156). Sits above the
+            sandbox so students compare the real auction with the one they
+            drive by hand below. */}
+        <div className="mb-8">
+          <LiveFeeMarket />
         </div>
 
         {/* Network parameters */}

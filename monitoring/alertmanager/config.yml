@@ -1,0 +1,44 @@
+# Alertmanager routing for Web3 Student Lab (BE-050, #1622).
+#
+# Secrets are read from files so they are never committed. Mount them into the
+# Alertmanager container at /etc/alertmanager/secrets/ (for example from a
+# Kubernetes Secret). Requires Alertmanager >= 0.27 for *_file options.
+#
+# Critical alerts page PagerDuty; warnings go to a webhook (for example a
+# Discord or Slack relay). Both receivers get a resolved notification.
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: warnings-webhook
+  group_by: ["alertname", "service"]
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 4h
+  routes:
+    - matchers:
+        - severity="critical"
+      receiver: pagerduty-critical
+      group_wait: 10s
+      repeat_interval: 1h
+    - matchers:
+        - severity="warning"
+      receiver: warnings-webhook
+
+receivers:
+  - name: pagerduty-critical
+    pagerduty_configs:
+      - routing_key_file: /etc/alertmanager/secrets/pagerduty_routing_key
+        severity: "{{ .CommonLabels.severity }}"
+        description: "{{ .CommonAnnotations.summary }}"
+        send_resolved: true
+        details:
+          runbook: "{{ .CommonAnnotations.runbook_url }}"
+          diagnostic_query: "{{ .CommonAnnotations.diagnostic_query }}"
+
+  - name: warnings-webhook
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/warning_webhook_url
+        send_resolved: true
+        max_alerts: 20

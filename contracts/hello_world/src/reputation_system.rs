@@ -1,8 +1,25 @@
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Map, String, Symbol, Vec};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
+    Env, Map, String, Symbol, Vec,
+};
 
-const KEY_REPUTATION: Symbol = Symbol::new("reputation");
-const KEY_REVIEWS: Symbol = Symbol::new("reviews");
-const KEY_JOB_HISTORY: Symbol = Symbol::new("job_history");
+// ── Errors (SC-HARD-20: range 400+) ──────────────────────────────────────────
+
+/// Typed contract errors for the reputation system.
+///
+/// Discriminants are in the `400+` range.
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum RepError {
+    /// `500` — Contract has already been initialised.
+    AlreadyInitialized = 500,
+    /// `501` — Rating value is out of the 1–5 range.
+    InvalidRating = 501,
+}
+
+const KEY_REPUTATION: Symbol = symbol_short!("reputation");
+const KEY_REVIEWS: Symbol = symbol_short!("reviews");
+const KEY_JOB_HIS: Symbol = symbol_short!("job_hstry");
 
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -55,11 +72,17 @@ impl ReputationSystem {
     /// Initialize the reputation system
     pub fn initialize(env: Env) {
         if env.storage().instance().has(&KEY_REPUTATION) {
-            panic!("Already initialized");
+            panic_with_error!(&env, RepError::AlreadyInitialized);
         }
-        env.storage().instance().set(&KEY_REPUTATION, &Map::<Address, Reputation>::new(&env));
-        env.storage().instance().set(&KEY_REVIEWS, &Vec::<Review>::new(&env));
-        env.storage().instance().set(&KEY_JOB_HISTORY, &Map::<Address, Vec<u64>>::new(&env));
+        env.storage()
+            .instance()
+            .set(&KEY_REPUTATION, &Map::<Address, Reputation>::new(&env));
+        env.storage()
+            .instance()
+            .set(&KEY_REVIEWS, &Vec::<Review>::new(&env));
+        env.storage()
+            .instance()
+            .set(&KEY_JOB_HIS, &Map::<Address, Vec<u64>>::new(&env));
     }
 
     /// Submit a review after job completion
@@ -74,7 +97,7 @@ impl ReputationSystem {
         reviewer.require_auth();
 
         if rating < 1 || rating > 5 {
-            panic!("Rating must be between 1 and 5");
+            panic_with_error!(&env, RepError::InvalidRating);
         }
 
         let review = Review {
@@ -87,12 +110,20 @@ impl ReputationSystem {
         };
 
         // Store review
-        let mut reviews: Vec<Review> = env.storage().instance().get(&KEY_REVIEWS).unwrap_or(Vec::new(&env));
+        let mut reviews: Vec<Review> = env
+            .storage()
+            .instance()
+            .get(&KEY_REVIEWS)
+            .unwrap_or_else(|| Vec::new(&env));
         reviews.push_back(review);
         env.storage().instance().set(&KEY_REVIEWS, &reviews);
 
         // Update reputation
-        let mut reputations: Map<Address, Reputation> = env.storage().instance().get(&KEY_REPUTATION).unwrap_or(Map::new(&env));
+        let mut reputations: Map<Address, Reputation> = env
+            .storage()
+            .instance()
+            .get(&KEY_REPUTATION)
+            .unwrap_or_else(|| Map::new(&env));
 
         let mut rep = reputations.get(reviewee.clone()).unwrap_or(Reputation {
             total_score: 0,
@@ -108,14 +139,18 @@ impl ReputationSystem {
         rep.last_updated = env.ledger().timestamp();
 
         // Track job history
-        let mut history: Map<Address, Vec<u64>> = env.storage().instance().get(&KEY_JOB_HISTORY).unwrap_or(Map::new(&env));
-        let mut jobs = history.get(reviewee.clone()).unwrap_or(Vec::new(&env));
+        let mut history: Map<Address, Vec<u64>> = env
+            .storage()
+            .instance()
+            .get(&KEY_JOB_HIS)
+            .unwrap_or_else(|| Map::new(&env));
+        let mut jobs = history.get(reviewee.clone()).unwrap_or_else(|| Vec::new(&env));
         if !jobs.contains(&job_id) {
             jobs.push_back(job_id);
             rep.completed_jobs = jobs.len() as u64;
         }
         history.set(reviewee.clone(), jobs);
-        env.storage().instance().set(&KEY_JOB_HISTORY, &history);
+        env.storage().instance().set(&KEY_JOB_HIS, &history);
 
         reputations.set(reviewee.clone(), rep);
         env.storage().instance().set(&KEY_REPUTATION, &reputations);
@@ -144,7 +179,11 @@ impl ReputationSystem {
 
     /// Get reputation for a user with time-based decay
     pub fn get_reputation(env: Env, user: Address) -> Reputation {
-        let reputations: Map<Address, Reputation> = env.storage().instance().get(&KEY_REPUTATION).unwrap_or(Map::new(&env));
+        let reputations: Map<Address, Reputation> = env
+            .storage()
+            .instance()
+            .get(&KEY_REPUTATION)
+            .unwrap_or_else(|| Map::new(&env));
         let rep = reputations.get(user.clone()).unwrap_or(Reputation {
             total_score: 0,
             review_count: 0,
@@ -158,8 +197,8 @@ impl ReputationSystem {
         if rep.last_updated > 0 && now > rep.last_updated {
             let periods = (now - rep.last_updated) / DECAY_PERIOD_SECONDS;
             if periods > 0 {
-                let decayed_rating = (rep.average_rating as u64)
-                    .saturating_sub(periods * DECAY_RATE);
+                let decayed_rating =
+                    (rep.average_rating as u64).saturating_sub(periods * DECAY_RATE);
                 return Reputation {
                     total_score: rep.total_score,
                     review_count: rep.review_count,
@@ -175,7 +214,11 @@ impl ReputationSystem {
 
     /// Get all reviews for a user
     pub fn get_reviews(env: Env, user: Address) -> Vec<Review> {
-        let reviews: Vec<Review> = env.storage().instance().get(&KEY_REVIEWS).unwrap_or(Vec::new(&env));
+        let reviews: Vec<Review> = env
+            .storage()
+            .instance()
+            .get(&KEY_REVIEWS)
+            .unwrap_or_else(|| Vec::new(&env));
         let mut result = Vec::new(&env);
         for review in reviews.iter() {
             if review.reviewee == user {
@@ -187,8 +230,12 @@ impl ReputationSystem {
 
     /// Get completed job count for a user
     pub fn get_completed_jobs(env: Env, user: Address) -> u64 {
-        let history: Map<Address, Vec<u64>> = env.storage().instance().get(&KEY_JOB_HISTORY).unwrap_or(Map::new(&env));
-        let jobs = history.get(user).unwrap_or(Vec::new(&env));
+        let history: Map<Address, Vec<u64>> = env
+            .storage()
+            .instance()
+            .get(&KEY_JOB_HIS)
+            .unwrap_or_else(|| Map::new(&env));
+        let jobs = history.get(user).unwrap_or_else(|| Vec::new(&env));
         jobs.len() as u64
     }
 }

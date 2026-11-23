@@ -339,3 +339,39 @@ fn test_run_test_suite() {
     let total_score = client.run_test_suite(&user, &module_id);
     assert_eq!(total_score, 30); // 10 + 20
 }
+
+#[test]
+fn test_verify_amm_and_lending_invariants() {
+    let env = create_test_env();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let contract_id = env.register(AutomatedTestingSuite, ());
+    let client = AutomatedTestingSuiteClient::new(&env, &contract_id);
+    client.initialize(&admin);
+
+    // AMM invariant holds when k_after >= k_before
+    assert!(client.verify_amm_invariant(&1_000_000, &1_000_050));
+    assert!(client.verify_amm_invariant(&1_000_000, &1_000_000));
+
+    // AMM invariant failure rejected
+    let res = client.try_verify_amm_invariant(&1_000_000, &999_999);
+    assert!(res.is_err());
+
+    // Lending solvency holds when assets >= liabilities
+    assert!(client.verify_lending_solvency(&15_000, &10_000));
+    assert!(client.verify_lending_solvency(&10_000, &10_000));
+
+    // Insolvent state rejected
+    let res_solv = client.try_verify_lending_solvency(&9_999, &10_000);
+    assert!(res_solv.is_err());
+
+    // Record fuzz run metrics
+    let inv_sym = Symbol::new(&env, "amm_k");
+    client.record_fuzz_run(&admin, &inv_sym, &1_000_000, &true);
+
+    let rec = client.get_fuzz_run(&inv_sym).unwrap();
+    assert_eq!(rec.invariant_type, inv_sym);
+    assert_eq!(rec.iterations, 1_000_000);
+    assert!(rec.passed);
+}

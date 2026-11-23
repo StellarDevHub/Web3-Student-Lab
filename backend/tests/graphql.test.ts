@@ -1,12 +1,14 @@
 import { describe, expect, it, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
-import { app } from '../src/index.js';
+import { app, graphqlSetupPromise } from '../src/index.js';
 import prisma from '../src/db/index.js';
+import config from '../src/config/env.config.js';
 
 const GRAPHQL_URL = '/graphql';
 
 describe('GraphQL API', () => {
   beforeAll(async () => {
+    await graphqlSetupPromise;
     try {
       await prisma.$connect();
     } catch {
@@ -242,6 +244,84 @@ describe('GraphQL API', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.errors).toBeTruthy();
+    });
+  });
+
+  describe('GraphQL query depth and complexity limits', () => {
+    let originalMaxDepth: number;
+    let originalMaxComplexity: number;
+
+    beforeAll(() => {
+      originalMaxDepth = config.graphql?.maxDepth ?? 10;
+      originalMaxComplexity = config.graphql?.maxComplexity ?? 100;
+    });
+
+    afterAll(() => {
+      if (config.graphql) {
+        config.graphql.maxDepth = originalMaxDepth;
+        config.graphql.maxComplexity = originalMaxComplexity;
+      }
+    });
+
+    it('permits queries within limits', async () => {
+      config.graphql.maxDepth = 10;
+      config.graphql.maxComplexity = 100;
+
+      const response = await request(app)
+        .post(GRAPHQL_URL)
+        .send({ query: '{ health }' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data?.health).toBe('OK');
+      expect(response.body.errors).toBeUndefined();
+    });
+
+    it('rejects queries that exceed depth limit', async () => {
+      config.graphql.maxDepth = 2; // Very low depth limit
+      config.graphql.maxComplexity = 100;
+
+      // Depth of 3: students (1) -> enrollments (2) -> course (3) -> id
+      const response = await request(app)
+        .post(GRAPHQL_URL)
+        .send({
+          query: `
+            query {
+              students {
+                enrollments {
+                  course {
+                    id
+                  }
+                }
+              }
+            }
+          `
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.errors).toBeTruthy();
+      expect(response.body.errors[0].message).toContain('exceeds maximum depth');
+    });
+
+    it('rejects queries that exceed complexity limit', async () => {
+      config.graphql.maxDepth = 10;
+      config.graphql.maxComplexity = 5; // Very low complexity limit
+
+      // Complexity: students (10) -> exceeds 5
+      const response = await request(app)
+        .post(GRAPHQL_URL)
+        .send({
+          query: `
+            query {
+              students {
+                id
+              }
+            }
+          `
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.errors).toBeTruthy();
+      expect(response.body.errors[0].message).toContain('exceeds maximum complexity');
     });
   });
 });

@@ -3,7 +3,7 @@
 import { Suspense, lazy, useMemo } from 'react';
 import { SharedStateProvider, SharedLibraryCard } from '@/microfrontends/shared/index';
 
-const RemoteLab = /*#__PURE__*/ lazy(() => import('lab_remote/LabRemote'));
+const RemoteLab = /*#__PURE__*/ lazy(() => import('@/microfrontends/remote/LabRemoteModule'));
 
 export default function MicroFrontendHost() {
   const remoteTips = useMemo(

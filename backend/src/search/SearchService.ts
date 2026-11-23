@@ -104,9 +104,9 @@ export abstract class SearchService<T> {
       data,
       pagination,
       metadata: {
-        query: options.query,
-        filters: options.filters,
-        sortBy: options.sort,
+        query: options.query ?? '',
+        filters: options.filters ?? {},
+        sortBy: options.sort ?? '',
         executionTime,
         totalResults: total,
       },

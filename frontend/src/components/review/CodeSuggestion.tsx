@@ -1,5 +1,6 @@
 'use client';
 
+import '@/lib/editor/monaco-loader';
 import { DiffEditor } from '@monaco-editor/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {

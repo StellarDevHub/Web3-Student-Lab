@@ -3,12 +3,11 @@
  * ScVal decoder, RPC helpers, fee stats
  */
 import { rpc, scValToNative, xdr } from '@stellar/stellar-sdk';
+import { getPublicEnv } from './env';
 
-export const SOROBAN_RPC_URL =
-  process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
+export const SOROBAN_RPC_URL = getPublicEnv().sorobanRpcUrl;
 
-export const HORIZON_URL =
-  process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon-testnet.stellar.org';
+export const HORIZON_URL = getPublicEnv().horizonUrl;
 
 // ─── ScVal Decoder ────────────────────────────────────────────────────────────
 

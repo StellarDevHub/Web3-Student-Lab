@@ -37,7 +37,7 @@ export function logSimulatorError(
   const entry: SimulatorError = {
     id: generateId(),
     sessionId,
-    userId,
+    ...(userId !== undefined ? { userId } : {}),
     severity,
     code,
     message,

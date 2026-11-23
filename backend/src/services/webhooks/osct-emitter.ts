@@ -1,5 +1,5 @@
 import type { WebhookDestination } from './types.js';
-import { enqueueWebhookDeliveries } from './index.js';
+import { enqueueWebhookDeliveries } from './dispatcher.js';
 import logger from '../../utils/logger.js';
 
 type OsctEventType =

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Request, Response, Router } from 'express';
 import { authenticate } from '../auth/auth.middleware.js';
 import logger from '../utils/logger.js';
@@ -9,8 +8,9 @@ import {
   getUserErrors,
   logSimulatorError,
 } from '../services/simulatorErrorLog.service.js';
+import { getQueryString } from '../utils/queryParams.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 const VALID_SEVERITIES: ErrorSeverity[] = ['low', 'medium', 'high', 'critical'];
 
@@ -66,8 +66,12 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
  * @access  Private
  */
 router.get('/session/:sessionId', authenticate, (req: Request, res: Response): void => {
-  const { sessionId } = req.params;
-  const severity = req.query.severity as ErrorSeverity | undefined;
+  const sessionId = getQueryString(req.params.sessionId);
+  const severityRaw = getQueryString(req.query.severity);
+  const severity = severityRaw
+    ? (severityRaw as ErrorSeverity)
+    : undefined;
+
 
   if (severity && !VALID_SEVERITIES.includes(severity)) {
     res.status(400).json({
@@ -98,7 +102,8 @@ router.get('/me', authenticate, (req: Request, res: Response): void => {
  * @access  Private
  */
 router.delete('/session/:sessionId', authenticate, (req: Request, res: Response): void => {
-  const { sessionId } = req.params;
+  const sessionId = getQueryString(req.params.sessionId);
+
   const cleared = clearSessionErrors(sessionId);
   res.json({ status: 'success', data: { cleared } });
 });

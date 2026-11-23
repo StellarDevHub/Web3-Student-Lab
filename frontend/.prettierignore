@@ -1,2 +1,13 @@
+# Build output
+.next/
+dist/
+
+# Dependencies
+node_modules/
+
+# Generated
+.next/
+
+# Large generated/third-party files
 src/components/rewards/RewardsDashboard.tsx
 src/components/subscriptions/SubscriptionDashboard.tsx

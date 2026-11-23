@@ -5,7 +5,7 @@ import { getAggregatedDashboardData } from '../services/bff.service.js';
 import logger from '../utils/logger.js';
 import * as hashController from './hash.controller.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @route   GET /api/dashboard/stats

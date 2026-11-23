@@ -1,5 +1,4 @@
 import { Queue } from 'bullmq';
-import { redisConnection } from '../utils/redis.js';
 
 export const BACKUP_QUEUE_NAME = 'backup-queue';
 

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Multi-region Redis replication configuration.
  *
@@ -68,7 +67,8 @@ export function resolveActiveRegionName(
   if (requested && regions.some((r) => r.name === requested)) {
     return requested;
   }
-  return regions[0].name;
+  // Length checked above, so the first element is guaranteed to exist.
+  return regions[0]!.name;
 }
 
 /**

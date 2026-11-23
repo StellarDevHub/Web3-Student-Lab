@@ -7,8 +7,8 @@ CREATE TABLE "students" (
     "firstName" TEXT NOT NULL,
     "lastName" TEXT NOT NULL,
     "walletAddress" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -18,8 +18,8 @@ CREATE TABLE "courses" (
     "description" TEXT,
     "instructor" TEXT NOT NULL,
     "credits" INTEGER NOT NULL DEFAULT 3,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -28,7 +28,7 @@ CREATE TABLE "certificates" (
     "studentId" TEXT NOT NULL,
     "courseId" TEXT NOT NULL,
     "tokenId" TEXT NOT NULL,
-    "issuedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "issuedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "certificateHash" TEXT,
     "status" TEXT NOT NULL DEFAULT 'pending',
     "did" TEXT,
@@ -36,13 +36,13 @@ CREATE TABLE "certificates" (
     "contractAddress" TEXT,
     "network" TEXT,
     "grade" TEXT,
-    "revokedAt" DATETIME,
+    "revokedAt" TIMESTAMP(3),
     "revocationReason" TEXT,
     "revokedBy" TEXT,
     "previousVersionId" TEXT,
     "transactionHash" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "certificates_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "students" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "certificates_courseId_fkey" FOREIGN KEY ("courseId") REFERENCES "courses" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -52,7 +52,7 @@ CREATE TABLE "enrollments" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "studentId" TEXT NOT NULL,
     "courseId" TEXT NOT NULL,
-    "enrolledAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "enrolledAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "status" TEXT NOT NULL DEFAULT 'active',
     CONSTRAINT "enrollments_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "students" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "enrollments_courseId_fkey" FOREIGN KEY ("courseId") REFERENCES "courses" ("id") ON DELETE CASCADE ON UPDATE CASCADE
@@ -65,8 +65,8 @@ CREATE TABLE "feedback" (
     "courseId" TEXT NOT NULL,
     "rating" INTEGER NOT NULL,
     "review" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "feedback_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "students" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "feedback_courseId_fkey" FOREIGN KEY ("courseId") REFERENCES "courses" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -80,10 +80,10 @@ CREATE TABLE "learning_progress" (
     "currentModuleId" TEXT,
     "percentage" INTEGER NOT NULL DEFAULT 0,
     "status" TEXT NOT NULL DEFAULT 'not_started',
-    "lastAccessedAt" DATETIME,
-    "completedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "lastAccessedAt" TIMESTAMP(3),
+    "completedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "learning_progress_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "students" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "learning_progress_courseId_fkey" FOREIGN KEY ("courseId") REFERENCES "courses" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -99,7 +99,7 @@ CREATE TABLE "audit_logs" (
     "details" JSONB,
     "ipAddress" TEXT,
     "userAgent" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
@@ -107,9 +107,9 @@ CREATE TABLE "auth_nonces" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "walletAddress" TEXT NOT NULL,
     "nonce" TEXT NOT NULL,
-    "expiresAt" DATETIME NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -120,7 +120,7 @@ CREATE TABLE "analytics_data" (
     "region" TEXT,
     "value" REAL,
     "category" TEXT,
-    "timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "metadata" JSONB
 );
 
@@ -134,10 +134,10 @@ CREATE TABLE "canvases" (
     "data" JSONB,
     "isPublic" BOOLEAN NOT NULL DEFAULT false,
     "collaborators" JSONB NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     "lastModifiedBy" TEXT,
-    "lastModifiedAt" DATETIME,
+    "lastModifiedAt" TIMESTAMP(3),
     CONSTRAINT "canvases_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "students" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 

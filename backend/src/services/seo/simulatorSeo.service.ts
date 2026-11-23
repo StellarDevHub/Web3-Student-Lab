@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { redisConnection } from '../../utils/redis.js';
+import redisClient from '../../cache/RedisClient.js';
 
 export interface SimulatorAsset {
   slug: string;
@@ -72,7 +71,8 @@ const SITEMAP_CACHE_KEY = 'seo:simulator:sitemap:v1';
 
 function parseSitemapXml(xml: string): string[] {
   const matches = xml.matchAll(/<loc>(.*?)<\/loc>/g);
-  return Array.from(matches, (match) => match[1].trim()).filter(Boolean);
+  return Array.from(matches, (match) => match[1]?.trim() ?? '').filter(Boolean);
+
 }
 
 function buildMetaTags(asset: SimulatorAsset, baseUrl: string): SimulatorMetaTags {
@@ -84,6 +84,19 @@ function buildMetaTags(asset: SimulatorAsset, baseUrl: string): SimulatorMetaTag
     ogType: 'article',
   };
 }
+
+/** In-memory no-op cache used when Redis is unavailable. */
+const memoryOnlyCache: SeoCacheClient = {
+  async get() {
+    return null;
+  },
+  async setex() {
+    return undefined;
+  },
+  async del() {
+    return undefined;
+  },
+};
 
 export class SimulatorSeoService {
   private readonly cache: SeoCacheClient;
@@ -99,7 +112,16 @@ export class SimulatorSeoService {
   private fallbackWrites = 0;
 
   constructor(dependencies: SeoServiceDependencies = {}) {
-    this.cache = dependencies.cache ?? (redisConnection as SeoCacheClient);
+    const redis = redisClient.getClient();
+    this.cache =
+      dependencies.cache ??
+      (redis
+        ? ({
+            get: (key: string) => redis.get(key),
+            setex: (key: string, ttl: number, value: string) => redis.setex(key, ttl, value),
+            del: (key: string) => redis.del(key),
+          } as SeoCacheClient)
+        : memoryOnlyCache);
     this.fetchAssetIndexImpl = dependencies.fetchAssetIndex ?? (async () => DEFAULT_ASSETS);
     this.fetchSitemapXmlImpl = dependencies.fetchSitemapXml ?? (async () => DEFAULT_SITEMAP_XML);
     this.now = dependencies.now ?? (() => Date.now());

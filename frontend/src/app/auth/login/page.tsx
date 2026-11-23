@@ -6,17 +6,21 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { WalletConnectCard } from '@/components/wallet/WalletConnectCard';
 import { useWalletProfileCompletion } from '@/lib/profile-completion';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { getWorkspaceId } from '@/lib/api-config';
+import { getApiEndpoint, getPublicEnv } from '@/lib/env';
 
-const GITHUB_OAUTH_URL = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1'}/oauth/github`;
+const GITHUB_OAUTH_URL = getApiEndpoint('/oauth/github');
 
 export default function LoginPage() {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
+  const { login, error, clearError, user, isLoading, isAuthenticated } = useAuth();
   const { publicKey } = useWallet();
   const completedProfile = useWalletProfileCompletion(publicKey);
   const profileCompleted = !!completedProfile;
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -24,9 +28,44 @@ export default function LoginPage() {
     }
   }, [router, isAuthenticated]);
 
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+    script.async = true;
+    script.defer = true;
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!turnstileToken && typeof window !== 'undefined' && (window as any).turnstile) {
+      try {
+        (window as any).turnstile.render('#turnstile-login-container', {
+          sitekey: getPublicEnv().turnstileSiteKey || '',
+          callback: (token: string) => setTurnstileToken(token),
+        });
+      } catch (error) {
+        console.error('Failed to render Turnstile widget:', error);
+      }
+    }
+  }, [turnstileToken]);
+
   const handleGitHubLogin = () => {
     const workspaceId = getWorkspaceId();
     window.location.href = `${GITHUB_OAUTH_URL}?workspaceId=${workspaceId}`;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await login(email, password, turnstileToken || undefined);
+      router.replace('/dashboard');
+    } catch (err) {
+      // error handled by context
+    }
   };
 
   return (
@@ -39,6 +78,57 @@ export default function LoginPage() {
           description="Wallet connection is now the first step. Once your wallet is connected, we can collect any remaining learner details."
           connectedDescription="Your wallet is connected. Continue to complete your learner profile and unlock the rest of the platform."
         />
+
+        <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/80 p-8">
+          <h1 className="mb-6 text-center text-3xl font-black tracking-wide text-white uppercase">
+            Sign In
+          </h1>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label htmlFor="email" className="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase">
+                Email
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-lg border border-white/20 bg-black px-4 py-3 text-white placeholder-gray-600 transition-colors focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                placeholder="student@example.com"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="password" className="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase">
+                Passphrase
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-lg border border-white/20 bg-black px-4 py-3 text-white placeholder-gray-600 transition-colors focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                placeholder="••••••••"
+              />
+            </div>
+
+            <div className="flex justify-center">
+              <div id="turnstile-login-container" className="flex justify-center" />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full rounded-lg bg-red-600 py-4 font-black tracking-widest uppercase text-white transition hover:bg-red-700 hover:shadow-[0_0_25px_rgba(220,38,38,0.6)]"
+            >
+              Sign In
+            </button>
+          </form>
+        </div>
 
         {/* GitHub OAuth Login Option */}
         <div className="mt-6 flex flex-col items-center justify-between gap-4 rounded-2xl border border-white/10 bg-zinc-950/80 px-6 py-5 text-center sm:flex-row sm:text-left">

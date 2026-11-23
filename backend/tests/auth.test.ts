@@ -212,4 +212,62 @@ describeOrSkip('Auth Module Integration Tests', () => {
       expect(response.body.user.name).toBe(`${testStudent.firstName} ${testStudent.lastName}`);
     });
   });
+
+  describe('POST /api/v1/auth/refresh & /logout (Cookie Session Flow)', () => {
+    const sessionStudent = {
+      email: 'session@example.com',
+      password: 'password123',
+      firstName: 'Session',
+      lastName: 'User',
+    };
+
+    it('should set refreshToken cookie on login and allow token rotation via cookie', async () => {
+      await request(app).post('/api/v1/auth/register').send(sessionStudent);
+
+      const loginRes = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ email: sessionStudent.email, password: sessionStudent.password })
+        .expect(200);
+
+      const cookies = loginRes.get('Set-Cookie');
+      expect(cookies).toBeDefined();
+      const refreshCookie = cookies?.find(c => c.startsWith('refreshToken='));
+      expect(refreshCookie).toBeDefined();
+      expect(refreshCookie).toContain('HttpOnly');
+
+      // Call refresh with cookie
+      const refreshRes = await request(app)
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', cookies || [])
+        .expect(200);
+
+      expect(refreshRes.body).toHaveProperty('accessToken');
+      const rotatedCookies = refreshRes.get('Set-Cookie');
+      expect(rotatedCookies).toBeDefined();
+    });
+
+    it('should clear refresh token cookie and invalidate session on logout', async () => {
+      const loginRes = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ email: sessionStudent.email, password: sessionStudent.password })
+        .expect(200);
+
+      const authToken = loginRes.body.token || loginRes.body.accessToken;
+      const cookies = loginRes.get('Set-Cookie');
+
+      const logoutRes = await request(app)
+        .post('/api/v1/auth/logout')
+        .set('Authorization', `Bearer ${authToken}`)
+        .set('Cookie', cookies || [])
+        .expect(200);
+
+      expect(logoutRes.body.message).toBe('Logged out successfully');
+
+      // Subsequent refresh attempt with old cookie should fail
+      await request(app)
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', cookies || [])
+        .expect(401);
+    });
+  });
 });

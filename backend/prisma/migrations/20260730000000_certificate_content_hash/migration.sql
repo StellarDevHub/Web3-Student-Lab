@@ -1,0 +1,11 @@
+-- Add contentHash column used to bind certificate metadata to an immutable
+-- integrity hash (SHA-256 of the canonicalized certificate fields).
+--
+-- Existing rows are left with contentHash = NULL. NULL is treated by the
+-- application as "no integrity hash recorded" (legacy certificate, minted
+-- before this feature existed) and is NOT reported as tampered — it is
+-- reported as "unverified" so operators can distinguish it from a genuine
+-- mismatch. Run `scripts/backfill-certificate-content-hash.ts` once after
+-- deploying this migration to backfill a hash for every existing
+-- certificate from its current stored fields.
+ALTER TABLE "certificates" ADD COLUMN "contentHash" TEXT;

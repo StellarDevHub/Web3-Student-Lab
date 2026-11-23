@@ -1,5 +1,21 @@
 {
+  "home": {
+    "title": "Web3 Student ",
+    "title_accent": "Lab",
+    "subtitle": "La plataforma educativa open-source definitiva para el desarrollo blockchain. Aprende contratos inteligentes, colabora en proyectos y construye el futuro de Web3.",
+    "launch_app": "Iniciar App",
+    "view_source": "Ver Código",
+    "feature_curriculum_title": "Currículo Interactivo",
+    "feature_curriculum_desc": "Progresa desde lo básico hasta el desarrollo avanzado de contratos inteligentes con ejercicios prácticos. Obtén certificados verificables en blockchain al completar módulos.",
+    "feature_ide_title": "IDE en el Navegador",
+    "feature_ide_desc": "Escribe, prueba y despliega contratos inteligentes Rust directamente desde tu navegador sin configuración local. Integrado con Soroban para pruebas sin interrupciones.",
+    "feature_collab_title": "Laboratorio Colaborativo",
+    "feature_collab_desc": "Trabaja en proyectos de Hackathon, comparte componentes y construye tu reputación descentralizada mediante revisiones de pares en cadena.",
+    "grant_title": "Estado del Proyecto: Se Requiere Beca",
+    "grant_desc": "Web3 Student Lab es un proyecto open-source ambicioso diseñado para revolucionar la incorporación de desarrolladores al ecosistema Stellar. Actualmente buscamos una beca para desplegar completamente nuestra infraestructura, finalizar nuestro plan de estudios y llevar esta plataforma a mainnet."
+  },
   "nav": {
+    "admin": "Admin",
     "learn": "Aprender",
     "dashboard": "Panel",
     "modules": "MÓDULOS",
@@ -172,7 +188,12 @@
         "Un diagrama de flujo de tokens",
         "Un ejercicio simple de matemáticas de AMM"
       ],
-      "tools": ["Simuladores AMM", "Modelado en hojas de cálculo", "Paneles de protocolo", "Herramientas de exploración"]
+      "tools": [
+        "Simuladores AMM",
+        "Modelado en hojas de cálculo",
+        "Paneles de protocolo",
+        "Herramientas de exploración"
+      ]
     },
     "default": {
       "level": "Nivel abierto",
@@ -197,7 +218,11 @@
           "description": "Integra todo en un resultado final o punto de revisión."
         }
       ],
-      "deliverables": ["Notas y puntos de control", "Trabajo práctico de laboratorio", "Artefacto de revisión final"],
+      "deliverables": [
+        "Notas y puntos de control",
+        "Trabajo práctico de laboratorio",
+        "Artefacto de revisión final"
+      ],
       "tools": ["Herramientas de wallet", "Exploradores", "Ejercicios del curso"]
     }
   }

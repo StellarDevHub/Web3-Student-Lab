@@ -1,12 +1,16 @@
 #![no_std]
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, String, Vec};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, panic_with_error, Address, Env, String,
+    Symbol, Vec,
+};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
     TestNotFound = 1,
+    InvariantViolated = 2,
 }
 
 #[contracttype]
@@ -16,6 +20,15 @@ pub enum TestStatus {
     Running,
     Passed,
     Failed,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FuzzInvariantRecord {
+    pub invariant_type: Symbol,
+    pub iterations: u32,
+    pub passed: bool,
+    pub verified_at: u64,
 }
 
 #[contracttype]
@@ -73,6 +86,7 @@ pub enum DataKey {
     TestResult(u64),
     UserProgress(Address, u64),
     ModuleTests(u64),
+    FuzzInvariant(Symbol),
 }
 
 #[contract]
@@ -348,6 +362,56 @@ impl AutomatedTestingSuite {
         }
 
         (progress.tests_passed * 100) / module.test_count
+    }
+
+    /// Assert AMM invariant k1 >= k0 (constant product conservation).
+    pub fn verify_amm_invariant(env: Env, k_before: u128, k_after: u128) -> bool {
+        if k_after < k_before {
+            panic_with_error!(&env, Error::InvariantViolated);
+        }
+        true
+    }
+
+    /// Assert lending pool solvency invariant (assets >= liabilities).
+    pub fn verify_lending_solvency(env: Env, total_assets: u128, total_liabilities: u128) -> bool {
+        if total_assets < total_liabilities {
+            panic_with_error!(&env, Error::InvariantViolated);
+        }
+        true
+    }
+
+    /// Record a property-based fuzz test run verifying protocol invariants.
+    pub fn record_fuzz_run(
+        env: Env,
+        tester: Address,
+        invariant_type: Symbol,
+        iterations: u32,
+        passed: bool,
+    ) {
+        tester.require_auth();
+
+        let record = FuzzInvariantRecord {
+            invariant_type: invariant_type.clone(),
+            iterations,
+            passed,
+            verified_at: env.ledger().timestamp(),
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::FuzzInvariant(invariant_type.clone()), &record);
+
+        env.events().publish(
+            (Symbol::new(&env, "fuzz_run"), invariant_type),
+            (tester, iterations, passed),
+        );
+    }
+
+    /// Retrieve recorded fuzz test run for an invariant.
+    pub fn get_fuzz_run(env: Env, invariant_type: Symbol) -> Option<FuzzInvariantRecord> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::FuzzInvariant(invariant_type))
     }
 }
 

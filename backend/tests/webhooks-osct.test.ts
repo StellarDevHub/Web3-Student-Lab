@@ -1,7 +1,7 @@
 import { describe, expect, it, jest, beforeEach, afterEach } from '@jest/globals';
 
-jest.mock('../src/services/webhooks/index.js', () => ({
-  ...jest.requireActual('../src/services/webhooks/index.js'),
+jest.mock('../src/services/webhooks/dispatcher.js', () => ({
+  ...jest.requireActual('../src/services/webhooks/dispatcher.js'),
   enqueueWebhookDeliveries: jest.fn(),
 }));
 
@@ -12,7 +12,7 @@ import {
   emitOsctIssueResolved,
   emitOsctContributionMilestone,
 } from '../src/services/webhooks/osct-emitter.js';
-import { enqueueWebhookDeliveries } from '../src/services/webhooks/index.js';
+import { enqueueWebhookDeliveries } from '../src/services/webhooks/dispatcher.js';
 
 describe('OSCT webhook emitter', () => {
   beforeEach(() => {

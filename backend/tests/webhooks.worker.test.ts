@@ -36,6 +36,7 @@ describe('webhook worker', () => {
           data: { certificateId: 'cert_1' },
         },
         metadata: { workspaceId: 'workspace_1' },
+        idempotencyKey: 'evt_3:https://example.com/webhook',
       },
     } as any;
 
@@ -62,6 +63,41 @@ describe('webhook worker', () => {
     );
   });
 
+  it('records delivered state in delivery history', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue(''),
+    });
+
+    const job = {
+      data: {
+        deliveryId: 'delivery_history_1',
+        destination: {
+          url: 'https://example.com/webhook',
+          secret: 'destination-secret',
+        },
+        event: {
+          id: 'evt_history',
+          type: 'lab.completed',
+          occurredAt: '2026-05-31T00:00:00.000Z',
+          source: 'lab-runner',
+          data: {},
+        },
+        idempotencyKey: 'evt_history:https://example.com/webhook',
+      },
+    } as any;
+
+    await deliverWebhook(job);
+
+    const { getDeliveryHistory } = await import('../src/services/webhooks/dispatcher.js');
+    const history = getDeliveryHistory();
+    const entry = history.find((h) => h.idempotencyKey === 'evt_history:https://example.com/webhook');
+    expect(entry).toBeDefined();
+    expect(entry!.state).toBe('delivered');
+    expect(entry!.deliveryId).toBe('delivery_history_1');
+  });
+
   it('throws a retryable error for transient failures', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: false,
@@ -73,7 +109,7 @@ describe('webhook worker', () => {
     const job = {
       data: {
         deliveryId: 'delivery_2',
-        destination: { url: 'https://example.com/webhook' },
+        destination: { url: 'https://example.com/webhook', secret: 'test-secret' },
         event: {
           id: 'evt_4',
           type: 'lab.completed',
@@ -81,6 +117,7 @@ describe('webhook worker', () => {
           source: 'lab-runner',
           data: {},
         },
+        idempotencyKey: 'evt_4:https://example.com/webhook',
       },
     } as any;
 
@@ -98,7 +135,7 @@ describe('webhook worker', () => {
     const job = {
       data: {
         deliveryId: 'delivery_3',
-        destination: { url: 'https://example.com/webhook' },
+        destination: { url: 'https://example.com/webhook', secret: 'test-secret' },
         event: {
           id: 'evt_5',
           type: 'lab.completed',
@@ -106,6 +143,7 @@ describe('webhook worker', () => {
           source: 'lab-runner',
           data: {},
         },
+        idempotencyKey: 'evt_5:https://example.com/webhook',
       },
     } as any;
 

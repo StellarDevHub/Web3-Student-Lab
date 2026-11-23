@@ -1,6 +1,6 @@
 'use client';
 
-import { SCPVisualizer } from '@/components/stellar-scp';
+import { QuorumSliceExplorer, SCPVisualizer } from '@/components/stellar-scp';
 
 export default function SCPPage() {
   return (
@@ -36,6 +36,12 @@ export default function SCPPage() {
         {/* Visualizer */}
         <div className="mb-8">
           <SCPVisualizer />
+
+          {/* Quorum slice explorer (Issue #1158): the trust graph itself, with
+              safety and liveness recomputed as the student cuts it. */}
+          <div className="mt-10">
+            <QuorumSliceExplorer />
+          </div>
         </div>
 
         {/* Info Section */}
@@ -50,6 +56,14 @@ export default function SCPPage() {
                   Validators broadcast their candidate values. Each validator collects nominations from its
                   quorum set and votes to confirm a composite candidate value that represents the set of all
                   proposed values.
+                </p>
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-100 mb-2">Network Partition Testing</h3>
+                <p>
+                  Split the validator network into isolated groups to observe how quorum slices
+                  determine whether consensus safety is preserved and whether liveness can be
+                  recovered once the partition heals.
                 </p>
               </div>
               <div>
@@ -86,6 +100,10 @@ export default function SCPPage() {
               <li className="flex gap-3">
                 <span className="text-red-400 font-bold">✗</span>
                 <span><strong>Click Node</strong> - Simulate validator failure</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="text-pink-400 font-bold">⛓</span>
+                <span><strong>Partition</strong> - Split network and test quorum safety</span>
               </li>
             </ul>
           </div>

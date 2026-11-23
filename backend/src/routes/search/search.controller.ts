@@ -32,8 +32,8 @@ export class SearchController {
       query: query as string,
       filters,
       sort: sort as string,
-      page: page ? parseInt(page as string) : undefined,
-      limit: limit ? parseInt(limit as string) : undefined,
+      page: page ? parseInt(page as string) : 1,
+      limit: limit ? parseInt(limit as string) : 10,
       cursor: cursor as string,
     };
   }

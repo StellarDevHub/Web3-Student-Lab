@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { TransactionService, Transaction } from './transaction.service.js';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 export const getTransactions = async (req: Request, res: Response) => {
   try {
@@ -19,7 +19,7 @@ export const createTransaction = async (req: Request, res: Response) => {
     }
 
     const newTx: Transaction = {
-      id: uuidv4(),
+      id: randomUUID(),
       sender,
       receiver,
       amount,

@@ -7,6 +7,26 @@ export const getWorkspaceId = (): string | undefined => {
   return workspaceContextStorage.getStore();
 };
 
+/**
+ * Trusted, tenant-agnostic execution (BE-005). Code running inside
+ * `runAsSystem` sets `app.bypass_rls = 'on'` on its transactions, so it can
+ * read and write across workspaces. Reserve it for workers and admin jobs.
+ */
+const systemContextStorage = new AsyncLocalStorage<boolean>();
+
+export const runAsSystem = <T>(fn: () => T): T => {
+  return workspaceContextStorage.exit(() => systemContextStorage.run(true, fn));
+};
+
+export const isSystemContext = (): boolean => {
+  return systemContextStorage.getStore() === true;
+};
+
+/** Run `fn` scoped to `workspaceId`, e.g. from a queue worker. */
+export const runWithWorkspace = <T>(workspaceId: string, fn: () => T): T => {
+  return systemContextStorage.exit(() => workspaceContextStorage.run(workspaceId, fn));
+};
+
 export const requireWorkspaceMiddleware = (
   req: Request,
   res: Response,

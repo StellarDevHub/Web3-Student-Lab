@@ -1,0 +1,11 @@
+# Workspace root for the off-chain Soroban indexer.
+# Contract crates stay in contracts/Cargo.toml so Soroban builds are unchanged.
+[workspace]
+resolver = "2"
+members = ["indexer"]
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+opt-level = 3

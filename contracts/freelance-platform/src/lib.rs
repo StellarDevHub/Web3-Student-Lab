@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
-    Env, Symbol, Vec,
+    BytesN, Env, Symbol, Vec,
 };
 
 #[contracterror]
@@ -20,6 +20,16 @@ pub enum FreelanceError {
     BudgetMismatch = 11,
     AlreadyAssigned = 12,
     NotApplied = 13,
+    AutoReleaseNotReady = 14,
+    NotArbiter = 15,
+    DisputeAlreadyResolved = 16,
+    BountyNotFound = 17,
+    BountyNotOpen = 18,
+    BountyExpired = 19,
+    BountyNotExpired = 20,
+    InvalidSplit = 21,
+    NoEvidenceSubmitted = 22,
+    BountyAlreadyCompleted = 23,
 }
 
 #[contracttype]
@@ -52,6 +62,8 @@ pub enum DataKey {
     Job(u64),
     Worker(Address),
     Applications(u64),
+    NextBountyId,
+    Bounty(u64),
 }
 
 #[contract]
@@ -394,8 +406,229 @@ impl FreelancePlatform {
     pub fn get_job(env: Env, job_id: u64) -> Option<Job> {
         env.storage().instance().get(&DataKey::Job(job_id))
     }
+
+    /// Worker submits a milestone along with cryptographically hashed deliverable.
+    pub fn submit_milestone_deliverable(
+        env: Env,
+        job_id: u64,
+        milestone_index: u32,
+        deliverable_hash: BytesN<32>,
+    ) {
+        Self::submit_milestone(env.clone(), job_id, milestone_index);
+        escrow::EscrowManager::record_submission(&env, job_id, milestone_index, deliverable_hash);
+    }
+
+    /// Automatically release funds to freelancer if client fails to review within 14 days.
+    pub fn auto_release_milestone(env: Env, job_id: u64, milestone_index: u32) {
+        let mut job: Job = env
+            .storage()
+            .instance()
+            .get(&DataKey::Job(job_id))
+            .ok_or_else(|| panic_with_error!(&env, FreelanceError::JobNotFound))
+            .unwrap();
+
+        let mut milestones = job.milestones;
+        let mut m = milestones
+            .get(milestone_index)
+            .ok_or_else(|| panic_with_error!(&env, FreelanceError::InvalidMilestone))
+            .unwrap();
+
+        if m.is_approved {
+            panic_with_error!(&env, FreelanceError::MilestoneAlreadyApproved);
+        }
+        if !m.is_completed {
+            panic_with_error!(&env, FreelanceError::MilestoneNotCompleted);
+        }
+        if m.is_disputed {
+            panic_with_error!(&env, FreelanceError::Unauthorized);
+        }
+
+        if !escrow::EscrowManager::is_eligible_for_auto_release(&env, job_id, milestone_index) {
+            panic_with_error!(&env, FreelanceError::AutoReleaseNotReady);
+        }
+
+        m.is_approved = true;
+        milestones.set(milestone_index, m.clone());
+        job.milestones = milestones;
+
+        let mut all_done = true;
+        for item in job.milestones.iter() {
+            if !item.is_approved {
+                all_done = false;
+                break;
+            }
+        }
+        if all_done {
+            job.status = symbol_short!("complete");
+        }
+
+        env.storage().instance().set(&DataKey::Job(job_id), &job);
+        escrow::EscrowManager::mark_released(&env, job_id, milestone_index);
+
+        let token: Address = env.storage().instance().get(&DataKey::Token).unwrap();
+        let token_client = soroban_sdk::token::Client::new(&env, &token);
+        token_client.transfer(&env.current_contract_address(), &job.freelancer, &m.amount);
+
+        env.events().publish(
+            (Symbol::new(&env, "auto_rel"), job.freelancer),
+            (job_id, milestone_index, m.amount),
+        );
+    }
+
+    /// Register a peer-elected student arbiter (admin only).
+    pub fn register_arbiter(env: Env, arbiter: Address) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or_else(|| panic_with_error!(&env, FreelanceError::NotInitialized))
+            .unwrap();
+        admin.require_auth();
+
+        arbitration::ArbitrationManager::add_arbiter(&env, arbiter);
+    }
+
+    /// Check if address is a registered student arbiter.
+    pub fn is_arbiter(env: Env, address: Address) -> bool {
+        arbitration::ArbitrationManager::is_arbiter(&env, &address)
+    }
+
+    /// Cast a binding arbitration vote on a disputed milestone.
+    pub fn cast_arbitration_vote(
+        env: Env,
+        job_id: u64,
+        milestone_index: u32,
+        arbiter: Address,
+        vote_for_freelancer: bool,
+    ) {
+        arbiter.require_auth();
+
+        if !Self::is_arbiter(env.clone(), arbiter.clone()) {
+            panic_with_error!(&env, FreelanceError::NotArbiter);
+        }
+
+        let mut job: Job = env
+            .storage()
+            .instance()
+            .get(&DataKey::Job(job_id))
+            .ok_or_else(|| panic_with_error!(&env, FreelanceError::JobNotFound))
+            .unwrap();
+
+        let mut milestones = job.milestones;
+        let mut m = milestones
+            .get(milestone_index)
+            .ok_or_else(|| panic_with_error!(&env, FreelanceError::InvalidMilestone))
+            .unwrap();
+
+        if !m.is_disputed {
+            panic_with_error!(&env, FreelanceError::NotDisputed);
+        }
+
+        let (_dispute, winner_opt) = arbitration::ArbitrationManager::cast_vote(
+            &env,
+            job_id,
+            milestone_index,
+            arbiter.clone(),
+            vote_for_freelancer,
+            job.client.clone(),
+            job.freelancer.clone(),
+            arbitration::DEFAULT_ARBITRATION_QUORUM,
+        );
+
+        if let Some(winner) = winner_opt {
+            let release_to_freelancer = winner == job.freelancer;
+            m.is_disputed = false;
+            m.is_approved = release_to_freelancer;
+            milestones.set(milestone_index, m.clone());
+            job.milestones = milestones;
+            job.status = symbol_short!("active");
+
+            env.storage().instance().set(&DataKey::Job(job_id), &job);
+            escrow::EscrowManager::mark_released(&env, job_id, milestone_index);
+
+            let token: Address = env.storage().instance().get(&DataKey::Token).unwrap();
+            let token_client = soroban_sdk::token::Client::new(&env, &token);
+            token_client.transfer(&env.current_contract_address(), &winner, &m.amount);
+
+            env.events().publish(
+                (Symbol::new(&env, "arb_ruling"), winner),
+                (job_id, milestone_index, m.amount),
+            );
+        }
+    }
+
+    /// Retrieve deliverable escrow record.
+    pub fn get_deliverable(
+        env: Env,
+        job_id: u64,
+        milestone_index: u32,
+    ) -> Option<escrow::DeliverableEscrow> {
+        escrow::EscrowManager::get_submission(&env, job_id, milestone_index)
+    }
+
+    /// Retrieve dispute record.
+    pub fn get_dispute(
+        env: Env,
+        job_id: u64,
+        milestone_index: u32,
+    ) -> Option<arbitration::DisputeRecord> {
+        arbitration::ArbitrationManager::get_dispute(&env, job_id, milestone_index)
+    }
+
+    /// Create a bounty board offering with locked escrow
+    pub fn create_bounty(
+        env: Env,
+        funder: Address,
+        title: Symbol,
+        amount: i128,
+        expiration: u64,
+    ) -> u64 {
+        bounty::create_bounty(&env, funder, title, amount, expiration)
+    }
+
+    /// Claim a bounty with proof evidence hash
+    pub fn claim_bounty(env: Env, claimant: Address, bounty_id: u64, evidence_hash: BytesN<32>) {
+        bounty::claim_bounty(&env, claimant, bounty_id, evidence_hash)
+    }
+
+    /// Claim a bounty collaboratively with multiple contributors and split bps
+    pub fn claim_bounty_collaborative(
+        env: Env,
+        submitter: Address,
+        bounty_id: u64,
+        claimants: Vec<Address>,
+        split_bps: Vec<u32>,
+        evidence_hash: BytesN<32>,
+    ) {
+        bounty::claim_bounty_collaborative(
+            &env,
+            submitter,
+            bounty_id,
+            claimants,
+            split_bps,
+            evidence_hash,
+        )
+    }
+
+    /// Funder verifies PR evidence and triggers release of funds (single or split)
+    pub fn verify_and_payout(env: Env, funder: Address, bounty_id: u64) {
+        bounty::verify_and_payout(&env, funder, bounty_id)
+    }
+
+    /// Funder claims 100% refund if bounty expired
+    pub fn claim_refund(env: Env, funder: Address, bounty_id: u64) {
+        bounty::claim_refund(&env, funder, bounty_id)
+    }
+
+    /// Query bounty details
+    pub fn get_bounty(env: Env, bounty_id: u64) -> Option<bounty::Bounty> {
+        bounty::get_bounty(&env, bounty_id)
+    }
 }
 
+pub mod arbitration;
+pub mod bounty;
+pub mod escrow;
 pub mod reputation_system;
 
 #[cfg(test)]

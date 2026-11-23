@@ -1,77 +1,116 @@
+/**
+ * logger.ts
+ *
+ * Structured Winston logger with AsyncLocalStorage-based trace-id propagation.
+ *
+ * Issue #981 — every log line carries a `traceId` field automatically because
+ * AsyncLocalStorage propagates across async boundaries (Promises, timers,
+ * callbacks) without any manual passing.
+ *
+ * Usage:
+ *   import logger, { traceContext } from './logger.js';
+ *
+ *   // Bind a traceId to a new async scope (done once in middleware):
+ *   traceContext.run({ traceId: 'abc-123' }, () => { ... });
+ *
+ *   // Read the current traceId anywhere downstream:
+ *   const { traceId } = traceContext.getStore() ?? {};
+ */
+
+import { AsyncLocalStorage } from 'async_hooks';
 import winston, { format } from 'winston';
-import { executionAsyncId } from 'async_hooks';
+import { redactSensitiveData, sanitizeString } from './logSanitizer.js';
+
+// ─── Async context store ────────────────────────────────────────────────────
+
+export interface TraceStore {
+  traceId: string;
+  /** Optional parent span for OpenTelemetry-compatible nesting */
+  parentSpanId?: string;
+}
+
+/**
+ * Singleton AsyncLocalStorage instance shared across the entire process.
+ * Any async operation (Promise, setTimeout, setImmediate, I/O callback, …)
+ * that is *started* inside a `traceContext.run(…)` block inherits the store.
+ */
+export const traceContext = new AsyncLocalStorage<TraceStore>();
+
+/**
+ * Retrieve the traceId from the current async context.
+ * Returns undefined when called outside a traced scope.
+ */
+export function getTraceId(): string | undefined {
+  return traceContext.getStore()?.traceId;
+}
+
+// ─── Backward-compatible helpers (kept for callsites that used the old API) ─
+
+let fallbackCorrelationId: string | undefined;
+
+export function setCorrelationId(id: string): void {
+  fallbackCorrelationId = id;
+}
+
+export function getCorrelationId(): string | undefined {
+  return getTraceId() ?? fallbackCorrelationId;
+}
+
+export function clearCorrelationId(): void {
+  fallbackCorrelationId = undefined;
+}
+
+// ─── Winston format that injects traceId into every log record ──────────────
 
 const { combine, timestamp, printf, colorize, errors, json, metadata } = format;
 
-/**
- * Correlation ID Context
- * Stores the current correlation ID for async context tracking
- */
-const correlationIdContext = new Map<string, string>();
+const traceIdFormat = format((info) => {
+  const id = getTraceId();
+  if (id) {
+    info.traceId = id;
+  }
+  return info;
+})();
 
-/**
- * Set the correlation ID for the current context
- * @param correlationId - The correlation ID to set
- */
-export function setCorrelationId(correlationId: string): void {
-  const asyncId = String(executionAsyncId());
-  correlationIdContext.set(asyncId, correlationId);
-}
-
-/**
- * Get the correlation ID for the current context
- * @returns The correlation ID or undefined if not set
- */
-export function getCorrelationId(): string | undefined {
-  const asyncId = String(executionAsyncId());
-  return correlationIdContext.get(asyncId);
-}
-
-/**
- * Clear the correlation ID for the current context
- */
-export function clearCorrelationId(): void {
-  const asyncId = String(executionAsyncId());
-  correlationIdContext.delete(asyncId);
-}
-
-/**
- * Custom format that adds correlation ID to log entries
- */
-const correlationIdFormat = format((info) => {
-  const correlationId = getCorrelationId();
-  if (correlationId) {
-    info.correlationId = correlationId;
+const sanitizeFormat = format((info) => {
+  for (const key of Object.keys(info)) {
+    // Keep structural fields untouched; sanitize everything else — including
+    // `message` and `stack` — so secrets/PII never reach log output (#1425).
+    if (['level', 'timestamp', 'traceId', 'symbol'].includes(key)) {
+      continue;
+    }
+    const value = info[key];
+    info[key] = typeof value === 'string' ? sanitizeString(value) : redactSensitiveData(value);
   }
   return info;
 })();
 
 /**
- * Console log format for development
- * Human-readable with colors and correlation ID
+ * Human-readable console format used in development.
  */
-const consoleLogFormat = printf(({ level, message, timestamp, correlationId, stack, ...metadata }) => {
-  const correlationPrefix = correlationId ? `[${correlationId}] ` : '';
-  const metaStr = Object.keys(metadata).length > 0 ? ` ${JSON.stringify(metadata)}` : '';
-  return `${timestamp} ${correlationPrefix}${level}: ${stack || message}${metaStr}`;
+const consoleLogFormat = printf(({ level, message, timestamp, traceId, stack, ...meta }) => {
+  const prefix = traceId ? `[${traceId}] ` : '';
+  const sanitizedMeta = redactSensitiveData(meta);
+  const metaStr = sanitizedMeta && typeof sanitizedMeta === 'object' && Object.keys(sanitizedMeta as object).length > 0 ? ` ${JSON.stringify(sanitizedMeta)}` : '';
+  const text = sanitizeString(String(stack || message || ''));
+  return `${timestamp} ${prefix}${level}: ${text}${metaStr}`;
 });
 
 /**
- * Structured JSON log format for production
- * Machine-readable with all metadata
+ * Machine-readable JSON format for production / log aggregation.
+ * Includes traceId automatically via traceIdFormat.
  */
 const structuredLogFormat = combine(
   timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
   errors({ stack: true }),
-  correlationIdFormat,
-  metadata({ fillExcept: ['message', 'level', 'timestamp', 'correlationId'] }),
+  traceIdFormat,
+  sanitizeFormat,
+  metadata({ fillExcept: ['message', 'level', 'timestamp', 'traceId'] }),
   json()
 );
 
-/**
- * Main application logger
- * Provides structured logging with correlation IDs for distributed tracing
- */
+// ─── Main logger ─────────────────────────────────────────────────────────────
+
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: structuredLogFormat,
@@ -80,37 +119,33 @@ const logger = winston.createLogger({
     environment: process.env.NODE_ENV || 'development',
   },
   transports: [
-    // Console transport with human-readable format for development
     new winston.transports.Console({
       format: combine(
         colorize(),
         timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
         errors({ stack: true }),
-        correlationIdFormat,
+        traceIdFormat,
         consoleLogFormat
       ),
     }),
-    // File transport for error logs
     new winston.transports.File({
       filename: 'logs/error.log',
       level: 'error',
-      maxsize: 5242880, // 5MB
+      maxsize: 5242880,
       maxFiles: 5,
       format: structuredLogFormat,
     }),
-    // File transport for all logs
     new winston.transports.File({
       filename: 'logs/combined.log',
-      maxsize: 5242880, // 5MB
+      maxsize: 5242880,
       maxFiles: 5,
       format: structuredLogFormat,
     }),
   ],
-  // Handle exceptions and rejections
   exceptionHandlers: [
     new winston.transports.File({
       filename: 'logs/exceptions.log',
-      maxsize: 5242880, // 5MB
+      maxsize: 5242880,
       maxFiles: 5,
     }),
     new winston.transports.Console({
@@ -118,6 +153,7 @@ const logger = winston.createLogger({
         colorize(),
         timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
         errors({ stack: true }),
+        sanitizeFormat,
         consoleLogFormat
       ),
     }),
@@ -125,7 +161,7 @@ const logger = winston.createLogger({
   rejectionHandlers: [
     new winston.transports.File({
       filename: 'logs/rejections.log',
-      maxsize: 5242880, // 5MB
+      maxsize: 5242880,
       maxFiles: 5,
     }),
     new winston.transports.Console({
@@ -133,22 +169,24 @@ const logger = winston.createLogger({
         colorize(),
         timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
         errors({ stack: true }),
+        sanitizeFormat,
         consoleLogFormat
       ),
     }),
   ],
 });
 
+// ─── Audit logger (immutable, for compliance) ────────────────────────────────
+
 /**
- * Immutable file logger specifically for audit events
- * Uses JSON format for structured, easily parseable logs
- * These logs are cryptographically hashed for integrity verification
+ * Append-only audit logger. Entries include traceId for request correlation.
  */
 export const auditLogger = winston.createLogger({
   level: 'info',
   format: combine(
     timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
-    correlationIdFormat,
+    traceIdFormat,
+    sanitizeFormat,
     json()
   ),
   defaultMeta: {
@@ -158,40 +196,40 @@ export const auditLogger = winston.createLogger({
   transports: [
     new winston.transports.File({
       filename: 'logs/audit-immutable.log',
-      maxsize: 5242880, // 5MB
-      maxFiles: 10, // Keep more audit logs for compliance
-      // By default, Winston's file transport appends to the file,
-      // creating an immutable record of events over time.
+      maxsize: 5242880,
+      maxFiles: 10,
     }),
   ],
 });
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 /**
- * Child logger factory
- * Creates a logger with additional metadata bound to it
- * @param metadata - Additional metadata to include in all log entries
- * @returns A child logger with bound metadata
+ * Create a child logger with static metadata bound permanently.
+ * The traceId is still inherited from the async context at log time.
  */
-export function createChildLogger(metadata: Record<string, unknown>): winston.Logger {
-  return logger.child(metadata);
+export function createChildLogger(meta: Record<string, unknown>): winston.Logger {
+  return logger.child(meta);
 }
 
 /**
- * Log with correlation ID
- * Helper function to log with a specific correlation ID
- * @param correlationId - The correlation ID to use for this log entry
- * @param level - Log level (info, warn, error, etc.)
- * @param message - Log message
- * @param meta - Additional metadata
+ * Log with an explicit traceId override (useful in job workers that receive
+ * the traceId as job metadata rather than from the current async context).
  */
-export function logWithCorrelationId(
-  correlationId: string,
+export function logWithTraceId(
+  traceId: string,
   level: string,
   message: string,
   meta?: Record<string, unknown>
 ): void {
-  const childLogger = logger.child({ correlationId });
-  (childLogger as any)[level](message, meta || {});
+  const child = logger.child({ traceId });
+  const logFn = (child as unknown as Record<string, (message: string, meta?: Record<string, unknown>) => void>)[level];
+  if (logFn) {
+    logFn(message, meta ?? {});
+  }
 }
+
+/** @deprecated Use logWithTraceId */
+export const logWithCorrelationId = logWithTraceId;
 
 export default logger;

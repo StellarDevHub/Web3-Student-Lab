@@ -1,8 +1,81 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
+    contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error, Address,
     Env, Symbol, Vec,
 };
+
+mod dispute;
+mod escrow;
+
+// ---------------------------------------------------------------------------
+// Typed event schemas — SC-HARD-02 migration
+// ---------------------------------------------------------------------------
+
+/// Emitted when a new developer profile is registered.
+#[contractevent]
+pub struct DeveloperRegistered {
+    pub developer: Address,
+}
+
+/// Emitted when a new team is created.
+#[contractevent]
+pub struct TeamCreated {
+    pub creator: Address,
+    pub team_id: u64,
+    pub name: Symbol,
+}
+
+/// Emitted when a developer submits a join request.
+#[contractevent]
+pub struct JoinRequested {
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a join request is accepted.
+#[contractevent]
+pub struct JoinAccepted {
+    pub creator: Address,
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a developer is invited to a team.
+#[contractevent]
+pub struct DeveloperInvited {
+    pub creator: Address,
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a developer accepts a team invitation.
+#[contractevent]
+pub struct InvitationAccepted {
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a developer leaves a team.
+#[contractevent]
+pub struct TeamLeft {
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a member is removed from a team.
+#[contractevent]
+pub struct MemberRemoved {
+    pub creator: Address,
+    pub developer: Address,
+    pub team_id: u64,
+}
+
+/// Emitted when a team is closed.
+#[contractevent]
+pub struct TeamClosed {
+    pub creator: Address,
+    pub team_id: u64,
+}
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -132,7 +205,7 @@ impl HackathonTeamMatching {
             .set(&DataKey::AllDevelopers, &all_devs);
 
         env.events()
-            .publish((symbol_short!("dev_reg"), developer), ());
+            .publish_event(&DeveloperRegistered { developer });
     }
 
     /// Retrieve a developer profile
@@ -200,8 +273,11 @@ impl HackathonTeamMatching {
             .persistent()
             .set(&DataKey::Developer(creator.clone()), &creator_dev);
 
-        env.events()
-            .publish((symbol_short!("team_new"), creator), (team_id, name));
+        env.events().publish_event(&TeamCreated {
+            creator,
+            team_id,
+            name,
+        });
         team_id
     }
 
@@ -260,7 +336,7 @@ impl HackathonTeamMatching {
         }
 
         env.events()
-            .publish((symbol_short!("join_req"), developer), team_id);
+            .publish_event(&JoinRequested { developer, team_id });
     }
 
     /// Accept a developer's join request (team creator only)
@@ -328,8 +404,11 @@ impl HackathonTeamMatching {
             .persistent()
             .set(&DataKey::Team(team_id), &team);
 
-        env.events()
-            .publish((symbol_short!("join_acc"), creator), (developer, team_id));
+        env.events().publish_event(&JoinAccepted {
+            creator,
+            developer,
+            team_id,
+        });
     }
 
     /// Invite a developer to join the team (team creator only)
@@ -384,8 +463,11 @@ impl HackathonTeamMatching {
                 .set(&DataKey::Invitations(developer.clone()), &invites);
         }
 
-        env.events()
-            .publish((symbol_short!("invite_d"), creator), (developer, team_id));
+        env.events().publish_event(&DeveloperInvited {
+            creator,
+            developer,
+            team_id,
+        });
     }
 
     /// Accept a team's invitation (developer only)
@@ -451,7 +533,7 @@ impl HackathonTeamMatching {
             .set(&DataKey::Team(team_id), &team);
 
         env.events()
-            .publish((symbol_short!("invite_a"), developer), team_id);
+            .publish_event(&InvitationAccepted { developer, team_id });
     }
 
     /// Leave the current team (non-creator member only)
@@ -504,8 +586,7 @@ impl HackathonTeamMatching {
             .persistent()
             .set(&DataKey::Team(team_id), &team);
 
-        env.events()
-            .publish((symbol_short!("team_lv"), developer), team_id);
+        env.events().publish_event(&TeamLeft { developer, team_id });
     }
 
     /// Remove a member from the team (team creator only)
@@ -560,8 +641,11 @@ impl HackathonTeamMatching {
             .persistent()
             .set(&DataKey::Team(team_id), &team);
 
-        env.events()
-            .publish((symbol_short!("team_rm"), creator), (developer, team_id));
+        env.events().publish_event(&MemberRemoved {
+            creator,
+            developer,
+            team_id,
+        });
     }
 
     /// Close the team, finalizing members (team creator only)
@@ -584,8 +668,7 @@ impl HackathonTeamMatching {
             .persistent()
             .set(&DataKey::Team(team_id), &team);
 
-        env.events()
-            .publish((symbol_short!("team_cls"), creator), team_id);
+        env.events().publish_event(&TeamClosed { creator, team_id });
     }
 
     /// Find matching teams for a developer
@@ -718,6 +801,220 @@ impl HackathonTeamMatching {
         } else {
             false
         }
+    }
+
+    /// Deposit milestone funds for a team, paid to its creator after approval.
+    /// The sponsor appoints an independent arbiter multisig.
+    pub fn create_escrow(
+        env: Env,
+        sponsor: Address,
+        team_id: u64,
+        token: Address,
+        amounts: Vec<i128>,
+        expires_at: u64,
+        arbiters: Vec<Address>,
+        arbiter_threshold: u32,
+    ) -> u64 {
+        sponsor.require_auth();
+
+        let team = env
+            .storage()
+            .persistent()
+            .get::<_, Team>(&DataKey::Team(team_id))
+            .unwrap_or_else(|| panic_with_error!(&env, escrow::EscrowError::TeamNotFound));
+
+        let now = env.ledger().timestamp();
+        if expires_at <= now {
+            panic_with_error!(&env, escrow::EscrowError::InvalidExpiration);
+        }
+        if amounts.is_empty() || team.members.is_empty() {
+            panic_with_error!(&env, escrow::EscrowError::InvalidMilestones);
+        }
+        if arbiters.is_empty() || arbiter_threshold == 0 || arbiter_threshold > arbiters.len() {
+            panic_with_error!(&env, escrow::EscrowError::InvalidArbiters);
+        }
+        for i in 0..arbiters.len() {
+            let arbiter = arbiters.get(i).unwrap();
+            if arbiter == sponsor || team.members.contains(&arbiter) {
+                panic_with_error!(&env, escrow::EscrowError::InvalidArbiters);
+            }
+            for j in 0..i {
+                if arbiters.get(j).unwrap() == arbiter {
+                    panic_with_error!(&env, escrow::EscrowError::InvalidArbiters);
+                }
+            }
+        }
+
+        let mut total = 0i128;
+        let mut milestones = Vec::new(&env);
+        for amount in amounts.iter() {
+            if amount <= 0 {
+                panic_with_error!(&env, escrow::EscrowError::InvalidMilestones);
+            }
+            total = total
+                .checked_add(amount)
+                .unwrap_or_else(|| panic_with_error!(&env, escrow::EscrowError::AmountOverflow));
+            milestones.push_back(escrow::Milestone {
+                amount,
+                status: escrow::MilestoneStatus::Pending,
+                sponsor_voted: false,
+                sponsor_approved: false,
+                team_approvals: Vec::new(&env),
+                team_rejections: Vec::new(&env),
+                arbiter_release_votes: Vec::new(&env),
+                arbiter_refund_votes: Vec::new(&env),
+            });
+        }
+
+        let contract_address = env.current_contract_address();
+        soroban_sdk::token::Client::new(&env, &token).transfer(&sponsor, &contract_address, &total);
+
+        let id: u64 = env
+            .storage()
+            .instance()
+            .get(&escrow::EscrowKey::NextId)
+            .unwrap_or(1);
+        let next_id = id
+            .checked_add(1)
+            .unwrap_or_else(|| panic_with_error!(&env, escrow::EscrowError::AmountOverflow));
+        env.storage()
+            .instance()
+            .set(&escrow::EscrowKey::NextId, &next_id);
+        let record = escrow::HackathonEscrow {
+            id,
+            sponsor: sponsor.clone(),
+            team_id,
+            team_recipient: team.creator,
+            team_members: team.members,
+            token,
+            milestones,
+            expires_at,
+            arbiters,
+            arbiter_threshold,
+        };
+        escrow::store(&env, &record);
+        env.events().publish(
+            (Symbol::new(&env, "escrow_created"), id),
+            (sponsor, team_id, total),
+        );
+        id
+    }
+
+    /// Retrieve an escrow and its milestone states.
+    pub fn get_escrow(env: Env, escrow_id: u64) -> Option<escrow::HackathonEscrow> {
+        escrow::load(&env, escrow_id)
+    }
+
+    /// Vote on a milestone. Any rejection opens a dispute; unanimous approvals release funds.
+    pub fn vote_milestone(
+        env: Env,
+        voter: Address,
+        escrow_id: u64,
+        milestone_index: u32,
+        approve: bool,
+    ) {
+        voter.require_auth();
+        let mut record = escrow::load_or_fail(&env, escrow_id);
+        if env.ledger().timestamp() >= record.expires_at {
+            panic_with_error!(&env, escrow::EscrowError::EscrowExpired);
+        }
+        let mut milestone = escrow::get_milestone(&env, &record, milestone_index);
+        if milestone.status != escrow::MilestoneStatus::Pending {
+            panic_with_error!(&env, escrow::EscrowError::MilestoneNotPending);
+        }
+
+        if voter == record.sponsor {
+            if milestone.sponsor_voted {
+                panic_with_error!(&env, escrow::EscrowError::AlreadyVoted);
+            }
+            milestone.sponsor_voted = true;
+            milestone.sponsor_approved = approve;
+        } else if record.team_members.contains(&voter) {
+            if milestone.team_approvals.contains(&voter)
+                || milestone.team_rejections.contains(&voter)
+            {
+                panic_with_error!(&env, escrow::EscrowError::AlreadyVoted);
+            }
+            if approve {
+                milestone.team_approvals.push_back(voter);
+            } else {
+                milestone.team_rejections.push_back(voter);
+            }
+        } else {
+            panic_with_error!(&env, escrow::EscrowError::NotParticipant);
+        }
+
+        if !approve {
+            milestone.status = escrow::MilestoneStatus::Disputed;
+        } else if milestone.sponsor_approved
+            && milestone.team_approvals.len() == record.team_members.len()
+        {
+            escrow::release_milestone(&env, &record, &mut milestone);
+        }
+        escrow::set_milestone(&mut record, milestone_index, milestone);
+        escrow::store(&env, &record);
+    }
+
+    /// Cast a multisig arbiter decision on a disputed milestone.
+    pub fn resolve_dispute(
+        env: Env,
+        arbiter: Address,
+        escrow_id: u64,
+        milestone_index: u32,
+        release_to_team: bool,
+    ) {
+        arbiter.require_auth();
+        let mut record = escrow::load_or_fail(&env, escrow_id);
+        if env.ledger().timestamp() >= record.expires_at {
+            panic_with_error!(&env, escrow::EscrowError::EscrowExpired);
+        }
+        let mut milestone = escrow::get_milestone(&env, &record, milestone_index);
+        if milestone.status != escrow::MilestoneStatus::Disputed {
+            panic_with_error!(&env, escrow::EscrowError::NotDisputed);
+        }
+        let resolved = dispute::cast_vote(&env, &record, &mut milestone, &arbiter, release_to_team);
+        if resolved {
+            if release_to_team {
+                escrow::release_milestone(&env, &record, &mut milestone);
+            } else {
+                escrow::refund_milestone(&env, &record, &mut milestone);
+            }
+        }
+        escrow::set_milestone(&mut record, milestone_index, milestone);
+        escrow::store(&env, &record);
+    }
+
+    /// Refund all pending or disputed milestones after the hackathon expiration.
+    pub fn refund_expired(env: Env, escrow_id: u64) -> i128 {
+        let mut record = escrow::load_or_fail(&env, escrow_id);
+        if env.ledger().timestamp() < record.expires_at {
+            panic_with_error!(&env, escrow::EscrowError::NotExpired);
+        }
+
+        let mut refund_amount = 0i128;
+        for index in 0..record.milestones.len() {
+            let mut milestone = record.milestones.get(index).unwrap();
+            if milestone.status == escrow::MilestoneStatus::Pending
+                || milestone.status == escrow::MilestoneStatus::Disputed
+            {
+                refund_amount = refund_amount
+                    .checked_add(milestone.amount)
+                    .unwrap_or_else(|| {
+                        panic_with_error!(&env, escrow::EscrowError::AmountOverflow)
+                    });
+                milestone.status = escrow::MilestoneStatus::Refunded;
+                record.milestones.set(index, milestone);
+            }
+        }
+        if refund_amount > 0 {
+            soroban_sdk::token::Client::new(&env, &record.token).transfer(
+                &env.current_contract_address(),
+                &record.sponsor,
+                &refund_amount,
+            );
+        }
+        escrow::store(&env, &record);
+        refund_amount
     }
 }
 

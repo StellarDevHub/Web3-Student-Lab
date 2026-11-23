@@ -31,7 +31,7 @@ import MultiSigWalletPanel from './MultiSigWalletPanel';
  */
 export default function IdeaGeneratorPanel() {
   const [filters, setFilters] = useState<IdeaFilters>(DEFAULT_FILTERS);
-  const { idea, isGenerating, error, isFallback, generate } = useIdeaGenerator();
+  const { idea, isGenerating, error, isFallback, fallbackMessage, generate } = useIdeaGenerator();
   const [showVesting, setShowVesting] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -153,12 +153,17 @@ export default function IdeaGeneratorPanel() {
                 {isFallback && (
                   <span
                     className="text-[10px] font-bold tracking-widest text-yellow-500 uppercase"
-                    title="AI service unavailable — generated from local templates"
+                    title={fallbackMessage ?? 'AI service unavailable — generated from local templates'}
                   >
                     Offline template
                   </span>
                 )}
               </div>
+              {isFallback && fallbackMessage && (
+                <p role="status" className="mb-4 text-xs font-mono text-yellow-500">
+                  {fallbackMessage}
+                </p>
+              )}
               <h2 className="text-foreground mb-3 text-2xl font-black tracking-tight uppercase">
                 {idea.title}
               </h2>

@@ -2,7 +2,7 @@
 
 This document serves as the official, unified tracking log for the recent infrastructure improvements, API stability fixes, frontend alignments, and smart contract deployments achieved across the `Web3-Student-Lab` ecosystem.
 
-## 🚀 Backend Infrastructure & API Fixes
+## 🚀Backend Infrastructure & API Fixes
 
 1. **Application Initialization & Connectivity**
    - **Environment Variable Priority**: Resolved a critical race condition causing internal 500 server errors on boot. We reordered the import sequence in `src/index.ts` so that `dotenv` explicitly executes *before* `PrismaClient` and other essential services are instantiated.
@@ -19,7 +19,7 @@ This document serves as the official, unified tracking log for the recent infras
 
 1. **Environment Targeting**
    - Updated `.env.local` to securely target the local backend development server (`http://localhost:8080/api/v1`) instead of the production Render environment to ensure accurate local testing.
-   
+
 2. **Platform Decoupling**
    - Removed Vercel-specific configuration (`vercel.json`) to standardize the local and CI build processes across platforms.
 

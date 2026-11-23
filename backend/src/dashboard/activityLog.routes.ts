@@ -3,7 +3,7 @@ import { authenticate } from '../auth/auth.middleware.js';
 import logger from '../utils/logger.js';
 import { getUserActivityLog, recordActivity } from './activityLog.service.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @route   GET /api/v1/dashboard/activity-log

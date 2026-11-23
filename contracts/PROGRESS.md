@@ -32,3 +32,9 @@ We successfully built and deployed all 7 of the functional, standalone workspace
 ## ⏭️ Next Steps
 1. **Frontend Integration**: Export these Contract IDs into the frontend's environment variables (`.env.local`) and map them to their corresponding `soroban-client` invocation hooks.
 2. **Educational Repair**: Incrementally audit and resolve the missing dependencies and Rust compiler errors residing in the remaining 70+ tutorial modules in `src/*.rs`.
+
+## Workspace membership
+
+All buildable contract crates under `contracts/` are listed in the Cargo workspace (`contracts/Cargo.toml`).
+See [`docs/contracts/WORKSPACE.md`](../docs/contracts/WORKSPACE.md) for selection criteria, exclusions
+(e.g. incomplete `did_registry/`), and how CI validates members with `cargo check --workspace`.

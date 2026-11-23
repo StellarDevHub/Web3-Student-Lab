@@ -1,616 +1,119 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
+  Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
+import {
+  BuybackDashboardData, calculateBuybackAggregates, fetchBuybackDashboard,
+  formatAmount, formatCurrency, formatDate,
+} from '@/lib/buyback-data';
 
-interface BuybackRecord {
-  timestamp: number;
-  purchaseAmount: number;
-  tokensPurchased: number;
-  pricePerToken: number;
-  transactionId: string;
-}
-
-interface BuybackStats {
-  totalSpent: number;
-  totalTokensBought: number;
-  buybackCount: number;
-  treasuryBalance: number;
-  averagePrice: number;
-  lastBuybackTime: number;
-}
-
-interface BuybackConfig {
-  revenuePercentage: number;
-  frequency: number;
-  minBuybackAmount: number;
-  maxBuybackAmount: number;
-  enabled: boolean;
-}
-
-interface BuybackSupplyData {
-  timestamp: number;
-  supply: number;
-  burned: number;
-  reductionPercentage: number;
-}
+type Tab = 'overview' | 'history' | 'supply';
 
 export default function BuybackDashboard() {
-  const [buybackRecords, setBuybackRecords] = useState<BuybackRecord[]>([]);
-  const [buybackStats, setBuybackStats] = useState<BuybackStats>({
-    totalSpent: 0,
-    totalTokensBought: 0,
-    buybackCount: 0,
-    treasuryBalance: 0,
-    averagePrice: 0,
-    lastBuybackTime: 0,
-  });
-  const [buybackConfig, setBuybackConfig] = useState<BuybackConfig>({
-    revenuePercentage: 0,
-    frequency: 0,
-    minBuybackAmount: 0,
-    maxBuybackAmount: 0,
-    enabled: false,
-  });
-  const [supplyData, setSupplyData] = useState<BuybackSupplyData[]>([]);
+  const [data, setData] = useState<BuybackDashboardData | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'supply'>('overview');
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
 
-  useEffect(() => {
-    const fetchBuybackData = async () => {
-      try {
-        setLoading(true);
-        // TODO: Replace with actual API calls to fetch buyback data
-        // For now, we'll use mock data for demonstration
-
-        // Mock buyback records
-        const mockRecords: BuybackRecord[] = [
-          {
-            timestamp: Date.now() - 86400000,
-            purchaseAmount: 50000,
-            tokensPurchased: 1000,
-            pricePerToken: 50,
-            transactionId: '0x1a2b3c4d5e6f7g8h9i0j',
-          },
-          {
-            timestamp: Date.now() - 172800000,
-            purchaseAmount: 45000,
-            tokensPurchased: 1050,
-            pricePerToken: 42.86,
-            transactionId: '0x2b3c4d5e6f7g8h9i0j1k',
-          },
-          {
-            timestamp: Date.now() - 259200000,
-            purchaseAmount: 55000,
-            tokensPurchased: 950,
-            pricePerToken: 57.89,
-            transactionId: '0x3c4d5e6f7g8h9i0j1k2l',
-          },
-        ];
-
-        const totalSpent = mockRecords.reduce((sum, r) => sum + r.purchaseAmount, 0);
-        const totalTokensBought = mockRecords.reduce((sum, r) => sum + r.tokensPurchased, 0);
-
-        setBuybackRecords(mockRecords);
-        setBuybackStats({
-          totalSpent,
-          totalTokensBought,
-          buybackCount: mockRecords.length,
-          treasuryBalance: 150000,
-          averagePrice: totalSpent / totalTokensBought,
-          lastBuybackTime: mockRecords[0].timestamp,
-        });
-
-        setBuybackConfig({
-          revenuePercentage: 15,
-          frequency: 86400,
-          minBuybackAmount: 10000,
-          maxBuybackAmount: 100000,
-          enabled: true,
-        });
-
-        // Mock supply reduction data
-        const mockSupplyData: BuybackSupplyData[] = [
-          {
-            timestamp: Date.now() - 259200000,
-            supply: 10000000,
-            burned: 0,
-            reductionPercentage: 0,
-          },
-          {
-            timestamp: Date.now() - 172800000,
-            supply: 9998950,
-            burned: 1050,
-            reductionPercentage: 0.01,
-          },
-          {
-            timestamp: Date.now() - 86400000,
-            supply: 9997950,
-            burned: 2050,
-            reductionPercentage: 0.02,
-          },
-          {
-            timestamp: Date.now(),
-            supply: 9997000,
-            burned: 3000,
-            reductionPercentage: 0.03,
-          },
-        ];
-
-        setSupplyData(mockSupplyData);
-      } catch (error) {
-        console.error('Failed to fetch buyback data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchBuybackData();
+  const load = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
+    setError(null);
+    try {
+      setData(await fetchBuybackDashboard(signal));
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === 'AbortError') return;
+      setError(caught instanceof Error ? caught.message : 'Could not load buyback data.');
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-black">
-        <div className="text-lg text-white">Loading Buyback Dashboard...</div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
+
+  if (loading) return <DashboardMessage title="Loading buyback data…" />;
+  if (error) return <DashboardMessage title="Buyback data is unavailable" detail={error} action={<RetryButton onClick={() => void load()} />} />;
+  if (!data) return null;
+
+  const aggregates = calculateBuybackAggregates(data.records);
+  const latestSupply = data.supplyHistory.at(-1);
+  const totalBurned = latestSupply?.burned ?? 0;
+  const currentSupply = latestSupply?.supply ?? data.initialSupply;
+  const reductionPercentage = data.initialSupply === 0 ? 0 : (totalBurned / data.initialSupply) * 100;
+  const pieData = [
+    { name: 'Current Supply', value: currentSupply },
+    { name: 'Burned', value: totalBurned },
+  ];
+  const hasRecords = data.records.length > 0;
 
   return (
     <div className="min-h-screen bg-black p-8 text-white">
       <div className="mx-auto max-w-7xl">
-        {/* Header */}
-        <div className="mb-8">
+        <header className="mb-8">
           <h1 className="mb-2 text-4xl font-bold">Token Buyback Program</h1>
-          <p className="text-gray-400">
-            Automated token buyback and burn mechanism for deflationary tokenomics
-          </p>
+          <p className="text-gray-400">On-chain buyback and burn activity, sourced from the program indexer.</p>
+        </header>
+
+        <div className="mb-6 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm border border-gray-600 bg-gray-900">
+          <span className={`h-2 w-2 rounded-full ${data.config.enabled ? 'bg-green-500' : 'bg-red-500'}`} />
+          <span className={data.config.enabled ? 'text-green-400' : 'text-red-400'}>{data.config.enabled ? 'Active' : 'Inactive'}</span>
+          <button className="ml-3 text-blue-400 hover:underline" onClick={() => void load()}>Refresh</button>
         </div>
 
-        {/* Status Badge */}
-        <div className="mb-6">
-          <div
-            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 ${
-              buybackConfig.enabled
-                ? 'border border-green-500/30 bg-green-900/30 text-green-400'
-                : 'border border-red-500/30 bg-red-900/30 text-red-400'
-            }`}
-          >
-            <div
-              className={`h-2 w-2 rounded-full ${
-                buybackConfig.enabled ? 'bg-green-500' : 'bg-red-500'
-              }`}
-            />
-            <span>{buybackConfig.enabled ? 'Active' : 'Inactive'}</span>
-          </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="mb-8 flex gap-4 border-b border-gray-700">
-          {['overview', 'history', 'supply'].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab as any)}
-              className={`px-2 pb-4 font-semibold transition-colors ${
-                activeTab === tab
-                  ? 'border-b-2 border-blue-500 text-blue-400'
-                  : 'text-gray-400 hover:text-gray-300'
-              }`}
-            >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+        <nav className="mb-8 flex gap-4 border-b border-gray-700" aria-label="Buyback dashboard sections">
+          {(['overview', 'history', 'supply'] as Tab[]).map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-2 pb-4 font-semibold capitalize ${activeTab === tab ? 'border-b-2 border-blue-500 text-blue-400' : 'text-gray-400 hover:text-gray-300'}`}>
+              {tab}
             </button>
           ))}
-        </div>
+        </nav>
 
-        {/* Overview Tab */}
-        {activeTab === 'overview' && (
-          <div className="space-y-8">
-            {/* Key Metrics */}
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-              <MetricCard
-                label="Total Spent"
-                value={`$${buybackStats.totalSpent.toLocaleString()}`}
-                subtext="Purchase amount"
-              />
-              <MetricCard
-                label="Tokens Purchased"
-                value={buybackStats.totalTokensBought.toLocaleString()}
-                subtext="Total buyback"
-              />
-              <MetricCard
-                label="Average Price"
-                value={`$${buybackStats.averagePrice.toFixed(2)}`}
-                subtext="Per token"
-              />
-              <MetricCard
-                label="Treasury Balance"
-                value={`$${buybackStats.treasuryBalance.toLocaleString()}`}
-                subtext="Available for buyback"
-              />
-            </div>
-
-            {/* Configuration & Statistics */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              {/* Configuration */}
-              <div className="rounded-lg border border-gray-700/50 bg-gray-900/50 p-6">
-                <h2 className="mb-6 text-xl font-bold">Configuration</h2>
-                <div className="space-y-4">
-                  <ConfigRow
-                    label="Revenue Allocation"
-                    value={`${buybackConfig.revenuePercentage}%`}
-                  />
-                  <ConfigRow
-                    label="Buyback Frequency"
-                    value={`${(buybackConfig.frequency / 3600).toFixed(0)} hours`}
-                  />
-                  <ConfigRow
-                    label="Min Buyback Amount"
-                    value={`$${buybackConfig.minBuybackAmount.toLocaleString()}`}
-                  />
-                  <ConfigRow
-                    label="Max Buyback Amount"
-                    value={`$${buybackConfig.maxBuybackAmount.toLocaleString()}`}
-                  />
-                  <ConfigRow label="Total Buybacks" value={buybackStats.buybackCount.toString()} />
-                </div>
-              </div>
-
-              {/* Statistics */}
-              <div className="rounded-lg border border-gray-700/50 bg-gray-900/50 p-6">
-                <h2 className="mb-6 text-xl font-bold">Statistics</h2>
-                <div className="space-y-4">
-                  <StatRow
-                    label="Total Amount Spent"
-                    value={`$${buybackStats.totalSpent.toLocaleString()}`}
-                    trend={+12.5}
-                  />
-                  <StatRow
-                    label="Tokens in Circulation"
-                    value={buybackStats.totalTokensBought.toLocaleString()}
-                    trend={-3.2}
-                  />
-                  <StatRow label="Program Uptime" value="97.8%" trend={+0.5} />
-                  <StatRow
-                    label="Last Buyback"
-                    value={formatRelativeTime(buybackStats.lastBuybackTime)}
-                    trend={undefined}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Price Trend Chart */}
-            <div className="rounded-lg border border-gray-700/50 bg-gray-900/50 p-6">
-              <h2 className="mb-6 text-xl font-bold">Price Trend</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={buybackRecords}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#444" />
-                  <XAxis
-                    dataKey="timestamp"
-                    tickFormatter={(ts) => new Date(ts).toLocaleDateString()}
-                    stroke="#888"
-                  />
-                  <YAxis stroke="#888" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1a1a1a',
-                      border: '1px solid #444',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="pricePerToken"
-                    stroke="#3b82f6"
-                    dot={{ fill: '#3b82f6' }}
-                    name="Price per Token"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+        {activeTab === 'overview' && <div className="space-y-8">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <MetricCard label="Total Spent" value={formatCurrency(aggregates.totalSpent)} subtext="All indexed purchases" />
+            <MetricCard label="Tokens Purchased" value={formatAmount(aggregates.totalTokensBought)} subtext="All indexed buybacks" />
+            <MetricCard label="Average Price" value={formatCurrency(aggregates.averagePrice)} subtext="Weighted by tokens purchased" />
+            <MetricCard label="Treasury Balance" value={formatCurrency(data.treasuryBalance)} subtext="Available for buyback" />
           </div>
-        )}
-
-        {/* History Tab */}
-        {activeTab === 'history' && (
-          <div className="space-y-6">
-            <div className="overflow-hidden rounded-lg border border-gray-700/50 bg-gray-900/50">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-700/50 bg-gray-900/70">
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                        Date
-                      </th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                        Amount Spent
-                      </th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                        Tokens Purchased
-                      </th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                        Price/Token
-                      </th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                        Transaction
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-700/50">
-                    {buybackRecords.map((record, index) => (
-                      <tr key={index} className="transition-colors hover:bg-gray-800/30">
-                        <td className="px-6 py-4 text-sm">
-                          {new Date(record.timestamp).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-green-400">
-                          ${record.purchaseAmount.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 text-sm">
-                          {record.tokensPurchased.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 text-sm">${record.pricePerToken.toFixed(2)}</td>
-                        <td className="px-6 py-4 font-mono text-sm text-blue-400">
-                          <a
-                            href={`https://stellar.expert/explorer/transactions/${record.transactionId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:underline"
-                          >
-                            {record.transactionId.slice(0, 10)}...
-                          </a>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Purchase Distribution Chart */}
-            <div className="rounded-lg border border-gray-700/50 bg-gray-900/50 p-6">
-              <h2 className="mb-6 text-xl font-bold">Purchase Distribution</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={buybackRecords}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#444" />
-                  <XAxis
-                    dataKey="timestamp"
-                    tickFormatter={(ts) => new Date(ts).toLocaleDateString()}
-                    stroke="#888"
-                  />
-                  <YAxis stroke="#888" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1a1a1a',
-                      border: '1px solid #444',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Legend />
-                  <Bar dataKey="purchaseAmount" fill="#3b82f6" name="Amount Spent" />
-                  <Bar dataKey="tokensPurchased" fill="#10b981" name="Tokens Purchased" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Panel title="Configuration"><ConfigRow label="Revenue Allocation" value={`${formatAmount(data.config.revenuePercentage)}%`} /><ConfigRow label="Buyback Frequency" value={formatFrequency(data.config.frequency)} /><ConfigRow label="Min Buyback Amount" value={formatCurrency(data.config.minBuybackAmount)} /><ConfigRow label="Max Buyback Amount" value={formatCurrency(data.config.maxBuybackAmount)} /><ConfigRow label="Total Buybacks" value={String(aggregates.buybackCount)} /></Panel>
+            <Panel title="Statistics"><ConfigRow label="Total Amount Spent" value={formatCurrency(aggregates.totalSpent)} /><ConfigRow label="Tokens Purchased" value={formatAmount(aggregates.totalTokensBought)} /><ConfigRow label="Tokens Burned" value={formatAmount(totalBurned)} /><ConfigRow label="Last Buyback" value={aggregates.lastBuybackTime ? formatDate(aggregates.lastBuybackTime) : 'No buybacks yet'} /></Panel>
           </div>
-        )}
+          <ChartPanel title="Price Trend" empty={!hasRecords} emptyText="No indexed buybacks yet. Price data will appear after the first execution.">
+            <LineChart data={data.records}><ChartGrid /><XAxis dataKey="timestamp" tickFormatter={shortDate} stroke="#888" /><YAxis stroke="#888" /><ChartTooltip /><Legend /><Line type="monotone" dataKey="pricePerToken" stroke="#3b82f6" name="Price per Token" /></LineChart>
+          </ChartPanel>
+        </div>}
 
-        {/* Supply Tab */}
-        {activeTab === 'supply' && (
-          <div className="space-y-6">
-            {/* Supply Reduction Cards */}
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              <MetricCard
-                label="Tokens Burned"
-                value={supplyData[supplyData.length - 1]?.burned.toLocaleString() || '0'}
-                subtext="Total burn"
-              />
-              <MetricCard
-                label="Current Supply"
-                value={supplyData[supplyData.length - 1]?.supply.toLocaleString() || '0'}
-                subtext="Remaining tokens"
-              />
-              <MetricCard
-                label="Reduction Rate"
-                value={`${(supplyData[supplyData.length - 1]?.reductionPercentage || 0).toFixed(
-                  3
-                )}%`}
-                subtext="Total burned"
-              />
-            </div>
+        {activeTab === 'history' && <div className="space-y-6">
+          {hasRecords ? <div className="overflow-hidden rounded-lg border border-gray-700/50 bg-gray-900/50"><div className="overflow-x-auto"><table className="w-full"><thead><tr className="border-b border-gray-700/50 bg-gray-900/70">{['Date', 'Amount Spent', 'Tokens Purchased', 'Price/Token', 'Transaction'].map(header => <th key={header} className="px-6 py-4 text-left text-sm font-semibold text-gray-300">{header}</th>)}</tr></thead><tbody className="divide-y divide-gray-700/50">{data.records.slice().reverse().map(record => <tr key={`${record.transactionId ?? 'buyback'}-${record.timestamp}`} className="hover:bg-gray-800/30"><td className="px-6 py-4 text-sm">{formatDate(record.timestamp)}</td><td className="px-6 py-4 text-sm text-green-400">{formatCurrency(record.purchaseAmount)}</td><td className="px-6 py-4 text-sm">{formatAmount(record.tokensPurchased)}</td><td className="px-6 py-4 text-sm">{formatCurrency(record.pricePerToken)}</td><td className="px-6 py-4 font-mono text-sm">{record.explorerUrl && record.transactionId ? <a href={record.explorerUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline" aria-label={`View transaction ${record.transactionId} in explorer`}>{shortTransaction(record.transactionId)}</a> : <span className="text-gray-500">Unavailable</span>}</td></tr>)}</tbody></table></div></div> : <EmptyState text="No buybacks have been indexed. The program remains usable while it has no history." />}
+          <ChartPanel title="Purchase Distribution" empty={!hasRecords} emptyText="No purchase data is available yet."><BarChart data={data.records}><ChartGrid /><XAxis dataKey="timestamp" tickFormatter={shortDate} stroke="#888" /><YAxis stroke="#888" /><ChartTooltip /><Legend /><Bar dataKey="purchaseAmount" fill="#3b82f6" name="Amount Spent" /><Bar dataKey="tokensPurchased" fill="#10b981" name="Tokens Purchased" /></BarChart></ChartPanel>
+        </div>}
 
-            {/* Supply Trend Chart */}
-            <div className="rounded-lg border border-gray-700/50 bg-gray-900/50 p-6">
-              <h2 className="mb-6 text-xl font-bold">Supply Reduction Over Time</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={supplyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#444" />
-                  <XAxis
-                    dataKey="timestamp"
-                    tickFormatter={(ts) => new Date(ts).toLocaleDateString()}
-                    stroke="#888"
-                  />
-                  <YAxis stroke="#888" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1a1a1a',
-                      border: '1px solid #444',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="supply"
-                    stroke="#3b82f6"
-                    name="Token Supply"
-                    yAxisId="left"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="burned"
-                    stroke="#ef4444"
-                    name="Tokens Burned"
-                    yAxisId="right"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Burn Pie Chart */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div className="rounded-lg border border-gray-700/50 bg-gray-900/50 p-6">
-                <h2 className="mb-6 text-xl font-bold">Supply Distribution</h2>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={[
-                        {
-                          name: 'Current Supply',
-                          value: supplyData[supplyData.length - 1]?.supply || 0,
-                        },
-                        {
-                          name: 'Burned',
-                          value: supplyData[supplyData.length - 1]?.burned || 0,
-                        },
-                      ]}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, value }) => `${name}: ${value.toLocaleString()}`}
-                      outerRadius={100}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      <Cell fill="#3b82f6" />
-                      <Cell fill="#ef4444" />
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1a1a1a',
-                        border: '1px solid #444',
-                        borderRadius: '8px',
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Burn Details */}
-              <div className="rounded-lg border border-gray-700/50 bg-gray-900/50 p-6">
-                <h2 className="mb-6 text-xl font-bold">Burn Details</h2>
-                <div className="space-y-4">
-                  <DetailRow label="Initial Supply" value="10,000,000" />
-                  <DetailRow
-                    label="Total Burned"
-                    value={supplyData[supplyData.length - 1]?.burned.toLocaleString() || '0'}
-                  />
-                  <DetailRow
-                    label="Current Supply"
-                    value={supplyData[supplyData.length - 1]?.supply.toLocaleString() || '0'}
-                  />
-                  <DetailRow
-                    label="Burn Percentage"
-                    value={`${(supplyData[supplyData.length - 1]?.reductionPercentage || 0).toFixed(
-                      3
-                    )}%`}
-                  />
-                  <DetailRow label="Burn Mechanism" value="Automated Buyback" />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {activeTab === 'supply' && <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3"><MetricCard label="Tokens Burned" value={formatAmount(totalBurned)} subtext="Total burn" /><MetricCard label="Current Supply" value={formatAmount(currentSupply)} subtext="Remaining tokens" /><MetricCard label="Reduction Rate" value={`${formatAmount(reductionPercentage, 3)}%`} subtext="Of initial supply" /></div>
+          <ChartPanel title="Supply Reduction Over Time" empty={!data.supplyHistory.length} emptyText="Supply snapshots have not been indexed yet."><LineChart data={data.supplyHistory}><ChartGrid /><XAxis dataKey="timestamp" tickFormatter={shortDate} stroke="#888" /><YAxis yAxisId="left" stroke="#888" /><YAxis yAxisId="right" orientation="right" stroke="#888" /><ChartTooltip /><Legend /><Line yAxisId="left" type="monotone" dataKey="supply" stroke="#3b82f6" name="Token Supply" /><Line yAxisId="right" type="monotone" dataKey="burned" stroke="#ef4444" name="Tokens Burned" /></LineChart></ChartPanel>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2"><Panel title="Supply Distribution"><div className="h-72"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, value }) => `${name}: ${formatAmount(Number(value))}`}><Cell fill="#3b82f6" /><Cell fill="#ef4444" /></Pie><ChartTooltip /></PieChart></ResponsiveContainer></div></Panel><Panel title="Burn Details"><ConfigRow label="Initial Supply" value={formatAmount(data.initialSupply)} /><ConfigRow label="Total Burned" value={formatAmount(totalBurned)} /><ConfigRow label="Current Supply" value={formatAmount(currentSupply)} /><ConfigRow label="Burn Percentage" value={`${formatAmount(reductionPercentage, 3)}%`} /><ConfigRow label="Burn Mechanism" value="Automated Buyback" /></Panel></div>
+        </div>}
       </div>
     </div>
   );
 }
 
-interface MetricCardProps {
-  label: string;
-  value: string;
-  subtext?: string;
-}
-
-function MetricCard({ label, value, subtext }: MetricCardProps) {
-  return (
-    <div className="rounded-lg border border-gray-700/50 bg-gray-900/50 p-6 transition-colors hover:border-gray-600/50">
-      <div className="mb-2 text-sm text-gray-400">{label}</div>
-      <div className="mb-1 text-2xl font-bold text-white">{value}</div>
-      {subtext && <div className="text-xs text-gray-500">{subtext}</div>}
-    </div>
-  );
-}
-
-interface ConfigRowProps {
-  label: string;
-  value: string;
-}
-
-function ConfigRow({ label, value }: ConfigRowProps) {
-  return (
-    <div className="flex items-center justify-between border-b border-gray-700/30 py-3 last:border-b-0">
-      <span className="text-sm text-gray-400">{label}</span>
-      <span className="font-semibold text-white">{value}</span>
-    </div>
-  );
-}
-
-interface StatRowProps {
-  label: string;
-  value: string;
-  trend?: number;
-}
-
-function StatRow({ label, value, trend }: StatRowProps) {
-  return (
-    <div className="flex items-center justify-between border-b border-gray-700/30 py-3 last:border-b-0">
-      <span className="text-sm text-gray-400">{label}</span>
-      <div className="flex items-center gap-2">
-        <span className="font-semibold text-white">{value}</span>
-        {trend !== undefined && (
-          <span className={trend >= 0 ? 'text-sm text-green-400' : 'text-sm text-red-400'}>
-            {trend >= 0 ? '+' : ''}
-            {trend.toFixed(1)}%
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-interface DetailRowProps {
-  label: string;
-  value: string;
-}
-
-function DetailRow({ label, value }: DetailRowProps) {
-  return (
-    <div className="flex items-center justify-between border-b border-gray-700/30 py-3 last:border-b-0">
-      <span className="text-sm text-gray-400">{label}</span>
-      <span className="font-semibold text-white">{value}</span>
-    </div>
-  );
-}
-
-function formatRelativeTime(timestamp: number): string {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  return `${Math.floor(seconds / 86400)}d ago`;
-}
+function ChartPanel({ title, empty, emptyText, children }: { title: string; empty: boolean; emptyText: string; children: ReactNode }) { return <Panel title={title}>{empty ? <EmptyState text={emptyText} /> : <div className="h-[300px]"><ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer></div>}</Panel>; }
+function Panel({ title, children }: { title: string; children: ReactNode }) { return <section className="rounded-lg border border-gray-700/50 bg-gray-900/50 p-6"><h2 className="mb-6 text-xl font-bold">{title}</h2>{children}</section>; }
+function MetricCard({ label, value, subtext }: { label: string; value: string; subtext: string }) { return <div className="rounded-lg border border-gray-700/50 bg-gray-900/50 p-6"><div className="mb-2 text-sm text-gray-400">{label}</div><div className="mb-1 text-2xl font-bold">{value}</div><div className="text-xs text-gray-500">{subtext}</div></div>; }
+function ConfigRow({ label, value }: { label: string; value: string }) { return <div className="flex items-center justify-between border-b border-gray-700/30 py-3 last:border-0"><span className="text-sm text-gray-400">{label}</span><span className="font-semibold text-white">{value}</span></div>; }
+function EmptyState({ text }: { text: string }) { return <div className="rounded border border-dashed border-gray-700 px-4 py-10 text-center text-sm text-gray-400">{text}</div>; }
+function DashboardMessage({ title, detail, action }: { title: string; detail?: string; action?: React.ReactNode }) { return <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-black p-8 text-center text-white"><p className="text-lg">{title}</p>{detail && <p className="max-w-lg text-sm text-gray-400">{detail}</p>}{action}</div>; }
+function RetryButton({ onClick }: { onClick: () => void }) { return <button className="rounded bg-blue-600 px-4 py-2 font-semibold hover:bg-blue-500" onClick={onClick}>Try again</button>; }
+function ChartGrid() { return <CartesianGrid strokeDasharray="3 3" stroke="#444" />; }
+function ChartTooltip() { return <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #444', borderRadius: '8px' }} />; }
+function shortDate(timestamp: number) { return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(timestamp); }
+function shortTransaction(transactionId: string) { return transactionId.length > 14 ? `${transactionId.slice(0, 10)}…${transactionId.slice(-4)}` : transactionId; }
+function formatFrequency(seconds: number) { if (seconds === 0) return 'Not scheduled'; if (seconds % 86400 === 0) return `${seconds / 86400} day${seconds === 86400 ? '' : 's'}`; if (seconds % 3600 === 0) return `${seconds / 3600} hours`; return `${formatAmount(seconds)} seconds`; }

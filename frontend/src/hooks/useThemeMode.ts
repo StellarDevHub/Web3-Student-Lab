@@ -65,7 +65,7 @@ export function useThemeMode() {
   // If theme is 'system', use the detected systemTheme
   // If not mounted yet (hydration in progress), default to 'dark'
   const currentTheme = mounted ? (theme === 'system' ? systemTheme : theme) : 'dark';
-  const isDark = currentTheme === 'dark';
+  const isDark = currentTheme === 'dark' || currentTheme === 'oled';
   const isLight = currentTheme === 'light';
 
   /**
@@ -79,7 +79,10 @@ export function useThemeMode() {
    * 5. Triggers smooth transition via CSS
    */
   const toggleTheme = () => {
-    const newTheme = isDark ? 'light' : 'dark';
+    let newTheme: 'light' | 'dark' | 'oled' = 'dark';
+    if (currentTheme === 'light') newTheme = 'dark';
+    else if (currentTheme === 'dark') newTheme = 'oled';
+    else newTheme = 'light';
     setTheme(newTheme);
     setStoredTheme(newTheme);
   };
@@ -94,20 +97,20 @@ export function useThemeMode() {
    * - 'dark': Force dark mode
    * - 'system': Use OS preference
    */
-  const setThemeMode = (newTheme: 'light' | 'dark' | 'system') => {
+  const setThemeMode = (newTheme: 'light' | 'dark' | 'oled' | 'system') => {
     setTheme(newTheme);
     setStoredTheme(newTheme);
   };
 
   // Get current theme colors
-  const colors = currentTheme === 'light' ? THEME_COLORS.light : THEME_COLORS.dark;
+  const colors = currentTheme === 'light' ? THEME_COLORS.light : currentTheme === 'oled' ? THEME_COLORS.oled : THEME_COLORS.dark;
 
   // Get chart colors optimized for D3 visualizations
   // These colors are chosen for good contrast and visual distinction
-  const chartColors = getChartColors(currentTheme as 'light' | 'dark');
+  const chartColors = getChartColors((currentTheme === 'light' ? 'light' : currentTheme === 'oled' ? 'oled' : 'dark') as any);
 
   return {
-    theme: currentTheme as 'light' | 'dark',
+    theme: currentTheme as 'light' | 'dark' | 'oled',
     isDark,
     isLight,
     mounted, // Use this to conditionally render to prevent FOUC

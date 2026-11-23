@@ -4,9 +4,11 @@ import {
   CertificateData,
   buildExplorerUrl,
   drawCryptoStamp,
+  renderVerificationQr,
+  seedFromString,
   truncateHash,
 } from '@/lib/certificate-generator';
-import { useEffect, useRef, forwardRef } from 'react';
+import { useEffect, useRef, useState, forwardRef } from 'react';
 
 interface Props {
   data: CertificateData;
@@ -14,9 +16,37 @@ interface Props {
   forExport?: boolean;
 }
 
+// Lightweight deterministic guilloche SVG frame (no per-frame randomness → no lag).
+function GuillocheFrame({ seed }: { seed: number }) {
+  const rings = Array.from({ length: 5 }, (_, r) => {
+    const radius = 40 + r * 7;
+    const petals = 7 + (r % 3);
+    const pts: string[] = [];
+    for (let t = 0; t <= 360; t += 6) {
+      const rad = (t * Math.PI) / 180;
+      const rr = radius * (1 + 0.06 * Math.sin(petals * rad + seed));
+      pts.push(`${50 + rr * Math.cos(rad)},${50 + rr * Math.sin(rad)}`);
+    }
+    return pts.join(' ');
+  });
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.12]"
+      aria-hidden="true"
+    >
+      {rings.map((points, i) => (
+        <polygon key={i} points={points} fill="none" stroke="rgba(220,38,38,0.6)" strokeWidth={0.3} />
+      ))}
+    </svg>
+  );
+}
+
 // Forward ref so parent can capture the container for downloading
 const CertificateTemplate = forwardRef<HTMLDivElement, Props>(function CertificateTemplate({ data, forExport = false }, ref) {
   const stampRef = useRef<HTMLCanvasElement>(null);
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
 
   // Draw the crypto stamp on the canvas overlay
   useEffect(() => {
@@ -26,6 +56,21 @@ const CertificateTemplate = forwardRef<HTMLDivElement, Props>(function Certifica
     canvas.height = 140;
     drawCryptoStamp(canvas, data.transactionHash, 70, 70, 60);
   }, [data.transactionHash]);
+
+  // Render the verification QR code pointing at /verify/[id]
+  useEffect(() => {
+    let cancelled = false;
+    renderVerificationQr(data.certificateId || 'pending')
+      .then((url) => {
+        if (!cancelled) setQrUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setQrUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [data.certificateId]);
 
   const formattedDate = data.issueDate
     ? new Date(data.issueDate).toLocaleDateString('en-US', {
@@ -50,6 +95,9 @@ const CertificateTemplate = forwardRef<HTMLDivElement, Props>(function Certifica
       <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-black to-zinc-950" />
       <div className="absolute top-0 left-0 h-[600px] w-[600px] rounded-full bg-red-900/10 blur-[120px]" />
       <div className="absolute right-0 bottom-0 h-[400px] w-[400px] rounded-full bg-red-800/8 blur-[100px]" />
+
+      {/* Deterministic guilloche anti-counterfeit border */}
+      <GuillocheFrame seed={seedFromString(data.certificateId || data.recipientName || 'cert')} />
 
       {/* Outer border frame */}
       <div className="pointer-events-none absolute inset-4 rounded-xl border border-red-600/30" />
@@ -111,9 +159,16 @@ const CertificateTemplate = forwardRef<HTMLDivElement, Props>(function Certifica
             <p className="font-mono text-[10px] tracking-widest text-gray-500 uppercase">Course Instructor</p>
           </div>
 
-          {/* Crypto stamp canvas */}
+          {/* Crypto stamp canvas + verification QR */}
           <div className="flex flex-col items-center gap-1">
             <canvas ref={stampRef} className="h-[70px] w-[70px]" />
+            {qrUrl && (
+              <img
+                src={qrUrl}
+                alt={`Verification QR for certificate ${data.certificateId}`}
+                className="h-[64px] w-[64px] rounded-sm"
+              />
+            )}
             <a
               href={explorerUrl}
               target="_blank"

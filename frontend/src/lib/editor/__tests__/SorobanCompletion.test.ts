@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type ProvideCompletionItems = (
   model: any,
@@ -278,5 +278,129 @@ describe('registerSorobanCompletion', () => {
       expect(suggestion.detail).toBeTruthy();
       expect(suggestion.documentation).toBeTruthy();
     }
+  });
+
+  it('should return advanced macro completions when typing #[contract', async () => {
+    const { registerSorobanCompletion } = await import('../SorobanCompletion');
+    registerSorobanCompletion(mockMonaco as any);
+
+    const provider = registeredProviders.find((p) => p.languageId === 'rust')!;
+    const model = mockModel('#[contract');
+    const position = mockPosition(1, 10);
+    const result = await provider.provideCompletionItems(model, position);
+
+    const fullScaffold = result.suggestions.find((s: any) => s.label === '#[contract] full scaffold');
+    expect(fullScaffold).toBeDefined();
+    expect(fullScaffold.insertText).toContain('#[contract]');
+    expect(fullScaffold.insertText).toContain('#[contracterror]');
+    expect(fullScaffold.insertText).toContain('#[contractimpl]');
+    expect(fullScaffold.insertText).toContain('env: Env');
+    expect(fullScaffold.insertText).toContain('Error');
+  });
+
+  it('should return #[contractimpl] with Env completion when typing #[contractimpl', async () => {
+    const { registerSorobanCompletion } = await import('../SorobanCompletion');
+    registerSorobanCompletion(mockMonaco as any);
+
+    const provider = registeredProviders.find((p) => p.languageId === 'rust')!;
+    const model = mockModel('#[contractimpl');
+    const position = mockPosition(1, 14);
+    const result = await provider.provideCompletionItems(model, position);
+
+    const contractimplEnv = result.suggestions.find((s: any) => s.label === '#[contractimpl] with Env');
+    expect(contractimplEnv).toBeDefined();
+    expect(contractimplEnv.insertText).toContain('#[contractimpl]');
+    expect(contractimplEnv.insertText).toContain('env: Env');
+    expect(contractimplEnv.insertText).toContain('Result<');
+    expect(contractimplEnv.insertText).toContain(', Error>');
+  });
+
+  it('should return #[contracterror] enum completion when typing #[contracterror', async () => {
+    const { registerSorobanCompletion } = await import('../SorobanCompletion');
+    registerSorobanCompletion(mockMonaco as any);
+
+    const provider = registeredProviders.find((p) => p.languageId === 'rust')!;
+    const model = mockModel('#[contracterror');
+    const position = mockPosition(1, 15);
+    const result = await provider.provideCompletionItems(model, position);
+
+    const contracterrorEnum = result.suggestions.find((s: any) => s.label === '#[contracterror] enum');
+    expect(contracterrorEnum).toBeDefined();
+    expect(contracterrorEnum.insertText).toContain('#[contracterror]');
+    expect(contracterrorEnum.insertText).toContain('derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)');
+    expect(contracterrorEnum.insertText).toContain('#[repr(u32)]');
+  });
+
+  it('should return constructor with Env completion in contract context', async () => {
+    const { registerSorobanCompletion } = await import('../SorobanCompletion');
+    registerSorobanCompletion(mockMonaco as any);
+
+    const provider = registeredProviders.find((p) => p.languageId === 'rust')!;
+    const model = mockModel('#[contract');
+    const position = mockPosition(1, 10);
+    const result = await provider.provideCompletionItems(model, position);
+
+    const constructor = result.suggestions.find((s: any) => s.label === 'constructor with Env');
+    expect(constructor).toBeDefined();
+    expect(constructor.insertText).toContain('pub fn new(env: Env)');
+  });
+
+  it('should return method with error handling completion in contract context', async () => {
+    const { registerSorobanCompletion } = await import('../SorobanCompletion');
+    registerSorobanCompletion(mockMonaco as any);
+
+    const provider = registeredProviders.find((p) => p.languageId === 'rust')!;
+    const model = mockModel('#[contract');
+    const position = mockPosition(1, 10);
+    const result = await provider.provideCompletionItems(model, position);
+
+    const methodWithError = result.suggestions.find((s: any) => s.label === 'method with error handling');
+    expect(methodWithError).toBeDefined();
+    expect(methodWithError.insertText).toContain('env: Env');
+    expect(methodWithError.insertText).toContain('Result<');
+    expect(methodWithError.insertText).toContain(', Error>');
+  });
+
+  it('should trigger advanced macro completions when typing #[', async () => {
+    const { registerSorobanCompletion } = await import('../SorobanCompletion');
+    registerSorobanCompletion(mockMonaco as any);
+
+    const provider = registeredProviders.find((p) => p.languageId === 'rust')!;
+    const model = mockModel('#[');
+    const position = mockPosition(1, 3);
+    const result = await provider.provideCompletionItems(model, position);
+
+    const fullScaffold = result.suggestions.find((s: any) => s.label === '#[contract] full scaffold');
+    expect(fullScaffold).toBeDefined();
+  });
+
+  it('should include Env injection in full scaffold', async () => {
+    const { registerSorobanCompletion } = await import('../SorobanCompletion');
+    registerSorobanCompletion(mockMonaco as any);
+
+    const provider = registeredProviders.find((p) => p.languageId === 'rust')!;
+    const model = mockModel('#[contract');
+    const position = mockPosition(1, 10);
+    const result = await provider.provideCompletionItems(model, position);
+
+    const fullScaffold = result.suggestions.find((s: any) => s.label === '#[contract] full scaffold');
+    expect(fullScaffold.insertText).toContain('pub fn new(env: Env)');
+    expect(fullScaffold.insertText).toContain('pub fn ${4:method_name}(env: Env');
+  });
+
+  it('should include error handling in full scaffold', async () => {
+    const { registerSorobanCompletion } = await import('../SorobanCompletion');
+    registerSorobanCompletion(mockMonaco as any);
+
+    const provider = registeredProviders.find((p) => p.languageId === 'rust')!;
+    const model = mockModel('#[contract');
+    const position = mockPosition(1, 10);
+    const result = await provider.provideCompletionItems(model, position);
+
+    const fullScaffold = result.suggestions.find((s: any) => s.label === '#[contract] full scaffold');
+    expect(fullScaffold.insertText).toContain('#[contracterror]');
+    expect(fullScaffold.insertText).toContain('pub enum Error');
+    expect(fullScaffold.insertText).toContain('AlreadyInitialized = 1');
+    expect(fullScaffold.insertText).toContain('NotFound = 2');
   });
 });

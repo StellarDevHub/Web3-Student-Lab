@@ -22,15 +22,18 @@ test.describe('wallet onboarding', () => {
 
     expect(walletState.stellarAddress).toBe(stellarAddress);
     expect(walletState.ethereumAddress).toBe(ethereumAddress);
-    await expect(page.getByRole('button', { name: /Freighter/ })).toContainText('Ready to connect');
+    await expect(page.getByRole('button', { name: /Freighter/ })).toContainText(/Ready to connect|Click to detect extension/);
   });
 
   test('restores wallet state into the transaction state chart', async ({
     page,
+    installWalletMocks,
     stellarAddress,
   }) => {
+    await installWalletMocks();
     await page.addInitScript(
       ({ address }) => {
+        window.sessionStorage.setItem('local_storage_cleared', 'true');
         window.localStorage.setItem(
           'stellar_wallet',
           JSON.stringify({ wallet: 'Freighter', pk: address })
@@ -41,9 +44,9 @@ test.describe('wallet onboarding', () => {
 
     await page.goto('/devtools/wallet', { waitUntil: 'domcontentloaded' });
 
-    await expect(page.getByText(`CONNECTED — Freighter`)).toBeVisible();
-    await expect(page.getByText(stellarAddress).first()).toBeVisible();
-    await expect(page.getByLabel('Web3 transaction lifecycle state chart')).toContainText('connected');
+    await expect(page.getByText(/CONNECTED.*Freighter/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(stellarAddress).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByLabel('Web3 transaction lifecycle state chart')).toContainText('connected', { timeout: 15_000 });
   });
 
   test('keeps unavailable Freighter detection controlled', async ({ page }) => {

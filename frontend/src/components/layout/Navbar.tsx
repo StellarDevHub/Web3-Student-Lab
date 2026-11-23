@@ -1,17 +1,19 @@
 'use client';
 
+import { useAuth } from "@/contexts/AuthContext";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
 import { LanguageSelector } from '@/components/common/LanguageSelector';
+import { ConnectionHealthBadge } from '@/components/common/ConnectionHealthBadge';
 import NotificationBell from '@/components/notifications/NotificationBell';
-import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { useWalletProfileCompletion } from '@/lib/profile-completion';
 import { primaryNav } from '@/lib/site-data';
 import { ArrowRight, Menu, X, Sparkles, ChevronDown, LogOut } from 'lucide-react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useState, useEffect } from 'react';
 import { useI18n } from '@/i18n';
 import { useKeyboardShortcuts } from '@/components/keyboard/KeyboardShortcutsProvider';
+import MobileDrawer from './MobileDrawer';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -41,7 +43,7 @@ export default function Navbar() {
   };
 
   return (
-    <header className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'bg-black/80 border-b border-red-500/20 backdrop-blur-xl shadow-[0_10px_30px_rgba(220,38,38,0.1)]' : 'bg-transparent border-b border-white/5'}`}>
+    <header suppressHydrationWarning className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'bg-black/80 border-b border-red-500/20 backdrop-blur-xl shadow-[0_10px_30px_rgba(220,38,38,0.1)]' : 'bg-transparent border-b border-white/5'}`}>
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 w-full px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex shrink-0">
           <Link href="/" className="group flex items-center gap-4" onClick={() => setOpen(false)}>
@@ -62,6 +64,26 @@ export default function Navbar() {
 
         <div className="flex flex-1 justify-end items-center gap-6">
           <nav className="hidden items-center gap-2 xl:flex relative z-[100]" aria-label="Primary">
+            <Link
+              href="/courses"
+              className={`px-4 py-2 text-xs font-bold uppercase tracking-widest transition-colors rounded-xl ${
+                isActive('/courses')
+                  ? 'text-red-400 bg-red-500/10 border border-red-500/20'
+                  : 'text-gray-300 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              {t('nav.learn')}
+            </Link>
+            <Link
+              href="/admin/courses"
+              className={`px-4 py-2 text-xs font-bold uppercase tracking-widest transition-colors rounded-xl ${
+                isActive('/admin/courses') || isActive('/admin/content')
+                  ? 'text-red-400 bg-red-500/10 border border-red-500/20'
+                  : 'text-gray-300 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              {t('nav.admin')}
+            </Link>
             <div className="group relative">
               <button className="flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-white transition-colors">
                 Explore <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180" />
@@ -86,11 +108,18 @@ export default function Navbar() {
             </div>
           </nav>
 
-          <div className="hidden items-center gap-6 xl:flex">
+          <div className="hidden items-center gap-4 xl:flex">
+            <ConnectionHealthBadge />
             <LanguageSelector />
             {user ? (
               <>
                 <NotificationBell />
+                <Link
+                  href="/admin/content"
+                  className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-red-400 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/50 transition-all shadow-[0_0_15px_rgba(220,38,38,0.15)] hover:shadow-[0_0_25px_rgba(220,38,38,0.25)]"
+                >
+                  {t('nav.admin')}
+                </Link>
                 <Link
                   href="/certificates"
                   className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-red-400 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/50 transition-all shadow-[0_0_15px_rgba(220,38,38,0.15)] hover:shadow-[0_0_25px_rgba(220,38,38,0.25)]"
@@ -126,6 +155,7 @@ export default function Navbar() {
             )}
           </div>
 
+
           <button
             type="button"
             onClick={() => setOpen((value) => !value)}
@@ -138,75 +168,7 @@ export default function Navbar() {
         </div>
       </div>
 
-      {open && (
-        <div className="border-t border-red-500/20 bg-black/95 backdrop-blur-2xl xl:hidden shadow-[0_20px_40px_rgba(220,38,38,0.1)] absolute w-full left-0">
-          <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 sm:px-6">
-            {primaryNav.map((item) => {
-              const active = isActive(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className={`rounded-2xl px-5 py-4 transition-all border ${
-                    active
-                      ? 'bg-red-500/10 border-red-500/30 shadow-[0_0_15px_rgba(220,38,38,0.15)]'
-                      : 'bg-white/5 border-transparent text-gray-300 hover:bg-white/10'
-                  }`}
-                >
-                  <span className={`block text-[10px] font-black uppercase tracking-[0.2em] ${active ? 'text-red-400' : 'text-white'}`}>{getNavLabel(item.label)}</span>
-                  <span className="mt-1.5 block text-[10px] font-light text-gray-500 leading-relaxed">{item.description}</span>
-                </Link>
-              );
-            })}
-
-            <div className="mt-6 mb-2 border-t border-white/10 pt-6">
-              <LanguageSelector />
-            </div>
-            
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {user ? (
-                <>
-                  <Link
-                    href="/certificates"
-                    onClick={() => setOpen(false)}
-                    className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-white text-center hover:bg-white/10 transition-colors"
-                  >
-                    {t('nav.certificates')}
-                  </Link>
-                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">{t('nav.notifications')}</span>
-                    <NotificationBell />
-                  </div>
-                  <button
-                    onClick={() => {
-                      logout();
-                      setOpen(false);
-                    }}
-                    className="rounded-2xl bg-white/10 px-5 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-white sm:col-span-2 hover:bg-white/20 transition-colors"
-                  >
-                    {t('nav.sign_out')}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Link
-                    href={profileCompleted ? '/auth/login' : '/auth/register'}
-                    onClick={() => setOpen(false)}
-                    className="rounded-2xl bg-red-600 px-5 py-4 text-xs font-black uppercase tracking-[0.2em] text-white text-center shadow-[0_0_20px_rgba(220,38,38,0.3)] hover:bg-red-500 transition-colors"
-                  >
-                    {publicKey
-                      ? profileCompleted
-                        ? t('nav.open_wallet_access')
-                        : t('nav.complete_profile')
-                      : t('nav.start_with_wallet')}
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <MobileDrawer open={open} setOpen={setOpen} />
     </header>
   );
 }

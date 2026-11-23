@@ -48,4 +48,9 @@ pub enum StorageKey {
     ContentVersion(u64, u32),
     Instructor(Address),
     Enrollment(u64, Address),
+    Copyright(u64),
+    LicenseTerms(u64),
+    License(u64),
+    ActiveLicense(u64, Address),
+    NextLicenseId,
 }

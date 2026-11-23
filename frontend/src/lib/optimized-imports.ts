@@ -5,7 +5,7 @@
 
 // Stellar SDK - Tree-shaked imports
 export {
-  Server,
+  Horizon,
   TransactionBuilder,
   Asset,
   Operation,
@@ -13,7 +13,6 @@ export {
   Keypair,
   Networks,
   StrKey,
-  Horizon,
 } from '@stellar/stellar-sdk';
 
 // D3.js - Specific imports for visualization

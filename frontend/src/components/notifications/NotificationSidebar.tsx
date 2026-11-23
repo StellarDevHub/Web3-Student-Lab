@@ -6,7 +6,8 @@ import {
   NotificationType,
   useNotifications,
 } from '@/contexts/NotificationContext';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { VirtualizedList } from './VirtualizedList';
 import {
   CheckCircle,
@@ -121,6 +122,15 @@ export function NotificationSidebar({ open, onClose }: Props) {
 
   const groups = useMemo(() => groupNotifications(filtered), [filtered]);
 
+  const sidebarRef = useRef<HTMLElement>(null);
+
+  useFocusTrap(sidebarRef, {
+    enabled: open && mounted,
+    initialFocus: true,
+    returnFocusOnDeactivate: true,
+    onEscape: onClose,
+  });
+
   if (!open || !mounted) return null;
 
   return createPortal(
@@ -134,7 +144,9 @@ export function NotificationSidebar({ open, onClose }: Props) {
 
       {/* Sidebar panel */}
       <aside
+        ref={sidebarRef}
         role="dialog"
+        aria-modal="true"
         aria-label="Notification Center"
         className="animate-in slide-in-from-right fixed top-0 right-0 z-50 flex h-full w-full max-w-[400px] flex-col border-l border-white/10 bg-zinc-950/90 shadow-2xl backdrop-blur-2xl"
       >

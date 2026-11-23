@@ -1,10 +1,11 @@
-// @ts-nocheck
 import { Request, Response } from 'express';
 import { P2PService } from './p2p.service.js';
+import { getQueryString } from '../utils/queryParams.js';
 
 export const getNodes = async (req: Request, res: Response) => {
   try {
-    const workspaceId = req.query.workspaceId as string || 'default';
+    const workspaceId = getQueryString(req.query.workspaceId, 'default');
+
     const nodes = await P2PService.getNodes(workspaceId);
     res.json({ success: true, data: nodes });
   } catch (error: any) {
@@ -40,7 +41,8 @@ export const broadcastMessage = async (req: Request, res: Response) => {
 
 export const getMessages = async (req: Request, res: Response) => {
   try {
-    const { nodeId } = req.params;
+    const nodeId = getQueryString(req.params.nodeId);
+
     const messages = await P2PService.getMessages(nodeId);
     res.json({ success: true, data: messages });
   } catch (error: any) {

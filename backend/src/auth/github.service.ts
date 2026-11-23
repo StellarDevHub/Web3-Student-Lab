@@ -1,6 +1,8 @@
 import crypto from 'crypto';
 import prisma from '../db/index.js';
 import logger from '../utils/logger.js';
+import { encryptToken, decryptToken } from '../utils/tokenEncryption.js';
+import { githubApiBreaker } from '../lib/circuit-breaker/externalServices.js';
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -116,40 +118,57 @@ export const buildAuthorizationUrl = (state: string): string => {
   return `${GITHUB_AUTHORIZE_URL}?${params.toString()}`;
 };
 
+export const buildPkceAuthorizationUrl = (state: string, challenge: string): string => {
+  const config = getGitHubConfig();
+  const params = new URLSearchParams({
+    client_id: config.clientId,
+    redirect_uri: config.redirectUri,
+    scope: 'read:user user:email',
+    state,
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+  });
+  return `${GITHUB_AUTHORIZE_URL}?${params.toString()}`;
+};
+
 /**
  * Exchange an authorization code for an access token from GitHub
  */
 export const exchangeCodeForToken = async (
-  code: string
+  code: string,
+  codeVerifier?: string
 ): Promise<GitHubAccessTokenResponse> => {
-  const response = await fetch(GITHUB_TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify({
-      client_id: GITHUB_CLIENT_ID,
-      client_secret: GITHUB_CLIENT_SECRET,
-      code,
-      redirect_uri: GITHUB_REDIRECT_URI,
-    }),
+  return githubApiBreaker.execute(async () => {
+    const response = await fetch(GITHUB_TOKEN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        client_id: GITHUB_CLIENT_ID,
+        client_secret: GITHUB_CLIENT_SECRET,
+        code,
+        redirect_uri: GITHUB_REDIRECT_URI,
+        ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      logger.error('GitHub token exchange failed:', { status: response.status, body: errorBody });
+      throw new Error(`GitHub token exchange failed with status ${response.status}`);
+    }
+
+    const data = (await response.json()) as GitHubAccessTokenResponse;
+
+    if ((data as any).error) {
+      logger.error('GitHub OAuth error:', (data as any).error_description || (data as any).error);
+      throw new Error(`GitHub OAuth error: ${(data as any).error_description || (data as any).error}`);
+    }
+
+    return data;
   });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    logger.error('GitHub token exchange failed:', { status: response.status, body: errorBody });
-    throw new Error(`GitHub token exchange failed with status ${response.status}`);
-  }
-
-  const data = (await response.json()) as GitHubAccessTokenResponse;
-
-  if ((data as any).error) {
-    logger.error('GitHub OAuth error:', (data as any).error_description || (data as any).error);
-    throw new Error(`GitHub OAuth error: ${(data as any).error_description || (data as any).error}`);
-  }
-
-  return data;
 };
 
 /**
@@ -158,31 +177,8 @@ export const exchangeCodeForToken = async (
 export const fetchGitHubUser = async (
   accessToken: string
 ): Promise<GitHubUser> => {
-  const response = await fetch(`${GITHUB_API_URL}/user`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/vnd.github.v3+json',
-      'User-Agent': 'Web3-Student-Lab',
-    },
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    logger.error('GitHub API user fetch failed:', { status: response.status, body: errorBody });
-    throw new Error(`Failed to fetch GitHub user: ${response.status}`);
-  }
-
-  return response.json() as Promise<GitHubUser>;
-};
-
-/**
- * Fetch the primary email from GitHub for the authenticated user
- */
-export const fetchGitHubPrimaryEmail = async (
-  accessToken: string
-): Promise<string | null> => {
-  try {
-    const response = await fetch(`${GITHUB_API_URL}/user/emails`, {
+  return githubApiBreaker.execute(async () => {
+    const response = await fetch(`${GITHUB_API_URL}/user`, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: 'application/vnd.github.v3+json',
@@ -191,16 +187,44 @@ export const fetchGitHubPrimaryEmail = async (
     });
 
     if (!response.ok) {
-      return null;
+      const errorBody = await response.text();
+      logger.error('GitHub API user fetch failed:', { status: response.status, body: errorBody });
+      throw new Error(`Failed to fetch GitHub user: ${response.status}`);
     }
 
-    const emails = (await response.json()) as GitHubEmail[];
-    const primaryEmail = emails.find((e) => e.primary && e.verified);
-    return primaryEmail?.email || null;
-  } catch (error) {
-    logger.warn('Failed to fetch GitHub emails:', error);
-    return null;
-  }
+    return response.json() as Promise<GitHubUser>;
+  });
+};
+
+/**
+ * Fetch the primary email from GitHub for the authenticated user
+ */
+export const fetchGitHubPrimaryEmail = async (
+  accessToken: string
+): Promise<string | null> => {
+  return githubApiBreaker.execute(
+    async () => {
+      const response = await fetch(`${GITHUB_API_URL}/user/emails`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'Web3-Student-Lab',
+        },
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const emails = (await response.json()) as GitHubEmail[];
+      const primaryEmail = emails.find((e) => e.primary && e.verified);
+      return primaryEmail?.email || null;
+    },
+    (error) => {
+      logger.warn('Circuit breaker fallback for GitHub email fetch:', error.message);
+      return null;
+    }
+  );
 };
 
 /**
@@ -222,7 +246,7 @@ export const findOrCreateStudentByGitHub = async (
       data: {
         githubUsername: githubUser.login,
         githubAvatarUrl: githubUser.avatar_url,
-        githubAccessToken,
+        githubAccessToken: encryptToken(githubAccessToken),
         updatedAt: new Date(),
       },
     });
@@ -246,7 +270,7 @@ export const findOrCreateStudentByGitHub = async (
           githubId: githubUser.id,
           githubUsername: githubUser.login,
           githubAvatarUrl: githubUser.avatar_url,
-          githubAccessToken,
+          githubAccessToken: encryptToken(githubAccessToken),
           updatedAt: new Date(),
         },
       });
@@ -276,8 +300,7 @@ export const findOrCreateStudentByGitHub = async (
       githubId: githubUser.id,
       githubUsername: githubUser.login,
       githubAvatarUrl: githubUser.avatar_url,
-      // TODO: Encrypt the GitHub access token before storing in production
-      githubAccessToken,
+      githubAccessToken: encryptToken(githubAccessToken),
     },
   });
 
@@ -290,16 +313,18 @@ export const findOrCreateStudentByGitHub = async (
  */
 export const handleGitHubCallback = async (
   code: string,
-  state: string
+  state: string,
+  codeVerifier?: string
 ): Promise<GitHubAuthResponse> => {
-  // Validate state for CSRF protection
-  const isValidState = await validateOAuthState(state);
-  if (!isValidState) {
-    throw new Error('Invalid or expired OAuth state. Please try logging in again.');
+  if (!codeVerifier) {
+    const isValidState = await validateOAuthState(state);
+    if (!isValidState) {
+      throw new Error('Invalid or expired OAuth state. Please try logging in again.');
+    }
   }
 
   // Exchange authorization code for access token
-  const tokenResponse = await exchangeCodeForToken(code);
+  const tokenResponse = await exchangeCodeForToken(code, codeVerifier);
 
   // Fetch GitHub user profile
   const githubUser = await fetchGitHubUser(tokenResponse.access_token);
@@ -334,12 +359,15 @@ export const handleGitHubCallback = async (
 /**
  * Link a GitHub account to an existing authenticated student
  */
-export const linkGitHubAccount = async (
+export const linkGitHubIdentity = async (
   studentId: string,
-  code: string
-): Promise<GitHubAuthResponse> => {
-  // Exchange code for token (no state validation needed for linking)
-  const tokenResponse = await exchangeCodeForToken(code);
+  code: string,
+  codeVerifier: string
+): Promise<void> => {
+  if (!codeVerifier) {
+    throw new Error('PKCE verifier is required to link GitHub');
+  }
+  const tokenResponse = await exchangeCodeForToken(code, codeVerifier);
 
   // Fetch GitHub user profile
   const githubUser = await fetchGitHubUser(tokenResponse.access_token);
@@ -354,18 +382,26 @@ export const linkGitHubAccount = async (
   }
 
   // Link GitHub to the student
-  const student = await prisma.student.update({
+  await prisma.student.update({
     where: { id: studentId },
     data: {
       githubId: githubUser.id,
       githubUsername: githubUser.login,
       githubAvatarUrl: githubUser.avatar_url,
-      // TODO: Encrypt the GitHub access token before storing in production
-      // The project has encryptPayload/decryptionMiddleware utilities
-      githubAccessToken: tokenResponse.access_token,
+      githubAccessToken: encryptToken(tokenResponse.access_token),
       updatedAt: new Date(),
     },
   });
+};
+
+export const linkGitHubAccount = async (
+  studentId: string,
+  code: string,
+  codeVerifier?: string
+): Promise<GitHubAuthResponse> => {
+  if (!codeVerifier) throw new Error('PKCE verifier is required to link GitHub');
+  await linkGitHubIdentity(studentId, code, codeVerifier);
+  const student = await prisma.student.findUniqueOrThrow({ where: { id: studentId } });
 
   const payload: TokenPayload = { userId: student.id };
   const accessToken = generateAccessToken(payload);

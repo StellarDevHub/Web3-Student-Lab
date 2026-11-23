@@ -1,6 +1,6 @@
-// @ts-nocheck
 import { Request, Response } from 'express';
 import { VotingService } from './voting.service.js';
+import { getQueryString } from '../utils/queryParams.js';
 
 export const createIdea = async (req: Request, res: Response) => {
   try {
@@ -17,9 +17,10 @@ export const createIdea = async (req: Request, res: Response) => {
 
 export const getIdeas = async (req: Request, res: Response) => {
   try {
-    const workspaceId = req.query.workspaceId as string || 'default';
+    const workspaceId = getQueryString(req.query.workspaceId, 'default');
+
     const ideas = await VotingService.getIdeas(workspaceId);
-    
+
     // Calculate score for each idea
     const ideasWithScores = ideas.map(idea => {
       const score = idea.votes.reduce((acc, vote) => acc + vote.value, 0);
@@ -34,9 +35,10 @@ export const getIdeas = async (req: Request, res: Response) => {
 
 export const castVote = async (req: Request, res: Response) => {
   try {
-    const { ideaId } = req.params;
+    const ideaId = getQueryString(req.params.ideaId);
+
     const { studentId, value } = req.body;
-    if (!studentId || (value !== 1 && value !== -1)) {
+    if (!ideaId || !studentId || (value !== 1 && value !== -1)) {
       return res.status(400).json({ success: false, error: 'Valid studentId and vote value (1 or -1) are required' });
     }
     const vote = await VotingService.castVote(ideaId, studentId, value);

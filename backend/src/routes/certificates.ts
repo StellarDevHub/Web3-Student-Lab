@@ -1,8 +1,9 @@
 import { Request, Response, Router } from 'express';
 import { normalizeSorobanDid } from '../auth/auth.service.js';
 import { auditAction } from '../middleware/audit.js';
+import { idempotency } from '../middleware/idempotency.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 // Robust Mock Database for 100% Demo Uptime
 interface MockCertificate {
@@ -23,9 +24,44 @@ export const linkDidToCertificates = (studentId: string, did: string | null): vo
   );
 };
 
-// GET /api/certificates - Get all certificates
+import { buildLinkHeader, paginateKeyset } from '../search/PaginationHelper.js';
+
+// GET /api/certificates - Get all certificates (supports cursor pagination)
 router.get('/', async (req: Request, res: Response) => {
   try {
+    const cursorParam = req.query.cursor as string | undefined;
+    const takeParam = parseInt((req.query.take || req.query.limit) as string, 10) || 20;
+
+    if (cursorParam || req.query.take) {
+      const result = await paginateKeyset(
+        async (args) => {
+          let filtered = [...certificates];
+          if (args.cursor?.id) {
+            const index = filtered.findIndex((c) => c.id === args.cursor?.id);
+            if (index !== -1) {
+              filtered = filtered.slice(index + (args.skip || 0));
+            }
+          }
+          return filtered.slice(0, args.take);
+        },
+        { take: takeParam, cursor: cursorParam }
+      );
+
+      const linkHeader = buildLinkHeader('/api/certificates', {}, result.nextCursor, result.prevCursor);
+      if (linkHeader) {
+        res.setHeader('Link', linkHeader);
+      }
+
+      return res.json({
+        data: result.items,
+        pagination: {
+          nextCursor: result.nextCursor,
+          prevCursor: result.prevCursor,
+          hasMore: result.hasMore,
+        },
+      });
+    }
+
     res.json(certificates);
   } catch {
     res.status(500).json({ error: 'Failed to fetch certificates' });
@@ -62,6 +98,7 @@ router.get('/student/:studentId', async (req: Request, res: Response) => {
 // POST /api/certificates - Issue a new certificate
 router.post(
   '/',
+  idempotency(),
   auditAction('ISSUE_CERTIFICATE', 'Certificate'),
   async (req: Request, res: Response) => {
     try {

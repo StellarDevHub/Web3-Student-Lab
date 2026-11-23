@@ -51,6 +51,11 @@ export const primaryNav: NavItem[] = [
     href: '/mempool-auction',
     description: 'Simulate a mempool fee market where the highest bidders are mined first.',
   },
+  {
+    label: 'Admin',
+    href: '/admin/content',
+    description: 'Create and manage courses, curriculum, and learning modules.',
+  },
 ];
 
 export const spotlightTools = [

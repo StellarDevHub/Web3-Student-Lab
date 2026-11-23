@@ -6,8 +6,10 @@ describe('Certificate route validation', () => {
     const response = await request(app).post('/api/v1/certificates').send({ courseId: 'course-101' });
 
     expect(response.status).toBe(400);
-    expect(response.body.status).toBe('error');
-    expect(response.body.errors).toEqual(
+    expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    expect(response.body.error.version).toBe('1');
+    expect(response.body.error.requestId).toBeTruthy();
+    expect(response.body.error.fieldErrors).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ field: 'studentId' }),
       ])
@@ -23,12 +25,15 @@ describe('Certificate route validation', () => {
     });
 
     expect(response.status).toBe(400);
-    expect(response.body.status).toBe('error');
-    expect(response.body.errors).toEqual(
+    expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    expect(response.body.error.fieldErrors).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ field: 'tokenId' }),
         expect.objectContaining({ field: 'did' }),
       ])
     );
+    // Validation failures must not leak internals.
+    expect(JSON.stringify(response.body)).not.toContain('at ');
+    expect(response.headers['x-correlation-id']).toBeTruthy();
   });
 });

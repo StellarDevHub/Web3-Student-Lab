@@ -1,9 +1,9 @@
-// @ts-nocheck
 /**
  * Cross-Chain Bridge Event Indexer Engine
  * Handles block indexing, event processing, and re-org detection for dual-chain bridges
  */
 
+import { EventEmitter } from 'events';
 import { PrismaClient } from '@prisma/client';
 import {
     BlockProcessingResult,
@@ -128,7 +128,7 @@ export class ChainIndexerEngine {
    */
   private async processBlockWithEvents(chain: string, block: IncomingBlock): Promise<BlockProcessingResult> {
     try {
-      const result = await this.prisma.$transaction(async (tx) => {
+      const result = await (this.prisma as any).$transaction(async (tx: any) => {
         // Create or update the processed block record
         const processedBlock = await tx.processedBlock.upsert({
           where: {
@@ -147,7 +147,8 @@ export class ChainIndexerEngine {
         });
 
         let processedEventCount = 0;
-        const failedEvents = [];
+        const failedEvents: Array<{ eventId: string; error: string }> = [];
+
 
         // Process each event in the block with idempotent tracking
         for (const eventData of block.events) {
@@ -246,7 +247,7 @@ export class ChainIndexerEngine {
    * @returns Last processed block info or null if no blocks have been processed
    */
   private async getLastProcessedBlock(chain: string): Promise<LastProcessedBlockInfo | null> {
-    const lastBlock = await this.prisma.processedBlock.findFirst({
+    const lastBlock = await (this.prisma as any).processedBlock?.findFirst({
       where: {
         chain,
         isRolledBack: false,
@@ -272,7 +273,7 @@ export class ChainIndexerEngine {
    */
   private async executeRollback(chain: string, forkBlockNumber: number): Promise<void> {
     try {
-      await this.prisma.$transaction(async (tx) => {
+      await (this.prisma as any).$transaction(async (tx: any) => {
         // Find all blocks at or after the fork block number that need to be rolled back
         const blocksToRollback = await tx.processedBlock.findMany({
           where: {
@@ -294,7 +295,7 @@ export class ChainIndexerEngine {
           return;
         }
 
-        const blockIds = blocksToRollback.map((b) => b.id);
+        const blockIds = blocksToRollback.map((b: any) => b.id);
 
         // Delete all bridge events associated with these blocks (cascade delete)
         await tx.bridgeEvent.deleteMany({
@@ -333,12 +334,12 @@ export class ChainIndexerEngine {
    */
   public async getIndexingStatus(chain: string): Promise<{ chain: string; lastBlockNumber: number | null; totalEventsProcessed: number }> {
     const lastBlock = await this.getLastProcessedBlock(chain);
-    const eventCount = await this.prisma.bridgeEvent.count({
+    const eventCount = await ((this.prisma as any).bridgeEvent?.count({
       where: {
         chain,
         processed: true,
       },
-    });
+    }) || 0);
 
     return {
       chain,

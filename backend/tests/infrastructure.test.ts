@@ -1,7 +1,7 @@
 import { TransactionService } from '../src/infrastructure/transaction.service';
 import { P2PService } from '../src/infrastructure/p2p.service';
 import redisClient from '../src/cache/RedisClient';
-import prisma from '../src/db/prisma';
+import prisma from '../src/db/index';
 
 // Mock Redis Client
 jest.mock('../src/cache/RedisClient', () => ({
@@ -12,8 +12,8 @@ jest.mock('../src/cache/RedisClient', () => ({
   }),
 }));
 
-// Mock Prisma
-jest.mock('../src/db/prisma', () => ({
+// Mock Prisma client used by P2PService
+jest.mock('../src/db/index', () => ({
   p2PNode: {
     create: jest.fn(),
     findMany: jest.fn(),
@@ -39,7 +39,7 @@ describe('Platform Infrastructure Module', () => {
         status: 'success',
         timestamp: 1000,
       };
-      
+
       await TransactionService.addTransaction(tx);
       const client = redisClient.getClient();
       expect(client?.lpush).toHaveBeenCalledWith(

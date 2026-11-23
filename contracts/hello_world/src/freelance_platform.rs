@@ -1,4 +1,31 @@
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Map, String, Symbol, Vec};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
+    Env, Map, String, Symbol, Vec,
+};
+
+// ── Errors (SC-HARD-20: range 400+) ──────────────────────────────────────────
+
+/// Typed contract errors for the freelance platform.
+///
+/// Discriminants are in the `400+` range.
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum FpError {
+    /// `510` — Contract has already been initialised.
+    AlreadyInitialized = 510,
+    /// `511` — Job is not open for applications.
+    JobNotOpen = 511,
+    /// `512` — Only the job client can perform this action.
+    NotClient = 512,
+    /// `513` — Only the assigned freelancer can perform this action.
+    NotFreelancer = 513,
+    /// `514` — Milestone has not been completed yet.
+    MilestoneNotCompleted = 514,
+    /// `515` — Job was not found.
+    JobNotFound = 515,
+    /// `516` — Milestone was not found.
+    MilestoneNotFound = 516,
+}
 
 /// Represents a single payment milestone in a freelance job
 #[contracttype]
@@ -66,9 +93,9 @@ pub struct MilestoneReleasedEvent {
     pub timestamp: u64,
 }
 
-const KEY_JOBS: Symbol = Symbol::new("jobs");
-const KEY_NEXT_ID: Symbol = Symbol::new("next_job_id");
-const KEY_ESCROW: Symbol = Symbol::new("escrow");
+const KEY_JOBS: Symbol = symbol_short!("jobs");
+const KEY_NEXT_ID: Symbol = symbol_short!("next_job");
+const KEY_ESCROW: Symbol = symbol_short!("escrow");
 
 #[contract]
 pub struct FreelancePlatform;
@@ -78,11 +105,15 @@ impl FreelancePlatform {
     /// Initialize the contract
     pub fn initialize(env: Env) {
         if env.storage().instance().has(&KEY_NEXT_ID) {
-            panic!("Already initialized");
+            panic_with_error!(&env, FpError::AlreadyInitialized);
         }
         env.storage().instance().set(&KEY_NEXT_ID, &0u64);
-        env.storage().instance().set(&KEY_JOBS, &Map::<u64, Job>::new(&env));
-        env.storage().instance().set(&KEY_ESCROW, &Map::<u64, i128>::new(&env));
+        env.storage()
+            .instance()
+            .set(&KEY_JOBS, &Map::<u64, Job>::new(&env));
+        env.storage()
+            .instance()
+            .set(&KEY_ESCROW, &Map::<u64, i128>::new(&env));
     }
 
     /// Post a new freelance job with milestones
@@ -127,7 +158,11 @@ impl FreelancePlatform {
             created_at: env.ledger().timestamp(),
         };
 
-        let mut jobs: Map<u64, Job> = env.storage().instance().get(&KEY_JOBS).unwrap();
+        let mut jobs: Map<u64, Job> = env
+            .storage()
+            .instance()
+            .get(&KEY_JOBS)
+            .unwrap_or_else(|| Map::new(&env));
         jobs.set(job_id, job);
         env.storage().instance().set(&KEY_JOBS, &jobs);
 
@@ -149,11 +184,17 @@ impl FreelancePlatform {
     pub fn apply_for_job(env: Env, job_id: u64, freelancer: Address) {
         freelancer.require_auth();
 
-        let mut jobs: Map<u64, Job> = env.storage().instance().get(&KEY_JOBS).unwrap();
-        let mut job = jobs.get(job_id).expect("Job not found");
+        let mut jobs: Map<u64, Job> = env
+            .storage()
+            .instance()
+            .get(&KEY_JOBS)
+            .unwrap_or_else(|| Map::new(&env));
+        let mut job = jobs
+            .get(job_id)
+            .unwrap_or_else(|| panic_with_error!(&env, FpError::JobNotFound));
 
         if job.status != JobStatus::Open {
-            panic!("Job is not open for applications");
+            panic_with_error!(&env, FpError::JobNotOpen);
         }
 
         let mut apps = job.applications;
@@ -164,23 +205,43 @@ impl FreelancePlatform {
     }
 
     /// Client selects a freelancer and funds the first milestone
-    pub fn hire_freelancer(env: Env, job_id: u64, client: Address, freelancer: Address, token: Address) {
+    pub fn hire_freelancer(
+        env: Env,
+        job_id: u64,
+        client: Address,
+        freelancer: Address,
+        token: Address,
+    ) {
         client.require_auth();
 
-        let mut jobs: Map<u64, Job> = env.storage().instance().get(&KEY_JOBS).unwrap();
-        let mut job = jobs.get(job_id).expect("Job not found");
+        let mut jobs: Map<u64, Job> = env
+            .storage()
+            .instance()
+            .get(&KEY_JOBS)
+            .unwrap_or_else(|| Map::new(&env));
+        let mut job = jobs
+            .get(job_id)
+            .unwrap_or_else(|| panic_with_error!(&env, FpError::JobNotFound));
 
         if job.client != client {
-            panic!("Only the client can hire");
+            panic_with_error!(&env, FpError::NotClient);
         }
 
-        let first_amount = job.milestones.get(0).unwrap().amount;
+        let first_amount = job
+            .milestones
+            .get(0)
+            .unwrap_or_else(|| panic_with_error!(&env, FpError::MilestoneNotFound))
+            .amount;
 
         // Transfer tokens from client to contract escrow
         let token_client = soroban_sdk::token::Client::new(&env, &token);
         token_client.transfer(&client, &env.current_contract_address(), &first_amount);
 
-        let mut escrow: Map<u64, i128> = env.storage().instance().get(&KEY_ESCROW).unwrap();
+        let mut escrow: Map<u64, i128> = env
+            .storage()
+            .instance()
+            .get(&KEY_ESCROW)
+            .unwrap_or_else(|| Map::new(&env));
         escrow.set(job_id, first_amount);
         env.storage().instance().set(&KEY_ESCROW, &escrow);
 
@@ -190,7 +251,7 @@ impl FreelancePlatform {
         env.storage().instance().set(&KEY_JOBS, &jobs);
 
         env.events().publish(
-            (Symbol::new(&env, "milestone_funded"),),
+            (Symbol::new(&env, "ms_funded"),),
             MilestoneFundedEvent {
                 job_id,
                 milestone_index: 0,
@@ -201,18 +262,31 @@ impl FreelancePlatform {
     }
 
     /// Freelancer marks a milestone as complete
-    pub fn complete_milestone(env: Env, job_id: u64, milestone_index: u32, freelancer: Address) {
+    pub fn complete_milestone(
+        env: Env,
+        job_id: u64,
+        milestone_index: u32,
+        freelancer: Address,
+    ) {
         freelancer.require_auth();
 
-        let mut jobs: Map<u64, Job> = env.storage().instance().get(&KEY_JOBS).unwrap();
-        let mut job = jobs.get(job_id).expect("Job not found");
+        let mut jobs: Map<u64, Job> = env
+            .storage()
+            .instance()
+            .get(&KEY_JOBS)
+            .unwrap_or_else(|| Map::new(&env));
+        let mut job = jobs
+            .get(job_id)
+            .unwrap_or_else(|| panic_with_error!(&env, FpError::JobNotFound));
 
         if job.freelancer.as_ref() != Some(&freelancer) {
-            panic!("Only assigned freelancer can mark complete");
+            panic_with_error!(&env, FpError::NotFreelancer);
         }
 
         let mut milestones = job.milestones;
-        let mut milestone = milestones.get(milestone_index).expect("Milestone not found");
+        let mut milestone = milestones
+            .get(milestone_index)
+            .unwrap_or_else(|| panic_with_error!(&env, FpError::MilestoneNotFound));
         milestone.completed = true;
         milestones.set(milestone_index, milestone);
         job.milestones = milestones;
@@ -221,48 +295,73 @@ impl FreelancePlatform {
     }
 
     /// Client approves a completed milestone and releases payment
-    pub fn approve_milestone(env: Env, job_id: u64, milestone_index: u32, client: Address, token: Address) {
+    pub fn approve_milestone(
+        env: Env,
+        job_id: u64,
+        milestone_index: u32,
+        client: Address,
+        token: Address,
+    ) {
         client.require_auth();
 
-        let mut jobs: Map<u64, Job> = env.storage().instance().get(&KEY_JOBS).unwrap();
-        let mut job = jobs.get(job_id).expect("Job not found");
+        let mut jobs: Map<u64, Job> = env
+            .storage()
+            .instance()
+            .get(&KEY_JOBS)
+            .unwrap_or_else(|| Map::new(&env));
+        let mut job = jobs
+            .get(job_id)
+            .unwrap_or_else(|| panic_with_error!(&env, FpError::JobNotFound));
 
         if job.client != client {
-            panic!("Only the client can approve");
+            panic_with_error!(&env, FpError::NotClient);
         }
 
         let mut milestones = job.milestones;
-        let mut milestone = milestones.get(milestone_index).expect("Milestone not found");
+        let mut milestone = milestones
+            .get(milestone_index)
+            .unwrap_or_else(|| panic_with_error!(&env, FpError::MilestoneNotFound));
 
         if !milestone.completed {
-            panic!("Milestone not yet completed");
+            panic_with_error!(&env, FpError::MilestoneNotCompleted);
         }
 
         milestone.approved = true;
         milestone.released = true;
-        milestones.set(milestone_index, milestone);
-        job.milestones = milestones;
+        milestones.set(milestone_index, milestone.clone());
+        job.milestones = milestones.clone();
 
         // If last milestone, complete the job
         if milestone_index as usize == milestones.len() - 1 {
             job.status = JobStatus::Completed;
         }
 
-        jobs.set(job_id, job);
+        jobs.set(job_id, job.clone());
         env.storage().instance().set(&KEY_JOBS, &jobs);
 
         // Release payment to freelancer
-        let freelancer = job.freelancer.clone().expect("No freelancer assigned");
+        let freelancer = job
+            .freelancer
+            .clone()
+            .unwrap_or_else(|| panic_with_error!(&env, FpError::NotFreelancer));
         let token_client = soroban_sdk::token::Client::new(&env, &token);
-        token_client.transfer(&env.current_contract_address(), &freelancer, &milestone.amount);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &freelancer,
+            &milestone.amount,
+        );
 
-        let mut escrow: Map<u64, i128> = env.storage().instance().get(&KEY_ESCROW).unwrap();
+        let mut escrow: Map<u64, i128> = env
+            .storage()
+            .instance()
+            .get(&KEY_ESCROW)
+            .unwrap_or_else(|| Map::new(&env));
         let current = escrow.get(job_id).unwrap_or(0);
         escrow.set(job_id, current - milestone.amount);
         env.storage().instance().set(&KEY_ESCROW, &escrow);
 
         env.events().publish(
-            (Symbol::new(&env, "milestone_released"),),
+            (Symbol::new(&env, "ms_released"),),
             MilestoneReleasedEvent {
                 job_id,
                 milestone_index,
@@ -277,11 +376,17 @@ impl FreelancePlatform {
     pub fn fund_next_milestone(env: Env, job_id: u64, client: Address, token: Address) {
         client.require_auth();
 
-        let mut jobs: Map<u64, Job> = env.storage().instance().get(&KEY_JOBS).unwrap();
-        let job = jobs.get(job_id).expect("Job not found");
+        let mut jobs: Map<u64, Job> = env
+            .storage()
+            .instance()
+            .get(&KEY_JOBS)
+            .unwrap_or_else(|| Map::new(&env));
+        let job = jobs
+            .get(job_id)
+            .unwrap_or_else(|| panic_with_error!(&env, FpError::JobNotFound));
 
         if job.client != client {
-            panic!("Only the client can fund");
+            panic_with_error!(&env, FpError::NotClient);
         }
 
         // Find the next unfunded milestone
@@ -299,13 +404,17 @@ impl FreelancePlatform {
             let token_client = soroban_sdk::token::Client::new(&env, &token);
             token_client.transfer(&client, &env.current_contract_address(), &milestone.amount);
 
-            let mut escrow: Map<u64, i128> = env.storage().instance().get(&KEY_ESCROW).unwrap();
+            let mut escrow: Map<u64, i128> = env
+                .storage()
+                .instance()
+                .get(&KEY_ESCROW)
+                .unwrap_or_else(|| Map::new(&env));
             let current = escrow.get(job_id).unwrap_or(0);
             escrow.set(job_id, current + milestone.amount);
             env.storage().instance().set(&KEY_ESCROW, &escrow);
 
             env.events().publish(
-                (Symbol::new(&env, "milestone_funded"),),
+                (Symbol::new(&env, "ms_funded"),),
                 MilestoneFundedEvent {
                     job_id,
                     milestone_index: idx,
@@ -314,17 +423,30 @@ impl FreelancePlatform {
                 },
             );
         }
+
+        // Persist jobs back (no mutation needed here, but keep consistent)
+        jobs.set(job_id, job);
+        env.storage().instance().set(&KEY_JOBS, &jobs);
     }
 
     /// Get a job by ID
     pub fn get_job(env: Env, job_id: u64) -> Job {
-        let jobs: Map<u64, Job> = env.storage().instance().get(&KEY_JOBS).unwrap();
-        jobs.get(job_id).expect("Job not found")
+        let jobs: Map<u64, Job> = env
+            .storage()
+            .instance()
+            .get(&KEY_JOBS)
+            .unwrap_or_else(|| Map::new(&env));
+        jobs.get(job_id)
+            .unwrap_or_else(|| panic_with_error!(&env, FpError::JobNotFound))
     }
 
     /// List all open jobs
     pub fn list_open_jobs(env: Env) -> Vec<Job> {
-        let jobs: Map<u64, Job> = env.storage().instance().get(&KEY_JOBS).unwrap();
+        let jobs: Map<u64, Job> = env
+            .storage()
+            .instance()
+            .get(&KEY_JOBS)
+            .unwrap_or_else(|| Map::new(&env));
         let mut result = Vec::new(&env);
         for (_id, job) in jobs.iter() {
             if job.status == JobStatus::Open {
@@ -336,7 +458,11 @@ impl FreelancePlatform {
 
     /// Get escrow balance for a job
     pub fn get_escrow_balance(env: Env, job_id: u64) -> i128 {
-        let escrow: Map<u64, i128> = env.storage().instance().get(&KEY_ESCROW).unwrap();
+        let escrow: Map<u64, i128> = env
+            .storage()
+            .instance()
+            .get(&KEY_ESCROW)
+            .unwrap_or_else(|| Map::new(&env));
         escrow.get(job_id).unwrap_or(0)
     }
 }

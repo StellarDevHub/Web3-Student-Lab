@@ -8,8 +8,8 @@ export class P2PService {
         workspaceId,
         nodeId,
         nodeName,
-        ipAddress,
-        port,
+        ...(ipAddress ? { ipAddress } : {}),
+        ...(port ? { port } : {}),
       },
     });
   }

@@ -1,0 +1,15 @@
+packages:
+  - 'frontend'
+
+allowBuilds:
+  '@sentry/cli': true
+  blake-hash: true
+  core-js: true
+  esbuild: true
+  keccak: true
+  msw: true
+  protobufjs: true
+  sharp: true
+  tiny-secp256k1: true
+  unrs-resolver: true
+  usb: true

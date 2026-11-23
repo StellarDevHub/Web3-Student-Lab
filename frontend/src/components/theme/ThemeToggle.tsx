@@ -102,10 +102,10 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
         whileTap={{ scale: 0.95 }}
         onClick={toggleTheme}
         className={`flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-300 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-black focus:outline-none dark:bg-gray-100 dark:text-gray-600 dark:hover:bg-gray-200 dark:hover:text-gray-700 dark:focus:ring-offset-white ${className} `}
-        aria-label={`Switch to ${isDark ? 'light' : 'dark'} mode`}
+        aria-label={`Switch theme`}
       >
         <AnimatedThemeIcon isDark={isDark} size={size} />
-        {showLabel && <span className="text-sm font-medium">{isDark ? 'Dark' : 'Light'}</span>}
+        {showLabel && <span className="text-sm font-medium">{theme.charAt(0).toUpperCase() + theme.slice(1)}</span>}
       </motion.button>
     );
   }
@@ -119,7 +119,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
       whileTap={{ scale: 0.9 }}
       onClick={toggleTheme}
       className={`relative flex items-center justify-center rounded-lg ${sizeMap[size]} bg-gray-900 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-300 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-black focus:outline-none dark:bg-gray-100 dark:text-gray-600 dark:hover:bg-gray-200 dark:hover:text-gray-700 dark:focus:ring-offset-white ${className} `}
-      aria-label={`Switch to ${isDark ? 'light' : 'dark'} mode`}
+      aria-label={`Switch theme`}
       type="button"
     >
       <AnimatedThemeIcon isDark={isDark} size={size} />
@@ -213,7 +213,7 @@ export const ThemeToggleCompact: React.FC<{ className?: string }> = ({ className
       whileTap={{ scale: 0.9 }}
       onClick={toggleTheme}
       className={`rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-900 hover:text-gray-300 focus:ring-2 focus:ring-purple-500 focus:outline-none dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white ${className} `}
-      aria-label={`Switch to ${isDark ? 'light' : 'dark'} mode`}
+      aria-label={`Switch theme`}
     >
       <motion.div
         animate={{ rotate: isDark ? 180 : 0 }}

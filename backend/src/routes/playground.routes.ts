@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { RustValidationService } from '../services/rust-validation.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 router.post('/validate', async (req: Request, res: Response) => {
   try {
@@ -13,9 +13,19 @@ router.post('/validate', async (req: Request, res: Response) => {
     }
 
     const result = await RustValidationService.validateCode(code);
+    if (result.status === 'rejected') {
+      res.status(413).json(result);
+      return;
+    }
+
+    if (result.status === 'timed_out') {
+      res.status(422).json(result);
+      return;
+    }
+
     res.json(result);
-  } catch (error) {
-    res.status(500).json({ error: 'Playground validation failed', details: String(error) });
+  } catch {
+    res.status(500).json({ error: 'Playground validation failed' });
   }
 });
 

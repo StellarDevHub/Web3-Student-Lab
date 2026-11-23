@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
+import { API_BASE_URL } from '@/lib/api-config';
 
 interface SubscriptionPlan {
   id: string;
@@ -78,8 +79,6 @@ interface SubscriptionStore {
   clearError: () => void;
   setLoading: (loading: boolean) => void;
 }
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 const parseJson = async <T>(response: Response): Promise<T> => {
   return (await response.json()) as T;

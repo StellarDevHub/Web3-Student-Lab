@@ -7,6 +7,7 @@ jest.mock('../src/db/index.js', () => ({
   __esModule: true,
   default: {
     auditLog: {
+      findFirst: jest.fn().mockResolvedValue({ hash: 'previous-hash-value' }),
       create: jest.fn().mockResolvedValue({}),
     },
   },
@@ -44,10 +45,12 @@ describe('Audit Logging System', () => {
 
       await logAudit(data);
 
+      expect(prisma.auditLog.findFirst).toHaveBeenCalledTimes(1);
       expect(prisma.auditLog.create).toHaveBeenCalledTimes(1);
       const prismaCall = (prisma.auditLog.create as jest.Mock).mock.calls[0][0];
       
       expect(prismaCall.data.action).toBe('TEST_ACTION');
+      expect(prismaCall.data.prevHash).toBe('previous-hash-value');
       expect(prismaCall.data.details._hash).toBeDefined();
 
       expect(auditLogger.info).toHaveBeenCalledTimes(1);

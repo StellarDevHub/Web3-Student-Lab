@@ -1,4 +1,18 @@
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, panic_with_error, symbol_short, Address, Env,
+};
+
+// ── Errors (SC-HARD-20: range 400+) ──────────────────────────────────────────
+
+/// Typed contract errors for the freelance reputation system.
+///
+/// Discriminants are in the `400+` range.
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum FreelanceRepError {
+    /// `520` — Rating value is out of the 1–5 range.
+    InvalidRating = 520,
+}
 
 #[contract]
 pub struct ReputationSystem;
@@ -6,8 +20,8 @@ pub struct ReputationSystem;
 #[contractimpl]
 impl ReputationSystem {
     pub fn add_rating(env: Env, user: Address, rating: u32) {
-        if rating > 5 {
-            panic!("Rating must be 1-5");
+        if rating < 1 || rating > 5 {
+            panic_with_error!(&env, FreelanceRepError::InvalidRating);
         }
 
         let key = (symbol_short!("rep"), user.clone());

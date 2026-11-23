@@ -27,21 +27,32 @@ export function CompileOutputTerminal({ logs, isCompiling = false }: CompileOutp
   }, [logs, isCompiling]);
 
   return (
-    <div className="group relative flex min-h-[280px] flex-grow flex-col overflow-hidden rounded-3xl border border-white/10 bg-black shadow-inner">
+    <div
+      role="region"
+      aria-label="Compile Output Terminal"
+      className="group relative flex min-h-[280px] flex-grow flex-col overflow-hidden rounded-3xl border border-white/10 bg-black shadow-inner"
+    >
       <div className="absolute top-0 left-0 h-1 w-full bg-red-600/30" />
       <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
         <h3 className="text-[10px] font-black tracking-widest text-gray-500 uppercase">
           Compile_Output
         </h3>
-        <span className="text-[9px] font-bold tracking-widest text-zinc-600 uppercase">
+        <span
+          role="status"
+          aria-live="polite"
+          className="text-[9px] font-bold tracking-widest text-zinc-600 uppercase"
+        >
           {isCompiling ? 'Running' : 'Ready'}
         </span>
       </div>
       <div
         ref={viewportRef}
-        className="flex-1 overflow-y-auto p-5 font-mono text-xs leading-6"
+        className="flex-1 overflow-y-auto p-5 font-mono text-xs leading-6 focus:outline-none focus:ring-1 focus:ring-red-500/30"
         role="log"
         aria-live="polite"
+        aria-atomic="false"
+        tabIndex={0}
+        aria-label="Compilation log entries"
       >
         {logs.length === 0 ? (
           <div className="text-zinc-500">

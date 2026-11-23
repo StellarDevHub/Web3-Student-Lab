@@ -124,8 +124,10 @@ export const generateOptimizedImports = () => {
     stellar: `
 // Instead of: import * as Stellar from '@stellar/stellar-sdk';
 // Use tree-shaked imports:
-import { Server, TransactionBuilder, Asset, Operation } from '@stellar/stellar-sdk';
+import { Horizon, TransactionBuilder, Asset, Operation } from '@stellar/stellar-sdk';
 import { Networks } from '@stellar/stellar-sdk/types';
+// Use Horizon.Server instead of Server (stellar-sdk v14+)
+// new Horizon.Server(url) instead of new Server(url)
 `,
     d3: `
 // Instead of: import * as d3 from 'd3';

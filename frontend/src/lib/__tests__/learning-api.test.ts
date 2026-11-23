@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { learningAPI } from '../learning-api';
+import {
+  learningAPI,
+  ProgressConflictError,
+} from '../learning-api';
 import apiClient from '../api-client';
 
 vi.mock('../api-client', () => ({
@@ -15,17 +18,21 @@ describe('learningAPI', () => {
   });
 
   describe('getProgress', () => {
-    it('returns normalized progress on success', async () => {
+    it('returns normalized progress from the wrapped backend response', async () => {
       vi.mocked(apiClient.get).mockResolvedValue({
         data: {
-          studentId: 'student-1',
-          courseId: 'course-1',
-          completedLessons: ['lesson-1'],
-          currentModuleId: 'mod-2',
-          percentage: 50,
-          status: 'in_progress',
-          lastAccessedAt: '2024-01-01',
-          completedAt: null,
+          progress: {
+            studentId: 'student-1',
+            courseId: 'course-1',
+            completedLessons: ['lesson-1'],
+            currentModuleId: 'mod-2',
+            percentage: 50,
+            status: 'in_progress',
+            lastAccessedAt: '2024-01-01',
+            completedAt: null,
+            updatedAt: '2024-01-02T00:00:00.000Z',
+          },
+          dataSource: 'live',
         },
       });
 
@@ -39,6 +46,7 @@ describe('learningAPI', () => {
         status: 'in_progress',
         lastAccessedAt: '2024-01-01',
         completedAt: null,
+        updatedAt: '2024-01-02T00:00:00.000Z',
       });
     });
 
@@ -63,14 +71,17 @@ describe('learningAPI', () => {
     it('normalizes percentage as number', async () => {
       vi.mocked(apiClient.get).mockResolvedValue({
         data: {
-          studentId: 's-1',
-          courseId: 'c-1',
-          completedLessons: [],
-          currentModuleId: null,
-          percentage: '75',
-          status: 'in_progress',
-          lastAccessedAt: null,
-          completedAt: null,
+          progress: {
+            studentId: 's-1',
+            courseId: 'c-1',
+            completedLessons: [],
+            currentModuleId: null,
+            percentage: '75',
+            status: 'in_progress',
+            lastAccessedAt: null,
+            completedAt: null,
+          },
+          dataSource: 'live',
         },
       });
 
@@ -80,28 +91,43 @@ describe('learningAPI', () => {
   });
 
   describe('updateProgress', () => {
-    it('sends PATCH request and invalidates cache', async () => {
+    it('sends PATCH request, passes the concurrency token, and invalidates cache', async () => {
       vi.mocked(apiClient.patch).mockResolvedValue({
         data: {
-          studentId: 's-1',
-          courseId: 'c-1',
-          completedLessons: ['l-1'],
-          currentModuleId: null,
-          percentage: 50,
-          status: 'in_progress',
-          lastAccessedAt: null,
-          completedAt: null,
+          progress: {
+            studentId: 's-1',
+            courseId: 'c-1',
+            completedLessons: ['l-1'],
+            currentModuleId: null,
+            percentage: 50,
+            status: 'in_progress',
+            lastAccessedAt: null,
+            completedAt: null,
+            updatedAt: '2024-01-03T00:00:00.000Z',
+          },
+          dataSource: 'live',
         },
       });
 
       const result = await learningAPI.updateProgress('c-1', {
         completedLessons: ['l-1'],
+        currentModuleId: null,
+        percentage: 50,
+        status: 'in_progress',
+        baseUpdatedAt: '2024-01-01T00:00:00.000Z',
       });
 
       expect(result).toBeTruthy();
+      expect(result?.updatedAt).toBe('2024-01-03T00:00:00.000Z');
       expect(apiClient.patch).toHaveBeenCalledWith(
         '/learning/courses/c-1/progress',
-        { completedLessons: ['l-1'] }
+        {
+          completedLessons: ['l-1'],
+          currentModuleId: null,
+          percentage: 50,
+          status: 'in_progress',
+          baseUpdatedAt: '2024-01-01T00:00:00.000Z',
+        }
       );
     });
 
@@ -112,6 +138,58 @@ describe('learningAPI', () => {
 
       const result = await learningAPI.updateProgress('c-1', {});
       expect(result).toBeNull();
+    });
+
+    it('throws ProgressConflictError with the server state on 409', async () => {
+      vi.mocked(apiClient.patch).mockRejectedValue({
+        response: {
+          status: 409,
+          data: {
+            error: 'Progress was updated in another session; refresh to reconcile',
+            progress: {
+              studentId: 's-1',
+              courseId: 'c-1',
+              completedLessons: ['l-2'],
+              currentModuleId: null,
+              percentage: 50,
+              status: 'in_progress',
+              lastAccessedAt: null,
+              completedAt: null,
+              updatedAt: '2024-01-03T00:00:00.000Z',
+            },
+          },
+        },
+      });
+
+      const promise = learningAPI.updateProgress('c-1', {
+        completedLessons: ['l-1'],
+      });
+
+      await expect(promise).rejects.toBeInstanceOf(ProgressConflictError);
+      await expect(promise).rejects.toMatchObject({
+        message: 'Progress was updated in another session; refresh to reconcile',
+        current: expect.objectContaining({
+          completedLessons: ['l-2'],
+          updatedAt: '2024-01-03T00:00:00.000Z',
+        }),
+      });
+    });
+
+    it('throws ProgressUnavailableError on 503', async () => {
+      vi.mocked(apiClient.patch).mockRejectedValue({
+        response: {
+          status: 503,
+          data: { error: 'learning service is temporarily unavailable' },
+        },
+      });
+
+      const promise = learningAPI.updateProgress('c-1', {
+        completedLessons: ['l-1'],
+      });
+
+      await expect(promise).rejects.toThrow(
+        'learning service is temporarily unavailable'
+      );
     });
   });
 
@@ -126,6 +204,7 @@ describe('learningAPI', () => {
         status: 'in_progress',
         lastAccessedAt: '2024-06-01',
         completedAt: null,
+        updatedAt: '2024-06-02T00:00:00.000Z',
       });
 
       expect(result).toEqual({
@@ -135,6 +214,7 @@ describe('learningAPI', () => {
         status: 'in_progress',
         lastAccessedAt: '2024-06-01',
         completedAt: null,
+        updatedAt: '2024-06-02T00:00:00.000Z',
       });
     });
   });

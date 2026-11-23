@@ -5,7 +5,7 @@ import {
 } from '../../services/vulnerabilityScanner.service.js';
 import logger from '../../utils/logger.js';
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 /**
  * @route POST /api/v1/simulator/scan

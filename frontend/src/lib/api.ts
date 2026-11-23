@@ -1,6 +1,7 @@
 import { apiRequestCache } from './api-cache';
 import apiClient from './api-client';
 import { API_BASE_URL } from './api-config';
+import { getPublicEnv } from './env';
 
 export interface User {
   id: string;
@@ -16,11 +17,43 @@ export interface User {
 export interface AuthResponse {
   user: User;
   token: string;
+  accessToken?: string;
+  refreshToken?: string;
+}
+
+export interface NormalizedAuthResponse {
+  user: User;
+  token: string;
+  accessToken?: string;
+  refreshToken?: string;
+}
+
+export function normalizeAuthResponse(response: unknown): NormalizedAuthResponse {
+  const source = (response as { data?: Record<string, unknown> } | null)?.data ?? response;
+  const obj = source as Record<string, unknown> | null;
+  if (!obj) {
+    throw new Error('Invalid auth response: missing user');
+  }
+  const user = obj.user as User;
+  if (!user) {
+    throw new Error('Invalid auth response: missing user');
+  }
+  const token = (obj.token as string) ?? (obj.accessToken as string);
+  if (!token) {
+    throw new Error('Invalid auth response: missing token');
+  }
+  return {
+    user,
+    token,
+    accessToken: (obj.accessToken as string) ?? token,
+    refreshToken: obj.refreshToken as string | undefined,
+  };
 }
 
 export interface LoginRequest {
   email: string;
   password: string;
+  turnstileToken?: string;
 }
 
 export interface RegisterRequest {
@@ -29,6 +62,7 @@ export interface RegisterRequest {
   firstName: string;
   lastName: string;
   walletAddress?: string;
+  turnstileToken?: string;
 }
 
 export interface Course {
@@ -119,12 +153,19 @@ function normalizeCertificateListResponse(data: unknown): Certificate[] {
 
 // Authentication APIs
 export const authAPI = {
+  completeOAuthTicket: async (ticket: string): Promise<AuthResponse & { isNewUser: boolean }> => {
+    const response = await apiClient.post('/oauth/session', { ticket });
+    return response.data;
+  },
+
   register: async (data: RegisterRequest): Promise<AuthResponse> => {
-    const response = await apiClient.post('/auth/register', data, { encrypt: true } as any);
+    apiRequestCache.invalidatePrefix('auth:profile-status');
+    const response = await apiClient.post('/auth/register', data);
     return response.data;
   },
 
   login: async (data: LoginRequest): Promise<AuthResponse> => {
+    apiRequestCache.invalidatePrefix('auth:profile-status');
     const response = await apiClient.post('/auth/login', data);
     return response.data;
   },
@@ -143,16 +184,27 @@ export const authAPI = {
   getProfileStatus: async (
     walletAddress: string
   ): Promise<{ completed: boolean; user: User | null }> => {
-    return apiRequestCache.fetch(
-      `auth:profile-status:${walletAddress}`,
-      async () => {
-        const response = await apiClient.get('/auth/profile-status', {
-          params: { walletAddress },
-        });
-        return response.data;
-      },
-      { ttlMs: DEFAULT_CACHE_TTL_MS }
-    );
+    const response = await apiClient.get('/auth/profile-status', {
+      params: { walletAddress },
+    });
+    return response.data;
+  },
+
+  getSep10Challenge: async (
+    account: string
+  ): Promise<{ transaction: string; network_passphrase?: string }> => {
+    const response = await apiClient.get('/auth/sep10/challenge', {
+      params: { account },
+    });
+    return response.data;
+  },
+
+  verifySep10Challenge: async (
+    transaction: string
+  ): Promise<AuthResponse> => {
+    apiRequestCache.invalidatePrefix('auth:profile-status');
+    const response = await apiClient.post('/auth/sep10/token', { transaction });
+    return response.data;
   },
 
   /**
@@ -184,28 +236,287 @@ export const authAPI = {
   },
 };
 
+export const socialIdentityAPI = {
+  getStatus: async (): Promise<{
+    github: { linked: boolean; username?: string };
+    discord: { linked: boolean; username?: string };
+  }> => {
+    const response = await apiClient.get('/oauth/social/status');
+    return response.data;
+  },
+
+  startGitHubLink: async (): Promise<string> => {
+    const response = await apiClient.post('/oauth/github/link/start');
+    return response.data.authorizationUrl;
+  },
+
+  startDiscordLink: async (): Promise<string> => {
+    const response = await apiClient.post('/oauth/discord/link/start');
+    return response.data.authorizationUrl;
+  },
+};
+
+// A course list/detail response is either backed by the live database
+// ("live") or, when the backend cannot reach the database, an
+// explicitly labeled demo/fallback dataset ("demo"). See #911 — the
+// backend never silently serves demo data as if it were live.
+export type CourseDataSource = 'live' | 'demo';
+
+export interface CoursesListResult {
+  courses: Course[];
+  dataSource: CourseDataSource;
+  message?: string;
+}
+
+export interface CourseDetailResult {
+  course: Course;
+  dataSource: CourseDataSource;
+  message?: string;
+}
+
+function normalizeCoursesResponse(data: unknown): CoursesListResult {
+  if (data && typeof data === 'object' && 'courses' in (data as Record<string, unknown>)) {
+    const d = data as { courses: Course[]; dataSource?: CourseDataSource; message?: string };
+    return {
+      courses: Array.isArray(d.courses) ? d.courses : [],
+      dataSource: d.dataSource ?? 'live',
+      message: d.message,
+    };
+  }
+  // Backward-compatible shape (plain array) in case of stale caches.
+  return { courses: Array.isArray(data) ? (data as Course[]) : [], dataSource: 'live' };
+}
+
+function normalizeCourseResponse(data: unknown): CourseDetailResult {
+  if (data && typeof data === 'object' && 'course' in (data as Record<string, unknown>)) {
+    const d = data as { course: Course; dataSource?: CourseDataSource; message?: string };
+    return {
+      course: d.course,
+      dataSource: d.dataSource ?? 'live',
+      message: d.message,
+    };
+  }
+  return { course: data as Course, dataSource: 'live' };
+}
+
+export const DEMO_COURSES: Course[] = [
+  {
+    id: 'cm1yxxxx-intro',
+    title: 'Introduction to Web3 and Stellar',
+    description:
+      'Learn the foundational concepts of blockchain technology, decentralized networks, and how the Stellar consensus protocol enables fast, low-cost cross-border payments.',
+    instructor: 'Satoshi N.',
+    credits: 3,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'cm1yxxxx-soroban',
+    title: 'Soroban Smart Contracts 101',
+    description:
+      'A deep dive into writing secure smart contracts on the Stellar network using Rust and the Soroban SDK. Execute state changes and build immutable modules.',
+    instructor: 'Vitalik B.',
+    credits: 5,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'cm1yxxxx-defi',
+    title: 'Decentralized Finance (DeFi) primitives',
+    description:
+      'Master the core primitives of DeFi including Liquidity Pools, Automated Market Makers (AMMs), and yield generation directly on-chain.',
+    instructor: 'Hayden A.',
+    credits: 4,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'course-1',
+    title: 'Soroban 101: Smart Contract Basics',
+    description:
+      'Master the art of writing, testing, and deploying Rust-based smart contracts on the Stellar Soroban virtual machine.',
+    instructor: 'Stellar Dev Hub',
+    credits: 3,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'course-2',
+    title: 'Stellar Blockchain Fundamentals',
+    description:
+      'Learn the core concepts of the Stellar network: accounts, assets, trustlines, anchors, and fast transaction settlement.',
+    instructor: 'Web3 Academy',
+    credits: 2,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'course-3',
+    title: 'DApp Development with Next.js',
+    description:
+      'Build end-to-end decentralized applications using Next.js 16, React 19, Freighter wallet authentication, and Soroban contract RPCs.',
+    instructor: 'Frontend Masters',
+    credits: 4,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'course-4',
+    title: 'Advanced Soroban & Rust Smart Contracts',
+    description:
+      'Deep dive into WASM memory management, Rust contract patterns, reentrancy guards, TTL storage expiration, and security auditing.',
+    instructor: 'Rust Security Labs',
+    credits: 5,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'course-5',
+    title: 'DeFi & Automated Market Makers on Stellar',
+    description:
+      'Build constant-product DEX liquidity pools, TWAP price oracles, multi-hop swaps, and atomic cross-contract arbitrage.',
+    instructor: 'DeFi Engineering Group',
+    credits: 5,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'blockchain-foundations',
+    title: 'Blockchain Foundations',
+    description:
+      'Understand cryptographic hashes, blocks, asymmetric key cryptography, and Federated Byzantine Agreement consensus.',
+    instructor: 'Stellar Dev Hub',
+    credits: 3,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'smart-contracts',
+    title: 'Smart Contracts Lab',
+    description:
+      'Learn how programmable agreements power Web3 products with practical Soroban Rust contract exercises and tests.',
+    instructor: 'Soroban Core Team',
+    credits: 4,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'open-source',
+    title: 'Open Source Lab',
+    description:
+      'Practice triaging real GitHub issues, managing Git feature branches and rebases, and submitting production-grade pull requests.',
+    instructor: 'Open Source Collective',
+    credits: 3,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'dao-governance',
+    title: 'DAO Governance & Voting Systems',
+    description:
+      'Explore decentralized governance, on-chain proposals, quorum calculation, and sybil-resistant quadratic voting contracts on Stellar.',
+    instructor: 'Governance Guild',
+    credits: 4,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+];
+
 // Courses APIs
 export const coursesAPI = {
+  /**
+   * Returns the course list along with an explicit `dataSource` flag
+   * so callers can distinguish live data from the demo fallback shown
+   * when the backend database or network is unreachable (#911).
+   */
+  getAllWithSource: async (): Promise<CoursesListResult> => {
+    try {
+      return await apiRequestCache.fetch(
+        'courses:list',
+        async () => {
+          try {
+            const response = await apiClient.get('/courses');
+            const normalized = normalizeCoursesResponse(response.data);
+            if (!normalized.courses || normalized.courses.length === 0) {
+              return {
+                courses: DEMO_COURSES,
+                dataSource: 'demo',
+                message: 'Live database has no courses seeded yet. Showing demo course catalog.',
+              };
+            }
+            return normalized;
+          } catch {
+            return {
+              courses: DEMO_COURSES,
+              dataSource: 'demo',
+              message: 'Live course service is temporarily unreachable. Showing offline demo catalog.',
+            };
+          }
+        },
+        { ttlMs: DEFAULT_CACHE_TTL_MS }
+      );
+    } catch {
+      return {
+        courses: DEMO_COURSES,
+        dataSource: 'demo',
+        message: 'Live course service is temporarily unreachable. Showing offline demo catalog.',
+      };
+    }
+  },
+
   getAll: async (): Promise<Course[]> => {
-    return apiRequestCache.fetch(
-      'courses:list',
-      async () => {
-        const response = await apiClient.get('/courses');
-        return response.data;
-      },
-      { ttlMs: DEFAULT_CACHE_TTL_MS }
-    );
+    const result = await coursesAPI.getAllWithSource();
+    return result.courses;
+  },
+
+  getByIdWithSource: async (id: string): Promise<CourseDetailResult> => {
+    try {
+      return await apiRequestCache.fetch(
+        `courses:detail:${id}`,
+        async () => {
+          try {
+            const response = await apiClient.get(`/courses/${id}`);
+            return normalizeCourseResponse(response.data);
+          } catch {
+            const fallback = DEMO_COURSES.find((c) => c.id === id) || {
+              id,
+              title: id.replace(/[-_]/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+              description: 'Course details are running in demo mode while the live backend is unreachable.',
+              instructor: 'Stellar Instructor',
+              credits: 3,
+              createdAt: '2025-01-01T00:00:00.000Z',
+              updatedAt: '2025-01-01T00:00:00.000Z',
+            };
+            return {
+              course: fallback,
+              dataSource: 'demo',
+              message: 'Live course service is temporarily unreachable. Showing offline demo data.',
+            };
+          }
+        },
+        { ttlMs: DEFAULT_CACHE_TTL_MS }
+      );
+    } catch {
+      const fallback = DEMO_COURSES.find((c) => c.id === id) || {
+        id,
+        title: id.replace(/[-_]/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+        description: 'Course details are running in demo mode while the live backend is unreachable.',
+        instructor: 'Stellar Instructor',
+        credits: 3,
+        createdAt: '2025-01-01T00:00:00.000Z',
+        updatedAt: '2025-01-01T00:00:00.000Z',
+      };
+      return {
+        course: fallback,
+        dataSource: 'demo',
+        message: 'Live course service is temporarily unreachable. Showing offline demo data.',
+      };
+    }
   },
 
   getById: async (id: string): Promise<Course> => {
-    return apiRequestCache.fetch(
-      `courses:detail:${id}`,
-      async () => {
-        const response = await apiClient.get(`/courses/${id}`);
-        return response.data;
-      },
-      { ttlMs: DEFAULT_CACHE_TTL_MS }
-    );
+    const result = await coursesAPI.getByIdWithSource(id);
+    return result.course;
   },
 
   create: async (data: Partial<Course>): Promise<Course> => {
@@ -298,14 +609,18 @@ export const enrollmentsAPI = {
   },
 
   getByStudentId: async (studentId: string): Promise<Enrollment[]> => {
-    return apiRequestCache.fetch(
-      `enrollments:student:${studentId}`,
-      async () => {
-        const response = await apiClient.get(`/enrollments/student/${studentId}`);
-        return response.data;
-      },
-      { ttlMs: DEFAULT_CACHE_TTL_MS }
-    );
+    try {
+      return await apiRequestCache.fetch(
+        `enrollments:student:${studentId}`,
+        async () => {
+          const response = await apiClient.get(`/enrollments/student/${studentId}`);
+          return Array.isArray(response.data) ? response.data : [];
+        },
+        { ttlMs: DEFAULT_CACHE_TTL_MS }
+      );
+    } catch {
+      return [];
+    }
   },
 
   enroll: async (studentId: string, courseId: string): Promise<Enrollment> => {
@@ -411,7 +726,7 @@ export const analyticsAPI = {
     const token = localStorage.getItem('token');
     if (!token) return null;
 
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080';
+    const wsUrl = getPublicEnv().wsUrl || 'ws://localhost:8080';
     const ws = new WebSocket(`${wsUrl}/analytics/stream?token=${token}`);
 
     ws.onmessage = (event) => {
@@ -436,6 +751,16 @@ export interface ProjectIdea {
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
 }
 
+export interface GeneratedIdeaResult {
+  idea: ProjectIdea;
+  /** True when the backend substituted a safe fallback idea instead of a live AI-generated one (#908). */
+  fromMock: boolean;
+  /** Machine-readable reason for the fallback, e.g. 'ai_service_unavailable' | 'generated_idea_rejected'. */
+  fallbackReason?: string;
+  /** Human-readable, actionable explanation suitable for display. */
+  message?: string;
+}
+
 export const generatorAPI = {
   generateIdea: async (params: {
     theme: string;
@@ -444,6 +769,34 @@ export const generatorAPI = {
   }): Promise<ProjectIdea> => {
     const response = await apiClient.post('/generator/generate', params);
     return response.data.projectIdea;
+  },
+
+  /**
+   * Same endpoint as {@link generateIdea}, but surfaces whether the
+   * backend had to fall back to a safe mock idea (AI unavailable, or
+   * generated output rejected by server-side validation/safety
+   * checks) so the UI can show an actionable message instead of
+   * silently presenting a substituted idea as if it were freshly
+   * generated (#908).
+   */
+  generateIdeaWithStatus: async (params: {
+    theme: string;
+    techStack: string[];
+    difficulty: string;
+  }): Promise<GeneratedIdeaResult> => {
+    const response = await apiClient.post('/generator/generate', params);
+    const data = response.data as {
+      projectIdea: ProjectIdea;
+      fromMock?: boolean;
+      fallbackReason?: string;
+      message?: string;
+    };
+    return {
+      idea: data.projectIdea,
+      fromMock: Boolean(data.fromMock),
+      fallbackReason: data.fallbackReason,
+      message: data.message,
+    };
   },
 };
 
