@@ -77,7 +77,7 @@ jobs:
           DATABASE_URL: postgresql://test:test@localhost:5432/test_db
         run: |
           npx prisma generate
-          npx prisma migrate deploy
+          npm run migration:deploy:locked
       - name: Test Migration Rollbacks
         working-directory: ./backend
         env:
