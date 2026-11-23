@@ -1,7 +1,6 @@
 'use client';
 
 import { StellarNetwork, useWallet } from '@/contexts/WalletContext';
-import { motion } from 'framer-motion';
 import { AlertCircle, CheckCircle2, Download, ExternalLink, Globe, RefreshCw, ShieldAlert, Wallet } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -78,10 +77,10 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-xl w-full bg-bg-secondary border border-border-theme rounded-2xl p-8 shadow-2xl space-y-6"
+      {/* CSS fade-in instead of framer-motion: this gate is in the root layout,
+          so its dependencies are paid by every route (FE-076). */}
+      <div
+        className="wallet-gate-enter max-w-xl w-full bg-bg-secondary border border-border-theme rounded-2xl p-8 shadow-2xl space-y-6"
       >
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3">
@@ -191,7 +190,7 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
             Targeting <strong>{activeNetwork}</strong>. If your wallet is on a different network, you will be prompted to switch seamlessly.
           </span>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

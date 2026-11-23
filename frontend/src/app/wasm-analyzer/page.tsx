@@ -11,7 +11,7 @@ import {
   sectionBreakdown,
 } from '@/lib/wasmAnalyzer';
 import { MemoryProfilerPanel } from '@/components/wasm-analyzer/MemoryProfilerPanel';
-import { WasmMemoryProfiler } from '@/components/visualizer/WasmMemoryProfiler';
+import { LazyWasmMemoryProfiler as WasmMemoryProfiler } from '@/components/charts/LazyCharts';
 import type { WatResponse } from '@/workers/wat.worker';
 
 /**
