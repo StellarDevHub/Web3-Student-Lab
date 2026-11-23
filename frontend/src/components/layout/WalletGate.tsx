@@ -121,15 +121,15 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
             return (
               <div
                 key={wallet.id}
-                className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                className={`flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border transition-all ${
                   installed
                     ? 'border-border-theme hover:border-red-500 hover:bg-red-500/5 cursor-pointer'
                     : 'border-neutral-800 bg-neutral-950/40 opacity-75'
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
                   <span className="text-2xl">{wallet.icon}</span>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-sm">{wallet.name}</span>
                       {wallet.recommended && installed && (
@@ -147,11 +147,13 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-text-secondary mt-0.5">{wallet.description}</p>
+                    <p className="mt-0.5 break-words text-xs text-text-secondary">
+                      {wallet.description}
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-end gap-2">
                   {!installed && (
                     <a
                       href={wallet.downloadUrl}

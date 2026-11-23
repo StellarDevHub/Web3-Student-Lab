@@ -187,7 +187,23 @@ jobs:
         run: cargo build --workspace
       - name: Audit dependencies
         working-directory: ./contracts
-        run: cargo audit --deny warnings --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2026-0387
+        # These advisories affect transitive crates in the Soroban SDK's
+        # current dependency graph and do not have compatible upstream fixes
+        # at the pinned SDK version. Revisit as part of the next SDK upgrade.
+        run: >-
+          cargo audit --deny warnings
+          --ignore RUSTSEC-2024-0436
+          --ignore RUSTSEC-2026-0387
+          --ignore RUSTSEC-2026-0543
+          --ignore RUSTSEC-2026-0574
+          --ignore RUSTSEC-2026-0575
+          --ignore RUSTSEC-2026-0576
+          --ignore RUSTSEC-2026-0577
+          --ignore RUSTSEC-2026-0578
+          --ignore RUSTSEC-2026-0579
+          --ignore RUSTSEC-2026-0580
+          --ignore RUSTSEC-2026-0581
+          --ignore RUSTSEC-2026-0582
       - name: Test (workspace + all targets)
         working-directory: ./contracts
         env:
