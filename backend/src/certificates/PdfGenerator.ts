@@ -1,23 +1,31 @@
 /**
- * PDF Certificate Generator — Issue #1176
+ * PDF Certificate Generator — Issue #1176 / BE-072
  *
  * Produces institutional PDF diplomas with:
  *  - Clean vector layout using pdf-lib
- *  - Embedded Ed25519 digital signature dictionary (cryptographic attestation)
+ *  - Ed25519 signature over the SHA-256 digest of the rendered document bytes
+ *  - Signature, public key and canonical certificate ID in PDF metadata
  *  - QR-code verification link embedded in the document
  *  - File size optimisation targeting < 300 KB
- *  - Synchronous generation completing in < 1 second
  *
- * The Ed25519 signature is computed over a canonical representation of the
- * certificate data.  Any tampering with the text fields will produce a
- * signature mismatch when re-verified.
- *
- * Dependencies: pdf-lib (already in package.json), @noble/ed25519 (pure-JS,
- * no native bindings required).
+ * The signature field is rendered with a fixed-length placeholder, the digest
+ * is computed over that canonical rendering, and the Ed25519 signature is
+ * substituted in place. Re-verification zeros the signature field again, so a
+ * single-byte change anywhere in the PDF invalidates the signature.
  */
 
 import crypto from 'crypto';
+import { Keypair } from '@stellar/stellar-sdk';
 import logger from '../utils/logger.js';
+import { deriveIssuerKeyPair } from './Ed25519Signature2020.js';
+
+const ED25519_SIGNATURE_HEX_LENGTH = 128;
+const ED25519_PUBLIC_KEY_HEX_LENGTH = 64;
+const SIGNATURE_METADATA_KEY = 'ed25519-sig:';
+const PUBLIC_KEY_METADATA_KEY = 'ed25519-pub:';
+const CERTIFICATE_ID_METADATA_KEY = 'cert-id:';
+const SIGNATURE_PLACEHOLDER = '0'.repeat(ED25519_SIGNATURE_HEX_LENGTH);
+const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,15 +49,19 @@ export interface PdfCertificateInput {
 }
 
 export interface PdfGenerationResult {
-  /** Raw PDF bytes. */
+  /** Raw PDF bytes with the signature embedded in document metadata. */
   pdfBytes: Uint8Array;
-  /** Hex-encoded Ed25519 signature over the canonical certificate payload. */
+  /** Hex-encoded Ed25519 signature over the SHA-256 document digest. */
   signature: string;
-  /** Hex-encoded SHA-256 of the PDF bytes (for integrity checks). */
+  /** Hex-encoded SHA-256 of the final PDF bytes. */
   sha256: string;
+  /** Hex-encoded SHA-256 digest that was signed. */
+  documentDigest: string;
+  /** Canonical certificate ID embedded in the PDF metadata. */
+  certificateId: string;
   /** File size in bytes. */
   sizeBytes: number;
-  /** Ed25519 public key (hex) used to sign — include this in the metadata. */
+  /** Ed25519 public key (hex) used to sign. */
   publicKeyHex: string;
 }
 
@@ -63,38 +75,28 @@ export interface SignaturePayload {
   grade: string;
 }
 
+interface PdfSignatureMetadata {
+  certificateId: string;
+  signature: string;
+  publicKeyHex: string;
+}
+
 // ─── CertificatePdfGenerator ──────────────────────────────────────────────────
 
 export class CertificatePdfGenerator {
   private static instance: CertificatePdfGenerator | null = null;
 
-  /** Ed25519 key-pair derived from the CERTIFICATE_SIGNING_SEED env variable.
-   *  Falls back to a randomly-generated seed for dev environments. */
-  private readonly privateKey: Buffer;
+  private readonly privateKey: crypto.KeyObject;
   private readonly publicKey: Buffer;
 
   constructor() {
-    const seedHex =
-      process.env['CERTIFICATE_SIGNING_SEED'] ||
-      crypto.randomBytes(32).toString('hex');
-
-    // Derive a deterministic 32-byte private key from the seed
-    this.privateKey = crypto
-      .createHash('sha256')
-      .update(Buffer.from(seedHex, 'hex').length === 32
-        ? Buffer.from(seedHex, 'hex')
-        : Buffer.from(seedHex))
-      .digest();
-
-    // Ed25519 public key via Node.js crypto
-    const { publicKey } = crypto.generateKeyPairSync('ed25519', {
-      privateKey: this.privateKey as never as crypto.KeyObject,
-    } as never);
-
-    // Extract raw 32-byte public key
-    this.publicKey = (publicKey as crypto.KeyObject)
-      .export({ type: 'spki', format: 'der' })
-      .slice(-32);
+    const secret = process.env['INSTITUTION_MASTER_SECRET'];
+    const seedHex = secret
+      ? Keypair.fromSecret(secret).rawSecretKey().toString('hex')
+      : process.env['CERTIFICATE_SIGNING_SEED'];
+    const keys = deriveIssuerKeyPair(seedHex);
+    this.privateKey = keys.privateKey;
+    this.publicKey = keys.publicKey;
   }
 
   static getInstance(): CertificatePdfGenerator {
@@ -106,40 +108,38 @@ export class CertificatePdfGenerator {
 
   // ── Public API ─────────────────────────────────────────────────────────
 
-  /**
-   * Generates a signed PDF certificate.
-   *
-   * @param input - Certificate data to embed in the document.
-   * @returns PDF bytes with embedded signature metadata.
-   */
   async generatePdf(input: PdfCertificateInput): Promise<PdfGenerationResult> {
     const startTs = Date.now();
+    const certificateId = input.certificateId.trim();
+
+    if (!certificateId) {
+      throw new Error('certificateId is required');
+    }
 
     const issuerName = input.issuerName ?? process.env['ISSUER_NAME'] ?? 'Web3 Student Lab';
-    const verificationUrl = `${input.verificationBaseUrl ?? process.env['API_BASE_URL'] ?? 'https://web3-student-lab.vercel.app'}/verify/${input.certificateId}`;
+    const verificationUrl = `${input.verificationBaseUrl ?? process.env['API_BASE_URL'] ?? 'https://web3-student-lab.vercel.app'}/verify/${certificateId}`;
+    const metadata: PdfSignatureMetadata = {
+      certificateId,
+      signature: SIGNATURE_PLACEHOLDER,
+      publicKeyHex: this.publicKey.toString('hex'),
+    };
 
-    // 1. Build signature payload (canonical, deterministic)
-    const payload = this.buildSignaturePayload(input, issuerName);
-
-    // 2. Sign payload with Ed25519
-    const signature = this.signPayload(payload);
-
-    // 3. Generate PDF bytes (pure-JS, no native deps)
-    const pdfBytes = await this.buildPdfBytes(input, issuerName, verificationUrl, signature, payload);
-
-    // 4. Hash the PDF
+    const unsignedPdf = await this.buildPdfBytes(input, issuerName, verificationUrl, metadata);
+    const documentDigest = crypto.createHash('sha256').update(unsignedPdf).digest();
+    const signature = this.signDigest(documentDigest);
+    const pdfBytes = this.embedSignature(unsignedPdf, signature);
     const sha256 = crypto.createHash('sha256').update(pdfBytes).digest('hex');
 
     const elapsed = Date.now() - startTs;
     logger.info('[PdfGenerator] Certificate PDF generated', {
-      certificateId: input.certificateId,
+      certificateId,
       sizeBytes: pdfBytes.length,
       latencyMs: elapsed,
     });
 
     if (pdfBytes.length > 300_000) {
       logger.warn('[PdfGenerator] Generated PDF exceeds 300 KB target', {
-        certificateId: input.certificateId,
+        certificateId,
         sizeBytes: pdfBytes.length,
       });
     }
@@ -148,42 +148,53 @@ export class CertificatePdfGenerator {
       pdfBytes,
       signature,
       sha256,
+      documentDigest: documentDigest.toString('hex'),
+      certificateId,
       sizeBytes: pdfBytes.length,
-      publicKeyHex: this.publicKey.toString('hex'),
+      publicKeyHex: metadata.publicKeyHex,
     };
   }
 
-  /**
-   * Verifies an Ed25519 signature against a canonical payload.
-   *
-   * @param payload   - The original SignaturePayload.
-   * @param signature - Hex-encoded signature to verify.
-   * @param publicKeyHex - Hex-encoded Ed25519 public key.
-   * @returns true if the signature is valid.
-   */
   verifySignature(
-    payload: SignaturePayload,
+    payloadOrPdfOrDigest: SignaturePayload | Uint8Array | string,
     signature: string,
     publicKeyHex: string
   ): boolean {
-    try {
-      const message = this.canonicalizePayload(payload);
-      const sigBuf = Buffer.from(signature, 'hex');
-      const pubKeyBuf = Buffer.from(publicKeyHex, 'hex');
-
-      // Reconstruct a SubjectPublicKeyInfo DER wrapper for the raw public key
-      const spkiPrefix = Buffer.from(
-        '302a300506032b6570032100',
-        'hex'
+    if (typeof payloadOrPdfOrDigest === 'string') {
+      return this.verifyDigestSignature(
+        Buffer.from(payloadOrPdfOrDigest, 'hex'),
+        signature,
+        publicKeyHex
       );
-      const spkiDer = Buffer.concat([spkiPrefix, pubKeyBuf]);
-      const keyObj = crypto.createPublicKey({
-        key: spkiDer,
-        format: 'der',
-        type: 'spki',
-      });
+    }
 
-      return crypto.verify(null, message, keyObj, sigBuf);
+    if (payloadOrPdfOrDigest instanceof Uint8Array) {
+      return this.verifyPdfSignature(payloadOrPdfOrDigest, signature, publicKeyHex);
+    }
+
+    try {
+      const message = this.canonicalizePayload(payloadOrPdfOrDigest);
+      return this.verifyDigestSignature(message, signature, publicKeyHex);
+    } catch {
+      return false;
+    }
+  }
+
+  verifyPdfSignature(
+    pdfBytes: Uint8Array,
+    signature?: string,
+    publicKeyHex?: string
+  ): boolean {
+    try {
+      const bytes = Buffer.from(pdfBytes);
+      const metadata = this.readSignatureMetadata(bytes);
+      if (!metadata) return false;
+      if (signature && signature !== metadata.signature) return false;
+      if (publicKeyHex && publicKeyHex !== metadata.publicKeyHex) return false;
+
+      const canonicalBytes = this.replaceSignature(bytes, metadata.signature, SIGNATURE_PLACEHOLDER);
+      const documentDigest = crypto.createHash('sha256').update(canonicalBytes).digest();
+      return this.verifyDigestSignature(documentDigest, metadata.signature, metadata.publicKeyHex);
     } catch {
       return false;
     }
@@ -196,78 +207,111 @@ export class CertificatePdfGenerator {
 
   // ── Private Helpers ────────────────────────────────────────────────────
 
-  private buildSignaturePayload(
-    input: PdfCertificateInput,
-    issuerName: string
-  ): SignaturePayload {
-    return {
-      certificateId: input.certificateId,
-      studentName: input.studentName,
-      courseTitle: input.courseTitle,
-      instructor: input.instructor,
-      issuedAt: input.issuedAt,
-      issuerName,
-      grade: input.grade ?? '',
-    };
-  }
-
   private canonicalizePayload(payload: SignaturePayload): Buffer {
-    // Sort keys for deterministic serialisation
     const ordered = Object.fromEntries(
       Object.entries(payload).sort(([a], [b]) => a.localeCompare(b))
     );
     return Buffer.from(JSON.stringify(ordered), 'utf-8');
   }
 
-  private signPayload(payload: SignaturePayload): string {
+  private signDigest(digest: Buffer): string {
     try {
-      const message = this.canonicalizePayload(payload);
-
-      // Build PKCS#8 DER from raw 32-byte Ed25519 private key
-      const pkcs8Prefix = Buffer.from('302e020100300506032b657004220420', 'hex');
-      const pkcs8Der = Buffer.concat([pkcs8Prefix, this.privateKey]);
-
-      const privKeyObj = crypto.createPrivateKey({
-        key: pkcs8Der,
-        format: 'der',
-        type: 'pkcs8',
-      });
-
-      const sig = crypto.sign(null, message, privKeyObj);
-      return sig.toString('hex');
+      return crypto.sign(null, digest, this.privateKey).toString('hex');
     } catch (error) {
-      logger.error('[PdfGenerator] Ed25519 signing failed', { error });
-      // Fallback: return a hex-encoded HMAC-SHA256 (still provides tamper detection)
-      return crypto
-        .createHmac('sha256', this.privateKey)
-        .update(this.canonicalizePayload(payload))
-        .digest('hex');
+      logger.error('[PdfGenerator] Ed25519 PDF signing failed', { error });
+      throw new Error('Failed to sign certificate PDF');
     }
   }
 
-  /**
-   * Builds the PDF bytes using a pure-JS approach.
-   * We generate a valid minimal PDF structure manually to avoid requiring
-   * native dependencies in a serverless environment.
-   *
-   * The PDF includes:
-   *   - Page 1: diploma layout (title, student name, course, date, grade, signature seal)
-   *   - /Info dictionary with subject, author, and creation date
-   *   - Custom /Sig metadata entry embedding the Ed25519 signature hex
-   */
+  private publicKeyObject(publicKeyHex: string): crypto.KeyObject {
+    if (!new RegExp(`^[0-9a-f]{${ED25519_PUBLIC_KEY_HEX_LENGTH}}$`).test(publicKeyHex)) {
+      throw new Error('Invalid Ed25519 public key');
+    }
+    const spkiDer = Buffer.concat([ED25519_SPKI_PREFIX, Buffer.from(publicKeyHex, 'hex')]);
+    return crypto.createPublicKey({ key: spkiDer, format: 'der', type: 'spki' });
+  }
+
+  private verifyDigestSignature(digest: Buffer, signature: string, publicKeyHex: string): boolean {
+    try {
+      const keyObj = this.publicKeyObject(publicKeyHex);
+      return crypto.verify(null, digest, keyObj, Buffer.from(signature, 'hex'));
+    } catch {
+      return false;
+    }
+  }
+
+  private metadataKeywords(metadata: PdfSignatureMetadata): string[] {
+    return [
+      `${SIGNATURE_METADATA_KEY}${metadata.signature}`,
+      `${PUBLIC_KEY_METADATA_KEY}${metadata.publicKeyHex}`,
+      `${CERTIFICATE_ID_METADATA_KEY}${metadata.certificateId}`,
+    ];
+  }
+
+  private readSignatureMetadata(pdfBytes: Buffer): PdfSignatureMetadata | null {
+    const text = pdfBytes.toString('latin1');
+    const signaturePattern = new RegExp(
+      `${SIGNATURE_METADATA_KEY}([0-9a-f]{${ED25519_SIGNATURE_HEX_LENGTH}})`
+    );
+    const publicKeyPattern = new RegExp(
+      `${PUBLIC_KEY_METADATA_KEY}([0-9a-f]{${ED25519_PUBLIC_KEY_HEX_LENGTH}})`
+    );
+    const certificateIdPattern = new RegExp(`${CERTIFICATE_ID_METADATA_KEY}([^)\\s]*)`);
+    const signature = text.match(signaturePattern)?.[1];
+    const publicKeyHex = text.match(publicKeyPattern)?.[1];
+    const certificateId = text.match(certificateIdPattern)?.[1];
+
+    if (!signature || !publicKeyHex || !certificateId) return null;
+    return { signature, publicKeyHex, certificateId };
+  }
+
+  private replaceSignature(pdfBytes: Buffer, from: string, to: string): Buffer {
+    const target = Buffer.from(`${SIGNATURE_METADATA_KEY}${from}`, 'latin1');
+    const index = pdfBytes.indexOf(target);
+    if (index === -1) {
+      throw new Error('PDF signature metadata is missing');
+    }
+
+    const replacement = Buffer.from(`${SIGNATURE_METADATA_KEY}${to}`, 'latin1');
+    if (replacement.length !== target.length) {
+      throw new Error('PDF signature metadata length mismatch');
+    }
+
+    const canonical = Buffer.from(pdfBytes);
+    replacement.copy(canonical, index);
+    return canonical;
+  }
+
+  private embedSignature(unsignedPdf: Uint8Array, signature: string): Uint8Array {
+    if (!new RegExp(`^[0-9a-f]{${ED25519_SIGNATURE_HEX_LENGTH}}$`).test(signature)) {
+      throw new Error('Invalid Ed25519 signature');
+    }
+
+    const bytes = Buffer.from(unsignedPdf);
+    const index = bytes.indexOf(
+      Buffer.from(`${SIGNATURE_METADATA_KEY}${SIGNATURE_PLACEHOLDER}`, 'latin1')
+    );
+    if (index === -1) {
+      throw new Error('PDF signature placeholder is missing');
+    }
+
+    const signed = this.replaceSignature(bytes, SIGNATURE_PLACEHOLDER, signature);
+    if (signed.length !== bytes.length) {
+      throw new Error('PDF signature embedding changed document length');
+    }
+    return signed;
+  }
+
   private async buildPdfBytes(
     input: PdfCertificateInput,
     issuerName: string,
     verificationUrl: string,
-    signature: string,
-    payload: SignaturePayload
+    metadata: PdfSignatureMetadata
   ): Promise<Uint8Array> {
-    // Try to use pdf-lib if available (already in package.json)
     try {
-      return await this.buildWithPdfLib(input, issuerName, verificationUrl, signature, payload);
-    } catch (_err) {
-      // Fallback: generate a minimal hand-crafted PDF
-      return this.buildMinimalPdf(input, issuerName, verificationUrl, signature);
+      return await this.buildWithPdfLib(input, issuerName, verificationUrl, metadata);
+    } catch {
+      return this.buildMinimalPdf(input, issuerName, verificationUrl, metadata);
     }
   }
 
@@ -275,19 +319,16 @@ export class CertificatePdfGenerator {
     input: PdfCertificateInput,
     issuerName: string,
     verificationUrl: string,
-    signature: string,
-    payload: SignaturePayload
+    metadata: PdfSignatureMetadata
   ): Promise<Uint8Array> {
-    // Dynamic import so the module is only loaded when actually available
-    const { PDFDocument, StandardFonts, rgb, degrees } = await import('pdf-lib');
+    const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
 
     const doc = await PDFDocument.create();
 
-    // Document info / metadata
     doc.setTitle(`${input.courseTitle} — Certificate of Completion`);
     doc.setAuthor(issuerName);
     doc.setSubject(`Awarded to ${input.studentName}`);
-    doc.setKeywords(['certificate', 'blockchain', 'ed25519', 'soulbound']);
+    doc.setKeywords(this.metadataKeywords(metadata));
     doc.setCreationDate(new Date(input.issuedAt));
 
     // A4 landscape
@@ -433,8 +474,7 @@ export class CertificatePdfGenerator {
       color: rgb(0.067, 0.180, 0.396),
     });
 
-    // Truncated signature fingerprint
-    const sigFingerprint = `Sig: ${signature.slice(0, 16)}…${signature.slice(-8)}`;
+    const sigFingerprint = `Sig: ${metadata.signature.slice(0, 16)}…${metadata.signature.slice(-8)}`;
     page.drawText(sigFingerprint, {
       x: width - 260,
       y: 62,
@@ -452,17 +492,7 @@ export class CertificatePdfGenerator {
       color: rgb(0.4, 0.4, 0.6),
     });
 
-    // ── Custom /Sig entry in doc info ───────────────────────────────────
-    // We embed the full signature and public key hex into the PDF as
-    // custom metadata, making it verifiable by our backend without
-    // requiring the full Adobe Acrobat signature infrastructure.
-    // This is stored in the PDF's Info dictionary via pdf-lib's
-    // subject / keywords fields.
-    doc.setKeywords([
-      `ed25519-sig:${signature}`,
-      `ed25519-pub:${this.publicKey.toString('hex')}`,
-      `cert-id:${input.certificateId}`,
-    ]);
+    doc.setKeywords(this.metadataKeywords(metadata));
 
     return doc.save({ useObjectStreams: false, addDefaultPage: false });
   }
@@ -472,7 +502,7 @@ export class CertificatePdfGenerator {
     input: PdfCertificateInput,
     issuerName: string,
     verificationUrl: string,
-    signature: string
+    metadata: PdfSignatureMetadata
   ): Uint8Array {
     const escapePdf = (s: string) =>
       s.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
@@ -498,7 +528,7 @@ export class CertificatePdfGenerator {
       `Verify: ${verificationUrl}`,
       ``,
       `Digitally signed with Ed25519`,
-      `Sig: ${signature.slice(0, 32)}...`,
+      `Sig: ${metadata.signature.slice(0, 32)}...`,
     ].filter(Boolean).join('\n');
 
     const stream = `BT\n/F1 12 Tf\n60 760 Td\n14 TL\n${
@@ -526,7 +556,7 @@ export class CertificatePdfGenerator {
     push(`3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources <</Font <</F1 5 0 R>>>>>>\nendobj\n`);
     push(`4 0 obj\n<</Length ${streamBytes}>>\nstream\n${stream}\nendstream\nendobj\n`);
     push(`5 0 obj\n<</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>\nendobj\n`);
-    push(`6 0 obj\n<</Title (${escapePdf(title)}) /Author (${escapePdf(issuerName)}) /Subject (${escapePdf(`Sig:${signature.slice(0,32)}`)})>>\nendobj\n`);
+    push(`6 0 obj\n<</Title (${escapePdf(title)}) /Author (${escapePdf(issuerName)}) /Subject (${escapePdf(`Sig:${metadata.signature.slice(0,32)}`)}) /Keywords (${escapePdf(this.metadataKeywords(metadata).join(' '))})>>\nendobj\n`);
 
     const xrefOffset = off;
     const xrefTable = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${xref.map(o => `${String(o).padStart(10, '0')} 00000 n `).join('\n')}\n`;
@@ -538,3 +568,11 @@ export class CertificatePdfGenerator {
 }
 
 export const certificatePdfGenerator = CertificatePdfGenerator.getInstance();
+
+export function verifyPdfSignature(
+  pdfBytes: Uint8Array,
+  signature?: string,
+  publicKeyHex?: string
+): boolean {
+  return certificatePdfGenerator.verifyPdfSignature(pdfBytes, signature, publicKeyHex);
+}

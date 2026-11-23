@@ -56,8 +56,10 @@ router.get('/:certificateId/download.pdf', async (req, res) => {
     const filename = `certificate-${cert.id}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Certificate-Id', result.certificateId);
     res.setHeader('X-Certificate-Signature', result.signature);
     res.setHeader('X-Certificate-Public-Key', result.publicKeyHex);
+    res.setHeader('X-Certificate-Digest', result.documentDigest);
     res.setHeader('X-Certificate-SHA256', result.sha256);
     return res.send(Buffer.from(result.pdfBytes));
   } catch (error) {
