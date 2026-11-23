@@ -4,13 +4,17 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'frontend/**'
-      - '.github/workflows/bundle-size.yml'
+      - "frontend/**"
+      - ".github/workflows/bundle-size.yml"
 
 jobs:
   analyze-bundle:
     name: Analyze Bundle Size & Check Budgets
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
 
     steps:
       - name: Checkout Code
@@ -46,7 +50,7 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
-            
+
             const message = `### 📦 Bundle Size & Budget Report
 
             - **Landing Route (\`/\`)**: Checked initial JS payload against 150KB threshold.

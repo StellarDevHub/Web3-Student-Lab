@@ -8,13 +8,21 @@ import React, {
   useRef,
   type ReactNode,
 } from 'react';
+import dynamic from 'next/dynamic';
 import type { Step } from 'react-joyride';
-import { TutorialWalkthrough } from '@/components/tutorials/TutorialWalkthrough';
 import {
   getTutorial,
   type TutorialDefinition,
   type TutorialId,
 } from '@/components/tutorials/tutorialConfig';
+
+const TutorialWalkthrough = dynamic(
+  () =>
+    import('@/components/tutorials/TutorialWalkthrough').then(
+      (module) => module.TutorialWalkthrough
+    ),
+  { ssr: false }
+);
 
 const STORAGE_PREFIX = 'tutorial-completed-';
 

@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 const zlib = require('node:zlib');
 
 const buildDir = path.join(process.cwd(), '.next');
@@ -27,11 +28,38 @@ for (const route of routes) {
   }
   appEntries.push(`/${segments.length ? `${segments.join('/')}/` : ''}page`);
   const appFiles = appEntries.flatMap((entry) => appManifest.pages?.[entry] ?? []);
-  const files = new Set([
-    ...(manifest.rootMainFiles ?? []),
-    ...(manifest.pages?.[route] ?? []),
-    ...appFiles,
-  ]);
+  const routeEntry = `${segments.length ? `${segments.join('/')}/` : ''}page`;
+  const clientReferenceManifestPath = path.join(
+    buildDir,
+    'server',
+    'app',
+    `${routeEntry}_client-reference-manifest.js`
+  );
+  const files = new Set();
+
+  if (fs.existsSync(clientReferenceManifestPath)) {
+    // Next 16 no longer emits app-build-manifest.json. Read the app route's
+    // client reference manifest instead; build-manifest.json describes the
+    // legacy Pages Router and must not be charged to App Router pages.
+    const sandbox = {};
+    vm.runInNewContext(fs.readFileSync(clientReferenceManifestPath, 'utf8'), sandbox);
+    const appRoute = `/${routeEntry}`;
+    const clientModules = sandbox.__RSC_MANIFEST?.[appRoute]?.clientModules ?? {};
+    for (const module of Object.values(clientModules)) {
+      if (module.async) continue;
+      for (const chunk of module.chunks ?? []) {
+        if (chunk.endsWith('.js')) files.add(chunk);
+      }
+    }
+  } else {
+    for (const file of [
+      ...(manifest.rootMainFiles ?? []),
+      ...(manifest.pages?.[route] ?? []),
+      ...appFiles,
+    ]) {
+      files.add(file);
+    }
+  }
   const scripts = [...files].filter((file) => file.endsWith('.js'));
   if (scripts.length === 0) {
     console.error(`${route}: no initial JavaScript files were listed in the build manifest.`);

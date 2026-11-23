@@ -1,9 +1,10 @@
 import type { NextConfig } from 'next';
 import path from 'path';
 
-const withBundleAnalyzer = process.env.ANALYZE === 'true'
-  ? require('@next/bundle-analyzer')({ enabled: true })
-  : (config: NextConfig) => config;
+const withBundleAnalyzer =
+  process.env.ANALYZE === 'true'
+    ? require('@next/bundle-analyzer')({ enabled: true })
+    : (config: NextConfig) => config;
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
@@ -68,8 +69,11 @@ const nextConfig: NextConfig = {
           stellar: {
             test: /[\\/]node_modules[\\/]@stellar[\\/]/,
             name: 'stellar',
-            chunks: 'all',
+            // Keep the large Stellar SDK out of every route's shared initial
+            // chunk. Routes that need it can load their own code on demand.
+            chunks: 'async',
             priority: 20,
+            enforce: true,
           },
           d3: {
             test: /[\\/]node_modules[\\/]d3[\\/]/,
@@ -157,7 +161,14 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     // Barrel-file tree shaking for icon/util/animation libraries (FE-050).
-    optimizePackageImports: ['d3', 'lucide-react', 'date-fns', 'framer-motion', 'recharts', 'react-chartjs-2'],
+    optimizePackageImports: [
+      'd3',
+      'lucide-react',
+      'date-fns',
+      'framer-motion',
+      'recharts',
+      'react-chartjs-2',
+    ],
   },
 };
 

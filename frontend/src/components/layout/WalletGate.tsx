@@ -1,8 +1,16 @@
 'use client';
 
 import { StellarNetwork, useWallet } from '@/contexts/WalletContext';
-import { motion } from 'framer-motion';
-import { AlertCircle, CheckCircle2, Download, ExternalLink, Globe, RefreshCw, ShieldAlert, Wallet } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Download,
+  ExternalLink,
+  Globe,
+  RefreshCw,
+  ShieldAlert,
+  Wallet,
+} from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -51,8 +59,8 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
               <ShieldAlert className="h-5 w-5 text-amber-400 shrink-0" />
               <span>
                 <strong>Network Mismatch Detected:</strong> Application target is{' '}
-                <span className="font-semibold underline">{activeNetwork}</span> but connected wallet is on{' '}
-                <span className="font-semibold underline">{walletNetwork}</span>.
+                <span className="font-semibold underline">{activeNetwork}</span> but connected
+                wallet is on <span className="font-semibold underline">{walletNetwork}</span>.
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -78,11 +86,7 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-xl w-full bg-bg-secondary border border-border-theme rounded-2xl p-8 shadow-2xl space-y-6"
-      >
+      <div className="max-w-xl w-full bg-bg-secondary border border-border-theme rounded-2xl p-8 shadow-2xl space-y-6">
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3">
             <div className="bg-red-500/10 p-3 rounded-full border border-red-500/20">
@@ -190,10 +194,11 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
         <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl flex items-start gap-3 text-xs text-yellow-200/80">
           <AlertCircle className="h-4 w-4 text-yellow-500 shrink-0 mt-0.5" />
           <span>
-            Targeting <strong>{activeNetwork}</strong>. If your wallet is on a different network, you will be prompted to switch seamlessly.
+            Targeting <strong>{activeNetwork}</strong>. If your wallet is on a different network,
+            you will be prompted to switch seamlessly.
           </span>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }
