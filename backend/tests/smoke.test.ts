@@ -69,7 +69,7 @@ jest.mock('bcryptjs', () => ({
 import prisma from '../src/db/index.js';
 import authRoutes from '../src/routes/auth/auth.routes.js';
 import { checkDbHealth } from '../src/db/healthMonitor.js';
-import { checkDeepReadiness } from '../src/db/deepReadiness.js';
+import { checkDeepReadiness, mockProbes } from '../src/services/health.service.js';
 import { compileWat, compileWatToBase64, WAT_ADD } from './fixtures/wasmFixtures.js';
 import { runSandboxedWasm } from '../src/simulator/wasmSandboxEngine.js';
 
@@ -151,15 +151,66 @@ describe('Automated Production Smoke Test & Canary Deployment Verifier (BE-049)'
   });
 
   describe('RPC & Dependency Health Check', () => {
-    it('verifies deep readiness and Soroban RPC health status', async () => {
-      const probeResult = await checkDeepReadiness();
+    it('verifies deep readiness with isolated healthy mock probes (<50ms)', async () => {
+      const start = Date.now();
+      const probeResult = await checkDeepReadiness({
+        timeoutMs: 1000,
+        probes: {
+          database: mockProbes.healthy(),
+          redis: mockProbes.healthy(),
+          sorobanRpc: mockProbes.healthy(),
+        },
+      });
+      expect(Date.now() - start).toBeLessThan(50);
 
-      expect(probeResult).toHaveProperty('status');
-      expect(probeResult).toHaveProperty('checks');
-      expect(probeResult.checks).toHaveProperty('database');
-      expect(probeResult.checks).toHaveProperty('redis');
-      expect(probeResult.checks).toHaveProperty('sorobanRpc');
+      expect(probeResult.status).toBe('healthy');
+      expect(probeResult.checks.database.status).toBe('healthy');
+      expect(probeResult.checks.redis.status).toBe('healthy');
+      expect(probeResult.checks.sorobanRpc.status).toBe('healthy');
       expect(probeResult).toHaveProperty('checkedAt');
+    });
+
+    it('reports degraded subsystem without marking overall as down', async () => {
+      const probeResult = await checkDeepReadiness({
+        timeoutMs: 1000,
+        probes: {
+          database: mockProbes.healthy(),
+          redis: mockProbes.degraded(),
+          sorobanRpc: mockProbes.healthy(),
+        },
+      });
+      expect(probeResult.status).toBe('degraded');
+      expect(probeResult.checks.redis.status).toBe('degraded');
+    });
+
+    it('reports down subsystem and isolates it from healthy ones', async () => {
+      const probeResult = await checkDeepReadiness({
+        timeoutMs: 1000,
+        probes: {
+          database: mockProbes.healthy(),
+          redis: mockProbes.down(),
+          sorobanRpc: mockProbes.healthy(),
+        },
+      });
+      expect(probeResult.status).toBe('down');
+      expect(probeResult.checks.redis.error).toBe('simulated outage');
+      expect(probeResult.checks.database.status).toBe('healthy');
+    });
+
+    it('times out a hanging probe within the configured budget', async () => {
+      const hanging = () => new Promise<never>(() => {});
+      const start = Date.now();
+      const probeResult = await checkDeepReadiness({
+        timeoutMs: 100,
+        probes: {
+          database: mockProbes.healthy(),
+          redis: hanging as any,
+          sorobanRpc: mockProbes.healthy(),
+        },
+      });
+      expect(Date.now() - start).toBeLessThan(1000);
+      expect(probeResult.checks.redis.status).toBe('down');
+      expect(probeResult.checks.redis.error).toMatch(/timed out/);
     });
   });
 

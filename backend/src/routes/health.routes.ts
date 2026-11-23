@@ -217,7 +217,8 @@ router.get('/ready', readinessHandler);
 const deepReadinessHandler: RequestHandler = async (_req, res) => {
   try {
     const result = await checkDeepReadiness();
-    res.status(result.status === 'ready' ? 200 : 503).json(result);
+    const httpStatus = result.status === 'ready' ? 200 : 503;
+    res.status(httpStatus).json(result);
   } catch (error) {
     logger.error('Deep readiness probe failed unexpectedly', error);
     res.status(503).json({
