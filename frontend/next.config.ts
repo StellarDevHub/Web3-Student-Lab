@@ -117,8 +117,11 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    formats: ['image/webp', 'image/avif'],
+    // Next's optimizer negotiates AVIF first and WebP for broader compatibility.
+    formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 60 * 60 * 24 * 30,
+    maximumRedirects: 2,
+    maximumResponseBody: 10_000_000,
   },
   // Immutable CDN cache headers for static assets — FE-HARD-50
   async headers() {
