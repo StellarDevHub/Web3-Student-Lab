@@ -46,6 +46,7 @@
     "hotkeys-js": "^3.9.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
+    "pdf-lib": "^1.17.1",
     "lucide-react": "^1.14.0",
     "monaco-editor": "^0.55.1",
     "monaco-languageclient": "^10.7.0",
