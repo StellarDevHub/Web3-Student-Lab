@@ -57,6 +57,36 @@ function signedPrivateGatewayUrl(base: string, path: string): string {
   return url.toString();
 }
 
+async function readLimitedBody(response: Response, limit: number): Promise<Uint8Array> {
+  if (!response.body) throw new Error('Gateway returned an empty response body.');
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limit) {
+        await reader.cancel();
+        throw new Error('IPFS image exceeds the configured size limit.');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return body;
+}
+
 function getGateways(path: string): Array<{ url: string; token?: string; private: boolean }> {
   const configuredPrivate = process.env.IPFS_PRIVATE_GATEWAY_URL;
   const configuredPublic = (process.env.IPFS_PUBLIC_GATEWAYS ?? '')
@@ -94,7 +124,12 @@ export async function GET(
     return NextResponse.json({ error: 'An IPFS CID is required.' }, { status: 400 });
   }
 
-  const decoded = segments.map((segment) => decodeURIComponent(segment));
+  let decoded: string[];
+  try {
+    decoded = segments.map((segment) => decodeURIComponent(segment));
+  } catch {
+    return NextResponse.json({ error: 'Invalid IPFS path encoding.' }, { status: 400 });
+  }
   const [cid, ...subpath] = decoded;
   if (!isValidCid(cid) || decoded.some((segment) => !segment || segment === '.' || segment === '..' || segment.includes('/'))) {
     return NextResponse.json({ error: 'Invalid IPFS path.' }, { status: 400 });
@@ -140,8 +175,8 @@ export async function GET(
         continue;
       }
 
-      const bytes = await response.arrayBuffer();
-      if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) {
+      const bytes = await readLimitedBody(response, MAX_IMAGE_BYTES);
+      if (bytes.byteLength === 0) {
         lastStatus = 413;
         continue;
       }
