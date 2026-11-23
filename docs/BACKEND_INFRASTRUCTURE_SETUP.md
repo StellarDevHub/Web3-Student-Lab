@@ -93,6 +93,10 @@ The service automatically:
 
 ## BE-024: Automated Backup & PITR with S3 Glacier
 
+> For the production orchestrator, continuous WAL archiving, multi-region
+> encrypted storage and the automated RTO/RPO restore drills added in BE-084,
+> see [DATABASE_BACKUP_PITR.md](./DATABASE_BACKUP_PITR.md).
+
 ### Features
 - Full database backups with compression
 - WAL (Write-Ahead Log) archiving for PITR
