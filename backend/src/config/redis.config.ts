@@ -1,10 +1,87 @@
+import { readFileSync } from 'node:fs';
 import { lookup as dnsLookup } from 'node:dns';
 import logger from '../utils/logger.js';
+
+const TRUTHY_FLAGS = new Set(['1', 'true', 'yes', 'on']);
+
+/** Parse the boolean-ish environment flags used across the Redis config. */
+export function envFlag(value: string | undefined): boolean {
+  return value !== undefined && TRUTHY_FLAGS.has(value.trim().toLowerCase());
+}
+
+export interface RedisTlsOptions {
+  ca?: string;
+  cert?: string;
+  key?: string;
+  servername?: string;
+  rejectUnauthorized?: boolean;
+}
+
+/** Accept either an inline PEM blob or a path to a PEM file. */
+function readPem(value: string | undefined, label: string): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (trimmed.includes('-----BEGIN')) return trimmed;
+  try {
+    return readFileSync(trimmed, 'utf8');
+  } catch (error) {
+    throw new Error(
+      `Redis TLS: cannot read ${label} from '${trimmed}' (${error instanceof Error ? error.message : String(error)}). ` +
+        'Provide an inline PEM value or an absolute path to a readable certificate file.'
+    );
+  }
+}
+
+/**
+ * TLS options for Redis traffic (BE-062). Enabled by `<PREFIX>_TLS=true` — or,
+ * for the main data path, by a `rediss://` REDIS_URL. CA/cert/key may be inline
+ * PEM or file paths, so Kubernetes secrets can be mounted directly.
+ *
+ *   REDIS_TLS=true
+ *   REDIS_TLS_CA=/etc/redis/tls/ca.crt
+ *   REDIS_TLS_CERT=/etc/redis/tls/tls.crt
+ *   REDIS_TLS_KEY=/etc/redis/tls/tls.key
+ *   REDIS_TLS_SERVERNAME=redis.internal
+ *   REDIS_TLS_REJECT_UNAUTHORIZED=false   # only for self-signed dev certs
+ */
+export function buildRedisTlsOptions(
+  env: NodeJS.ProcessEnv = process.env,
+  prefix = 'REDIS',
+  fallbackEnabled = false
+): RedisTlsOptions | undefined {
+  const flag = env[`${prefix}_TLS`];
+  const urlUsesTls = prefix === 'REDIS' && (env.REDIS_URL ?? '').trim().toLowerCase().startsWith('rediss://');
+  const enabled = flag !== undefined ? envFlag(flag) : fallbackEnabled || urlUsesTls;
+  if (!enabled) return undefined;
+
+  const options: RedisTlsOptions = {};
+  const ca = readPem(env[`${prefix}_TLS_CA`], `${prefix}_TLS_CA`);
+  const cert = readPem(env[`${prefix}_TLS_CERT`], `${prefix}_TLS_CERT`);
+  const key = readPem(env[`${prefix}_TLS_KEY`], `${prefix}_TLS_KEY`);
+  if (ca) options.ca = ca;
+  if (cert) options.cert = cert;
+  if (key) options.key = key;
+  const servername = env[`${prefix}_TLS_SERVERNAME`];
+  if (servername) options.servername = servername;
+  const rejectUnauthorized = env[`${prefix}_TLS_REJECT_UNAUTHORIZED`];
+  if (rejectUnauthorized !== undefined) options.rejectUnauthorized = envFlag(rejectUnauthorized);
+
+  return options;
+}
+
+// TLS for the data path, sentinel control connections and cluster nodes. Each
+// can be overridden independently; sentinel/cluster inherit the data-path
+// setting when their own flag is absent.
+const standaloneTls = buildRedisTlsOptions();
+const sentinelTls = buildRedisTlsOptions(process.env, 'REDIS_SENTINEL', Boolean(standaloneTls));
+const clusterTls = buildRedisTlsOptions(process.env, 'REDIS_CLUSTER', Boolean(standaloneTls));
 
 // Standalone Redis configuration
 export const redisConfig: any = process.env.REDIS_URL
   ? {
+      username: process.env.REDIS_USERNAME,
       password: process.env.REDIS_PASSWORD,
+      ...(standaloneTls ? { tls: standaloneTls } : {}),
       maxRetriesPerRequest: 3,
       retryStrategy: (times: number) => Math.min(times * 50, 2000),
       enableOfflineQueue: false,
@@ -17,7 +94,9 @@ export const redisConfig: any = process.env.REDIS_URL
       return {
         host: process.env.REDIS_HOST || 'localhost',
         port: parseInt(process.env.REDIS_PORT || '6379', 10),
+        username: process.env.REDIS_USERNAME,
         password: process.env.REDIS_PASSWORD,
+        ...(standaloneTls ? { tls: standaloneTls } : {}),
         maxRetriesPerRequest: 3,
         retryStrategy: (times: number) => Math.min(times * 50, 2000),
         enableOfflineQueue: false,
@@ -49,7 +128,9 @@ export const redisClusterConfig = {
   password: process.env.REDIS_CLUSTER_PASSWORD || process.env.REDIS_PASSWORD,
   options: {
     redisOptions: {
+      username: process.env.REDIS_CLUSTER_USERNAME || process.env.REDIS_USERNAME,
       password: process.env.REDIS_CLUSTER_PASSWORD || process.env.REDIS_PASSWORD,
+      ...(clusterTls ? { tls: clusterTls } : {}),
       maxRetriesPerRequest: 3,
       connectTimeout: 2000,
       reconnectOnError: reconnectOnReadonly,
@@ -76,8 +157,12 @@ export const redisSentinelConfig = {
   sentinels: parseNodeList(process.env.REDIS_SENTINELS, 26379),
   name: process.env.REDIS_SENTINEL_NAME || 'mymaster',
   role: 'master' as const,
+  username: process.env.REDIS_USERNAME,
   password: process.env.REDIS_PASSWORD,
+  sentinelUsername: process.env.REDIS_SENTINEL_USERNAME,
   sentinelPassword: process.env.REDIS_SENTINEL_PASSWORD,
+  ...(standaloneTls ? { tls: standaloneTls } : {}),
+  ...(sentinelTls ? { sentinelTLS: sentinelTls, enableTLSForSentinelMode: true } : {}),
   // Subscribe to +switch-master on the sentinels so the client reconnects the
   // moment a replica is promoted instead of waiting for the dead socket to time out.
   failoverDetector: true,
