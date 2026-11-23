@@ -84,9 +84,6 @@ const nextConfig: NextConfig = {
   },
   // Enable compression
   compress: true,
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   // Optimize images
   images: {
     formats: ['image/webp', 'image/avif'],
