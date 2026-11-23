@@ -1,5 +1,11 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import {
+  checkEdgeRateLimit,
+  createRateLimitHeaders,
+  extractClientIp,
+  extractStudentId,
+} from './lib/security/edgeRateLimit';
 
 const NONCE_HEADER = 'x-nonce';
 const ADMIN_ROUTE_PREFIX = '/admin';
@@ -9,34 +15,6 @@ const LOGIN_ROUTE = '/login';
 const ALLOWED_ADMIN_IPS = (process.env.ALLOWED_ADMIN_IPS || '').split(',').filter(Boolean);
 const ALLOWED_ADMIN_COUNTRIES = (process.env.ALLOWED_ADMIN_COUNTRIES || '').split(',').filter(Boolean);
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev';
-
-// Rate Limiting (In-memory simple rate limit for edge, resets per worker)
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-const MAX_REQUESTS = 100;
-const WINDOW_MS = 60 * 1000;
-
-function checkRateLimit(ip: string): boolean {
-  if (
-    process.env.CI ||
-    process.env.NODE_ENV === 'test' ||
-    ip === '127.0.0.1' ||
-    ip === '::1' ||
-    ip === 'localhost'
-  ) {
-    return true;
-  }
-  const now = Date.now();
-  const record = rateLimitMap.get(ip);
-  if (!record || now > record.resetTime) {
-    rateLimitMap.set(ip, { count: 1, resetTime: now + WINDOW_MS });
-    return true;
-  }
-  if (record.count >= MAX_REQUESTS) {
-    return false;
-  }
-  record.count += 1;
-  return true;
-}
 
 // Bot Detection
 const BOT_USER_AGENTS = ['bot', 'crawler', 'spider', 'headless', 'scraper'];
@@ -111,7 +89,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(destination, 301);
   }
 
-  const ip = request.ip || request.headers.get('x-forwarded-for') || '127.0.0.1';
+  const ip = extractClientIp(request);
+  const studentId = extractStudentId(request);
   const userAgent = request.headers.get('user-agent') || '';
 
   // 1. Bot detection
@@ -119,9 +98,13 @@ export async function middleware(request: NextRequest) {
     return new NextResponse('Bot detected', { status: 403 });
   }
 
-  // 2. Rate limiting
-  if (!checkRateLimit(ip)) {
-    return new NextResponse('Too many requests', { status: 429 });
+  // 2. Distributed rate limiting via Upstash Redis
+  const rateLimit = await checkEdgeRateLimit({ ip, studentId });
+  if (!rateLimit.allowed) {
+    return new NextResponse('Too many requests', {
+      status: 429,
+      headers: createRateLimitHeaders(rateLimit),
+    });
   }
 
   // 3. Admin routes protection
