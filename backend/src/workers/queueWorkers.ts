@@ -10,6 +10,7 @@
  * through the admin API (/api/v1/admin/queues/dlq).
  */
 
+import { startTracing } from '../instrumentation.js';
 import { getQueueManager } from '../queues/queueManager.js';
 import logger from '../utils/logger.js';
 import { startEvaluationWorker, stopEvaluationWorker } from './evaluationWorker.js';
@@ -28,7 +29,11 @@ export async function stopQueueWorkers(): Promise<void> {
 const isEntrypoint = /queueWorkers\.(ts|js)$/.test(process.argv[1] ?? '');
 
 if (isEntrypoint) {
-  startQueueWorkers();
+  // Start the OTLP exporter before consuming any jobs so every job span is
+  // exported. startTracing() is idempotent and a no-op when OTEL_SDK_DISABLED=true.
+  void startTracing().then(() => {
+    startQueueWorkers();
+  });
   const shutdown = (signal: string) => {
     logger.info(`[queueWorkers] ${signal} received; draining workers`);
     stopQueueWorkers().finally(() => process.exit(0));
