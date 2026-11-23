@@ -37,3 +37,52 @@ Note: this probe currently calls Horizon's ledgers endpoint, not Soroban RPC.
 1. Check the Horizon status page and `HORIZON_URL` in the environment.
 2. Check outbound connectivity from the backend pod.
 3. Check the probe failure count: `sum by (outcome) (rate(w3sl_external_probe_total{probe="horizon_ledger"}[5m]))`.
+
+## SorobanIndexerLagHigh
+
+`soroban_indexer_ledger_lag_seconds{indexer="soroban-events"}` is above 15s
+(about 3 ledgers at a 5s close interval) for 2 minutes.
+
+1. Confirm the current lag: `soroban_indexer_ledger_lag_seconds`.
+2. Check backend logs for `Stream indexer poll failed` — a failing Soroban RPC
+   makes the indexer fall behind while the HTTP API stays healthy.
+3. Verify the RPC head is advancing: `GET /health/ready` reports
+   `latestLedgerHeight`, and `w3sl_external_probe_total{probe="horizon_ledger"}` shows probe outcomes.
+4. If lag grows without bound, restart the indexer worker; the cursor is
+   checkpointed in Redis (`indexer:checkpoint:*`) so it resumes without data loss.
+
+## BullmqQueueDepthHigh
+
+The sum of `bullmq_queue_waiting_jobs_count` for a queue is above 500 for 5
+minutes (2000 and a critical severity for `BullmqQueueDepthCritical`).
+
+1. Identify the saturated queue: `sum by (queue) (bullmq_queue_waiting_jobs_count)`.
+2. Check worker health and throughput: `GET /api/v1/metrics/prometheus` exposes
+   `w3sl_worker_up` and `w3sl_worker_jobs_failed_total`.
+3. Check Redis latency/reachability — the exporter keeps the last sample on a
+   failed refresh, so a stale timestamp plus a flat line points at Redis.
+4. Scale the relevant worker (`MINTING_WORKER_CONCURRENCY`,
+   `EVALUATION_WORKER_CONCURRENCY`, …) only after confirming the downstream
+   rate limit (for example `SOROBAN_RPC_MAX_SUBMISSIONS_PER_SEC`) has headroom.
+
+## WasmEvaluationLatencyHigh
+
+p95 sandboxed WASM evaluation duration is above 1.5s for 10 minutes.
+
+1. Confirm: `histogram_quantile(0.95, sum by (le) (rate(wasm_evaluation_duration_seconds_bucket[5m])))`.
+2. Break it down by outcome with `sum by (status, termination_reason) (rate(wasm_evaluation_duration_seconds_count[5m]))`.
+   A rise in `termination_reason="timeout"` means hostile or pathological
+   submissions, not host overload.
+3. Check host CPU saturation and `WASM_SANDBOX_MAX_CONCURRENCY`; the sandbox
+   caps concurrent isolates per process.
+
+## MetricsScrapeTargetDown
+
+Prometheus reports `up{job="web3-student-lab-backend"} == 0` for 5 minutes.
+
+1. Confirm the endpoint responds: `curl -u "$PROMETHEUS_BASIC_AUTH_USER:$PROMETHEUS_BASIC_AUTH_PASSWORD" https://<host>/metrics`.
+2. A `401` means the scrape configuration credentials no longer match
+   `PROMETHEUS_BASIC_AUTH_USER` / `PROMETHEUS_BASIC_AUTH_PASSWORD`.
+3. A `503` means the credentials are unset in production; set them and restart.
+4. If `curl` succeeds from outside the cluster but Prometheus fails, check the
+   ServiceMonitor/scrape target and network policy.

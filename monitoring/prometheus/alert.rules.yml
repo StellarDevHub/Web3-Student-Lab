@@ -83,3 +83,81 @@ groups:
           description: "Probe failure ratio is {{ $value | humanizePercentage }} over the last 5m."
           runbook_url: "https://github.com/StellarDevHub/Web3-Student-Lab/blob/main/monitoring/runbooks.md#rpcprobefailureratehigh"
           diagnostic_query: 'sum by (outcome) (rate(w3sl_external_probe_total{probe="horizon_ledger"}[5m]))'
+
+  # BE-077 — custom Prometheus exporter (/metrics, src/metrics/prometheusMetrics.ts).
+  # Queue depth and indexer lag are the two saturation signals that the
+  # request-level SLO alerts above cannot see.
+  - name: web3-student-lab-prometheus-exporter
+    interval: 15s
+    rules:
+      - alert: SorobanIndexerLagHigh
+        # `soroban_indexer_ledger_lag_seconds` is lag in seconds; with a ~5s
+        # ledger close time, 3 ledgers is 15s.
+        expr: soroban_indexer_ledger_lag_seconds > 15
+        for: 2m
+        labels:
+          severity: critical
+          service: soroban-indexer
+          slo: indexer-lag
+        annotations:
+          summary: "Soroban indexer is more than 3 ledgers behind the network"
+          description: "Indexer {{ $labels.indexer }} is {{ $value | humanizeDuration }} behind the network head (threshold: 3 ledgers ≈ 15s)."
+          runbook_url: "https://github.com/StellarDevHub/Web3-Student-Lab/blob/main/monitoring/runbooks.md#sorobanindexerlaghigh"
+          diagnostic_query: 'soroban_indexer_ledger_lag_seconds'
+
+      - alert: BullmqQueueDepthHigh
+        expr: sum by (queue) (bullmq_queue_waiting_jobs_count) > 500
+        for: 5m
+        labels:
+          severity: warning
+          service: background-workers
+          slo: queue-saturation
+        annotations:
+          summary: "BullMQ queue {{ $labels.queue }} has more than 500 waiting jobs"
+          description: "Queue {{ $labels.queue }} has {{ $value | humanize }} waiting jobs; worker capacity is saturated."
+          runbook_url: "https://github.com/StellarDevHub/Web3-Student-Lab/blob/main/monitoring/runbooks.md#bullmqqueuedepthhigh"
+          diagnostic_query: 'sum by (queue) (bullmq_queue_waiting_jobs_count)'
+
+      - alert: BullmqQueueDepthCritical
+        expr: sum by (queue) (bullmq_queue_waiting_jobs_count) > 2000
+        for: 5m
+        labels:
+          severity: critical
+          service: background-workers
+          slo: queue-saturation
+        annotations:
+          summary: "BullMQ queue {{ $labels.queue }} backlog is critical"
+          description: "Queue {{ $labels.queue }} has {{ $value | humanize }} waiting jobs; user-facing work is at risk."
+          runbook_url: "https://github.com/StellarDevHub/Web3-Student-Lab/blob/main/monitoring/runbooks.md#bullmqqueuedepthhigh"
+          diagnostic_query: 'sum by (queue) (bullmq_queue_waiting_jobs_count)'
+
+      - alert: WasmEvaluationLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(wasm_evaluation_duration_seconds_bucket[5m]))
+          ) > 1.5
+          and sum(rate(wasm_evaluation_duration_seconds_count[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: wasm-sandbox
+          slo: evaluation-latency
+        annotations:
+          summary: "Sandboxed WASM evaluation p95 above 1.5s"
+          description: "p95 evaluation duration is {{ $value | humanizeDuration }} over the last 5m; grading throughput is degrading."
+          runbook_url: "https://github.com/StellarDevHub/Web3-Student-Lab/blob/main/monitoring/runbooks.md#wasmevaluationlatencyhigh"
+          diagnostic_query: 'histogram_quantile(0.95, sum by (le) (rate(wasm_evaluation_duration_seconds_bucket[5m])))'
+
+      - alert: MetricsScrapeTargetDown
+        expr: up{job="web3-student-lab-backend"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+          slo: observability
+        annotations:
+          summary: "Prometheus cannot scrape the backend /metrics endpoint"
+          description: "The {{ $labels.instance }} scrape target has been down for 5m; metrics, dashboards and alerts are blind."
+          runbook_url: "https://github.com/StellarDevHub/Web3-Student-Lab/blob/main/monitoring/runbooks.md#metricsscrapetargetdown"
+          diagnostic_query: 'up{job="web3-student-lab-backend"}'
