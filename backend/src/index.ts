@@ -15,6 +15,7 @@ import { runStartupMigrations } from './db/startupMigrations.js';
 import { startAuditChainJobs } from './jobs/anchorMerkleRootJob.js';
 import logger from './utils/logger.js';
 import { getSentryErrorHandler, getSentryRequestHandler, initializeSentry } from './utils/sentry.js';
+import { shutdownCoordinator } from './utils/shutdown.js';
 
 dotenv.config();
 
@@ -105,9 +106,11 @@ app.use(getSentryErrorHandler());
 if (process.env.NODE_ENV !== 'test') {
   runStartupMigrations()
     .then(() => {
-      app.listen(port, () => {
+      const server = app.listen(port, () => {
         console.log(`Server is running on port ${port}`);
       });
+      shutdownCoordinator.setServer(server);
+      shutdownCoordinator.listen(['SIGTERM', 'SIGINT']);
       // Routine audit hash-chain verification + Stellar Merkle-root anchoring
       if (process.env.AUDIT_CHAIN_JOBS_ENABLED === 'true') {
         startAuditChainJobs();
