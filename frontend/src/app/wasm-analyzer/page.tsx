@@ -11,6 +11,7 @@ import {
   sectionBreakdown,
 } from '@/lib/wasmAnalyzer';
 import { MemoryProfilerPanel } from '@/components/wasm-analyzer/MemoryProfilerPanel';
+import { WasmMemoryProfiler } from '@/components/visualizer/WasmMemoryProfiler';
 import type { WatResponse } from '@/workers/wat.worker';
 
 /**
@@ -23,6 +24,7 @@ import type { WatResponse } from '@/workers/wat.worker';
  */
 export default function WasmAnalyzerPage() {
   const [info, setInfo] = useState<WasmModuleInfo | null>(null);
+  const [moduleBytes, setModuleBytes] = useState<Uint8Array | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const [sha256, setSha256] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
@@ -107,7 +109,9 @@ export default function WasmAnalyzerPage() {
       setSha256(hash);
 
       // Analyse before transferring the buffer to the worker, which neuters it.
-      setInfo(analyzeWasm(new Uint8Array(buffer.slice(0))));
+      const bytes = new Uint8Array(buffer.slice(0));
+      setModuleBytes(bytes);
+      setInfo(analyzeWasm(bytes));
       disassemble(buffer);
     },
     [disassemble],
@@ -365,6 +369,9 @@ export default function WasmAnalyzerPage() {
 
             {/* Memory profiler & allocator leak detector (Issue #1404) */}
             <MemoryProfilerPanel info={info} />
+
+            {/* Flamegraph, sunburst & growth trace (FE-071) */}
+            {moduleBytes && <WasmMemoryProfiler bytes={moduleBytes} fileName={fileName} />}
 
             {/* WAT viewer */}
             <section className="rounded-2xl border border-white/10 bg-zinc-950 p-6">
