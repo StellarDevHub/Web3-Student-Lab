@@ -12,10 +12,15 @@
  * - inclusion-proof generation and step-by-step root reconstruction,
  * - proof verification (members and non-members) rendered on a
  *   ResizeObserver-driven D3 canvas.
+ *
+ * This studio is a teaching tool with its own domain-separated scheme. Proofs
+ * meant for the on-chain airdrop distributor come from `/merkle-simulator`
+ * instead, which follows the contract's exact leaf and pair hashing.
  */
 
 import * as d3 from 'd3';
 import { FlaskConical, Plus, ShieldCheck, TreeDeciduous } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildMerkleTree,
@@ -274,6 +279,13 @@ export default function MerkleTreePage() {
           </h1>
           <p className="text-xs tracking-widest text-gray-500 uppercase">
             Interactive cryptographic tree visualizer — build leaves, hash, prove, verify
+          </p>
+          <p className="mt-2 text-[11px] text-zinc-500">
+            Proving an airdrop claim for the Soroban contract? Use the{' '}
+            <Link href="/merkle-simulator" className="text-emerald-400 underline">
+              Airdrop Merkle Proof Explorer
+            </Link>
+            , which matches the contract&apos;s hashing exactly.
           </p>
         </div>
 
