@@ -8,6 +8,7 @@ edition = "2021"
 [workspace]
 members = [
     ".",
+    "access_control",
     "amm",
     "auth_checker",
     "certificate_nft",
@@ -45,6 +46,8 @@ members = [
     "peer_review",
     "contract_events",
     "automated_testing_suite",
+    "flash_loan_provider",
+    "yield_farming",
 ]
 # Incomplete or non-crate directories under contracts/ must not be listed as members.
 exclude = [
