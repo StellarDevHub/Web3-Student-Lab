@@ -533,3 +533,65 @@ html:not(.dark) .lesson-viewer code {
   --code-bg: hsl(var(--code-hsl-bg-h), var(--code-hsl-bg-s), var(--code-hsl-bg-l-light));
   --code-fg: hsl(var(--code-hsl-fg-h), var(--code-hsl-fg-s), var(--code-hsl-fg-l-light));
 }
+
+/* ─── FE-092: RTL / logical-property overrides ─────────────────────────────
+   When dir="rtl" is set on <html> the browser mirrors layout automatically.
+   These rules replace physical (left/right) properties with CSS logical
+   equivalents so padding, margin, border-radius, and flex alignment all
+   flip correctly without per-component overrides.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+[dir='rtl'] {
+  /* Ensure text alignment follows writing direction */
+  text-align: start;
+}
+
+/* Navigation / flex rows: flip gap and alignment in RTL */
+[dir='rtl'] .flex {
+  /* flex-direction stays row; browser mirrors start/end automatically */
+}
+
+/* Convert physical padding/margin helpers to logical where needed */
+[dir='rtl'] .ps-1  { padding-inline-start: 0.25rem; }
+[dir='rtl'] .ps-2  { padding-inline-start: 0.5rem; }
+[dir='rtl'] .ps-3  { padding-inline-start: 0.75rem; }
+[dir='rtl'] .ps-4  { padding-inline-start: 1rem; }
+[dir='rtl'] .ps-6  { padding-inline-start: 1.5rem; }
+[dir='rtl'] .pe-1  { padding-inline-end: 0.25rem; }
+[dir='rtl'] .pe-2  { padding-inline-end: 0.5rem; }
+[dir='rtl'] .pe-3  { padding-inline-end: 0.75rem; }
+[dir='rtl'] .pe-4  { padding-inline-end: 1rem; }
+[dir='rtl'] .pe-6  { padding-inline-end: 1.5rem; }
+
+[dir='rtl'] .ms-1  { margin-inline-start: 0.25rem; }
+[dir='rtl'] .ms-2  { margin-inline-start: 0.5rem; }
+[dir='rtl'] .ms-3  { margin-inline-start: 0.75rem; }
+[dir='rtl'] .ms-4  { margin-inline-start: 1rem; }
+[dir='rtl'] .ms-auto { margin-inline-start: auto; }
+[dir='rtl'] .me-1  { margin-inline-end: 0.25rem; }
+[dir='rtl'] .me-2  { margin-inline-end: 0.5rem; }
+[dir='rtl'] .me-3  { margin-inline-end: 0.75rem; }
+[dir='rtl'] .me-4  { margin-inline-end: 1rem; }
+[dir='rtl'] .me-auto { margin-inline-end: auto; }
+
+/* Border-radius: flip rounded corners for start/end */
+[dir='rtl'] .rounded-l-md  { border-start-start-radius: 0.375rem; border-end-start-radius: 0.375rem; }
+[dir='rtl'] .rounded-r-md  { border-start-end-radius: 0.375rem;   border-end-end-radius: 0.375rem; }
+[dir='rtl'] .rounded-l-lg  { border-start-start-radius: 0.5rem;   border-end-start-radius: 0.5rem; }
+[dir='rtl'] .rounded-r-lg  { border-start-end-radius: 0.5rem;     border-end-end-radius: 0.5rem; }
+
+/* Icons that must mirror (arrows, chevrons, etc.) */
+[dir='rtl'] .icon-flip-rtl {
+  transform: scaleX(-1);
+}
+
+/* Navbar / sidebar: start-aligned in LTR should become end-aligned in RTL */
+[dir='rtl'] .navbar-logo {
+  margin-inline-end: auto;
+  margin-inline-start: 0;
+}
+
+/* Scrollbars stay on the correct side */
+[dir='rtl'] {
+  scrollbar-gutter: stable both-edges;
+}
