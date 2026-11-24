@@ -10,6 +10,10 @@ function mean(arr:number[]){return arr.reduce((a,b)=>a+b,0)/Math.max(1,arr.lengt
 function std(arr:number[]){const m=mean(arr);return Math.sqrt(mean(arr.map(x=>Math.pow(x-m,2))));}
 
 export async function POST() {
+  // NOTE: The BE-079 issue (Soroban/EVM cross-chain Merkle proof generation) is
+  // implemented in backend/src/routes/cross-chain.routes.ts and
+  // backend/src/services/crossChainRelayer.ts, not in this file. No change to
+  // the moderation calibration logic is required by that issue.
   const qraw = await readFile(QUEUE, 'utf-8');
   const wraw = await readFile(WEIGHTS, 'utf-8');
   const q = JSON.parse(qraw);

@@ -34,10 +34,16 @@ async function recalcScores() {
 export async function POST(req: Request) {
   const body = await req.json();
   const { id, override=false, feedback } = body;
+  if (typeof id !== 'string' && typeof id !== 'number') {
+    return new Response(JSON.stringify({error:'invalid id'}), { status: 400 });
+  }
   const raw = await readFile(QUEUE, 'utf-8');
   const json = JSON.parse(raw);
   const rev = json.reviews.find((r:any) => r.id === id);
   if (!rev) return new Response(JSON.stringify({error:'not found'}), { status: 404 });
+  if (rev.status === 'approved') {
+    return new Response(JSON.stringify({error:'already approved'}), { status: 409 });
+  }
   rev.status = 'approved';
   if (override) rev.override = true;
   await writeFile(QUEUE, JSON.stringify(json, null, 2), 'utf-8');
