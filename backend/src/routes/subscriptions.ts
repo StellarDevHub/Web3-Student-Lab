@@ -1,5 +1,18 @@
 import { Request, Response, Router } from 'express';
 import { idempotency } from '../middleware/idempotency.js';
+import {
+  SUPPORTED_CURRENCIES,
+  exportReconciliationReportCsv,
+  generateDailyReconciliationReport,
+  getReconciliationAlerts,
+  isSupportedCurrency,
+  normalizeCurrency,
+  resolveReconciliationAlert,
+  runReconciliationCycle,
+  type PaymentReconciliationResult,
+  type ReconcilablePayment,
+  type ReconciliationStatus,
+} from '../workers/paymentReconciliationWorker.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -44,11 +57,61 @@ interface MockPayment {
   status: 'Success' | 'Failed' | 'Retried' | 'Refunded';
   retry_count: number;
   tx_hash: string;
+  reconciliation_status: ReconciliationStatus;
+  settled_amount: number | null;
+  slippage_bps: number | null;
+  ledger_sequence: number | null;
+  reconciled_at: number | null;
+  alert_triggered: boolean;
+  review_notes: string | null;
 }
 
 let plans: MockSubscriptionPlan[] = [];
 let subscriptions: MockSubscription[] = [];
 let payments: MockPayment[] = [];
+
+export function getPaymentsForReconciliation(onlyPending = true): ReconcilablePayment[] {
+  return payments
+    .filter((p) => (onlyPending ? p.reconciliation_status === 'pending' : true))
+    .map((p) => ({
+      id: p.id,
+      subscriptionId: p.subscription_id,
+      currency: p.token,
+      expectedAmount: p.amount,
+      txHash: p.tx_hash || null,
+      merchant: p.merchant,
+      subscriber: p.subscriber,
+      paidAt: new Date(p.timestamp * 1000),
+      reconciliationStatus: p.reconciliation_status,
+      settledAmount: p.settled_amount,
+      slippageBps: p.slippage_bps,
+      ledgerSequence: p.ledger_sequence,
+      reconciledAt: p.reconciled_at ? new Date(p.reconciled_at * 1000) : null,
+      alertTriggered: p.alert_triggered,
+      reviewNotes: p.review_notes,
+    }));
+}
+
+export function applyReconciliationResult(result: PaymentReconciliationResult): void {
+  const idx = payments.findIndex((p) => p.id === result.paymentId);
+  if (idx === -1) {
+    return;
+  }
+  const existing = payments[idx];
+  if (!existing) {
+    return;
+  }
+  payments[idx] = {
+    ...existing,
+    reconciliation_status: result.status,
+    settled_amount: result.settledAmount,
+    slippage_bps: result.slippageBps,
+    ledger_sequence: result.ledgerSequence,
+    reconciled_at: result.reconciledAt ? Math.floor(result.reconciledAt.getTime() / 1000) : null,
+    alert_triggered: Boolean(result.alert),
+    review_notes: result.reviewNotes,
+  };
+}
 
 // GET /api/subscriptions/plans - Get all plans
 router.get('/plans', async (req: Request, res: Response) => {
@@ -68,13 +131,20 @@ router.post('/plans', idempotency(), async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    const normalizedToken = normalizeCurrency(String(token));
+    if (!isSupportedCurrency(normalizedToken)) {
+      return res.status(400).json({
+        error: `Unsupported token '${token}'. Supported currencies: ${SUPPORTED_CURRENCIES.join(', ')}`,
+      });
+    }
+
     const newPlan: MockSubscriptionPlan = {
       id: `plan-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name,
       description: description || '',
       amount,
       frequency,
-      token,
+      token: normalizedToken,
       active: true,
       created_at: Math.floor(Date.now() / 1000),
       merchant,
@@ -279,7 +349,7 @@ router.get('/payments/:subscriptionId', async (req: Request, res: Response) => {
 // POST /api/subscriptions/execute-payment - Execute a payment
 router.post('/execute-payment', async (req: Request, res: Response) => {
   try {
-    const { subscription_id } = req.body;
+    const { subscription_id, tx_hash } = req.body;
 
     const subscription = subscriptions.find((s) => s.id === subscription_id);
     if (!subscription) {
@@ -305,7 +375,14 @@ router.post('/execute-payment', async (req: Request, res: Response) => {
       timestamp: now,
       status: 'Success',
       retry_count: 0,
-      tx_hash: `0x${Math.random().toString(16).substr(2, 64)}`,
+      tx_hash: tx_hash || `0x${Math.random().toString(16).substr(2, 64)}`,
+      reconciliation_status: 'pending',
+      settled_amount: null,
+      slippage_bps: null,
+      ledger_sequence: null,
+      reconciled_at: null,
+      alert_triggered: false,
+      review_notes: null,
     };
 
     payments.push(newPayment);
@@ -327,7 +404,7 @@ router.post('/execute-payment', async (req: Request, res: Response) => {
 // POST /api/subscriptions/retry-payment - Retry failed payment
 router.post('/retry-payment', async (req: Request, res: Response) => {
   try {
-    const { subscription_id } = req.body;
+    const { subscription_id, tx_hash } = req.body;
 
     const subscription = subscriptions.find((s) => s.id === subscription_id);
     if (!subscription) {
@@ -345,7 +422,14 @@ router.post('/retry-payment', async (req: Request, res: Response) => {
       timestamp: now,
       status: 'Retried',
       retry_count: 1,
-      tx_hash: `0x${Math.random().toString(16).substr(2, 64)}`,
+      tx_hash: tx_hash || `0x${Math.random().toString(16).substr(2, 64)}`,
+      reconciliation_status: 'pending',
+      settled_amount: null,
+      slippage_bps: null,
+      ledger_sequence: null,
+      reconciled_at: null,
+      alert_triggered: false,
+      review_notes: null,
     };
 
     payments.push(newPayment);
@@ -390,6 +474,93 @@ router.get('/analytics/:merchantKey', async (req: Request, res: Response) => {
     res.json(analytics);
   } catch {
     res.status(500).json({ error: 'Failed to fetch analytics' });
+  }
+});
+
+// POST /api/subscriptions/reconciliation/run - Trigger a reconciliation cycle
+router.post('/reconciliation/run', async (req: Request, res: Response) => {
+  try {
+    const slippageToleranceBps =
+      req.body?.slippage_tolerance_bps !== undefined
+        ? Number(req.body.slippage_tolerance_bps)
+        : undefined;
+
+    const results = await runReconciliationCycle({
+      slippageToleranceBps,
+      loadPendingPayments: () => getPaymentsForReconciliation(true),
+      persistResult: applyReconciliationResult,
+    });
+
+    res.json({
+      processed: results.length,
+      reconciled: results.filter((r) => r.status === 'reconciled').length,
+      flagged: results.filter((r) => r.status !== 'reconciled').length,
+      results,
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to run payment reconciliation' });
+  }
+});
+
+// GET /api/subscriptions/reconciliation/flagged - List flagged payments & active accounting alerts
+router.get('/reconciliation/flagged', async (_req: Request, res: Response) => {
+  try {
+    const flaggedPayments = payments.filter(
+      (p) => p.reconciliation_status !== 'reconciled' && p.reconciliation_status !== 'pending'
+    );
+    const activeAlerts = getReconciliationAlerts(false);
+
+    res.json({
+      flagged_payments: flaggedPayments,
+      active_alerts: activeAlerts,
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch flagged payments' });
+  }
+});
+
+// POST /api/subscriptions/reconciliation/alerts/:alertId/resolve - Resolve an accounting alert
+router.post('/reconciliation/alerts/:alertId/resolve', async (req: Request, res: Response) => {
+  try {
+    const alertId = String(req.params.alertId ?? '');
+    const resolvedBy = String(req.body?.resolved_by || 'admin');
+    const resolved = resolveReconciliationAlert(alertId, resolvedBy);
+    if (!resolved) {
+      return res.status(404).json({ error: 'Reconciliation alert not found' });
+    }
+    res.json(resolved);
+  } catch {
+    res.status(500).json({ error: 'Failed to resolve reconciliation alert' });
+  }
+});
+
+// GET /api/subscriptions/reconciliation/reports/daily - Export daily reconciliation report (JSON/CSV)
+router.get('/reconciliation/reports/daily', async (req: Request, res: Response) => {
+  try {
+    const dateParam = typeof req.query.date === 'string' ? req.query.date : undefined;
+    const format = typeof req.query.format === 'string' ? req.query.format.toLowerCase() : 'json';
+
+    const reportDate = dateParam ? new Date(`${dateParam}T00:00:00.000Z`) : new Date();
+    if (Number.isNaN(reportDate.getTime())) {
+      return res.status(400).json({ error: 'Invalid date format. Expected YYYY-MM-DD.' });
+    }
+
+    const allPayments = getPaymentsForReconciliation(false);
+    const report = generateDailyReconciliationReport(allPayments, reportDate);
+
+    if (format === 'csv') {
+      const csv = exportReconciliationReportCsv(report);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="reconciliation-report-${report.reportDate}.csv"`
+      );
+      return res.status(200).send(csv);
+    }
+
+    res.json(report);
+  } catch {
+    res.status(500).json({ error: 'Failed to generate daily reconciliation report' });
   }
 });
 
