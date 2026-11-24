@@ -14,14 +14,16 @@ import { getQueueManager } from '../queues/queueManager.js';
 import logger from '../utils/logger.js';
 import { startEvaluationWorker, stopEvaluationWorker } from './evaluationWorker.js';
 import { startMintingWorker, stopMintingWorker } from './mintingWorker.js';
+import { startVideoTranscodingWorker, stopVideoTranscodingWorker } from './videoTranscodingWorker.js';
 
 export function startQueueWorkers(): void {
   startMintingWorker();
   startEvaluationWorker();
+  startVideoTranscodingWorker();
 }
 
 export async function stopQueueWorkers(): Promise<void> {
-  await Promise.allSettled([stopMintingWorker(), stopEvaluationWorker()]);
+  await Promise.allSettled([stopMintingWorker(), stopEvaluationWorker(), stopVideoTranscodingWorker()]);
   await getQueueManager().close();
 }
 
