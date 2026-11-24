@@ -1,5 +1,5 @@
 /**
- * Gitcoin (Human) Passport Stamps API v2 client (Issue BE-019).
+ * Gitcoin (Human) Passport Stamps API v2 client (Issue BE-019, extended for BE-086).
  *
  * GET {base}/v2/stamps/{scorer_id}/score/{address}
  * Docs: https://docs.passport.xyz/building-with-passport/stamps/passport-api

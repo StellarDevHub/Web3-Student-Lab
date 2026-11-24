@@ -42,6 +42,8 @@ model Student {
   webauthnCredentials WebAuthnCredential[]
   hashSimulations  HashSimulation[]
   subscriptions    Subscription[]
+  sybilIdentities  SybilIdentity[]
+  sybilScores      SybilScore[]
 
   @@index([workspaceId, email])
   @@index([firstName, lastName])
@@ -50,6 +52,41 @@ model Student {
   @@index([githubId])
   @@index([discordId])
   @@map("students")
+}
+
+/// External identity credential (Gitcoin Passport stamp or BrightID proof) bound to a student (BE-086).
+model SybilIdentity {
+  id               String    @id @default(cuid())
+  studentId        String
+  provider         String    // gitcoin_passport | brightid
+  externalId       String    // Passport address / BrightID unique handle
+  proofHash        String    @unique
+  verified         Boolean   @default(false)
+  verifiedAt       DateTime?
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalId])
+  @@index([studentId])
+  @@map("sybil_identities")
+}
+
+/// Aggregated Sybil resistance score snapshot per student (BE-086).
+model SybilScore {
+  id          String   @id @default(cuid())
+  studentId   String
+  score       Float
+  passportScore Float  @default(0)
+  brightIdScore Float  @default(0)
+  eligible    Boolean  @default(false)
+  computedAt  DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, computedAt])
+  @@map("sybil_scores")
 }
 
 model PasskeyCredential {
