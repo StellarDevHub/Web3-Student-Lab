@@ -61,6 +61,13 @@ export default function RootLayout({
       data-scroll-behavior="smooth"
       className={`${inter.variable} ${outfit.variable} overflow-x-hidden`}
     >
+      {/* Render-blocking inline script: sets data-theme before paint to
+      eliminate FOUC. Runs before React hydration. */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(function(){try{var k='web3-lab-theme';var t=localStorage.getItem(k);var d='dark';if(t==='light'||t==='dark'||t==='oled'){d=t;}else if(t==='system'||!t){try{d=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}catch(e){}}document.documentElement.setAttribute('data-theme',d);document.documentElement.classList.add(d);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();`,
+        }}
+      />
       <body className="bg-background text-foreground min-h-screen antialiased overflow-x-hidden" suppressHydrationWarning>
         <QueryProvider>
           <ThemeProvider>

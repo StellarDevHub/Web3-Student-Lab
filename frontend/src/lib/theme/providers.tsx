@@ -6,7 +6,7 @@ import { ReactNode, useEffect, useState } from 'react';
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider
-      attribute="class"
+      attribute="data-theme"
       defaultTheme="dark"
       enableSystem
       disableTransitionOnChange={false}

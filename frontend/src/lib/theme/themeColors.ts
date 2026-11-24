@@ -179,23 +179,3 @@ export function getThemeColors(theme: 'light' | 'dark' | 'oled') {
 export function getChartColors(theme: 'light' | 'dark' | 'oled') {
   return THEME_COLORS[theme].chart;
 }
-
-// Generate inline styles for theme
-export function getThemeStyles(theme: 'light' | 'dark' | 'oled') {
-  const colors = THEME_COLORS[theme];
-  const vars: Record<string, string> = {};
-
-  // Build CSS variable assignments
-  Object.entries(colors).forEach(([category, colorMap]) => {
-    if (typeof colorMap === 'object') {
-      Object.entries(colorMap).forEach(([key, value]) => {
-        const cssVar = CSS_VARIABLES[category as keyof typeof CSS_VARIABLES]?.[key as any];
-        if (cssVar) {
-          vars[cssVar] = value;
-        }
-      });
-    }
-  });
-
-  return vars;
-}
