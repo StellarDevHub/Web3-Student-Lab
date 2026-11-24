@@ -8,6 +8,7 @@
 //!   * gating which headers are accepted.
 
 use super::*;
+use ed25519_dalek::{Signer, SigningKey};
 use soroban_sdk::testutils::{Address as _, Ledger as _};
 use soroban_sdk::Env;
 
@@ -51,6 +52,46 @@ fn validator_registration_and_threshold() {
 
     client.unregister_validator(&admin, &validator);
     assert!(!client.is_validator(&validator));
+}
+
+#[test]
+fn validator_quorum_tracks_distinct_active_validators() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    for key in [[1u8; 32], [2u8; 32], [3u8; 32], [4u8; 32]] {
+        client.register_validator(&admin, &BytesN::from_array(&env, &key));
+    }
+    assert_eq!(client.get_threshold(), 3);
+
+    client.set_threshold(&admin, &1u32);
+    assert_eq!(client.get_threshold(), 3);
+
+    client.unregister_validator(&admin, &BytesN::from_array(&env, &[4u8; 32]));
+    assert_eq!(client.get_threshold(), 3);
+    client.unregister_validator(&admin, &BytesN::from_array(&env, &[3u8; 32]));
+    assert_eq!(client.get_threshold(), 2);
+}
+
+#[test]
+fn verify_block_header_rejects_duplicate_signers() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let validator = BytesN::from_array(&env, &[9u8; 32]);
+    client.register_validator(&admin, &validator);
+
+    let hash = BytesN::from_array(&env, &[1u8; 32]);
+    let signers: Vec<BytesN<32>> = Vec::from_array(&env, [validator.clone(), validator]);
+    let signatures: Vec<BytesN<64>> = Vec::from_array(
+        &env,
+        [
+            BytesN::from_array(&env, &[0u8; 64]),
+            BytesN::from_array(&env, &[0u8; 64]),
+        ],
+    );
+    assert!(!client.verify_block_header(&hash, &signers, &signatures));
 }
 
 #[test]
@@ -141,4 +182,110 @@ fn ledger_timestamp_advances_for_header_accept_time() {
     let (_client, _admin) = setup(&env);
     env.ledger().with_mut(|li| li.timestamp = 1_000);
     assert_eq!(env.ledger().timestamp(), 1_000);
+}
+
+#[test]
+fn mpt_leaf_inclusion_verifies_exact_transaction_value() {
+    let env = Env::default();
+    let node = Bytes::from_array(&env, &[0xc6, 0x82, 0x20, 0x80, 0x82, 0xaa, 0xbb]);
+    let root: BytesN<32> = env.crypto().keccak256(&node).into();
+    let key = Bytes::from_array(&env, &[0x80]);
+    let transaction = Bytes::from_array(&env, &[0xaa, 0xbb]);
+    let proof = Vec::from_array(&env, [node]);
+
+    assert!(verify_mpt_inclusion(
+        &env,
+        &root,
+        &key,
+        &transaction,
+        &proof
+    ));
+}
+
+#[test]
+fn mpt_leaf_inclusion_rejects_wrong_key_and_value() {
+    let env = Env::default();
+    let node = Bytes::from_array(&env, &[0xc6, 0x82, 0x20, 0x80, 0x82, 0xaa, 0xbb]);
+    let root: BytesN<32> = env.crypto().keccak256(&node).into();
+    let proof = Vec::from_array(&env, [node]);
+
+    assert!(!verify_mpt_inclusion(
+        &env,
+        &root,
+        &Bytes::from_array(&env, &[0x81]),
+        &Bytes::from_array(&env, &[0xaa, 0xbb]),
+        &proof
+    ));
+    assert!(!verify_mpt_inclusion(
+        &env,
+        &root,
+        &Bytes::from_array(&env, &[0x80]),
+        &Bytes::from_array(&env, &[0xaa, 0xbc]),
+        &proof
+    ));
+}
+
+#[test]
+fn accepted_header_mpt_proof_unlocks_once() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    env.ledger().with_mut(|li| li.timestamp = 1_000);
+
+    let signing_key = SigningKey::from_bytes(&[42u8; 32]);
+    let validator = BytesN::from_array(&env, &signing_key.verifying_key().to_bytes());
+    client.register_validator(&admin, &validator);
+
+    let transaction = Bytes::from_array(&env, &[0xaa, 0xbb]);
+    let trie_key = Bytes::from_array(&env, &[0x80]);
+    let node = Bytes::from_array(&env, &[0xc6, 0x82, 0x20, 0x80, 0x82, 0xaa, 0xbb]);
+    let tx_root: BytesN<32> = env.crypto().keccak256(&node).into();
+    let block_hash = BytesN::from_array(&env, &[3u8; 32]);
+    let parent_hash = BytesN::from_array(&env, &[0u8; 32]);
+    let state_root = BytesN::from_array(&env, &[4u8; 32]);
+    let signing_hash = client.block_header_signing_hash(
+        &7u32,
+        &1u64,
+        &block_hash,
+        &parent_hash,
+        &state_root,
+        &tx_root,
+        &1_000u64,
+    );
+    let signature = signing_key.sign(&signing_hash.to_array()).to_bytes();
+    let signers = Vec::from_array(&env, [validator]);
+    let signatures = Vec::from_array(&env, [BytesN::from_array(&env, &signature)]);
+    client.submit_block_header(
+        &admin,
+        &7u32,
+        &1u64,
+        &block_hash,
+        &parent_hash,
+        &state_root,
+        &tx_root,
+        &1_000u64,
+        &signers,
+        &signatures,
+    );
+
+    let tx_hash: BytesN<32> = env.crypto().keccak256(&transaction).into();
+    let proof_nodes = Vec::from_array(&env, [node]);
+    let asset_id = BytesN::from_array(&env, &[5u8; 32]);
+    let recipient = Bytes::from_array(&env, &[6u8; 32]);
+    assert!(client.unlock_asset_from_header(
+        &admin,
+        &7u32,
+        &1u64,
+        &tx_hash,
+        &trie_key,
+        &transaction,
+        &proof_nodes,
+        &asset_id,
+        &recipient,
+        &25i128,
+    ));
+    assert!(client.is_source_tx_processed(&7u32, &tx_hash));
+    assert!(client.get_processed_tx(&tx_hash));
+    assert_eq!(client.get_source_unlock(&7u32, &tx_hash).block_number, 1);
+    assert!(!client.is_source_tx_processed(&8u32, &tx_hash));
 }

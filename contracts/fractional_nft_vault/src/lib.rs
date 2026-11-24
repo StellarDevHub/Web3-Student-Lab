@@ -608,7 +608,7 @@ impl FractionalNftVaultContract {
     /// Start a blinded commit-reveal buyout auction.
     ///
     /// * `min_bid` — minimum acceptable revealed bid.
-    /// * `deposit` — anti-spam deposit escrowed with each commitment.
+    /// * `deposit` — anti-spam deposit, at least 10% of `min_bid`.
     /// * `commit_duration` — seconds the commit phase lasts.
     /// * `reveal_duration` — seconds the reveal phase lasts after commit closes.
     pub fn start_commit_reveal_auction(
@@ -624,7 +624,9 @@ impl FractionalNftVaultContract {
         admin.require_auth();
         require_admin(&env, &admin);
 
-        if min_bid <= 0 || deposit <= 0 || commit_duration == 0 || reveal_duration == 0 {
+        let minimum_deposit = min_bid / 10 + if min_bid % 10 == 0 { 0 } else { 1 };
+        if min_bid <= 0 || deposit < minimum_deposit || commit_duration == 0 || reveal_duration == 0
+        {
             panic_with_error!(&env, VaultError::InvalidAmount);
         }
         ensure_no_auction(&env);
@@ -771,11 +773,7 @@ impl FractionalNftVaultContract {
             .highest_bidder
             .clone()
             .unwrap_or_else(|| panic_with_error!(&env, VaultError::NoBids));
-        let price = if auction.second_highest_bid > 0 {
-            auction.second_highest_bid
-        } else {
-            auction.highest_bid
-        };
+        let price = auction.second_highest_bid.max(auction.min_bid);
 
         let payment = token::Client::new(&env, &read_payment_token(&env));
         for (bidder, amount) in auction.reveals.iter() {
@@ -799,8 +797,9 @@ impl FractionalNftVaultContract {
         auction.forfeited_deposits = forfeited;
         auction.finalized = true;
 
-        let treasury = price
-            .checked_add(forfeited)
+        let treasury = read_treasury(&env)
+            .checked_add(price)
+            .and_then(|amount| amount.checked_add(forfeited))
             .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow));
         env.storage().instance().set(&DataKey::Treasury, &treasury);
         env.storage().instance().set(&DataKey::Finalized, &true);
@@ -820,6 +819,38 @@ impl FractionalNftVaultContract {
         publish_auction(&env, &winner, treasury, read_total_shares(&env), true);
     }
 
+    /// Settle an auction with no valid reveals after its reveal deadline.
+    ///
+    /// Outstanding deposits are forfeited into the buyout treasury and the
+    /// empty auction is cleared so a later auction can proceed. The slashed
+    /// amount is distributed pro-rata with the proceeds of the eventual
+    /// successful buyout.
+    pub fn settle_unrevealed_bids(env: Env) -> i128 {
+        ensure_initialized(&env);
+        ensure_not_finalized(&env);
+
+        let auction = read_cr_auction(&env);
+        if env.ledger().timestamp() <= auction.reveal_deadline {
+            panic_with_error!(&env, VaultError::AuctionActive);
+        }
+        if auction.revealed_count != 0 {
+            panic_with_error!(&env, VaultError::AuctionActive);
+        }
+
+        let mut forfeited = 0i128;
+        for (_, deposit) in auction.deposits.iter() {
+            forfeited = forfeited
+                .checked_add(deposit)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow));
+        }
+        let treasury = read_treasury(&env)
+            .checked_add(forfeited)
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow));
+        env.storage().instance().set(&DataKey::Treasury, &treasury);
+        env.storage().instance().remove(&DataKey::CrAuction);
+        forfeited
+    }
+
     /// Cancel a live commit-reveal auction and refund every escrow. Admin only.
     pub fn cancel_commit_reveal_auction(env: Env, admin: Address) {
         ensure_initialized(&env);
@@ -828,6 +859,9 @@ impl FractionalNftVaultContract {
         require_admin(&env, &admin);
 
         let auction = read_cr_auction(&env);
+        if env.ledger().timestamp() > auction.reveal_deadline {
+            panic_with_error!(&env, VaultError::AuctionActive);
+        }
         let payment = token::Client::new(&env, &read_payment_token(&env));
         for (bidder, amount) in auction.reveals.iter() {
             if amount > 0 {
@@ -1625,6 +1659,50 @@ mod tests {
         // Runner-up is refunded in full.
         assert_eq!(sac.balance(&v.bidder), 10_000_000);
         assert!(v.client().finalized());
+    }
+
+    #[test]
+    fn no_reveal_deposits_are_slashed_and_distributed_with_next_buyout() {
+        let v = setup();
+        fractionalize(&v, 300, 200, 500);
+        let sac = token::StellarAssetClient::new(&v.env, &v.payment_token);
+
+        v.client()
+            .start_commit_reveal_auction(&v.admin, &1_000, &100, &10, &10);
+        let (no_show_commitment, _) = commitment(&v.env, 5_000);
+        v.client().commit_bid(&v.bidder, &no_show_commitment, &100);
+
+        v.env.ledger().with_mut(|li| li.timestamp = 21);
+        assert_eq!(v.client().settle_unrevealed_bids(), 100);
+        assert_eq!(v.client().treasury(), 100);
+        assert!(v.client().commit_reveal_auction().is_none());
+        assert!(!v.client().finalized());
+        assert!(v.client().nft_locked());
+        assert_eq!(sac.balance(&v.bidder), 10_000_000 - 100);
+
+        v.client()
+            .start_commit_reveal_auction(&v.admin, &1_000, &100, &10, &10);
+        let (next_commitment, nonce) = commitment(&v.env, 5_000);
+        v.client().commit_bid(&v.bidder, &next_commitment, &100);
+        v.env.ledger().with_mut(|li| li.timestamp = 32);
+        v.client().reveal_bid(&v.bidder, &5_000, &nonce);
+        v.env.ledger().with_mut(|li| li.timestamp = 42);
+        v.client().finalize_commit_reveal_auction(&v.admin);
+
+        assert_eq!(v.client().treasury(), 1_100);
+        assert_eq!(v.client().claim_buyout_payout(&v.user_a), 330);
+        assert_eq!(v.client().claim_buyout_payout(&v.user_b), 220);
+        assert_eq!(v.client().claim_buyout_payout(&v.admin), 550);
+        assert_eq!(nft_owner(&v), v.bidder);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #4)")]
+    fn commit_reveal_requires_ten_percent_minimum_deposit() {
+        let v = setup();
+        fractionalize(&v, 300, 200, 500);
+        v.client()
+            .start_commit_reveal_auction(&v.admin, &1_000, &99, &10, &10);
     }
 
     #[test]

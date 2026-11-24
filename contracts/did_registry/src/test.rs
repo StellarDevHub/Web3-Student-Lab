@@ -12,11 +12,9 @@
 //! - Revocation: deactivated DIDs reject all subsequent mutations
 //! - Duplicate DID registration rejected
 
-use crate::{ContributorProof, DIDRegistryContract, DIDRegistryContractClient};
+use crate::{ContributorProof, DIDRegistryContract, DIDRegistryContractClient, DidError};
 use soroban_sdk::{
-    symbol_short,
-    testutils::Address as _,
-    Address, Bytes, BytesN, Env, Map, String, Symbol,
+    symbol_short, testutils::Address as _, Address, Bytes, BytesN, Env, Map, String, Symbol,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -99,10 +97,7 @@ fn test_bind_github_handle() {
 
     let doc = client.resolve(&did).unwrap();
     assert_eq!(doc.github_handle, Some(handle.clone()));
-    assert_eq!(
-        client.get_github_handle(&did),
-        Some(handle)
-    );
+    assert_eq!(client.get_github_handle(&did), Some(handle));
 }
 
 // ── Social identity binding ───────────────────────────────────────────────────
@@ -281,7 +276,10 @@ fn test_old_owner_cannot_mutate_after_rotation() {
     // Old owner tries to rotate again
     let another = Address::generate(&env);
     let result = client.try_rotate_key(&owner, &did, &another);
-    assert!(result.is_err(), "old owner must not be able to rotate after handoff");
+    assert!(
+        result.is_err(),
+        "old owner must not be able to rotate after handoff"
+    );
 }
 
 // ── Revocation ────────────────────────────────────────────────────────────────
@@ -374,9 +372,149 @@ fn test_update_attributes() {
     register_default(&env, &client, &owner, &did);
 
     let mut new_attrs = Map::new(&env);
-    new_attrs.set(symbol_short!("endpoint"), Bytes::from_slice(&env, b"https://example.com"));
+    new_attrs.set(
+        symbol_short!("endpoint"),
+        Bytes::from_slice(&env, b"https://example.com"),
+    );
     client.update(&owner, &did, &new_attrs);
 
     let doc = client.resolve(&did).unwrap();
     assert!(doc.attributes.contains_key(symbol_short!("endpoint")));
+}
+
+#[test]
+fn test_resolves_w3c_documents_for_stellar_and_soroban() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_id, client) = deploy(&env);
+    let owner = Address::generate(&env);
+    let did = make_did(&env, 20);
+    register_default(&env, &client, &owner, &did);
+
+    let verification_key = BytesN::from_array(&env, &[21u8; 32]);
+    let recovery_key = BytesN::from_array(&env, &[22u8; 32]);
+    client.set_verification_key(&owner, &did, &verification_key);
+    client.set_recovery_key(&owner, &did, &recovery_key);
+    client.add_service(
+        &owner,
+        &did,
+        &String::from_str(&env, "#profile"),
+        &String::from_str(&env, "LinkedDomains"),
+        &String::from_str(&env, "https://example.com"),
+    );
+
+    let stellar = client.resolve_stellar(&did).unwrap();
+    assert_eq!(
+        stellar.id,
+        String::from_str(
+            &env,
+            "did:stellar:1414141414141414141414141414141414141414141414141414141414141414"
+        )
+    );
+    assert_eq!(
+        stellar.context.len(),
+        2,
+        "DID Core and Ed25519 contexts should be present"
+    );
+    assert_eq!(stellar.verification_method.len(), 2);
+    assert_eq!(stellar.authentication.len(), 1);
+    assert_eq!(stellar.assertion_method.len(), 1);
+    assert_eq!(stellar.capability_invocation.len(), 1);
+    assert_eq!(stellar.service.len(), 1);
+    assert_eq!(
+        stellar.service.get(0).unwrap().id,
+        String::from_str(
+            &env,
+            "did:stellar:1414141414141414141414141414141414141414141414141414141414141414#profile"
+        )
+    );
+    assert_eq!(
+        stellar.verification_method.get(0).unwrap().r#type,
+        String::from_str(&env, "Ed25519VerificationKey2020")
+    );
+    assert!(
+        stellar
+            .verification_method
+            .get(0)
+            .unwrap()
+            .public_key_multibase
+            .len()
+            > 1
+    );
+
+    let soroban = client
+        .resolve_soroban(&did, &String::from_str(&env, "testnet"))
+        .unwrap();
+    assert_eq!(
+        soroban.id,
+        String::from_str(
+            &env,
+            "did:soroban:testnet:1414141414141414141414141414141414141414141414141414141414141414"
+        )
+    );
+}
+
+#[test]
+fn test_recovery_signature_rotates_key_and_preserves_history() {
+    use ed25519_dalek::Signer;
+
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_id, client) = deploy(&env);
+    let owner = Address::generate(&env);
+    let did = make_did(&env, 21);
+    register_default(&env, &client, &owner, &did);
+
+    let current_signing_key = ed25519_dalek::SigningKey::from_bytes(&[31u8; 32]);
+    let recovery_signing_key = ed25519_dalek::SigningKey::from_bytes(&[32u8; 32]);
+    let new_signing_key = ed25519_dalek::SigningKey::from_bytes(&[33u8; 32]);
+    let current_key = BytesN::from_array(&env, current_signing_key.verifying_key().as_bytes());
+    let recovery_key = BytesN::from_array(&env, recovery_signing_key.verifying_key().as_bytes());
+    let new_key = BytesN::from_array(&env, new_signing_key.verifying_key().as_bytes());
+    client.set_verification_key(&owner, &did, &current_key);
+    client.set_recovery_key(&owner, &did, &recovery_key);
+
+    let payload = client.key_rotation_payload(&did, &new_key);
+    let signature = recovery_signing_key.sign(&payload.to_alloc_vec());
+    let signature = BytesN::from_array(&env, &signature.to_bytes());
+    client.rotate_verification_key(&did, &new_key, &signature);
+
+    let resolved = client.resolve(&did).unwrap();
+    assert_eq!(resolved.verification_key, Some(new_key));
+    assert_eq!(resolved.historical_verification_keys.len(), 1);
+    assert_eq!(
+        resolved.historical_verification_keys.get(0),
+        Some(current_key)
+    );
+    assert_eq!(resolved.key_rotation_nonce, 1);
+}
+
+#[test]
+fn test_unauthorized_owner_change_uses_typed_error() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_id, client) = deploy(&env);
+    let owner = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let did = make_did(&env, 22);
+    register_default(&env, &client, &owner, &did);
+
+    let result = client.try_bind_github(&attacker, &did, &String::from_str(&env, "mallory"));
+    assert_eq!(result, Err(Ok(DidError::Unauthorized)));
+}
+
+#[test]
+fn test_verification_key_cannot_be_replaced_without_recovery_signature() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_id, client) = deploy(&env);
+    let owner = Address::generate(&env);
+    let did = make_did(&env, 23);
+    register_default(&env, &client, &owner, &did);
+
+    let original = BytesN::from_array(&env, &[23u8; 32]);
+    let replacement = BytesN::from_array(&env, &[24u8; 32]);
+    client.set_verification_key(&owner, &did, &original);
+    let result = client.try_set_verification_key(&owner, &did, &replacement);
+    assert_eq!(result, Err(Ok(DidError::Unauthorized)));
 }
