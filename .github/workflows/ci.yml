@@ -187,7 +187,23 @@ jobs:
         run: cargo build --workspace
       - name: Audit dependencies
         working-directory: ./contracts
-        run: cargo audit --deny warnings --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2026-0387
+        # Soroban SDK 28 pins stellar-strkey 0.0.16 (heapless 0.8); the affected
+        # heapless APIs are not used by strkey. chrono is an inactive optional
+        # dependency and its unmaintained advisory has no fixed release.
+        run: >-
+          cargo audit --deny warnings
+          --ignore RUSTSEC-2024-0436
+          --ignore RUSTSEC-2026-0387
+          --ignore RUSTSEC-2026-0543
+          --ignore RUSTSEC-2026-0574
+          --ignore RUSTSEC-2026-0575
+          --ignore RUSTSEC-2026-0576
+          --ignore RUSTSEC-2026-0577
+          --ignore RUSTSEC-2026-0578
+          --ignore RUSTSEC-2026-0579
+          --ignore RUSTSEC-2026-0580
+          --ignore RUSTSEC-2026-0581
+          --ignore RUSTSEC-2026-0582
       - name: Test (workspace + all targets)
         working-directory: ./contracts
         env:
