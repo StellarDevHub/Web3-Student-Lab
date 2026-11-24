@@ -6,6 +6,7 @@ import { cacheTTL } from '../config/redis.config.js';
 import prisma from '../db/index.js';
 import { auditAction } from '../middleware/audit.js';
 import { createNotification } from '../notifications/index.js';
+import { sanitizeMarkdownContent } from '../services/contentSanitizer.js';
 import { getQueryString } from '../utils/queryParams.js';
 import logger from '../utils/logger.js';
 
@@ -200,10 +201,12 @@ router.post('/', auditAction('CREATE_COURSE', 'Course'), async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    const sanitizedDescription = await sanitizeMarkdownContent(description ?? '');
+
     const newCourse: CourseView = {
       id: `course-${Date.now()}`,
       title,
-      description: description ?? '',
+      description: sanitizedDescription,
       instructor,
       credits: credits || 3,
       createdAt: new Date().toISOString(),
@@ -263,9 +266,12 @@ router.put('/:id', auditAction('UPDATE_COURSE', 'Course'), async (req, res) => {
       return res.status(404).json({ error: 'Course not found' });
     }
 
+    const sanitizedDescription =
+      description === undefined ? undefined : await sanitizeMarkdownContent(description ?? '');
+
     const updated = await prisma.course.update({
       where: { id },
-      data: { title, description, instructor, credits },
+      data: { title, description: sanitizedDescription, instructor, credits },
     });
 
     await invalidateCourseCache(id);
