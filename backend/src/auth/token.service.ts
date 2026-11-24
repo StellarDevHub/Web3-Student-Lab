@@ -3,21 +3,40 @@ import jwt from 'jsonwebtoken';
 import logger from '../utils/logger.js';
 import { getRedisClient } from '../utils/redis.js';
 
-export const getAccessTokenSecret = (): string => {
-  const secret = process.env.ACCESS_TOKEN_SECRET || process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error('ACCESS_TOKEN_SECRET is not configured');
+type TokenSecretName = 'ACCESS_TOKEN_SECRET' | 'REFRESH_TOKEN_SECRET';
+
+const getTokenSecrets = (name: TokenSecretName): string[] => {
+  const versionPattern = new RegExp(`^${name}_v(\\d+)$`);
+  const versionedSecrets = Object.entries(process.env)
+    .flatMap(([key, value]) => {
+      const match = versionPattern.exec(key);
+      if (!match || !value) return [];
+      const version = Number(match[1]);
+      if (!Number.isSafeInteger(version) || version < 1) return [];
+      return [{ version, value }];
+    })
+    .sort((a, b) => b.version - a.version)
+    .map(({ value }) => value);
+
+  const legacySecrets =
+    name === 'ACCESS_TOKEN_SECRET'
+      ? [process.env.ACCESS_TOKEN_SECRET, process.env.JWT_SECRET].filter(
+          (secret): secret is string => Boolean(secret),
+        )
+      : process.env.REFRESH_TOKEN_SECRET
+        ? [process.env.REFRESH_TOKEN_SECRET]
+        : [];
+  const secrets = [...new Set([...versionedSecrets, ...legacySecrets])];
+
+  if (secrets.length === 0) {
+    throw new Error(`${name} is not configured`);
   }
-  return secret;
+  return secrets;
 };
 
-export const getRefreshTokenSecret = (): string => {
-  const secret = process.env.REFRESH_TOKEN_SECRET;
-  if (!secret) {
-    throw new Error('REFRESH_TOKEN_SECRET is not configured');
-  }
-  return secret;
-};
+export const getAccessTokenSecret = (): string => getTokenSecrets('ACCESS_TOKEN_SECRET')[0]!;
+
+export const getRefreshTokenSecret = (): string => getTokenSecrets('REFRESH_TOKEN_SECRET')[0]!;
 
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY_DAYS = 7;
@@ -96,13 +115,13 @@ export const generateRefreshToken = async (
 };
 
 export const verifyAccessToken = (token: string): TokenPayload => {
-  return verifyJwt(token, getAccessTokenSecret()) as TokenPayload;
+  return verifyWithKeyRing(token, getTokenSecrets('ACCESS_TOKEN_SECRET')) as TokenPayload;
 };
 
 export const verifyRefreshToken = async (token: string): Promise<TokenPayload> => {
   let decoded: TokenPayload;
   try {
-    decoded = verifyJwt(token, getRefreshTokenSecret()) as TokenPayload;
+    decoded = verifyWithKeyRing(token, getTokenSecrets('REFRESH_TOKEN_SECRET')) as TokenPayload;
   } catch (_err) {
     throw new Error('Refresh token has been reused or revoked');
   }
@@ -160,6 +179,18 @@ export const verifyRefreshToken = async (token: string): Promise<TokenPayload> =
   }
 };
 
+const verifyWithKeyRing = (token: string, secrets: string[]): unknown => {
+  let lastError: unknown;
+  for (const secret of secrets) {
+    try {
+      return verifyJwt(token, secret);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+};
+
 const UNLOCK_SCRIPT = `
 if redis.call("get", KEYS[1]) == ARGV[1] then
   return redis.call("del", KEYS[1])
@@ -203,7 +234,7 @@ export const rotateRefreshToken = async (
 ): Promise<{ accessToken: string; refreshToken: string }> => {
   let decoded: TokenPayload;
   try {
-    decoded = verifyJwt(oldToken, getRefreshTokenSecret()) as TokenPayload;
+    decoded = verifyWithKeyRing(oldToken, getTokenSecrets('REFRESH_TOKEN_SECRET')) as TokenPayload;
   } catch (_err) {
     throw new Error('Refresh token has been reused or revoked');
   }
