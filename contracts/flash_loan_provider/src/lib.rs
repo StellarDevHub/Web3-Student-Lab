@@ -5,7 +5,6 @@ pub mod receiver;
 #[cfg(test)]
 mod test;
 
-use receiver::FlashLoanReceiver;
 use soroban_sdk::{
     contract, contracterror, contractimpl, panic_with_error, symbol_short, token, Address, Bytes,
     Env, IntoVal, Symbol,
@@ -97,13 +96,7 @@ impl FlashLoanProvider {
 
         token.transfer(&contract_addr, &borrower, &amount);
 
-        let args = (
-            borrower.clone(),
-            token_addr.clone(),
-            amount,
-            fee,
-            params,
-        );
+        let args = (borrower.clone(), token_addr.clone(), amount, fee, params);
         env.invoke_contract::<()>(
             &borrower,
             &Symbol::new(&env, "execute_operation"),
@@ -111,12 +104,10 @@ impl FlashLoanProvider {
         );
 
         let balance_after = token.balance(&contract_addr);
-        let required_balance = balance_before
-            .checked_add(fee)
-            .unwrap_or_else(|| {
-                env.storage().temporary().remove(&FLASH_LOAN_LOCK);
-                panic_with_error!(&env, FlashLoanError::Overflow);
-            });
+        let required_balance = balance_before.checked_add(fee).unwrap_or_else(|| {
+            env.storage().temporary().remove(&FLASH_LOAN_LOCK);
+            panic_with_error!(&env, FlashLoanError::Overflow);
+        });
 
         if balance_after < required_balance {
             env.storage().temporary().remove(&FLASH_LOAN_LOCK);
