@@ -7,6 +7,7 @@ import { ApiResponse } from '../utils/response.js';
 
 const sponsorSchema = z.object({
   innerTxXdr: z.string().min(10),
+  turnstileToken: z.string().min(1).optional(),
 });
 
 export const gasStationController = {
@@ -18,11 +19,19 @@ export const gasStationController = {
     }
 
     const user = req.user!;
+    const countryCode =
+      (req.headers['cf-ipcountry'] as string | undefined) ||
+      (req.headers['x-vercel-ip-country'] as string | undefined) ||
+      (req.headers['x-country-code'] as string | undefined);
+
     try {
       const result = await gasStationService.sponsor({
         studentId: user.id,
         studentPublicKey: user.walletAddress || '',
         innerTxXdr: parsed.data.innerTxXdr,
+        turnstileToken: parsed.data.turnstileToken,
+        clientIp: req.ip,
+        countryCode,
       });
       return res.status(200).json(ApiResponse.success('Transaction sponsored', result));
     } catch (err) {
@@ -35,8 +44,13 @@ export const gasStationController = {
 
   // Today's sponsorship usage for the authenticated student
   getQuota: asyncHandler(async (req: Request, res: Response) => {
-    const usage = await getGasQuotaUsage(req.user!.id);
-    return res.status(200).json(ApiResponse.success('Gas quota retrieved', usage));
+    const [usage, dailyTransactions] = await Promise.all([
+      getGasQuotaUsage(req.user!.id),
+      gasStationService.getDailyTxCount(req.user!.id),
+    ]);
+    return res
+      .status(200)
+      .json(ApiResponse.success('Gas quota retrieved', { ...usage, dailyTransactions }));
   }),
 
   // Verified course contracts eligible for sponsorship
