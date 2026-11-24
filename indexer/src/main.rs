@@ -22,6 +22,7 @@
 
 mod config;
 mod db;
+mod grpc;
 mod reorg;
 mod rpc;
 mod server;
@@ -78,6 +79,17 @@ async fn main() -> Result<()> {
             warn!(error = %err, "poller terminated");
         }
     });
+
+    // Optional internal mTLS gRPC server (BE-093).
+    if cfg.grpc_port.is_some() {
+        let grpc_cfg = cfg.clone();
+        let grpc_state = state.clone();
+        tokio::spawn(async move {
+            if let Err(err) = grpc::serve_grpc_mtls(grpc_cfg, grpc_state).await {
+                warn!(error = %err, "mTLS gRPC server terminated");
+            }
+        });
+    }
 
     server::serve(cfg, state).await
 }
