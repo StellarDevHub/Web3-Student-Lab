@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import '@/lib/editor/monaco-loader';
 import { Editor, OnMount } from '@monaco-editor/react';
 import { MessageCircle, Plus, Users, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';

@@ -37,10 +37,14 @@ This document is automatically generated from `#[contracterror]` annotations acr
 | `402` | `InvalidFee` | `402` — Fee is outside the allowed range. |
 | `403` | `SlippageExceeded` | `403` — Slippage tolerance exceeded. |
 | `404` | `NotInitialized` | `404` — Contract has not been initialised. |
-| `405` | `ContractPaused` | `405` — AMM operations are paused by the circuit breaker. |
-| `406` | `Unauthorized` | `406` — Caller is not authorized to manage the circuit breaker. |
+| `405` | `DeadlineExceeded` | `405` — Deadline expired for trade execution. |
+| `406` | `SameBlockBidirectionalTrade` | `406` — Same-block opposite-direction trades are prohibited. |
 | `407` | `WithdrawalLimitExceeded` | `407` — The 24-hour token outflow budget has been exceeded. |
 | `408` | `Overflow` | `408` — Arithmetic overflow. |
+| `409` | `ContractPaused` | `409` — AMM operations are paused by the circuit breaker. |
+| `410` | `Unauthorized` | `410` — Caller is not authorized to manage the circuit breaker. |
+| `411` | `ReentrancyGuardTriggered` | `411` — A reentrant AMM call was rejected. |
+| `412` | `InvariantViolated` | `412` — Pool balances exceed recorded reserves. |
 
 ### `AuthError` (`auth_checker/src/lib.rs`)
 
@@ -310,10 +314,11 @@ This document is automatically generated from `#[contracterror]` annotations acr
 | `422` | `InvalidStake` | `422` — Stake must be a positive value. |
 | `423` | `InvalidPrice` | `423` — Price must be a positive value. |
 | `424` | `NotWhitelisted` | `424` — Reporter is not on the whitelist. |
-| `425` | `NoFreshReports` | `425` — No fresh price reports are available. |
+| `425` | `NoFreshReports` | `425` — No price reports have been submitted. |
 | `426` | `AllOutliers` | `426` — All submitted reports were flagged as outliers. |
-| `427` | `PriceStale` | `427` — The latest aggregated price is stale. |
+| `427` | `StalePriceFeed` | `427` — A report or latest aggregate exceeds the staleness limit. |
 | `428` | `NotInitialized` | `428` — Contract has not been initialised. |
+| `429` | `InsufficientReports` | `429` — Fewer than three fresh reports are available. |
 
 ### `InsuranceError` (`parametric_insurance/src/lib.rs`)
 
@@ -438,6 +443,14 @@ This document is automatically generated from `#[contracterror]` annotations acr
 | `121` | `TimelockNotElapsed` | `121` — Timelock has not elapsed; proposal is not ready. |
 | `122` | `InvariantViolated` | `122` — Reserve conservation invariant violated. |
 | `123` | `WithdrawalLimitExceeded` | `123` — 24-hour withdrawal allowance has been exceeded. |
+| `124` | `EscrowAlreadyInitialized` | `124` — Escrow has already been initialized. |
+| `125` | `EscrowNotInitialized` | `125` — Escrow has not been initialized. |
+| `126` | `InvalidEscrowSigners` | `126` — Escrow signers must be distinct and match their configured roles. |
+| `127` | `InsufficientEscrowBalance` | `127` — Escrow balance is insufficient for the requested release. |
+| `128` | `RecoveryPending` | `128` — A key recovery is already pending. |
+| `129` | `NoRecoveryPending` | `129` — No key recovery is pending. |
+| `130` | `RecoveryTimelockActive` | `130` — Key recovery timelock has not elapsed. |
+| `131` | `InvalidRecoveryTarget` | `131` — Replacement signer is not a valid new party. |
 
 ### `AuthError` (`src/errors.rs`)
 

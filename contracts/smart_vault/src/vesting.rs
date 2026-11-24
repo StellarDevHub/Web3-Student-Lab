@@ -5,8 +5,8 @@
 //! - Accurate pro-rata unlocked calculation based on ledger sequence
 //! - Revocable vs. irrevocable schedules with unvested tokens returning to organization treasury
 
-use soroban_sdk::{contracttype, Address};
 use crate::VaultError;
+use soroban_sdk::{contracttype, Address};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -38,8 +38,12 @@ impl VestingSchedule {
         if total_duration == 0 || cliff_duration > total_duration {
             return Err(VaultError::InvalidThreshold);
         }
-        let cliff_ledger = start_ledger.checked_add(cliff_duration).ok_or(VaultError::Overflow)?;
-        let end_ledger = start_ledger.checked_add(total_duration).ok_or(VaultError::Overflow)?;
+        let cliff_ledger = start_ledger
+            .checked_add(cliff_duration)
+            .ok_or(VaultError::Overflow)?;
+        let end_ledger = start_ledger
+            .checked_add(total_duration)
+            .ok_or(VaultError::Overflow)?;
 
         Ok(Self {
             id,

@@ -4,7 +4,11 @@ import { webhookDeliveryQueue, WEBHOOK_DELIVERY_QUEUE_NAME } from './webhooks/qu
 import { exportQueue, EXPORT_QUEUE_NAME } from '../jobs/export.queue.js';
 import { backupQueue, BACKUP_QUEUE_NAME } from '../jobs/backup.queue.js';
 import { storagePinQueue, STORAGE_PIN_QUEUE_NAME } from './storage/queue.js';
-import { buildSignedWebhookHeaders, canonicalizeWebhookPayload } from './webhooks/signature.js';
+import {
+  buildSignedWebhookHeaders,
+  canonicalizeWebhookPayload,
+  resolveEndpointSecret,
+} from './webhooks/signature.js';
 import type { SignedWebhookHeaders, WebhookDeliveryJobData } from './webhooks/types.js';
 
 export type DLQFailureCategory =
@@ -171,6 +175,9 @@ const SIGNATURE_HEADER_KEYS = new Set([
   'x-webhook-timestamp',
   'x-webhook-delivery-id',
   'x-webhook-event',
+  'x-hub-signature-256',
+  'x-webhook-nonce',
+  'x-webhook-unix-timestamp',
 ]);
 
 /**
@@ -219,12 +226,7 @@ export function reSignWebhookPayload(
   data: WebhookDeliveryJobData,
   options: { timestamp?: string; secret?: string } = {}
 ): WebhookResignature {
-  const secret = options.secret ?? data.destination?.secret ?? process.env.WEBHOOK_SIGNING_SECRET;
-  if (!secret) {
-    throw new Error(
-      'WEBHOOK_SIGNING_SECRET environment variable is required to re-sign webhook payloads'
-    );
-  }
+  const secret = options.secret ?? resolveEndpointSecret(data.destination);
 
   const serializedPayload = canonicalizeWebhookPayload({
     event: data.event,

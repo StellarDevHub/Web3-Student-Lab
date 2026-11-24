@@ -50,6 +50,22 @@ services:
       timeout: 5s
       retries: 5
 
+  # Redis replica - promoted by Sentinel when the primary fails (BE-004)
+  redis-replica:
+    image: redis:7-alpine
+    container_name: web3-student-lab-redis-replica
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --replicaof redis 6379
+    volumes:
+      - redis_replica_data:/data
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Redis Sentinel 1 - Monitors primary Redis instance
   redis-sentinel-1:
     image: redis:7-alpine
@@ -57,11 +73,13 @@ services:
     restart: always
     ports:
       - "26379:26379"
-    command: redis-sentinel /etc/sentinel.conf --port 26379
+    # Sentinel rewrites its config at runtime, so copy the read-only template.
+    command: sh -c "cp /etc/sentinel.tpl.conf /data/sentinel.conf && exec redis-sentinel /data/sentinel.conf --port 26379"
     volumes:
-      - ./redis-sentinel.conf:/etc/sentinel.conf:ro
+      - ./redis-sentinel.conf:/etc/sentinel.tpl.conf:ro
     depends_on:
       - redis
+      - redis-replica
     healthcheck:
       test: ["CMD", "redis-cli", "-p", "26379", "ping"]
       interval: 10s
@@ -75,11 +93,13 @@ services:
     restart: always
     ports:
       - "26380:26379"
-    command: redis-sentinel /etc/sentinel.conf --port 26379
+    # Sentinel rewrites its config at runtime, so copy the read-only template.
+    command: sh -c "cp /etc/sentinel.tpl.conf /data/sentinel.conf && exec redis-sentinel /data/sentinel.conf --port 26379"
     volumes:
-      - ./redis-sentinel.conf:/etc/sentinel.conf:ro
+      - ./redis-sentinel.conf:/etc/sentinel.tpl.conf:ro
     depends_on:
       - redis
+      - redis-replica
     healthcheck:
       test: ["CMD", "redis-cli", "-p", "26379", "ping"]
       interval: 10s
@@ -93,11 +113,13 @@ services:
     restart: always
     ports:
       - "26381:26379"
-    command: redis-sentinel /etc/sentinel.conf --port 26379
+    # Sentinel rewrites its config at runtime, so copy the read-only template.
+    command: sh -c "cp /etc/sentinel.tpl.conf /data/sentinel.conf && exec redis-sentinel /data/sentinel.conf --port 26379"
     volumes:
-      - ./redis-sentinel.conf:/etc/sentinel.conf:ro
+      - ./redis-sentinel.conf:/etc/sentinel.tpl.conf:ro
     depends_on:
       - redis
+      - redis-replica
     healthcheck:
       test: ["CMD", "redis-cli", "-p", "26379", "ping"]
       interval: 10s
@@ -184,7 +206,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       # Redis Sentinel (activate by setting REDIS_MODE=sentinel)
-      - REDIS_SENTINELS=redis-sentinel-1:26379,redis-sentinel-2:26380
+      - REDIS_SENTINELS=redis-sentinel-1:26379,redis-sentinel-2:26379,redis-sentinel-3:26379
       - REDIS_SENTINEL_NAME=mymaster
       # Redis Cluster (activate by setting REDIS_MODE=cluster)
       - REDIS_CLUSTER_NODES=redis-cluster-1:6381,redis-cluster-2:6382,redis-cluster-3:6383
@@ -284,6 +306,7 @@ volumes:
   postgres_data:
   postgres_replica_data:
   redis_data:
+  redis_replica_data:
   redis_cluster_1_data:
   redis_cluster_2_data:
   redis_cluster_3_data:

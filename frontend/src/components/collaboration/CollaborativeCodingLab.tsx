@@ -11,6 +11,7 @@
  * #1143
  */
 
+import '@/lib/editor/monaco-loader';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import * as Y from 'yjs';
 import { MonacoBinding } from 'y-monaco';

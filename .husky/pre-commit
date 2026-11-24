@@ -1,5 +1,12 @@
 #!/bin/sh
-echo "🔍 Running pre-commit hooks (ESLint & Prettier auto-formatting)..."
+echo "🔍 Running pre-commit hooks (Malware scan, ESLint & Prettier)..."
+
+echo "🛡️ Scanning for malicious supply-chain indicators..."
+./scripts/scan-malicious-indicators.sh || {
+  echo ""
+  echo "❌ Pre-commit scan failed: Malicious or prohibited patterns detected!"
+  exit 1
+}
 
 npx lint-staged || {
   echo ""

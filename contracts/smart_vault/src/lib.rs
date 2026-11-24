@@ -33,9 +33,11 @@ use soroban_sdk::{
     BytesN, Env, Map, String, Symbol, Vec,
 };
 
+pub mod auth;
 pub mod bitmap;
 pub mod circuit_breaker;
 pub mod merkle_distributor;
+pub mod reentrancy_guard;
 
 pub use bitmap::BitMap;
 pub use merkle_distributor::{
@@ -46,8 +48,6 @@ pub use merkle_distributor::{
 const TOTAL_SHARES: Symbol = symbol_short!("TSHARES");
 const TOTAL_ASSETS: Symbol = symbol_short!("TASSETS");
 const RESERVES: Symbol = symbol_short!("RESERVES");
-/// Temporary-storage key for the reentrancy guard mutex (SC-HARD-17).
-const RG_KEY: Symbol = symbol_short!("sv_rg");
 const HARVEST_COOL: u32 = 10; // minimum ledgers between harvests (front-run guard)
 
 // ── Governance constants ─────────────────────────────────────────────────────
@@ -122,6 +122,22 @@ pub enum VaultError {
     InvariantViolated = 122,
     /// `123` — 24-hour withdrawal allowance has been exceeded.
     WithdrawalLimitExceeded = 123,
+    /// `124` — Escrow has already been initialized.
+    EscrowAlreadyInitialized = 124,
+    /// `125` — Escrow has not been initialized.
+    EscrowNotInitialized = 125,
+    /// `126` — Escrow signers must be distinct and match their configured roles.
+    InvalidEscrowSigners = 126,
+    /// `127` — Escrow balance is insufficient for the requested release.
+    InsufficientEscrowBalance = 127,
+    /// `128` — A key recovery is already pending.
+    RecoveryPending = 128,
+    /// `129` — No key recovery is pending.
+    NoRecoveryPending = 129,
+    /// `130` — Key recovery timelock has not elapsed.
+    RecoveryTimelockActive = 130,
+    /// `131` — Replacement signer is not a valid new party.
+    InvalidRecoveryTarget = 131,
 }
 
 // ── Data types ───────────────────────────────────────────────────────────────
@@ -161,6 +177,24 @@ pub struct Proposal {
     pub state: ProposalState,
 }
 
+/// One of the three independently-authorized escrow roles.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EscrowRole {
+    Student,
+    Mentor,
+    Sponsor,
+}
+
+/// Configured escrow participants.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EscrowConfig {
+    pub student: Address,
+    pub mentor: Address,
+    pub sponsor: Address,
+}
+
 // ── Contract ─────────────────────────────────────────────────────────────────
 
 #[contract]
@@ -168,6 +202,68 @@ pub struct SmartVault;
 
 #[contractimpl]
 impl SmartVault {
+    // ── Multi-signer escrow ─────────────────────────────────────────────────
+
+    /// Configure the student, mentor, and sponsor. Each participant must
+    /// authorize the setup using their native Soroban account authorization.
+    pub fn init_escrow(env: Env, student: Address, mentor: Address, sponsor: Address) {
+        Self::lock(&env);
+        auth::initialize(&env, student, mentor, sponsor);
+        Self::unlock(&env);
+    }
+
+    /// Move shares from `funder` into the escrow. Shares remain backed by the
+    /// vault's existing assets and cannot be withdrawn by a single participant.
+    pub fn fund_escrow(env: Env, funder: Address, shares: i128) {
+        Self::lock(&env);
+        Self::assert_not_frozen(&env);
+        circuit_breaker::assert_not_paused(&env);
+        auth::fund(&env, &funder, shares);
+        Self::unlock(&env);
+    }
+
+    /// Release escrowed shares to `recipient`; all three configured parties
+    /// must authorize this exact Soroban invocation.
+    pub fn release_escrow(
+        env: Env,
+        student: Address,
+        mentor: Address,
+        sponsor: Address,
+        recipient: Address,
+        shares: i128,
+    ) {
+        Self::lock(&env);
+        Self::assert_not_frozen(&env);
+        circuit_breaker::assert_not_paused(&env);
+        auth::release(&env, &student, &mentor, &sponsor, &recipient, shares);
+        Self::unlock(&env);
+    }
+
+    /// Returns the number of shares held in escrow.
+    pub fn escrow_balance(env: Env) -> i128 {
+        auth::balance(&env)
+    }
+
+    /// Returns the current escrow participants.
+    pub fn escrow_config(env: Env) -> EscrowConfig {
+        auth::config(&env)
+    }
+
+    /// Start a seven-day recovery for a lost participant key. The other two
+    /// current participants and the replacement account must authorize.
+    pub fn propose_escrow_recovery(env: Env, role: EscrowRole, replacement: Address) {
+        Self::lock(&env);
+        auth::propose_recovery(&env, role, replacement);
+        Self::unlock(&env);
+    }
+
+    /// Apply a previously approved participant-key replacement after its delay.
+    pub fn execute_escrow_recovery(env: Env) {
+        Self::lock(&env);
+        auth::execute_recovery(&env);
+        Self::unlock(&env);
+    }
+
     // ── Deposit ──────────────────────────────────────────────────────────────
 
     /// Deposit `amount` tokens into the vault and receive proportional shares.
@@ -301,6 +397,7 @@ impl SmartVault {
 
     /// Mark vault assets as "staked".
     pub fn stake(env: Env, admin: Address) {
+        Self::lock(&env);
         admin.require_auth();
         circuit_breaker::assert_not_paused(&env);
         let ledger = env.ledger().sequence();
@@ -308,6 +405,7 @@ impl SmartVault {
             .instance()
             .set(&symbol_short!("staked_at"), &ledger);
         env.events().publish((symbol_short!("staked"),), ledger);
+        Self::unlock(&env);
     }
 
     // ── Harvest ──────────────────────────────────────────────────────────────
@@ -321,12 +419,17 @@ impl SmartVault {
         circuit_breaker::assert_not_paused(&env);
         Self::lock(&env);
 
+        let reward = Self::harvest_inner(&env, &user);
+        Self::unlock(&env);
+        reward
+    }
+
+    fn harvest_inner(env: &Env, user: &Address) -> i128 {
         let current_ledger = env.ledger().sequence();
-        let mut pos = Self::get_position(&env, &user);
+        let mut pos = Self::get_position(env, user);
 
         // Front-run / sandwich protection: enforce minimum cooldown.
         if current_ledger < pos.last_harvest + HARVEST_COOL {
-            Self::unlock(&env);
             panic_with_error!(&env, VaultError::HarvestCooldownActive);
         }
 
@@ -340,7 +443,6 @@ impl SmartVault {
         let total_shares: i128 = env.storage().instance().get(&TOTAL_SHARES).unwrap_or(0i128);
 
         if total_shares == 0 {
-            Self::unlock(&env);
             return 0;
         }
 
@@ -358,7 +460,6 @@ impl SmartVault {
             .unwrap_or(0);
 
         if reward == 0 {
-            Self::unlock(&env);
             return 0;
         }
 
@@ -377,10 +478,9 @@ impl SmartVault {
         );
 
         pos.last_harvest = current_ledger;
-        Self::set_position(&env, &user, &pos);
+        Self::set_position(env, user, &pos);
 
-        Self::assert_invariant(&env);
-        Self::unlock(&env);
+        Self::assert_invariant(env);
         env.events()
             .publish((symbol_short!("harvest"), user.clone()), reward);
 
@@ -391,12 +491,15 @@ impl SmartVault {
 
     /// Harvest rewards and immediately re-deposit them as new shares.
     pub fn compound(env: Env, user: Address) -> i128 {
-        let reward = Self::harvest(env.clone(), user.clone());
+        user.require_auth();
+        circuit_breaker::assert_not_paused(&env);
+        Self::lock(&env);
+        let reward = Self::harvest_inner(&env, &user);
         if reward == 0 {
+            Self::unlock(&env);
             return 0;
         }
 
-        Self::lock(&env);
         let total_assets: i128 = env.storage().instance().get(&TOTAL_ASSETS).unwrap_or(0i128);
         let total_shares: i128 = env.storage().instance().get(&TOTAL_SHARES).unwrap_or(0i128);
 
@@ -437,6 +540,7 @@ impl SmartVault {
     /// Initialize the multi-sig governance with a set of guardians and a
     /// signature threshold.
     pub fn init_governance(env: Env, guardians: Vec<Address>, threshold: u32) {
+        Self::lock(&env);
         if env.storage().instance().has(&GOV_INIT) {
             panic_with_error!(&env, VaultError::AlreadyExecuted);
         }
@@ -452,10 +556,12 @@ impl SmartVault {
         env.storage().instance().set(&PROPOSAL_COUNT, &0u32);
         env.storage().instance().set(&GOV_PERIOD, &MIN_GOV_PERIOD);
         env.storage().instance().set(&FREEZED, &false);
+        Self::unlock(&env);
     }
 
     /// Create a new governance proposal. The proposer must be a guardian.
     pub fn propose(env: Env, proposer: Address, description: String) -> u32 {
+        Self::lock(&env);
         proposer.require_auth();
         Self::assert_governance(&env);
         let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
@@ -491,11 +597,13 @@ impl SmartVault {
             (symbol_short!("gov"), symbol_short!("proposed")),
             (count, proposer, now),
         );
+        Self::unlock(&env);
         count
     }
 
     /// Collect a guardian's signature on a proposal.
     pub fn approve(env: Env, signer: Address, proposal_id: u32) {
+        Self::lock(&env);
         signer.require_auth();
         Self::assert_governance(&env);
         let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
@@ -538,10 +646,12 @@ impl SmartVault {
                 ),
             );
         }
+        Self::unlock(&env);
     }
 
     /// Execute a proposal after timelock has elapsed.
     pub fn execute_proposal(env: Env, proposal_id: u32) {
+        Self::lock(&env);
         Self::assert_governance(&env);
         let mut proposals: Map<u32, Proposal> = env.storage().persistent().get(&PROPOSALS).unwrap();
         let mut proposal = Self::load_proposal(&env, &proposals, proposal_id);
@@ -569,10 +679,12 @@ impl SmartVault {
             (symbol_short!("gov"), symbol_short!("executed")),
             (proposal_id, proposal.approvals.len(), now),
         );
+        Self::unlock(&env);
     }
 
     /// Cancel a proposal.
     pub fn cancel(env: Env, caller: Address, proposal_id: u32) {
+        Self::lock(&env);
         caller.require_auth();
         Self::assert_governance(&env);
         let mut proposals: Map<u32, Proposal> = env.storage().persistent().get(&PROPOSALS).unwrap();
@@ -596,10 +708,12 @@ impl SmartVault {
             (symbol_short!("gov"), symbol_short!("cancelled")),
             (proposal_id, caller, env.ledger().timestamp()),
         );
+        Self::unlock(&env);
     }
 
     /// Emergency freeze: immediately halts all deposits and withdrawals.
     pub fn emergency_freeze(env: Env, guardian: Address) {
+        Self::lock(&env);
         Self::assert_governance(&env);
         let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
         guardian.require_auth();
@@ -610,10 +724,12 @@ impl SmartVault {
         circuit_breaker::set_paused(&env, &guardian, true);
         env.events()
             .publish((symbol_short!("gov"), symbol_short!("freeze")), guardian);
+        Self::unlock(&env);
     }
 
     /// Lift an emergency freeze.
     pub fn unfreeze(env: Env, guardian: Address) {
+        Self::lock(&env);
         Self::assert_governance(&env);
         let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
         guardian.require_auth();
@@ -624,6 +740,7 @@ impl SmartVault {
         circuit_breaker::set_paused(&env, &guardian, false);
         env.events()
             .publish((symbol_short!("gov"), symbol_short!("unfreeze")), guardian);
+        Self::unlock(&env);
     }
 
     /// Returns `true` if the vault is currently emergency-frozen.
@@ -647,6 +764,7 @@ impl SmartVault {
     /// de-facto guardians when governance is initialized, otherwise any admin
     /// caller via require_auth).
     pub fn set_paused(env: Env, caller: Address, paused: bool) {
+        Self::lock(&env);
         caller.require_auth();
         Self::assert_governance(&env);
         let guardians: Vec<Address> = env.storage().instance().get(&GUARDIANS).unwrap();
@@ -654,6 +772,7 @@ impl SmartVault {
             panic_with_error!(&env, VaultError::Unauthorized);
         }
         circuit_breaker::set_paused(&env, &caller, paused);
+        Self::unlock(&env);
     }
 
     pub fn is_paused(env: Env) -> bool {
@@ -719,15 +838,12 @@ impl SmartVault {
 
     /// Acquire reentrancy guard using temporary storage (SC-HARD-17).
     fn lock(env: &Env) {
-        if env.storage().temporary().has(&RG_KEY) {
-            panic_with_error!(env, VaultError::ReentrancyGuardTriggered);
-        }
-        env.storage().temporary().set(&RG_KEY, &true);
+        reentrancy_guard::lock(env);
     }
 
     /// Release reentrancy guard.
     fn unlock(env: &Env) {
-        env.storage().temporary().remove(&RG_KEY);
+        reentrancy_guard::unlock(env);
     }
 
     /// State invariant: `TOTAL_ASSETS == RESERVES` and neither is negative.
@@ -785,6 +901,7 @@ impl SmartVault {
 
     /// Mints synthetic assets against collateral. Requires 150% collateralization.
     pub fn mint_synthetic(env: Env, user: Address, amount: i128) {
+        Self::lock(&env);
         user.require_auth();
         if amount <= 0 {
             panic_with_error!(&env, VaultError::ZeroAmount);
@@ -857,6 +974,7 @@ impl SmartVault {
             (Symbol::new(&env, "synthetic_minted"),),
             (user, amount, new_debt_shares),
         );
+        Self::unlock(&env);
     }
 
     /// Returns global debt pool state: (total_debt_amount, total_debt_shares).
@@ -896,7 +1014,9 @@ impl SmartVault {
         merkle_root: BytesN<32>,
         total_amount: i128,
     ) {
+        Self::lock(&env);
         MerkleDistributor::initialize(&env, admin, token, merkle_root, total_amount);
+        Self::unlock(&env);
     }
 
     /// Claim tokens using cryptographic Merkle proof, address, and allocated amount.
@@ -908,7 +1028,9 @@ impl SmartVault {
         proof: Vec<BytesN<32>>,
     ) {
         circuit_breaker::assert_not_paused(&env);
+        Self::lock(&env);
         MerkleDistributor::claim(&env, index, account, amount, proof);
+        Self::unlock(&env);
     }
 
     /// Check if a recipient index has already claimed via the bitmap.
@@ -919,7 +1041,10 @@ impl SmartVault {
     /// Reclaim unclaimed tokens to `to` address after 90-day window expires.
     pub fn clawback_airdrop(env: Env, admin: Address, to: Address) -> i128 {
         circuit_breaker::assert_not_paused(&env);
-        MerkleDistributor::clawback(&env, admin, to)
+        Self::lock(&env);
+        let amount = MerkleDistributor::clawback(&env, admin, to);
+        Self::unlock(&env);
+        amount
     }
 
     /// Get current airdrop configuration.
@@ -952,6 +1077,7 @@ impl SmartVault {
         total_duration_ledgers: u32,
         revocable: bool,
     ) -> u64 {
+        Self::lock(&env);
         admin.require_auth();
         let count_key = symbol_short!("v_cnt");
         let count: u64 = env.storage().instance().get(&count_key).unwrap_or(0);
@@ -985,6 +1111,7 @@ impl SmartVault {
         list.push_back(schedule_id);
         env.storage().persistent().set(&ben_key, &list);
 
+        Self::unlock(&env);
         schedule_id
     }
 
@@ -1014,6 +1141,7 @@ impl SmartVault {
 
     /// Claims unlocked tokens for `beneficiary`.
     pub fn claim_vesting(env: Env, beneficiary: Address, schedule_id: u64) -> i128 {
+        Self::lock(&env);
         beneficiary.require_auth();
         circuit_breaker::assert_not_paused(&env);
         let mut schedule = Self::get_vesting_schedule(env.clone(), schedule_id);
@@ -1027,12 +1155,14 @@ impl SmartVault {
         };
         let sched_key = (symbol_short!("v_sched"), schedule_id);
         env.storage().persistent().set(&sched_key, &schedule);
+        Self::unlock(&env);
         claimed
     }
 
     /// Revokes a schedule, returning unvested tokens to organization treasury.
     /// Returns (unvested_amount_for_treasury, claimable_vested_for_beneficiary).
     pub fn revoke_vesting_schedule(env: Env, admin: Address, schedule_id: u64) -> (i128, i128) {
+        Self::lock(&env);
         admin.require_auth();
         let mut schedule = Self::get_vesting_schedule(env.clone(), schedule_id);
         let current_ledger = env.ledger().sequence();
@@ -1042,6 +1172,7 @@ impl SmartVault {
         };
         let sched_key = (symbol_short!("v_sched"), schedule_id);
         env.storage().persistent().set(&sched_key, &schedule);
+        Self::unlock(&env);
         (unvested, claimable)
     }
 }
@@ -1052,8 +1183,28 @@ impl SmartVault {
 mod tests {
     use super::*;
     use soroban_sdk::testutils::{Address as _, Ledger};
-    use soroban_sdk::Env;
+    use soroban_sdk::{contract, contractimpl, symbol_short, Env};
     use soroban_sdk::{Bytes, String, Vec};
+
+    #[contract]
+    struct CallbackToken;
+
+    #[contractimpl]
+    impl CallbackToken {
+        pub fn transfer(env: Env, _from: Address, _to: Address, _amount: i128) {
+            let vault: Address = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("vault"))
+                .unwrap();
+            let user: Address = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("user"))
+                .unwrap();
+            SmartVaultClient::new(&env, &vault).deposit(&user, &1);
+        }
+    }
 
     fn setup() -> (Env, Address, Address) {
         let env = Env::default();
@@ -1226,9 +1377,31 @@ mod tests {
         let client = SmartVaultClient::new(&env, &contract_id);
 
         env.as_contract(&contract_id, || {
-            env.storage().temporary().set(&RG_KEY, &true);
+            reentrancy_guard::lock(&env);
         });
         client.deposit(&user, &1000);
+    }
+
+    #[test]
+    fn airdrop_token_callback_cannot_reenter_vault() {
+        let (env, contract_id, user) = setup();
+        let client = SmartVaultClient::new(&env, &contract_id);
+        let callback_token = env.register(CallbackToken, ());
+        let admin = Address::generate(&env);
+        let root = MerkleDistributor::compute_leaf(&env, 0, &user, 100);
+        let proof = Vec::new(&env);
+
+        env.as_contract(&callback_token, || {
+            env.storage()
+                .instance()
+                .set(&symbol_short!("vault"), &contract_id);
+            env.storage().instance().set(&symbol_short!("user"), &user);
+        });
+        client.init_airdrop(&admin, &Some(callback_token), &root, &100);
+
+        assert!(client.try_claim_airdrop(&0, &user, &100, &proof).is_err());
+        assert_eq!(client.shares_of(&user), 0);
+        assert_eq!(client.get_airdrop_config().claimed_amount, 0);
     }
 
     #[test]
@@ -1570,5 +1743,54 @@ mod tests {
         // After revocation, no further tokens can vest
         env.ledger().with_mut(|li| li.sequence_number += 1000);
         assert_eq!(client.get_claimable_vesting(&sched_id), 80_000);
+    }
+
+    #[test]
+    fn escrow_release_requires_all_configured_signers_and_moves_backed_shares() {
+        let (env, contract_id, student) = setup();
+        let client = SmartVaultClient::new(&env, &contract_id);
+        let mentor = Address::generate(&env);
+        let sponsor = Address::generate(&env);
+        let recipient = Address::generate(&env);
+
+        client.deposit(&student, &1_000);
+        client.init_escrow(&student, &mentor, &sponsor);
+        client.fund_escrow(&student, &400);
+
+        let wrong_student = Address::generate(&env);
+        assert!(client
+            .try_release_escrow(&wrong_student, &mentor, &sponsor, &recipient, &250)
+            .is_err());
+        assert_eq!(client.escrow_balance(), 400);
+
+        client.release_escrow(&student, &mentor, &sponsor, &recipient, &250);
+        assert_eq!(client.escrow_balance(), 150);
+        assert_eq!(client.shares_of(&student), 600);
+        assert_eq!(client.shares_of(&recipient), 250);
+    }
+
+    #[test]
+    fn escrow_recovery_waits_seven_days_before_replacing_lost_signer() {
+        let (env, contract_id, student) = setup();
+        let client = SmartVaultClient::new(&env, &contract_id);
+        let mentor = Address::generate(&env);
+        let sponsor = Address::generate(&env);
+        let replacement = Address::generate(&env);
+        client.init_escrow(&student, &mentor, &sponsor);
+
+        client.propose_escrow_recovery(&EscrowRole::Student, &replacement);
+        assert!(client.try_execute_escrow_recovery().is_err());
+
+        env.ledger()
+            .with_mut(|ledger| ledger.timestamp += 7 * 24 * 60 * 60);
+        client.execute_escrow_recovery();
+        assert_eq!(
+            client.escrow_config(),
+            EscrowConfig {
+                student: replacement,
+                mentor,
+                sponsor,
+            }
+        );
     }
 }

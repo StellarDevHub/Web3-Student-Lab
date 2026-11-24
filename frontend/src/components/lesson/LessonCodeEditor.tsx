@@ -35,8 +35,12 @@ export interface LessonCodeEditorProps {
   onChange?: (value: string) => void;
 }
 
-const Editor = dynamic(() => import('@monaco-editor/react'), {
-  ssr: false,
+import '@/lib/editor/monaco-loader';
+
+const Editor = dynamic(
+  () => import('@/lib/editor/monaco-loader').then(() => import('@monaco-editor/react')),
+  {
+    ssr: false,
   loading: () => (
     <div
       role="status"

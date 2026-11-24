@@ -17,6 +17,8 @@ pub enum CertificateError {
     Unauthorized = 101,
     /// 106 — Soulbound certificate cannot be transferred or delegated.
     SoulboundNonTransferable = 106,
+    /// 107 - Certificate transfer or delegation attempted; certificates are non-transferable.
+    NonTransferable = 107,
     /// 201 — Certificate record was not found in persistent storage.
     NotFound = 201,
     /// 202 — Certificate has already been revoked.

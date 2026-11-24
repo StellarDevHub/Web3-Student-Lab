@@ -4,7 +4,7 @@
 //! pro-rata share of unallocated treasury reserves during timelock before proposal execution.
 
 use crate::treasury::Treasury;
-use crate::{DaoError, Key, Proposal, ProposalStatus};
+use crate::{load_proposal, DaoError, Key, ProposalStatus};
 use soroban_sdk::{panic_with_error, Address, Env};
 
 pub struct Ragequit;
@@ -22,10 +22,7 @@ impl Ragequit {
             panic_with_error!(env, DaoError::ZeroShares);
         }
 
-        let proposal: Proposal = env
-            .storage()
-            .persistent()
-            .get(&Key::Proposal(proposal_id))
+        let proposal = load_proposal(env, proposal_id)
             .unwrap_or_else(|| panic_with_error!(env, DaoError::ProposalNotFound));
 
         // Proposal must be passed and not yet executed

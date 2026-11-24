@@ -1,6 +1,8 @@
 #![cfg(test)]
 use super::*;
-use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, token, vec, Address, BytesN, Env};
+use soroban_sdk::{
+    testutils::Address as _, testutils::Ledger as _, token, vec, Address, BytesN, Env,
+};
 
 fn setup() -> (
     Env,
@@ -373,13 +375,7 @@ fn test_bounty_collaborative_split_payout() {
     // 50% (5000 bps), 30% (3000 bps), 20% (2000 bps)
     let split_bps = vec![&env, 5000u32, 3000u32, 2000u32];
 
-    client.claim_bounty_collaborative(
-        &dev1,
-        &bounty_id,
-        &claimants,
-        &split_bps,
-        &evidence_hash,
-    );
+    client.claim_bounty_collaborative(&dev1, &bounty_id, &claimants, &split_bps, &evidence_hash);
 
     client.verify_and_payout(&funder, &bounty_id);
 

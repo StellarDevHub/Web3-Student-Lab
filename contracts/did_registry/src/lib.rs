@@ -9,6 +9,9 @@
 //   * The registry stores the controller `Address`, an off-chain GitHub
 //     handle binding, the Ed25519 *verification key* used to sign contributor
 //     proofs, and the set of verified contributor claims.
+//   * String-form entry points (`register_string`, `resolve_string`) accept
+//     only canonical `did:stellar:<64 hex>` DIDs and reject malformed strings
+//     with `DIDError::MalformedDID`; `validate_did` is a non-panicking view.
 //
 // Contributor proof signatures are verified by the off-chain resolver. Key
 // rotation signatures are verified on-chain against the separately configured
@@ -732,7 +735,7 @@ fn valid_network(network: &String) -> bool {
 mod integration_tests;
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use soroban_sdk::{symbol_short, testutils::Address as _, BytesN, Env};
 
@@ -803,3 +806,6 @@ mod test {
         assert!(doc.revoked);
     }
 }
+
+#[cfg(test)]
+mod test;

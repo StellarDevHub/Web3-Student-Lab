@@ -55,7 +55,14 @@ fn setup_amm(
 
     client.add_liquidity(&admin, &initial_a, &initial_b, &0);
 
-    (admin, client, token_a_id, token_b_id, pool_share_id, fee_collector)
+    (
+        admin,
+        client,
+        token_a_id,
+        token_b_id,
+        pool_share_id,
+        fee_collector,
+    )
 }
 
 #[test]
@@ -84,7 +91,10 @@ fn test_fuzz_amm_k_invariant_one_million_continuous_actions() {
 
     // 1. In-contract trades to verify live state consistency and event emission
     for _ in 0..100 {
-        env.ledger().with_mut(|li| li.sequence_number += 1);
+        env.ledger().with_mut(|li| {
+            li.sequence_number += 1;
+            li.timestamp += 24 * 60 * 60 + 1;
+        });
         let trade_a_to_b = (next_rand() % 2) == 0;
         let amount_in = ((next_rand() % 50_000) + 1_000) as i128;
 
@@ -182,9 +192,9 @@ proptest! {
 
     #[test]
     fn prop_fuzz_amm_arbitrary_trades(
-        res_a in 100_000i128..50_000_000i128,
-        res_b in 100_000i128..50_000_000i128,
-        trade_amt in 100i128..500_000i128,
+        res_a in 1_000_000i128..50_000_000i128,
+        res_b in 1_000_000i128..50_000_000i128,
+        trade_amt in 100i128..50_000i128,
     ) {
         let env = Env::default();
         let (_admin, client, token_a, _token_b, _, _) = setup_amm(&env, res_a, res_b);

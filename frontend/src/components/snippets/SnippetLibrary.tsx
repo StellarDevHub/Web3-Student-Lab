@@ -25,8 +25,11 @@ import { Badge } from '../ui/Badge';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '../ui/Card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
 import { Snippet, SnippetManager } from '../../lib/snippets/SnippetManager';
-import { SnippetEditor } from './SnippetEditor';
 import { motion, AnimatePresence } from 'framer-motion';
+import dynamic from 'next/dynamic';
+
+// Monaco is only needed once a snippet is opened for editing.
+const SnippetEditor = dynamic(() => import('./SnippetEditor').then((mod) => mod.SnippetEditor), { ssr: false });
 
 export const SnippetLibrary: React.FC = () => {
   const snippetManager = SnippetManager.getInstance();

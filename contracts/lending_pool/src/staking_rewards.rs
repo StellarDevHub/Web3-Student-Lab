@@ -5,25 +5,23 @@
 //! and user reward debt snapshots to prevent iteration loops, eliminating out-of-gas risks.
 //! High-precision 128-bit fixed-point math (`WAD = 10^18`) eliminates rounding dilution.
 
-use soroban_sdk::{
-    contracttype, panic_with_error, symbol_short, token, Address, Env,
-};
 use crate::math::{mul_div, Rounding, WAD};
 use crate::LPError;
+use soroban_sdk::{contracttype, panic_with_error, symbol_short, token, Address, Env};
 
 #[contracttype]
 #[derive(Clone)]
 pub enum StakingKey {
     StakingToken,
     RewardToken,
-    RewardRate,            // Reward tokens per second (scaled to WAD)
-    PeriodFinish,          // Timestamp when current reward distribution period ends
-    LastUpdateTime,        // Last timestamp when reward_per_token was updated
-    RewardPerTokenStored,  // Accumulated reward per token stored (scaled to WAD)
-    TotalSupply,           // Total tokens currently staked
-    UserBalance(Address),  // User staked balance
-    UserRewardDebt(Address),// User rewardPerToken snapshot
-    UserRewards(Address),  // Unclaimed accumulated rewards for user
+    RewardRate,              // Reward tokens per second (scaled to WAD)
+    PeriodFinish,            // Timestamp when current reward distribution period ends
+    LastUpdateTime,          // Last timestamp when reward_per_token was updated
+    RewardPerTokenStored,    // Accumulated reward per token stored (scaled to WAD)
+    TotalSupply,             // Total tokens currently staked
+    UserBalance(Address),    // User staked balance
+    UserRewardDebt(Address), // User rewardPerToken snapshot
+    UserRewards(Address),    // Unclaimed accumulated rewards for user
 }
 
 pub struct StakingRewards;
@@ -38,13 +36,27 @@ impl StakingRewards {
         duration_seconds: u64,
     ) {
         let now = env.ledger().timestamp();
-        env.storage().instance().set(&StakingKey::StakingToken, &staking_token);
-        env.storage().instance().set(&StakingKey::RewardToken, &reward_token);
-        env.storage().instance().set(&StakingKey::RewardRate, &reward_rate);
-        env.storage().instance().set(&StakingKey::RewardPerTokenStored, &0u128);
-        env.storage().instance().set(&StakingKey::TotalSupply, &0u128);
-        env.storage().instance().set(&StakingKey::LastUpdateTime, &now);
-        env.storage().instance().set(&StakingKey::PeriodFinish, &(now + duration_seconds));
+        env.storage()
+            .instance()
+            .set(&StakingKey::StakingToken, &staking_token);
+        env.storage()
+            .instance()
+            .set(&StakingKey::RewardToken, &reward_token);
+        env.storage()
+            .instance()
+            .set(&StakingKey::RewardRate, &reward_rate);
+        env.storage()
+            .instance()
+            .set(&StakingKey::RewardPerTokenStored, &0u128);
+        env.storage()
+            .instance()
+            .set(&StakingKey::TotalSupply, &0u128);
+        env.storage()
+            .instance()
+            .set(&StakingKey::LastUpdateTime, &now);
+        env.storage()
+            .instance()
+            .set(&StakingKey::PeriodFinish, &(now + duration_seconds));
     }
 
     /// Computes the last timestamp applicable for rewards.
@@ -131,7 +143,9 @@ impl StakingRewards {
     /// Internal hook called before any balance/state mutation to sync reward indices.
     pub fn update_reward(env: &Env, account: Option<&Address>) {
         let rpt = Self::reward_per_token(env);
-        env.storage().instance().set(&StakingKey::RewardPerTokenStored, &rpt);
+        env.storage()
+            .instance()
+            .set(&StakingKey::RewardPerTokenStored, &rpt);
         env.storage().instance().set(
             &StakingKey::LastUpdateTime,
             &Self::last_time_reward_applicable(env),
@@ -139,8 +153,12 @@ impl StakingRewards {
 
         if let Some(user) = account {
             let total_earned = Self::earned(env, user);
-            env.storage().instance().set(&StakingKey::UserRewards(user.clone()), &total_earned);
-            env.storage().instance().set(&StakingKey::UserRewardDebt(user.clone()), &rpt);
+            env.storage()
+                .instance()
+                .set(&StakingKey::UserRewards(user.clone()), &total_earned);
+            env.storage()
+                .instance()
+                .set(&StakingKey::UserRewardDebt(user.clone()), &rpt);
         }
     }
 
@@ -178,11 +196,13 @@ impl StakingRewards {
         env.storage()
             .instance()
             .set(&StakingKey::TotalSupply, &cur_supply.saturating_add(amount));
-        env.storage()
-            .instance()
-            .set(&StakingKey::UserBalance(user.clone()), &cur_bal.saturating_add(amount));
+        env.storage().instance().set(
+            &StakingKey::UserBalance(user.clone()),
+            &cur_bal.saturating_add(amount),
+        );
 
-        env.events().publish((symbol_short!("staked"), user), amount as i128);
+        env.events()
+            .publish((symbol_short!("staked"), user), amount as i128);
     }
 
     /// Unstakes `amount` tokens from the pool.
@@ -212,9 +232,10 @@ impl StakingRewards {
         env.storage()
             .instance()
             .set(&StakingKey::TotalSupply, &cur_supply.saturating_sub(amount));
-        env.storage()
-            .instance()
-            .set(&StakingKey::UserBalance(user.clone()), &cur_bal.saturating_sub(amount));
+        env.storage().instance().set(
+            &StakingKey::UserBalance(user.clone()),
+            &cur_bal.saturating_sub(amount),
+        );
 
         let staking_token: Address = env
             .storage()
@@ -228,7 +249,8 @@ impl StakingRewards {
             &(amount as i128),
         );
 
-        env.events().publish((symbol_short!("unstake"), user), amount as i128);
+        env.events()
+            .publish((symbol_short!("unstake"), user), amount as i128);
     }
 
     /// Claims all accumulated reward tokens.
@@ -242,7 +264,9 @@ impl StakingRewards {
             .unwrap_or(0u128);
 
         if reward > 0 {
-            env.storage().instance().set(&StakingKey::UserRewards(user.clone()), &0u128);
+            env.storage()
+                .instance()
+                .set(&StakingKey::UserRewards(user.clone()), &0u128);
 
             let reward_token: Address = env
                 .storage()
@@ -256,7 +280,8 @@ impl StakingRewards {
                 &(reward as i128),
             );
 
-            env.events().publish((symbol_short!("reward"), user), reward as i128);
+            env.events()
+                .publish((symbol_short!("reward"), user), reward as i128);
         }
 
         reward

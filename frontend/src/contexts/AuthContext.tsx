@@ -13,6 +13,7 @@ import React, {
 import { markWalletProfileComplete } from '@/lib/profile-completion';
 import { authAPI, normalizeAuthResponse, User } from '@/lib/api';
 import { useWallet } from './WalletContext';
+import { getSessionBroadcastManager } from '@/services/session/broadcastSync';
 
 interface AuthContextType {
   user: User | null;
@@ -63,6 +64,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (session.refreshToken) {
       localStorage.setItem('refreshToken', session.refreshToken);
     }
+
+    try {
+      getSessionBroadcastManager().broadcast('AUTH_LOGIN', {
+        user: session.user,
+        token: nextToken,
+      });
+    } catch {}
 
     return true;
   }, []);
@@ -216,6 +224,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user, publicKey, refreshProfileStatus]);
 
+  // Synchronize authentication changes across tabs
+  useEffect(() => {
+    const manager = getSessionBroadcastManager();
+
+    const unsubLogout = manager.on('AUTH_LOGOUT', () => {
+      setUser(null);
+      setToken(null);
+      localStorage.removeItem('token');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      disconnect();
+      const publicPaths = ['/', '/auth/login', '/auth', '/auth/register'];
+      if (typeof window !== 'undefined' && !publicPaths.includes(window.location.pathname)) {
+        window.location.href = '/auth/login';
+      }
+    });
+
+    const unsubLogin = manager.on('AUTH_LOGIN', (payload: { user: User; token: string }) => {
+      if (payload?.user) {
+        setUser(payload.user);
+        try {
+          localStorage.setItem('user', JSON.stringify(payload.user));
+        } catch {}
+      }
+      if (payload?.token) {
+        setToken(payload.token);
+        try {
+          localStorage.setItem('token', payload.token);
+          localStorage.setItem('accessToken', payload.token);
+        } catch {}
+      }
+    });
+
+    const unsubExpired = manager.on('AUTH_TOKEN_EXPIRED', () => {
+      setUser(null);
+      setToken(null);
+      localStorage.removeItem('token');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      disconnect();
+    });
+
+    return () => {
+      unsubLogout();
+      unsubLogin();
+      unsubExpired();
+    };
+  }, [disconnect]);
+
   const login = async (email: string, password: string, turnstileToken?: string) => {
     try {
       setError(null);
@@ -288,6 +347,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    try {
+      getSessionBroadcastManager().broadcast('AUTH_LOGOUT', { reason: 'user_action' });
+    } catch {}
     setUser(null);
     setToken(null);
     localStorage.removeItem('token');

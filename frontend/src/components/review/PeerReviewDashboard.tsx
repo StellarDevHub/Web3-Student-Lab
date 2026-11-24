@@ -10,9 +10,12 @@ import {
 import type { DiffOnMount } from '@monaco-editor/react';
 import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import '@/lib/editor/monaco-loader';
 
-const DiffEditor = dynamic(() => import('@monaco-editor/react').then((mod) => mod.DiffEditor), {
-  ssr: false,
+const DiffEditor = dynamic(
+  () => import('@/lib/editor/monaco-loader').then(() => import('@monaco-editor/react').then((mod) => mod.DiffEditor)),
+  {
+    ssr: false,
   loading: () => (
     <div className="flex h-full w-full items-center justify-center bg-zinc-950 text-zinc-500">
       <div className="flex flex-col items-center gap-4">

@@ -14,8 +14,10 @@ use soroban_sdk::{
 /// Reports older than this many seconds are rejected as stale.
 pub const MAX_STALENESS_SECONDS: u64 = 300; // 5 minutes
 
-/// Reports deviating more than this percentage from the median are outliers.
-pub const OUTLIER_DEVIATION_BPS: i128 = 1500; // 15.00% expressed in bps/100
+/// Reports deviating more than this percentage from consensus are outliers.
+pub const OUTLIER_DEVIATION_BPS: i128 = 1000; // 10.00% expressed in basis points
+/// Minimum number of fresh independent reports required to aggregate.
+pub const MIN_FRESH_REPORTS: u32 = 3;
 
 /// Percentage (in bps/100, i.e. 1000 = 10%) of stake slashed on an outlier.
 pub const SLASH_BPS: i128 = 1000; // 10%
@@ -38,15 +40,20 @@ pub enum OracleError {
     InvalidPrice = 423,
     /// `424` — Reporter is not on the whitelist.
     NotWhitelisted = 424,
-    /// `425` — No fresh price reports are available.
+    /// `425` — No price reports have been submitted.
     NoFreshReports = 425,
     /// `426` — All submitted reports were flagged as outliers.
     AllOutliers = 426,
-    /// `427` — The latest aggregated price is stale.
-    PriceStale = 427,
+    /// `427` — A report or the latest aggregate exceeds the staleness limit.
+    StalePriceFeed = 427,
     /// `428` — Contract has not been initialised.
     NotInitialized = 428,
+    /// `429` — Fewer than three fresh independent reports are available.
+    InsufficientReports = 429,
 }
+
+pub mod median;
+pub mod staleness;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -153,9 +160,8 @@ impl OracleAggregatorContract {
             .publish((Symbol::new(&env, "price_submitted"),), (reporter, price));
     }
 
-    /// Aggregates all fresh whitelisted reporter prices into a medianized
-    /// price, excluding and slashing outliers (> 15% deviation from median).
-    /// Reports older than `MAX_STALENESS_SECONDS` are ignored entirely.
+    /// Aggregates fresh reports after rejecting prices more than 10% from the
+    /// robust median consensus. At least three fresh reporters are required.
     pub fn aggregate(env: Env) -> i128 {
         let reporters: Vec<Address> = env
             .storage()
@@ -166,6 +172,7 @@ impl OracleAggregatorContract {
         let now = env.ledger().timestamp();
         let mut fresh_prices: Vec<i128> = Vec::new(&env);
         let mut fresh_reports: Vec<PriceReport> = Vec::new(&env);
+        let mut has_reports = false;
 
         for reporter in reporters.iter() {
             if let Some(report) = env
@@ -173,8 +180,8 @@ impl OracleAggregatorContract {
                 .persistent()
                 .get::<DataKey, PriceReport>(&DataKey::LatestReport(reporter.clone()))
             {
-                let age = now.saturating_sub(report.timestamp);
-                if age <= MAX_STALENESS_SECONDS {
+                has_reports = true;
+                if staleness::is_fresh(&env, &report, MAX_STALENESS_SECONDS) {
                     fresh_prices.push_back(report.price);
                     fresh_reports.push_back(report);
                 }
@@ -182,20 +189,30 @@ impl OracleAggregatorContract {
         }
 
         if fresh_prices.len() == 0 {
-            panic_with_error!(&env, OracleError::NoFreshReports);
+            let error = if has_reports {
+                OracleError::StalePriceFeed
+            } else {
+                OracleError::NoFreshReports
+            };
+            panic_with_error!(&env, error);
         }
 
-        let median = Self::median(&env, &fresh_prices);
+        if fresh_prices.len() < MIN_FRESH_REPORTS {
+            panic_with_error!(&env, OracleError::InsufficientReports);
+        }
+
+        let consensus = median::median(&fresh_prices)
+            .unwrap_or_else(|| panic_with_error!(&env, OracleError::NoFreshReports));
 
         // Filter outliers and slash their stake.
         let mut inlier_prices: Vec<i128> = Vec::new(&env);
         for report in fresh_reports.iter() {
-            let deviation_bps = Self::deviation_bps(report.price, median);
+            let deviation_bps = median::deviation_bps(report.price, consensus);
             if deviation_bps > OUTLIER_DEVIATION_BPS {
                 Self::slash(&env, &report.reporter);
                 env.events().publish(
                     (Symbol::new(&env, "outlier_flagged"),),
-                    (report.reporter.clone(), report.price, median),
+                    (report.reporter.clone(), report.price, consensus),
                 );
             } else {
                 inlier_prices.push_back(report.price);
@@ -206,7 +223,8 @@ impl OracleAggregatorContract {
             panic_with_error!(&env, OracleError::AllOutliers);
         }
 
-        let final_median = Self::median(&env, &inlier_prices);
+        let final_median = median::median(&inlier_prices)
+            .unwrap_or_else(|| panic_with_error!(&env, OracleError::AllOutliers));
 
         env.storage()
             .instance()
@@ -228,9 +246,8 @@ impl OracleAggregatorContract {
             .instance()
             .get(&DataKey::LastMedianTimestamp)
             .unwrap_or_else(|| panic_with_error!(&env, OracleError::NotInitialized));
-        let now = env.ledger().timestamp();
-        if now.saturating_sub(ts) > MAX_STALENESS_SECONDS {
-            panic_with_error!(&env, OracleError::PriceStale);
+        if staleness::is_stale(&env, ts, MAX_STALENESS_SECONDS) {
+            panic_with_error!(&env, OracleError::StalePriceFeed);
         }
         env.storage().instance().get(&DataKey::LastMedian).unwrap()
     }
@@ -270,7 +287,7 @@ impl OracleAggregatorContract {
             .persistent()
             .get(&DataKey::Stake(reporter.clone()))
             .unwrap_or(0);
-        let penalty = stake * SLASH_BPS / 10_000;
+        let penalty = stake / (10_000 / SLASH_BPS);
         let new_stake = stake - penalty;
         env.storage()
             .persistent()
@@ -279,48 +296,6 @@ impl OracleAggregatorContract {
             (Symbol::new(env, "reporter_slashed"),),
             (reporter.clone(), penalty, new_stake),
         );
-    }
-
-    /// Absolute deviation of `price` from `median`, expressed in bps/100
-    /// (i.e. 1500 == 15%).
-    fn deviation_bps(price: i128, median: i128) -> i128 {
-        if median == 0 {
-            return i128::MAX;
-        }
-        let diff = if price > median {
-            price - median
-        } else {
-            median - price
-        };
-        diff * 10_000 / median
-    }
-
-    /// Computes the median of a Vec<i128> via simple insertion sort (small n).
-    fn median(env: &Env, values: &Vec<i128>) -> i128 {
-        let mut sorted: Vec<i128> = Vec::new(env);
-        for v in values.iter() {
-            let mut inserted = false;
-            let mut i = 0u32;
-            while i < sorted.len() {
-                if v < sorted.get(i).unwrap() {
-                    sorted.insert(i, v);
-                    inserted = true;
-                    break;
-                }
-                i += 1;
-            }
-            if !inserted {
-                sorted.push_back(v);
-            }
-        }
-        let n = sorted.len();
-        if n % 2 == 1 {
-            sorted.get(n / 2).unwrap()
-        } else {
-            let a = sorted.get(n / 2 - 1).unwrap();
-            let b = sorted.get(n / 2).unwrap();
-            (a + b) / 2
-        }
     }
 }
 

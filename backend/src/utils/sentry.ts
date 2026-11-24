@@ -1,5 +1,6 @@
 import type { ErrorRequestHandler, RequestHandler, Application } from 'express';
 import * as Sentry from '@sentry/node';
+import { isTracingEnabled } from '../instrumentation.js';
 import { redactSensitiveData } from './logSanitizer.js';
 
 let sentryEnabled = false;
@@ -31,6 +32,9 @@ export function initializeSentry(app?: Application): void {
     tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
     attachStacktrace: true,
     normalizeDepth: 5,
+    // The OpenTelemetry SDK (src/instrumentation.ts) owns the global tracer
+    // provider and exports to Jaeger; Sentry keeps error tracking.
+    skipOpenTelemetrySetup: isTracingEnabled(),
     beforeSend(event) {
       if (process.env.NODE_ENV === 'test') {
         return null;

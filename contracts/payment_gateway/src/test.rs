@@ -483,12 +483,16 @@ fn test_payment_splitter_multi_token_proportional_release() {
 
     // Setup Token A (e.g., USDC)
     let token_admin_a = Address::generate(&env);
-    let token_a = env.register_stellar_asset_contract_v2(token_admin_a.clone()).address();
+    let token_a = env
+        .register_stellar_asset_contract_v2(token_admin_a.clone())
+        .address();
     let token_a_admin = token::StellarAssetClient::new(&env, &token_a);
 
     // Setup Token B (e.g., XLM)
     let token_admin_b = Address::generate(&env);
-    let token_b = env.register_stellar_asset_contract_v2(token_admin_b.clone()).address();
+    let token_b = env
+        .register_stellar_asset_contract_v2(token_admin_b.clone())
+        .address();
     let token_b_admin = token::StellarAssetClient::new(&env, &token_b);
 
     let donor = Address::generate(&env);
@@ -564,4 +568,3 @@ fn test_payment_splitter_rejects_zero_shares() {
 
     client.initialize(&payees, &shares);
 }
-

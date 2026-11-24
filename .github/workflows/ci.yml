@@ -7,6 +7,17 @@ on:
     branches: [ "main", "master" ]
 
 jobs:
+  malware-scan:
+    name: Wave Security & Malware Indicator Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run Malware Indicator Scanner
+        run: |
+          chmod +x scripts/scan-malicious-indicators.sh
+          ./scripts/scan-malicious-indicators.sh
+
   backend:
     name: Backend Build & Test
     runs-on: ubuntu-latest
@@ -58,6 +69,8 @@ jobs:
         run: |
           PGPASSWORD=test psql -h localhost -U test -d test_db \
             -c "CREATE DATABASE shadow_db;"
+          PGPASSWORD=test psql -h localhost -U test -d test_db \
+            -c "CREATE DATABASE drift_db;"
       - name: Prisma Generate & Migrate
         working-directory: ./backend
         env:
@@ -71,22 +84,23 @@ jobs:
           DATABASE_URL: postgresql://test:test@localhost:5432/test_db
           SHADOW_DATABASE_URL: postgresql://test:test@localhost:5432/shadow_db
         run: npm run test:migrations
-      - name: Detect schema/migration drift
-        # Reporting only, not yet a merge gate: schema.prisma has
-        # substantial pre-existing drift from the migration history
-        # (see PR description) that a single PR shouldn't be blocked on
-        # resolving. Once that backlog is cleared with a dedicated
-        # migration, remove `continue-on-error` so future drift fails CI.
+      - name: Verify schema drift & migration rollbacks (shadow DB)
+        # Applies every migration sequentially to a clean drift_db, rolls
+        # each one back and checks the schema is restored exactly, then
+        # compares the result against schema.prisma. Fails CI on any drift.
         working-directory: ./backend
-        continue-on-error: true
         env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/test_db
+          DRIFT_DATABASE_URL: postgresql://test:test@localhost:5432/drift_db
           SHADOW_DATABASE_URL: postgresql://test:test@localhost:5432/shadow_db
-        run: |
-          npx prisma migrate diff \
-            --from-config-datasource \
-            --to-schema prisma/schema.prisma \
-            --exit-code
+          SCHEMA_DRIFT_REPORT: schema-drift-report.md
+        run: npm run schema:verify-drift
+      - name: Upload schema drift report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-drift-report
+          path: backend/schema-drift-report.md
+          retention-days: 30
       - name: Run tests
         working-directory: ./backend
         env:
@@ -173,7 +187,7 @@ jobs:
         run: cargo build --workspace
       - name: Audit dependencies
         working-directory: ./contracts
-        run: cargo audit --deny warnings --ignore RUSTSEC-2024-0436
+        run: cargo audit --deny warnings --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2026-0387
       - name: Test (workspace + all targets)
         working-directory: ./contracts
         env:

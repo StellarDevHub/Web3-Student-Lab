@@ -3,7 +3,6 @@
 import React, { useState, useMemo } from 'react';
 
 import { LivePoolYield } from '@/components/yield-calculator/LivePoolYield';
-import { TwapBacktestCanvas } from '@/components/analytics/TwapBacktestCanvas';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -18,6 +17,12 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { HelpCircle, RefreshCw, Calculator, TrendingUp, DollarSign, Percent, Clock } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+const TwapBacktestCanvas = dynamic(
+  () => import('@/components/analytics/TwapBacktestCanvas').then((mod) => mod.TwapBacktestCanvas),
+  { ssr: false, loading: () => <div className="h-[480px] w-full animate-pulse rounded-2xl bg-zinc-900/40" aria-busy="true" />, },
+);
 
 // Register ChartJS modules
 ChartJS.register(

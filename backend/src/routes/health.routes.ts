@@ -3,6 +3,7 @@ import { checkReadiness } from '../db/readinessMonitor.js';
 import { checkDeepReadiness } from '../db/deepReadiness.js';
 import { cbManager } from '../lib/circuit-breaker/CircuitBreakerManager.js';
 import { checkDbHealth } from '../db/healthMonitor.js';
+import redisClient from '../cache/RedisClient.js';
 import logger from '../utils/logger.js';
 
 const router: ReturnType<typeof Router> = Router();
@@ -232,5 +233,36 @@ const deepReadinessHandler: RequestHandler = async (_req, res) => {
 };
 
 router.get('/deep', deepReadinessHandler);
+
+/**
+ * @openapi
+ * /api/v1/health/redis:
+ *   get:
+ *     summary: Redis topology health probe
+ *     description: >
+ *       Probes every pooled Redis client (main, pub, sub), every configured
+ *       Sentinel node (reachability and agreed master) and, in cluster mode,
+ *       every cluster node. Also reports the last client-observed failover
+ *       recovery time against the failover budget. Returns HTTP 200 when
+ *       healthy or degraded and HTTP 503 when the master is unreachable.
+ *     tags: [Health]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Redis is healthy or degraded (still serving traffic)
+ *       503:
+ *         description: Redis master is unreachable
+ */
+export const redisHealthHandler: RequestHandler = async (_req, res) => {
+  try {
+    const health = await redisClient.checkTopologyHealth();
+    res.status(health.status === 'unhealthy' ? 503 : 200).json({ status: 'success', data: health });
+  } catch (error) {
+    logger.error('Redis topology probe failed unexpectedly', error);
+    res.status(503).json({ status: 'error', error: { message: 'redis health probe failed' } });
+  }
+};
+
+router.get('/redis', redisHealthHandler);
 
 export default router;

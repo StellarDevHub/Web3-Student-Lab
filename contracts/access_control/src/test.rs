@@ -1,9 +1,55 @@
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, Env};
+use soroban_sdk::{
+    contract, contractimpl,
+    testutils::{Address as _, Ledger as _},
+    Address, Env,
+};
 
-fn in_contract<T>(env: &Env, f: impl FnOnce() -> T) -> T {
-    let contract_id = Address::generate(env);
-    env.as_contract(&contract_id, f)
+#[contract]
+pub struct TestContract;
+
+#[contractimpl]
+impl TestContract {
+    pub fn initialize(env: Env, admin: Address) {
+        crate::initialize(&env, &admin);
+    }
+
+    pub fn grant_role(env: Env, caller: Address, role: Role, account: Address) {
+        crate::grant_role(&env, &caller, role, &account);
+    }
+
+    pub fn revoke_role(env: Env, caller: Address, role: Role, account: Address) {
+        crate::revoke_role(&env, &caller, role, &account);
+    }
+
+    pub fn has_role(env: Env, account: Address, role: Role) -> bool {
+        crate::has_role(&env, &account, role)
+    }
+
+    pub fn admin(env: Env) -> Option<Address> {
+        crate::admin(&env)
+    }
+
+    pub fn propose_admin(env: Env, caller: Address, candidate: Address) -> u64 {
+        crate::propose_admin(&env, &caller, &candidate)
+    }
+
+    pub fn claim_admin(env: Env, candidate: Address) {
+        crate::claim_admin(&env, &candidate);
+    }
+
+    pub fn cancel_admin_proposal(env: Env, caller: Address) {
+        crate::cancel_admin_proposal(&env, &caller);
+    }
+
+    pub fn pending_admin(env: Env) -> Option<AdminProposal> {
+        crate::pending_admin(&env)
+    }
+}
+
+fn setup_test(env: &Env) -> TestContractClient<'_> {
+    let contract_id = env.register(TestContract, ());
+    TestContractClient::new(env, &contract_id)
 }
 
 #[test]
@@ -13,13 +59,12 @@ fn initializes_once_and_preserves_admin() {
     let second = Address::generate(&env);
     env.mock_all_auths();
 
-    in_contract(&env, || {
-        initialize(&env, &first);
-        initialize(&env, &second);
-        assert_eq!(admin(&env), Some(first.clone()));
-        assert!(has_role(&env, &first, Role::Admin));
-        assert!(!has_role(&env, &second, Role::Admin));
-    });
+    let client = setup_test(&env);
+    client.initialize(&first);
+    client.initialize(&second);
+    assert_eq!(client.admin(), Some(first.clone()));
+    assert!(client.has_role(&first, &Role::Admin));
+    assert!(!client.has_role(&second, &Role::Admin));
 }
 
 #[test]
@@ -29,13 +74,12 @@ fn admin_can_grant_and_revoke_application_roles() {
     let instructor = Address::generate(&env);
     env.mock_all_auths();
 
-    in_contract(&env, || {
-        initialize(&env, &admin);
-        grant_role(&env, &admin, Role::Instructor, &instructor);
-        assert!(has_role(&env, &instructor, Role::Instructor));
-        revoke_role(&env, &admin, Role::Instructor, &instructor);
-        assert!(!has_role(&env, &instructor, Role::Instructor));
-    });
+    let client = setup_test(&env);
+    client.initialize(&admin);
+    client.grant_role(&admin, &Role::Instructor, &instructor);
+    assert!(client.has_role(&instructor, &Role::Instructor));
+    client.revoke_role(&admin, &Role::Instructor, &instructor);
+    assert!(!client.has_role(&instructor, &Role::Instructor));
 }
 
 #[test]
@@ -46,10 +90,9 @@ fn admin_role_cannot_be_granted_directly() {
     let candidate = Address::generate(&env);
     env.mock_all_auths();
 
-    in_contract(&env, || {
-        initialize(&env, &admin);
-        grant_role(&env, &admin, Role::Admin, &candidate);
-    });
+    let client = setup_test(&env);
+    client.initialize(&admin);
+    client.grant_role(&admin, &Role::Admin, &candidate);
 }
 
 #[test]
@@ -60,11 +103,10 @@ fn candidate_cannot_claim_before_48_hours() {
     let candidate = Address::generate(&env);
     env.mock_all_auths();
 
-    in_contract(&env, || {
-        initialize(&env, &current_admin);
-        propose_admin(&env, &current_admin, &candidate);
-        claim_admin(&env, &candidate);
-    });
+    let client = setup_test(&env);
+    client.initialize(&current_admin);
+    client.propose_admin(&current_admin, &candidate);
+    client.claim_admin(&candidate);
 }
 
 #[test]
@@ -73,29 +115,24 @@ fn candidate_claims_admin_after_48_hours() {
     let current_admin = Address::generate(&env);
     let candidate = Address::generate(&env);
     let instructor = Address::generate(&env);
-    let contract_id = Address::generate(&env);
     env.mock_all_auths();
 
-    let unlock_at = env.as_contract(&contract_id, || {
-        initialize(&env, &current_admin);
-        let unlock_at = propose_admin(&env, &current_admin, &candidate);
-        assert_eq!(pending_admin(&env).unwrap().unlock_at, unlock_at);
-        assert_eq!(unlock_at, env.ledger().timestamp() + ADMIN_HANDOVER_DELAY);
-        unlock_at
-    });
+    let client = setup_test(&env);
+    client.initialize(&current_admin);
+    let unlock_at = client.propose_admin(&current_admin, &candidate);
+    assert_eq!(client.pending_admin().unwrap().unlock_at, unlock_at);
+    assert_eq!(unlock_at, env.ledger().timestamp() + ADMIN_HANDOVER_DELAY);
 
     env.ledger().with_mut(|ledger| ledger.timestamp = unlock_at);
-    env.as_contract(&contract_id, || {
-        claim_admin(&env, &candidate);
+    client.claim_admin(&candidate);
 
-        assert_eq!(admin(&env), Some(candidate.clone()));
-        assert!(has_role(&env, &candidate, Role::Admin));
-        assert!(!has_role(&env, &current_admin, Role::Admin));
-        assert!(pending_admin(&env).is_none());
+    assert_eq!(client.admin(), Some(candidate.clone()));
+    assert!(client.has_role(&candidate, &Role::Admin));
+    assert!(!client.has_role(&current_admin, &Role::Admin));
+    assert!(client.pending_admin().is_none());
 
-        grant_role(&env, &candidate, Role::Instructor, &instructor);
-        assert!(has_role(&env, &instructor, Role::Instructor));
-    });
+    client.grant_role(&candidate, &Role::Instructor, &instructor);
+    assert!(client.has_role(&instructor, &Role::Instructor));
 }
 
 #[test]
@@ -105,17 +142,13 @@ fn only_the_proposed_candidate_can_claim_admin() {
     let current_admin = Address::generate(&env);
     let candidate = Address::generate(&env);
     let other = Address::generate(&env);
-    let contract_id = Address::generate(&env);
     env.mock_all_auths();
 
-    let unlock_at = env.as_contract(&contract_id, || {
-        initialize(&env, &current_admin);
-        propose_admin(&env, &current_admin, &candidate)
-    });
+    let client = setup_test(&env);
+    client.initialize(&current_admin);
+    let unlock_at = client.propose_admin(&current_admin, &candidate);
     env.ledger().with_mut(|ledger| ledger.timestamp = unlock_at);
-    env.as_contract(&contract_id, || {
-        claim_admin(&env, &other);
-    });
+    client.claim_admin(&other);
 }
 
 #[test]
@@ -125,13 +158,12 @@ fn current_admin_can_cancel_a_pending_handover() {
     let candidate = Address::generate(&env);
     env.mock_all_auths();
 
-    in_contract(&env, || {
-        initialize(&env, &current_admin);
-        propose_admin(&env, &current_admin, &candidate);
-        cancel_admin_proposal(&env, &current_admin);
-        assert!(pending_admin(&env).is_none());
-        assert_eq!(admin(&env), Some(current_admin.clone()));
-    });
+    let client = setup_test(&env);
+    client.initialize(&current_admin);
+    client.propose_admin(&current_admin, &candidate);
+    client.cancel_admin_proposal(&current_admin);
+    assert!(client.pending_admin().is_none());
+    assert_eq!(client.admin(), Some(current_admin.clone()));
 }
 
 #[test]
@@ -143,8 +175,7 @@ fn non_admin_cannot_grant_roles() {
     let instructor = Address::generate(&env);
     env.mock_all_auths();
 
-    in_contract(&env, || {
-        initialize(&env, &admin);
-        grant_role(&env, &attacker, Role::Instructor, &instructor);
-    });
+    let client = setup_test(&env);
+    client.initialize(&admin);
+    client.grant_role(&attacker, &Role::Instructor, &instructor);
 }

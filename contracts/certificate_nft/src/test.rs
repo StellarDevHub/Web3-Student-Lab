@@ -19,7 +19,10 @@ fn test_mint_badge_and_soulbound_enforcement() {
     let (env, client, admin, student) = setup();
 
     let course_id = String::from_str(&env, "SORO-101");
-    let uri = String::from_str(&env, "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+    let uri = String::from_str(
+        &env,
+        "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+    );
     let milestone1 = String::from_str(&env, "Milestone 1: Smart Contract Basics");
 
     let badge_id = client.mint_badge(
@@ -39,7 +42,7 @@ fn test_mint_badge_and_soulbound_enforcement() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #402)")]
+#[should_panic(expected = "Error(Contract, #406)")]
 fn test_badge_transfer_fails_soulbound() {
     let (env, client, admin, student) = setup();
     let recipient = Address::generate(&env);
@@ -57,8 +60,26 @@ fn test_badge_transfer_fails_soulbound() {
         &milestone1,
     );
 
-    // Transfer must panic with SoulboundNonTransferable (402)
+    // Transfer must panic with NonTransferable (406)
     client.transfer(&student, &recipient, &badge_id);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #406)")]
+fn test_badge_transfer_from_fails_non_transferable() {
+    let (env, client, admin, student) = setup();
+    let recipient = Address::generate(&env);
+
+    let badge_id = client.mint_badge(
+        &admin,
+        &student,
+        &String::from_str(&env, "SORO-101"),
+        &RarityTier::Bronze,
+        &String::from_str(&env, "ipfs://cid1"),
+        &String::from_str(&env, "Milestone 1"),
+    );
+
+    client.transfer_from(&admin, &student, &recipient, &badge_id);
 }
 
 #[test]
@@ -79,8 +100,16 @@ fn test_badge_tier_upgrade_and_provenance_history() {
     );
 
     // Add milestone 2 and 3
-    client.add_badge_milestone(&admin, &badge_id, &String::from_str(&env, "Milestone 2: Borrow Checker"));
-    client.add_badge_milestone(&admin, &badge_id, &String::from_str(&env, "Milestone 3: Lifetimes"));
+    client.add_badge_milestone(
+        &admin,
+        &badge_id,
+        &String::from_str(&env, "Milestone 2: Borrow Checker"),
+    );
+    client.add_badge_milestone(
+        &admin,
+        &badge_id,
+        &String::from_str(&env, "Milestone 3: Lifetimes"),
+    );
 
     let badge_before_upgrade = client.get_badge(&badge_id);
     assert_eq!(badge_before_upgrade.completed_milestones.len(), 3);

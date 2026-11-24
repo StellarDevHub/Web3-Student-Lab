@@ -1,7 +1,24 @@
 use super::*;
 use contract_events::topic;
 use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
-use soroban_sdk::{token, xdr, Address, Env, Symbol, TryFromVal, Val, Vec};
+use soroban_sdk::{
+    contract, contractimpl, symbol_short, token, xdr, Address, Env, Symbol, TryFromVal, Val, Vec,
+};
+
+#[contract]
+struct CallbackToken;
+
+#[contractimpl]
+impl CallbackToken {
+    pub fn transfer(env: Env, from: Address, _to: Address, _amount: i128) {
+        let pool: Address = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("pool"))
+            .unwrap();
+        AMMContractClient::new(&env, &pool).swap_a_for_b(&from, &1, &0);
+    }
+}
 
 fn setup(
     env: &Env,
@@ -40,7 +57,7 @@ fn setup(
         &token_b_id,
         &pool_share_id,
         &fee_collector,
-        &50,
+        &30, // 0.3 % base swap fee (spec: 0.3 % dynamic swap fee)
     );
 
     (admin, client, token_a_id, token_b_id, pool_share_id)
@@ -114,6 +131,57 @@ fn test_constant_product_invariant_swap() {
     // After swap, k should increase (fee collected is removed from B balance)
     // So k_after >= k_before (due to fee collection)
     assert!(k_after >= k_before);
+}
+
+#[test]
+fn test_token_callback_cannot_reenter_pool() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let pool_id = env.register(AMMContract, ());
+    let pool = AMMContractClient::new(&env, &pool_id);
+    let callback_token = env.register(CallbackToken, ());
+    let token_b = env.register_stellar_asset_contract_v2(admin.clone());
+    let pool_share = env.register_stellar_asset_contract_v2(admin.clone());
+    let token_b_id = token_b.address();
+    let pool_share_id = pool_share.address();
+    let fee_collector = Address::generate(&env);
+
+    env.as_contract(&callback_token, || {
+        env.storage()
+            .instance()
+            .set(&symbol_short!("pool"), &pool_id);
+    });
+    token::StellarAssetClient::new(&env, &token_b_id).mint(&admin, &1_000_000);
+    pool.initialize(
+        &admin,
+        &callback_token,
+        &token_b_id,
+        &pool_share_id,
+        &fee_collector,
+        &50,
+    );
+
+    let result = pool.try_add_liquidity(&admin, &1_000_000, &1_000_000, &0);
+    assert!(
+        result.is_err(),
+        "callback reentry must revert the outer call"
+    );
+    assert_eq!(pool.get_pool_state(), (0, 0, DEAD_SHARES));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #412)")]
+fn test_reserve_invariant_rejects_accounted_balance_above_reserve() {
+    let env = Env::default();
+    let pool_id = env.register(AMMContract, ());
+    env.as_contract(&pool_id, || {
+        env.storage().instance().set(&DataKey::BalanceA, &2i128);
+        env.storage().instance().set(&DataKey::BalanceB, &0i128);
+        env.storage().instance().set(&DataKey::ReserveA, &1i128);
+        env.storage().instance().set(&DataKey::ReserveB, &0i128);
+        invariants::assert_balance_reserve_invariant(&env);
+    });
 }
 
 #[test]
@@ -280,6 +348,78 @@ fn test_twap_resistant_to_single_block_flash_manipulation() {
 
     // TWAP output remains stable and immune to single-block flash loan spike
     assert_eq!(twap_before_flash, twap_during_flash);
+}
+
+// ── Reentrancy guard (flash-swap defense) tests ──────────────────────────────
+
+#[test]
+#[should_panic(expected = "Error(Contract, #411)")]
+fn test_reentrancy_guard_blocks_double_entry() {
+    let env = Env::default();
+    let (admin, client, _, _, _) = setup(&env);
+
+    // Simulate a reentrant state by pre-setting the temporary guard key.
+    env.as_contract(&client.address, || {
+        env.storage().temporary().set(&RG_KEY, &true);
+    });
+
+    // This deposit must be rejected because the guard is already held.
+    client.add_liquidity(&admin, &1_000_000, &1_000_000, &0);
+}
+
+#[test]
+fn test_reentrancy_lock_released_after_successful_calls() {
+    let env = Env::default();
+    let (admin, client, token_a_id, _, _) = setup(&env);
+
+    // Consecutive mutations succeed because each call releases its guard.
+    client.add_liquidity(&admin, &10_000_000, &10_000_000, &0);
+
+    let user = Address::generate(&env);
+    let token_a_client = token::StellarAssetClient::new(&env, &token_a_id);
+    token_a_client.mint(&user, &1_000_000);
+    client.swap_a_for_b(&user, &1_000_000, &0);
+
+    client.add_liquidity(&admin, &1_000_000, &1_000_000, &0);
+
+    // The guard must be absent from storage between transactions.
+    let lock_held = env.as_contract(&client.address, || env.storage().temporary().has(&RG_KEY));
+    assert!(
+        !lock_held,
+        "reentrancy guard must be released after each call"
+    );
+}
+
+// ── Fee accumulator test (0.3 % base fee + dynamic price-impact uplift) ─────
+
+#[test]
+fn test_swap_charges_0_3pct_base_fee_with_impact_uplift() {
+    let env = Env::default();
+    let (admin, client, token_a_id, _token_b_id, _) = setup(&env);
+
+    client.add_liquidity(&admin, &10_000_000, &10_000_000, &0);
+
+    let user = Address::generate(&env);
+    let token_a_client = token::StellarAssetClient::new(&env, &token_a_id);
+    let amount_in = 1_000_000i128;
+    token_a_client.mint(&user, &amount_in);
+
+    let (bal_a_before, bal_b_before, _) = client.get_pool_state();
+    let new_a = bal_a_before + amount_in;
+    let out_before = bal_b_before - (bal_a_before * bal_b_before + new_a - 1) / new_a;
+
+    // Spec: 0.3 % base fee, uplifted by price impact (bps / 100).
+    let impact_bps = (out_before * 10_000) / bal_b_before;
+    let expected_fee = (out_before * (30 + impact_bps / 100)) / 10_000;
+
+    let amount_out = client.swap_a_for_b(&user, &amount_in, &0);
+
+    let (_, bal_b_after, _) = client.get_pool_state();
+    let fee = (bal_b_before - bal_b_after) - amount_out;
+
+    assert!(fee > 0, "swap must collect a fee");
+    assert_eq!(fee, expected_fee, "fee must be 0.3 % base + impact uplift");
+    assert_eq!(amount_out, out_before - fee);
 }
 
 #[test]

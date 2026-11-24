@@ -5,10 +5,8 @@
 //! execution frame / transaction envelope.
 //! Accrues fee revenue directly to the pool reserves.
 
-use soroban_sdk::{
-    panic_with_error, symbol_short, token, Address, Env, IntoVal, Symbol,
-};
 use crate::{LPError, BPS};
+use soroban_sdk::{panic_with_error, symbol_short, token, Address, Env, IntoVal, Symbol};
 
 /// Protocol flash loan fee in basis points (0.09% = 9 bps)
 pub const FLASH_LOAN_FEE_BPS: i128 = 9;
@@ -82,13 +80,7 @@ impl FlashLoan {
         token_client.transfer(&contract_addr, &receiver, &amount);
 
         // Call borrower's contract hook
-        let receiver_args = (
-            contract_addr.clone(),
-            token.clone(),
-            amount,
-            fee,
-            params,
-        );
+        let receiver_args = (contract_addr.clone(), token.clone(), amount, fee, params);
         env.invoke_contract::<()>(
             &receiver,
             &Symbol::new(env, "execute_operation"),
@@ -114,10 +106,8 @@ impl FlashLoan {
         env.storage().temporary().remove(&FLASH_LOAN_LOCK);
 
         // Emit flash-loan event
-        env.events().publish(
-            (symbol_short!("flash"), token, receiver),
-            (amount, fee),
-        );
+        env.events()
+            .publish((symbol_short!("flash"), token, receiver), (amount, fee));
 
         fee
     }

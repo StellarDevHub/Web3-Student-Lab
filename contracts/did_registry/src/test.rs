@@ -11,6 +11,10 @@
 //! - Key rotation
 //! - Revocation: deactivated DIDs reject all subsequent mutations
 //! - Duplicate DID registration rejected
+//! - DID string form (SC-010): `did:stellar:<64 hex>` round-trip, malformed
+//!   string rejection via the typed `DIDError::MalformedDID` error
+//! - Unauthorized key binding attempts rejected (SC-010)
+//! - Delegated verification key revocation (SC-010)
 
 use crate::{ContributorProof, DIDRegistryContract, DIDRegistryContractClient, DidError};
 use soroban_sdk::{
@@ -27,6 +31,30 @@ fn deploy(env: &Env) -> (Address, DIDRegistryContractClient) {
 
 fn make_did(env: &Env, seed: u8) -> BytesN<32> {
     BytesN::from_array(env, &[seed; 32])
+}
+
+/// Canonical `did:stellar:` string for `make_did(env, seed)` — built with an
+/// explicit hex table so it stays independent of `verification.rs`.
+fn canonical_string(env: &Env, seed: u8) -> String {
+    let hex = b"0123456789abcdef";
+    let mut buf = [0u8; 76];
+    buf[..12].copy_from_slice(b"did:stellar:");
+    for i in 0..32 {
+        buf[12 + 2 * i] = hex[(seed >> 4) as usize];
+        buf[13 + 2 * i] = hex[(seed & 0x0f) as usize];
+    }
+    String::from_bytes(env, &buf)
+}
+
+/// Concatenate byte parts into a soroban String (no alloc needed).
+fn cat(env: &Env, parts: &[&[u8]]) -> String {
+    let mut buf = [0u8; 256];
+    let mut n = 0usize;
+    for p in parts {
+        buf[n..n + p.len()].copy_from_slice(p);
+        n += p.len();
+    }
+    String::from_bytes(env, &buf[..n])
 }
 
 fn register_default(

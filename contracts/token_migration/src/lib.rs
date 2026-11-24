@@ -1,13 +1,14 @@
 //! Legacy token migration contract.
 //!
-//! Users swap legacy `old_token` for a newly minted `new_token` at a fixed
-//! ratio until a deadline, after which the admin can recover any remaining
-//! legacy tokens.
+//! Users permanently burn legacy `old_token` for newly minted `new_token` at
+//! an exact ratio until a deadline. New tokens can also be locked in linear
+//! vesting schedules.
 
 #![no_std]
 
 pub mod vesting;
 pub use vesting::MigrationVestingSchedule;
+pub mod burner;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, token,
@@ -36,6 +37,10 @@ pub enum MigError {
     Unauthorized = 485,
     /// `486` — Contract has not been initialised.
     NotInitialized = 486,
+    /// `487` — Conversion ratio numerator or denominator is zero.
+    InvalidRatio = 487,
+    /// `488` — Conversion would discard a fractional token.
+    InexactConversion = 488,
 }
 
 #[contracttype]
@@ -51,6 +56,7 @@ pub struct MigrationConfig {
 #[contracttype]
 pub enum DataKey {
     Config,
+    RatioDenominator,
     UserMigrated(Address),
     TotalMigrated,
     /// Versioned per-user storage record (v1/v2 schema transmutation).
@@ -112,7 +118,7 @@ pub struct TokenMigrationContract;
 impl TokenMigrationContract {
     /// Initializes the migration contract.
     ///
-    /// * `admin`             – The admin address, who can withdraw remaining legacy tokens after the deadline.
+    /// * `admin`             – The migration admin and vesting treasury.
     /// * `old_token`         – The address of the legacy token contract.
     /// * `new_token`         – The address of the new token contract. Must have minting rights on it.
     /// * `ratio_new_per_old` – The number of new tokens minted for 1 old token.
@@ -125,19 +131,51 @@ impl TokenMigrationContract {
         ratio_new_per_old: u32,
         deadline: u64,
     ) {
+        Self::initialize_with_ratio(
+            env,
+            admin,
+            old_token,
+            new_token,
+            ratio_new_per_old,
+            1,
+            deadline,
+        );
+    }
+
+    /// Initializes migration with an exact rational conversion ratio.
+    /// Every migration must convert to a whole number of new-token base units.
+    pub fn initialize_with_ratio(
+        env: Env,
+        admin: Address,
+        old_token: Address,
+        new_token: Address,
+        ratio_numerator: u32,
+        ratio_denominator: u32,
+        deadline: u64,
+    ) {
         if env.storage().instance().has(&DataKey::Config) {
             panic_with_error!(&env, MigError::AlreadyInitialized);
+        }
+        admin.require_auth();
+        if ratio_numerator == 0 || ratio_denominator == 0 {
+            panic_with_error!(&env, MigError::InvalidRatio);
+        }
+        if deadline <= env.ledger().timestamp() {
+            panic_with_error!(&env, MigError::MigrationPeriodEnded);
         }
 
         let config = MigrationConfig {
             admin,
             old_token,
             new_token,
-            ratio_new_per_old,
+            ratio_new_per_old: ratio_numerator,
             deadline,
         };
 
         env.storage().instance().set(&DataKey::Config, &config);
+        env.storage()
+            .instance()
+            .set(&DataKey::RatioDenominator, &ratio_denominator);
         env.storage()
             .instance()
             .set(&DataKey::TotalMigrated, &0i128);
@@ -163,7 +201,7 @@ impl TokenMigrationContract {
             .get(&DataKey::Config)
             .unwrap_or_else(|| panic_with_error!(&env, MigError::NotInitialized));
 
-        if env.ledger().timestamp() > config.deadline {
+        if env.ledger().timestamp() >= config.deadline {
             panic_with_error!(&env, MigError::MigrationPeriodEnded);
         }
 
@@ -171,78 +209,66 @@ impl TokenMigrationContract {
             panic_with_error!(&env, MigError::ZeroAmount);
         }
 
-        let new_amount = amount
-            .checked_mul(config.ratio_new_per_old as i128)
-            .unwrap_or_else(|| panic_with_error!(&env, MigError::Overflow));
-
-        let old_token_client = token::Client::new(&env, &config.old_token);
-        old_token_client.transfer_from(
-            &env.current_contract_address(),
-            &caller,
-            &env.current_contract_address(),
-            &amount,
-        );
-
-        let new_token_client = token::StellarAssetClient::new(&env, &config.new_token);
-        new_token_client.mint(&caller, &new_amount);
-
-        let user_key = DataKey::UserMigrated(caller.clone());
-        let user_migrated: i128 = env.storage().persistent().get(&user_key).unwrap_or(0);
-        let new_total = user_migrated
-            .checked_add(amount)
-            .unwrap_or_else(|| panic_with_error!(&env, MigError::Overflow));
-        env.storage().persistent().set(&user_key, &new_total);
-        env.storage()
-            .persistent()
-            .extend_ttl(&user_key, 100_000, 100_000);
-
-        // Record (or update) the versioned per-user storage record. New
-        // records are written in the legacy v1 shape; the storage
-        // migration engine below transmutes them to v2 in cursor batches.
-        let record_key = DataKey::UserRecord(caller.clone());
-        let already_indexed = env.storage().persistent().has(&record_key);
-        env.storage().persistent().set(
-            &record_key,
-            &VersionedUserRecord::V1(UserRecordV1 { amount: new_total }),
-        );
-        env.storage()
-            .persistent()
-            .extend_ttl(&record_key, 100_000, 100_000);
-
-        if !already_indexed {
-            let count: u32 = env
-                .storage()
-                .instance()
-                .get(&DataKey::UserCount)
-                .unwrap_or(0);
-            env.storage()
-                .persistent()
-                .set(&DataKey::UserIndex(count), &caller);
-            env.storage()
-                .instance()
-                .set(&DataKey::UserCount, &(count + 1));
-            env.storage()
-                .instance()
-                .set(&DataKey::MigrationStatus, &MigrationStatus::InProgress);
-        }
-
-        let total_migrated: i128 = env
-            .storage()
-            .instance()
-            .get(&DataKey::TotalMigrated)
-            .unwrap_or(0);
-        env.storage().instance().set(
-            &DataKey::TotalMigrated,
-            &total_migrated
-                .checked_add(amount)
-                .unwrap_or_else(|| panic_with_error!(&env, MigError::Overflow)),
-        );
-
-        env.events()
-            .publish((symbol_short!("migrated"), caller), (amount, new_amount));
+        let (new_amount, total_migrated) = Self::prepare_migration(&env, &config, amount);
+        burner::burn_from(&env, &config.old_token, &caller, amount);
+        token::StellarAssetClient::new(&env, &config.new_token).mint(&caller, &new_amount);
+        Self::record_migration(&env, &caller, amount, total_migrated);
+        Self::publish_migration_event(&env, &caller, amount, new_amount, false);
     }
 
-    /// Allows the admin to withdraw any remaining legacy tokens after the deadline.
+    /// Burn legacy tokens and create a linear vesting schedule for the new tokens.
+    pub fn migrate_vested(
+        env: Env,
+        caller: Address,
+        amount: i128,
+        cliff_duration_ledgers: u32,
+        total_duration_ledgers: u32,
+    ) -> u64 {
+        caller.require_auth();
+        let config: MigrationConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .unwrap_or_else(|| panic_with_error!(&env, MigError::NotInitialized));
+        if env.ledger().timestamp() >= config.deadline {
+            panic_with_error!(&env, MigError::MigrationPeriodEnded);
+        }
+
+        let (new_amount, total_migrated) = Self::prepare_migration(&env, &config, amount);
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::VestingCounter)
+            .unwrap_or(0);
+        let schedule_id = count
+            .checked_add(1)
+            .unwrap_or_else(|| panic_with_error!(&env, MigError::Overflow));
+        let schedule = match MigrationVestingSchedule::new(
+            schedule_id,
+            caller.clone(),
+            new_amount,
+            env.ledger().sequence(),
+            cliff_duration_ledgers,
+            total_duration_ledgers,
+            false,
+        ) {
+            Ok(schedule) => schedule,
+            Err(error) => panic_with_error!(&env, error),
+        };
+
+        burner::burn_from(&env, &config.old_token, &caller, amount);
+        token::StellarAssetClient::new(&env, &config.new_token)
+            .mint(&env.current_contract_address(), &new_amount);
+        Self::record_migration(&env, &caller, amount, total_migrated);
+        env.storage()
+            .instance()
+            .set(&DataKey::VestingCounter, &schedule_id);
+        Self::store_vesting_schedule(&env, &caller, &schedule);
+        Self::publish_migration_event(&env, &caller, amount, new_amount, true);
+        schedule_id
+    }
+
+    /// Permanently burns any legacy-token dust sent to the contract after the deadline.
     pub fn withdraw_legacy(env: Env) {
         let config: MigrationConfig = env
             .storage()
@@ -251,15 +277,14 @@ impl TokenMigrationContract {
             .unwrap_or_else(|| panic_with_error!(&env, MigError::NotInitialized));
         config.admin.require_auth();
 
-        if env.ledger().timestamp() <= config.deadline {
+        if env.ledger().timestamp() < config.deadline {
             panic_with_error!(&env, MigError::DeadlineNotReached);
         }
 
         let old_token_client = token::Client::new(&env, &config.old_token);
         let balance = old_token_client.balance(&env.current_contract_address());
-
         if balance > 0 {
-            old_token_client.transfer(&env.current_contract_address(), &config.admin, &balance);
+            old_token_client.burn(&env.current_contract_address(), &balance);
         }
     }
 
@@ -284,6 +309,14 @@ impl TokenMigrationContract {
             .instance()
             .get(&DataKey::TotalMigrated)
             .unwrap_or(0)
+    }
+
+    /// Denominator paired with `ratio_new_per_old` in migration config.
+    pub fn ratio_denominator(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::RatioDenominator)
+            .unwrap_or(1)
     }
 
     /// Current status of the in-place v1 -> v2 storage schema migration.
@@ -424,7 +457,9 @@ impl TokenMigrationContract {
             .instance()
             .get(&DataKey::VestingCounter)
             .unwrap_or(0);
-        let schedule_id = count + 1;
+        let schedule_id = count
+            .checked_add(1)
+            .unwrap_or_else(|| panic_with_error!(&env, MigError::Overflow));
         env.storage()
             .instance()
             .set(&DataKey::VestingCounter, &schedule_id);
@@ -443,6 +478,8 @@ impl TokenMigrationContract {
             Err(e) => panic_with_error!(&env, e),
         };
 
+        token::StellarAssetClient::new(&env, &config.new_token)
+            .mint(&env.current_contract_address(), &total_amount);
         env.storage()
             .persistent()
             .set(&DataKey::VestingSchedule(schedule_id), &schedule);
@@ -457,6 +494,14 @@ impl TokenMigrationContract {
             .persistent()
             .set(&DataKey::BeneficiaryVesting(beneficiary), &list);
 
+        env.events().publish(
+            (symbol_short!("vest_new"), schedule_id),
+            (
+                schedule.beneficiary.clone(),
+                total_amount,
+                schedule.end_ledger,
+            ),
+        );
         schedule_id
     }
 
@@ -477,6 +522,11 @@ impl TokenMigrationContract {
     /// Claims unlocked tokens for `beneficiary`.
     pub fn claim_vesting(env: Env, beneficiary: Address, schedule_id: u64) -> i128 {
         beneficiary.require_auth();
+        let config: MigrationConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .unwrap_or_else(|| panic_with_error!(&env, MigError::NotInitialized));
         let mut schedule = Self::get_vesting_schedule(env.clone(), schedule_id);
         if schedule.beneficiary != beneficiary {
             panic_with_error!(&env, MigError::Unauthorized);
@@ -486,9 +536,18 @@ impl TokenMigrationContract {
             Ok(amt) => amt,
             Err(e) => panic_with_error!(&env, e),
         };
+        token::Client::new(&env, &config.new_token).transfer(
+            &env.current_contract_address(),
+            &beneficiary,
+            &claimed,
+        );
         env.storage()
             .persistent()
             .set(&DataKey::VestingSchedule(schedule_id), &schedule);
+        env.events().publish(
+            (symbol_short!("vest_clm"), schedule_id),
+            (beneficiary, claimed, current_ledger),
+        );
         claimed
     }
 
@@ -511,10 +570,139 @@ impl TokenMigrationContract {
             Ok(res) => res,
             Err(e) => panic_with_error!(&env, e),
         };
+        if unvested > 0 {
+            token::Client::new(&env, &config.new_token).transfer(
+                &env.current_contract_address(),
+                &config.admin,
+                &unvested,
+            );
+        }
         env.storage()
             .persistent()
             .set(&DataKey::VestingSchedule(schedule_id), &schedule);
+        env.events().publish(
+            (symbol_short!("vest_rev"), schedule_id),
+            (unvested, claimable, current_ledger),
+        );
         (unvested, claimable)
+    }
+
+    fn prepare_migration(env: &Env, config: &MigrationConfig, amount: i128) -> (i128, i128) {
+        if amount <= 0 {
+            panic_with_error!(env, MigError::ZeroAmount);
+        }
+        let denominator: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::RatioDenominator)
+            .unwrap_or(1);
+        let product = amount
+            .checked_mul(config.ratio_new_per_old as i128)
+            .unwrap_or_else(|| panic_with_error!(env, MigError::Overflow));
+        if product % denominator as i128 != 0 {
+            panic_with_error!(env, MigError::InexactConversion);
+        }
+        let new_amount = product / denominator as i128;
+        let total_migrated: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalMigrated)
+            .unwrap_or(0);
+        let new_total = total_migrated
+            .checked_add(amount)
+            .unwrap_or_else(|| panic_with_error!(env, MigError::Overflow));
+        (new_amount, new_total)
+    }
+
+    fn record_migration(env: &Env, caller: &Address, amount: i128, total_migrated: i128) {
+        let user_key = DataKey::UserMigrated(caller.clone());
+        let user_migrated: i128 = env.storage().persistent().get(&user_key).unwrap_or(0);
+        let new_total = user_migrated
+            .checked_add(amount)
+            .unwrap_or_else(|| panic_with_error!(env, MigError::Overflow));
+        env.storage().persistent().set(&user_key, &new_total);
+        env.storage()
+            .persistent()
+            .extend_ttl(&user_key, 100_000, 100_000);
+
+        let record_key = DataKey::UserRecord(caller.clone());
+        let already_indexed = env.storage().persistent().has(&record_key);
+        env.storage().persistent().set(
+            &record_key,
+            &VersionedUserRecord::V1(UserRecordV1 { amount: new_total }),
+        );
+        env.storage()
+            .persistent()
+            .extend_ttl(&record_key, 100_000, 100_000);
+
+        if !already_indexed {
+            let count: u32 = env
+                .storage()
+                .instance()
+                .get(&DataKey::UserCount)
+                .unwrap_or(0);
+            let next_count = count
+                .checked_add(1)
+                .unwrap_or_else(|| panic_with_error!(env, MigError::Overflow));
+            env.storage()
+                .persistent()
+                .set(&DataKey::UserIndex(count), caller);
+            env.storage()
+                .instance()
+                .set(&DataKey::UserCount, &next_count);
+            env.storage()
+                .instance()
+                .set(&DataKey::MigrationStatus, &MigrationStatus::InProgress);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalMigrated, &total_migrated);
+    }
+
+    fn store_vesting_schedule(
+        env: &Env,
+        beneficiary: &Address,
+        schedule: &MigrationVestingSchedule,
+    ) {
+        env.storage()
+            .persistent()
+            .set(&DataKey::VestingSchedule(schedule.id), schedule);
+        let mut list: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::BeneficiaryVesting(beneficiary.clone()))
+            .unwrap_or_else(|| Vec::new(env));
+        list.push_back(schedule.id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::BeneficiaryVesting(beneficiary.clone()), &list);
+    }
+
+    fn publish_migration_event(
+        env: &Env,
+        caller: &Address,
+        legacy_amount: i128,
+        new_amount: i128,
+        vested: bool,
+    ) {
+        let config: MigrationConfig = env.storage().instance().get(&DataKey::Config).unwrap();
+        let denominator: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::RatioDenominator)
+            .unwrap_or(1);
+        env.events().publish(
+            (symbol_short!("migrated"), caller.clone()),
+            (
+                legacy_amount,
+                new_amount,
+                config.ratio_new_per_old,
+                denominator,
+                vested,
+                env.ledger().timestamp(),
+            ),
+        );
     }
 }
 

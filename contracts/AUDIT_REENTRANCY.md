@@ -6,22 +6,21 @@
 //!
 //! ## Executive Summary
 //!
-//! A comprehensive audit was performed on all Soroban contracts in the workspace
-//! to identify potential reentrancy vulnerabilities arising from cross-contract
-//! calls via `env.invoke_contract()`.
+//! This report records reentrancy protections for the audited Soroban contract
+//! entry points that perform cross-contract calls, including token callbacks.
 //!
-//! **Result: All contracts are protected against reentrancy attacks.** No
-//! critical or high-severity vulnerabilities were found. One informational
-//! finding was identified in `lending_pool` related to the ordering of external
-//! calls, which is mitigated by an existing reentrancy guard.
+//! **Result:** the audited external-call paths in `lending_pool`, `smart_vault`,
+//! and `amm` are guarded. The guard rejects reentry across public entry points.
 //!
 //! Re-factoring (2026-08): reentrancy guards were hardened with a dedicated
 //! `ReentrancyGuardActive` contract error on both `lending_pool` and
 //! `smart_vault`, the reentrancy lock was extended to `smart_vault::harvest`
 //! and `smart_vault::compound`, and `smart_vault` gained a post-condition
 //! state invariant asserting conservation of total deposited assets
-//! (`TOTAL_ASSETS == RESERVES`) on every state-mutating entry point. No
-//! re-testing gaps were identified; zero high/critical vulnerabilities remain.
+//! (`TOTAL_ASSETS == RESERVES`) on vault accounting entry points. SC-024 adds
+//! a shared temporary-storage guard module, protects the vault's airdrop token
+//! transfers, guards AMM token interactions, and validates reserve accounting
+//! after each liquidity or swap operation.
 //!
 //! ## Contracts Audited
 //!
@@ -29,7 +28,8 @@
 //! |---|---|---|---|
 //! | `lending_pool` | ✅ (oracle price feed) | ✅ (LOCK mutex) | Protected |
 //! | `payment_streaming` | ❌ None | ✅ (LOCK mutex) | Protected |
-//! | `smart_vault` | ❌ None | ✅ (LOCK mutex) | Protected |
+//! | `smart_vault` | ✅ (airdrop token transfers) | ✅ (temporary-storage lock) | Protected |
+//! | `amm` | ✅ (token transfers and pool-share mint/burn) | ✅ (temporary-storage lock) | Protected |
 //! | `multisig_wallet_timelock` | ❌ None | ✅ (LOCK mutex) | Protected |
 //! | `payment_gateway` | ❌ None | N/A | No risk |
 //! | `commit_reveal_rng` | ❌ None | N/A | No risk |
@@ -109,19 +109,24 @@
 //! - Cross-contract calls happen synchronously within the same execution context
 //! - A reentrant call would see the LOCK flag still set to `true`
 //!
-//! ### Finding #3: Contracts Without Cross-Contract Calls (CONFIRMED SAFE)
+//! ### Finding #3: smart_vault and AMM — Token Callback Reentry (MITIGATED)
 //!
-//! **Severity:** None
+//! **Severity:** None after mitigation
 //!
-//! The following contracts do not make any `env.invoke_contract()` calls
-//! and therefore have zero reentrancy attack surface:
+//! `smart_vault::claim_airdrop` and `clawback_airdrop` make token transfers
+//! through `MerkleDistributor`. They now acquire the shared temporary-storage
+//! guard before invoking the distributor and release it after the transfer.
+//! A token callback attempting any guarded vault operation is rejected.
 //!
-//! - `payment_streaming`: Pure storage operations + `env.ledger().sequence()`
-//! - `smart_vault`: Pure storage operations + `env.ledger().sequence()`
-//! - `multisig_wallet_timelock`: Pure storage operations + `env.ledger().timestamp()`
+//! The AMM's add/remove-liquidity and swap entry points call token contracts
+//! (including pool-share mint/burn). Each holds a temporary-storage guard
+//! throughout those calls, then checks that nonnegative accounted balances do
+//! not exceed their corresponding reserves before returning.
 //!
-//! Reentrancy guards were added to these contracts as a defense-in-depth
-//! measure in case future upgrades introduce cross-contract calls.
+//! Regression tests use a callback token that attempts to call back into the
+//! AMM during `add_liquidity`; the outer operation reverts when the nested
+//! swap encounters the active guard. A separate test confirms that inconsistent
+//! balance/reserve state fails the invariant check.
 //!
 //! ## Methodology
 //!
@@ -136,22 +141,23 @@
 //!
 //! ## Fuzz Testing
 //!
-//! Fuzz tests were added to `contracts/lending_pool/src/lib.rs` to verify that
-//! reentrant call patterns do not corrupt contract state. These tests:
+//! Tests in `contracts/lending_pool/src/lib.rs` and
+//! `contracts/amm/src/test.rs` verify that reentrant call patterns do not
+//! corrupt contract state. These tests:
 //! - Attempt to call `deposit_collateral()` from within a mock oracle callback
+//! - Attempt an AMM swap from a token transfer callback during liquidity addition
 //! - Verify that the reentrancy guard correctly rejects the attempt
 //! - Confirm that state remains consistent after the rejection
 //!
 //! ## Conclusion
 //!
-//! All contracts in the workspace are protected against reentrancy attacks.
-//! The `lending_pool` contract has a production-quality reentrancy guard and
-//! correctly applies the checks-effects-interactions pattern where external
-//! calls are made. Three contracts (`payment_streaming`, `smart_vault`,
-//! `multisig_wallet_timelock`) received defense-in-depth guards to protect
-//! against future changes introducing cross-contract calls.
+//! The audited external-call paths in `lending_pool`, `smart_vault`, and `amm`
+//! are guarded and covered by targeted reentrancy tests. AMM liquidity and swap
+//! operations also validate internal balance/reserve invariants after external
+//! calls. Contracts without external-call paths listed above retain their
+//! existing protections as defense in depth.
 //!
-//! No remediation is required at this time.
+//! See the findings above for the covered entry points and limitations.
 //!
 //! ## Signatures
 //!

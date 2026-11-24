@@ -3,6 +3,8 @@ import redisClient from '../cache/RedisClient.js';
 import prisma from '../db/index.js';
 import logger from '../utils/logger.js';
 import type { GraphQLContext } from './context.js';
+import { publishCourseProgress } from './pubsub.js';
+import { subscriptionMutationResolvers, subscriptionResolvers } from './resolvers/subscriptionResolvers.js';
 
 const CACHE_TTL = 60;
 
@@ -244,8 +246,17 @@ export const resolvers = {
         studentId: input.studentId,
         courseId: input.courseId,
       });
+      publishCourseProgress({
+        courseId: progress.courseId,
+        studentId: progress.studentId,
+        percentage: progress.percentage,
+        status: progress.status,
+        completedLessons,
+      });
       return progress;
     },
+
+    publishGlobalAnnouncement: subscriptionMutationResolvers.publishGlobalAnnouncement,
 
     issueCertificate: async (_parent: unknown, { studentId, courseId }: { studentId: string; courseId: string }, context: GraphQLContext) => {
       const tokenId = `token-${crypto.randomUUID()}`;
@@ -277,6 +288,8 @@ export const resolvers = {
       return certificate;
     },
   },
+
+  Subscription: subscriptionResolvers,
 
   Student: {
     enrollments: (parent: { id: string }, _args: unknown, context: GraphQLContext) =>

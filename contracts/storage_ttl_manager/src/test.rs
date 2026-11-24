@@ -204,4 +204,3 @@ fn test_restoring_non_archived_state_fails() {
     // Second restore attempt should fail as it's not archived anymore
     client.restore_state(&user, &key, &500);
 }
-

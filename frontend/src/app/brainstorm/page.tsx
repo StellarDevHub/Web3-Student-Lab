@@ -1,12 +1,18 @@
 'use client';
 
-import { CollaborativeCanvas } from '@/components/CollaborativeCanvas';
+import dynamic from 'next/dynamic';
 import { EncryptedRoomChat } from '@/components/collaboration/EncryptedRoomChat';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
 import { getApiEndpoint } from '@/lib/env';
 import { BrainstormSkeleton } from '@/components/ui/skeletons/PageSkeletons';
+
+// ReactFlow + html2canvas + jsPDF are only needed once a session is open.
+const CollaborativeCanvas = dynamic(
+  () => import('@/components/CollaborativeCanvas').then((mod) => mod.CollaborativeCanvas),
+  { ssr: false, loading: () => <div className="h-[480px] w-full animate-pulse rounded-2xl bg-zinc-900/40" aria-busy="true" />, },
+);
 
 function BrainstormContent() {
   const searchParams = useSearchParams();

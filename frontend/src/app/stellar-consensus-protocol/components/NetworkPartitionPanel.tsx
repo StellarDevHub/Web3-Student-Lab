@@ -36,14 +36,14 @@ export default function NetworkPartitionPanel({ state, onToggleFailure }: Props)
 
   return (
     <div className="bg-slate-900/60 border border-slate-700 rounded-xl p-6 space-4">
-      <h
+      <div>
         <h2 className="text-lg font-bold text-slate-100">
           Network Partition Tests
         </h2>
         <p className="text-xs text-slate-400">
           Simulate validator failures to observe how quorum slices degrade.
         </p>
-      </h>
+      </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-sm text-slate-300">

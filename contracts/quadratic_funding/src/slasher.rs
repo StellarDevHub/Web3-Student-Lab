@@ -3,11 +3,9 @@
 //! Handles stake confiscation, donation disqualification from quadratic calculations,
 //! and 50% bounty distribution to reporting investigators.
 
-use soroban_sdk::{
-    contracterror, contracttype, symbol_short, Address, Env, Map, Vec,
-};
 use crate::collusion_detection::{verify_collusion_proof, CollusionProof};
 use crate::{bump_instance, Project, POOL_KEY, PROJECTS_KEY, SCALE, WHITELIST_KEY};
+use soroban_sdk::{contracterror, contracttype, symbol_short, Address, Env, Map, Vec};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -84,7 +82,9 @@ pub fn slash_collusion(
         .instance()
         .get(&PROJECTS_KEY)
         .ok_or(SlasherError::ProjectNotFound)?;
-    let mut project = projects.get(project_id).ok_or(SlasherError::ProjectNotFound)?;
+    let mut project = projects
+        .get(project_id)
+        .ok_or(SlasherError::ProjectNotFound)?;
 
     let mut wl: Map<Address, bool> = env
         .storage()
@@ -112,14 +112,9 @@ pub fn slash_collusion(
             .unwrap_or(0);
 
         let sqrt_contribution = crate::QuadraticFunding::isqrt(
-            donated_amount
-                .checked_mul(SCALE * SCALE)
-                .expect("overflow"),
+            donated_amount.checked_mul(SCALE * SCALE).expect("overflow"),
         );
-        project.sqrt_sum = project
-            .sqrt_sum
-            .checked_sub(sqrt_contribution)
-            .unwrap_or(0);
+        project.sqrt_sum = project.sqrt_sum.checked_sub(sqrt_contribution).unwrap_or(0);
 
         project.donors.remove(colluder.clone());
 

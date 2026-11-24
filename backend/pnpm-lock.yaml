@@ -20,6 +20,9 @@ importers:
       '@aws-sdk/lib-storage':
         specifier: ^3.1076.0
         version: 3.1141.0(@aws-sdk/client-s3@3.1141.0)
+      '@graphql-tools/schema':
+        specifier: ^10.0.33
+        version: 10.1.1(graphql@16.14.2)
       '@prisma/adapter-pg':
         specifier: ^7.10.0
         version: 7.10.0

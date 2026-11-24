@@ -11,10 +11,15 @@
  *     stays bounded.
  */
 
-import metricsCollector, { type MetricsSummary } from './MetricsCollector.js';
+import metricsCollector, {
+  type DurationHistogramSnapshot,
+  type MetricsSummary,
+  type ProbeCounts,
+} from './MetricsCollector.js';
 import workerRegistry, { type WorkerStatus } from './WorkerRegistry.js';
 import cacheService from '../cache/CacheService.js';
 import redisClient from '../cache/RedisClient.js';
+import { getDbPoolUtilizationPct } from './dbPoolMetrics.js';
 
 /** Snapshot schema version. Bump on a breaking field change. */
 export const METRICS_SCHEMA_VERSION = '1';
@@ -56,6 +61,12 @@ export interface MetricsSnapshot {
   business: { eventsTotal: number; eventsByName: Record<string, number> };
   workers: WorkerStatus[];
   system: { uptimeSeconds: number; memoryResidentBytes: number; cpuUserSeconds: number };
+  /** Cumulative request-duration histogram (optional for hand-built snapshots). */
+  durationHistogram?: DurationHistogramSnapshot;
+  /** Dependency probe outcomes keyed by probe name. */
+  probes?: Record<string, ProbeCounts>;
+  /** Last recorded DB pool utilisation (0-100), or null if never measured. */
+  dbPoolUtilizationPct?: number | null;
 }
 
 /** Segments that look like identifiers rather than route names. */
@@ -147,7 +158,26 @@ export function buildMetricsSnapshot(
       memoryResidentBytes: Math.round(summary.system.memoryUsageMB * 1024 * 1024),
       cpuUserSeconds: Number((summary.system.cpuUserMs / 1000).toFixed(3)),
     },
+    durationHistogram: metricsCollector.getDurationHistogram(),
+    probes: metricsCollector.getProbeCounts(),
+    dbPoolUtilizationPct: getDbPoolUtilizationPct(),
   };
+}
+
+/**
+ * Render a Prometheus histogram (cumulative `_bucket` lines plus `_sum` and
+ * `_count`). The generic renderFamily helper only supports counters and
+ * gauges, so histograms are rendered here.
+ */
+function renderHistogram(name: string, help: string, h: DurationHistogramSnapshot): string {
+  const lines = [`# HELP ${name} ${help}`, `# TYPE ${name} histogram`];
+  for (const bucket of h.buckets) {
+    lines.push(`${name}_bucket{le="${bucket.le}"} ${bucket.count}`);
+  }
+  lines.push(`${name}_bucket{le="+Inf"} ${h.count}`);
+  lines.push(`${name}_sum ${h.sumMs}`);
+  lines.push(`${name}_count ${h.count}`);
+  return lines.join('\n');
 }
 
 // ─── Prometheus text exposition ───────────────────────────────────────────────
@@ -304,7 +334,39 @@ export function renderPrometheus(snapshot: MetricsSnapshot = buildMetricsSnapsho
     },
   ];
 
-  return `${families.map(renderFamily).join('\n')}\n`;
+  if (snapshot.dbPoolUtilizationPct !== undefined && snapshot.dbPoolUtilizationPct !== null) {
+    families.push({
+      name: `${PREFIX}_db_pool_utilization_percent`,
+      help: 'Database connection pool utilisation from the last health check, 0-100.',
+      type: 'gauge',
+      samples: [{ value: snapshot.dbPoolUtilizationPct }],
+    });
+  }
+
+  if (snapshot.probes && Object.keys(snapshot.probes).length > 0) {
+    families.push({
+      name: `${PREFIX}_external_probe_total`,
+      help: 'Dependency probe outcomes since process start, by probe and outcome.',
+      type: 'counter',
+      samples: Object.entries(snapshot.probes).flatMap(([probe, counts]) => [
+        { labels: { probe, outcome: 'ok' }, value: counts.ok },
+        { labels: { probe, outcome: 'failed' }, value: counts.failed },
+      ]),
+    });
+  }
+
+  const rendered = families.map(renderFamily);
+  if (snapshot.durationHistogram) {
+    rendered.push(
+      renderHistogram(
+        `${PREFIX}_http_request_duration_milliseconds`,
+        'HTTP request duration histogram in milliseconds, cumulative since process start.',
+        snapshot.durationHistogram
+      )
+    );
+  }
+
+  return `${rendered.join('\n')}\n`;
 }
 
 /** Content type expected by Prometheus-compatible scrapers. */

@@ -3,14 +3,14 @@
 pub mod badges;
 pub mod rarity;
 
+pub use badges::{AchievementBadge, ProvenanceRecord};
+pub use rarity::RarityTier;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
     Env, String, Symbol,
 };
-pub use badges::{AchievementBadge, ProvenanceRecord};
-pub use rarity::RarityTier;
 
-// ── Errors (SC-HARD-20: range 400+) ──────────────────────────────────────────
+// ---- Errors (SC-HARD-20: range 400+) ----
 
 /// Typed contract errors for the certificate NFT contract.
 ///
@@ -19,18 +19,20 @@ pub use rarity::RarityTier;
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
 pub enum CertError {
-    /// `400` — A certificate has already been minted for this student and course.
+    /// `400` - A certificate has already been minted for this student and course.
     AlreadyMinted = 400,
-    /// `401` — Caller is not the admin.
+    /// `401` - Caller is not the admin.
     Unauthorized = 401,
-    /// `402` — Badge is soulbound and cannot be transferred.
+    /// `402` - Badge is soulbound and cannot be transferred.
     SoulboundNonTransferable = 402,
-    /// `403` — Requested tier upgrade is invalid or prerequisites unmet.
+    /// `403` - Requested tier upgrade is invalid or prerequisites unmet.
     InvalidTierUpgrade = 403,
-    /// `404` — Requested badge ID was not found.
+    /// `404` - Requested badge ID was not found.
     BadgeNotFound = 404,
-    /// `405` — Insufficient completed milestones for this tier.
+    /// `405` - Insufficient completed milestones for this tier.
     InsufficientMilestones = 405,
+    /// `406` - Badge transfer attempted; badges are non-transferable.
+    NonTransferable = 406,
 }
 
 #[contracttype]
@@ -114,6 +116,103 @@ impl CertificateNFTContract {
             (token_id, current_recipient, new_recipient),
         );
     }
+
+    /// Mints a new tiered achievement badge to a student.
+    pub fn mint_badge(
+        env: Env,
+        admin: Address,
+        student: Address,
+        course_id: String,
+        tier: RarityTier,
+        metadata_uri: String,
+        initial_milestone: String,
+    ) -> u64 {
+        admin.require_auth();
+
+        let badge_id: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::BadgeCounter)
+            .unwrap_or(1);
+        env.storage()
+            .persistent()
+            .set(&DataKey::BadgeCounter, &(badge_id + 1));
+
+        let badge = match AchievementBadge::new(
+            &env,
+            badge_id,
+            student.clone(),
+            admin.clone(),
+            course_id.clone(),
+            tier,
+            metadata_uri,
+            initial_milestone,
+        ) {
+            Ok(b) => b,
+            Err(e) => panic_with_error!(&env, e),
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Badge(badge_id), &badge);
+
+        let topics: (Symbol, Address, u64) = (symbol_short!("badge_mnt"), student, badge_id);
+        env.events().publish(topics, badge_id);
+
+        badge_id
+    }
+
+    /// Returns the badge with provenance and milestones.
+    pub fn get_badge(env: Env, badge_id: u64) -> AchievementBadge {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Badge(badge_id))
+            .unwrap_or_else(|| panic_with_error!(&env, CertError::BadgeNotFound))
+    }
+
+    /// Adds a completed course milestone to an existing badge.
+    pub fn add_badge_milestone(env: Env, admin: Address, badge_id: u64, milestone: String) {
+        admin.require_auth();
+        let mut badge: AchievementBadge = Self::get_badge(env.clone(), badge_id);
+        badge.add_milestone(&env, milestone);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Badge(badge_id), &badge);
+    }
+
+    /// Upgrades badge rarity tier after verifying prerequisite milestones.
+    pub fn upgrade_badge_tier(
+        env: Env,
+        admin: Address,
+        badge_id: u64,
+        target_tier: RarityTier,
+        new_metadata_uri: String,
+    ) {
+        admin.require_auth();
+        let mut badge: AchievementBadge = Self::get_badge(env.clone(), badge_id);
+        if let Err(e) = badge.upgrade_tier(&env, target_tier, new_metadata_uri) {
+            panic_with_error!(&env, e);
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::Badge(badge_id), &badge);
+    }
+
+    /// Strictly enforces soulbound non-transferability.
+    pub fn transfer(env: Env, _from: Address, _to: Address, _badge_id: u64) {
+        AchievementBadge::assert_transfer_blocked(&env);
+    }
+
+    /// Strictly enforces soulbound non-transferability.
+    pub fn transfer_from(
+        env: Env,
+        _spender: Address,
+        _from: Address,
+        _to: Address,
+        _badge_id: u64,
+    ) {
+        AchievementBadge::assert_transfer_blocked(&env);
+    }
 }
 
 #[cfg(test)]
@@ -158,83 +257,6 @@ mod tests {
         let updated_royalty = client.royalty_info(&token_id, &20_000u128);
         assert_eq!(updated_royalty.recipient, Some(new_designer));
         assert_eq!(updated_royalty.royalty_amount, 1_000u128);
-    /// Mints a new tiered achievement badge to a student.
-    pub fn mint_badge(
-        env: Env,
-        admin: Address,
-        student: Address,
-        course_id: String,
-        tier: RarityTier,
-        metadata_uri: String,
-        initial_milestone: String,
-    ) -> u64 {
-        admin.require_auth();
-
-        let badge_id: u64 = env.storage().persistent().get(&DataKey::BadgeCounter).unwrap_or(1);
-        env.storage().persistent().set(&DataKey::BadgeCounter, &(badge_id + 1));
-
-        let badge = match AchievementBadge::new(
-            &env,
-            badge_id,
-            student.clone(),
-            admin.clone(),
-            course_id.clone(),
-            tier,
-            metadata_uri,
-            initial_milestone,
-        ) {
-            Ok(b) => b,
-            Err(e) => panic_with_error!(&env, e),
-        };
-
-        env.storage().persistent().set(&DataKey::Badge(badge_id), &badge);
-
-        let topics: (Symbol, Address, u64) = (symbol_short!("badge_mnt"), student, badge_id);
-        env.events().publish(topics, badge_id);
-
-        badge_id
-    }
-
-    /// Returns the badge with provenance and milestones.
-    pub fn get_badge(env: Env, badge_id: u64) -> AchievementBadge {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Badge(badge_id))
-            .unwrap_or_else(|| panic_with_error!(&env, CertError::BadgeNotFound))
-    }
-
-    /// Adds a completed course milestone to an existing badge.
-    pub fn add_badge_milestone(env: Env, admin: Address, badge_id: u64, milestone: String) {
-        admin.require_auth();
-        let mut badge: AchievementBadge = Self::get_badge(env.clone(), badge_id);
-        badge.add_milestone(&env, milestone);
-        env.storage().persistent().set(&DataKey::Badge(badge_id), &badge);
-    }
-
-    /// Upgrades badge rarity tier after verifying prerequisite milestones.
-    pub fn upgrade_badge_tier(
-        env: Env,
-        admin: Address,
-        badge_id: u64,
-        target_tier: RarityTier,
-        new_metadata_uri: String,
-    ) {
-        admin.require_auth();
-        let mut badge: AchievementBadge = Self::get_badge(env.clone(), badge_id);
-        if let Err(e) = badge.upgrade_tier(&env, target_tier, new_metadata_uri) {
-            panic_with_error!(&env, e);
-        }
-        env.storage().persistent().set(&DataKey::Badge(badge_id), &badge);
-    }
-
-    /// Strictly enforces soulbound non-transferability.
-    pub fn transfer(env: Env, _from: Address, _to: Address, _badge_id: u64) {
-        AchievementBadge::assert_transfer_blocked(&env);
-    }
-
-    /// Strictly enforces soulbound non-transferability.
-    pub fn transfer_from(env: Env, _spender: Address, _from: Address, _to: Address, _badge_id: u64) {
-        AchievementBadge::assert_transfer_blocked(&env);
     }
 }
 

@@ -4,11 +4,13 @@ import {
   WebSocketMessage,
   getWebSocketClient,
 } from '@/lib/websocket';
+import { getSessionBroadcastManager } from '@/services/session/broadcastSync';
 
 export interface UseWebSocketOptions {
   url?: string;
   token?: string | null;
   autoConnect?: boolean;
+  preventDuplicateTabs?: boolean;
   channels?: string[];
   heartbeatIntervalMs?: number;
   heartbeatTimeoutMs?: number;
@@ -69,18 +71,40 @@ export const useWebSocket = (urlOrOptions?: string | UseWebSocketOptions) => {
       setError(err.message);
     });
 
-    options.channels.forEach((channel) => client.subscribe(channel));
+    options.channels?.forEach((channel) => client.subscribe(channel));
 
-    if (options.autoConnect ?? true) {
-      client.connect();
+    const connectIfAllowed = () => {
+      if (options.preventDuplicateTabs) {
+        if (getSessionBroadcastManager().isLeader()) {
+          client.connect();
+        } else {
+          client.disconnect();
+        }
+      } else if (options.autoConnect ?? true) {
+        client.connect();
+      }
+    };
+
+    connectIfAllowed();
+
+    let unsubLeadership: (() => void) | undefined;
+    if (options.preventDuplicateTabs) {
+      unsubLeadership = getSessionBroadcastManager().onLeadershipChange((isLeader) => {
+        if (isLeader) {
+          client.connect();
+        } else {
+          client.disconnect();
+        }
+      });
     }
 
     return () => {
       unsubscribeStatus();
       unsubscribeMessage();
       unsubscribeError();
+      unsubLeadership?.();
     };
-  }, [options.token, options.autoConnect, options.channels?.join(',')]);
+  }, [options.token, options.autoConnect, options.preventDuplicateTabs, options.channels?.join(',')]);
 
   return {
     status,

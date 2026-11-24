@@ -100,7 +100,8 @@ export function getProductionCSP(nonce?: string): CSPConfig {
   const scriptSrc = [
     "'self'",
     "'strict-dynamic'",
-    ...(nonce ? [`'nonce-${nonce}'`] : []),
+    'https://cdn.jsdelivr.net',
+    ...(nonce ? [`'nonce-${nonce}'`] : ["'nonce-{nonce}'"]),
   ];
 
   return {
@@ -111,8 +112,8 @@ export function getProductionCSP(nonce?: string): CSPConfig {
       // Scripts: nonce + strict-dynamic only (no unsafe-inline / unsafe-eval)
       'script-src': scriptSrc,
 
-      // Styles: self only – inline styles must be avoided in production
-      'style-src': ["'self'"],
+      // Styles: self and trusted cdn
+      'style-src': ["'self'", 'https://cdn.jsdelivr.net'],
 
       // Images: self, data URIs, blobs and HTTPS
       'img-src': ["'self'", 'data:', 'blob:', 'https:'],
@@ -190,8 +191,8 @@ export function getDevelopmentCSP(): CSPConfig {
     directives: {
       'default-src': ["'self'"],
       // unsafe-eval needed for Next.js HMR / source maps in dev only
-      'script-src': ["'self'", "'unsafe-eval'", "'unsafe-inline'"],
-      'style-src': ["'self'", "'unsafe-inline'"],
+      'script-src': ["'self'", "'unsafe-eval'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+      'style-src': ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
       'img-src': ["'self'", 'data:', 'blob:', 'https:', 'http:'],
       'font-src': ["'self'", 'data:'],
       'connect-src': [

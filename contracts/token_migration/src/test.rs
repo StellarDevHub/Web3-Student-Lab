@@ -1,5 +1,9 @@
 use super::*;
-use soroban_sdk::{contract, contractimpl, testutils::{Address as _, Ledger as _}, Env};
+use soroban_sdk::{
+    contract, contractimpl,
+    testutils::{Address as _, Ledger as _},
+    token, Address, Env,
+};
 
 /// Minimal legacy token: tracks transfers but otherwise a no-op.
 #[contract]
@@ -19,6 +23,10 @@ impl MockLegacyToken {
     ) {
     }
     #[allow(dead_code)]
+    pub fn burn_from(_env: Env, _spender: Address, _from: Address, _amount: i128) {}
+    #[allow(dead_code)]
+    pub fn burn(_env: Env, _from: Address, _amount: i128) {}
+    #[allow(dead_code)]
     pub fn balance(_env: Env, _id: Address) -> i128 {
         0
     }
@@ -32,6 +40,8 @@ struct MockNewToken;
 impl MockNewToken {
     #[allow(dead_code)]
     pub fn mint(_env: Env, _to: Address, _amount: i128) {}
+    #[allow(dead_code)]
+    pub fn transfer(_env: Env, _from: Address, _to: Address, _amount: i128) {}
 }
 
 fn setup(
@@ -180,14 +190,7 @@ fn test_token_migration_vesting_cliff_and_pro_rata() {
     let beneficiary = Address::generate(&env);
 
     // 50,000 tokens, 100 ledgers cliff, 500 ledgers total duration
-    let sched_id = client.create_vesting_schedule(
-        &admin,
-        &beneficiary,
-        &50_000,
-        &100,
-        &500,
-        &true,
-    );
+    let sched_id = client.create_vesting_schedule(&admin, &beneficiary, &50_000, &100, &500, &true);
 
     // Prior to cliff: 0 claimable
     env.ledger().with_mut(|li| li.sequence_number += 80);
@@ -211,3 +214,81 @@ fn test_token_migration_vesting_cliff_and_pro_rata() {
     assert_eq!(claimable, 20_000);
 }
 
+#[test]
+fn fractional_ratio_requires_exact_whole_token_conversion_and_burns_legacy() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let old_token_admin = Address::generate(&env);
+    let contract_id = env.register(TokenMigrationContract, ());
+    let old_token_id = env
+        .register_stellar_asset_contract_v2(old_token_admin.clone())
+        .address();
+    let new_token_id = env
+        .register_stellar_asset_contract_v2(contract_id.clone())
+        .address();
+    let old_token = token::Client::new(&env, &old_token_id);
+    let old_token_admin_client = token::StellarAssetClient::new(&env, &old_token_id);
+    let new_token = token::Client::new(&env, &new_token_id);
+    let client = TokenMigrationContractClient::new(&env, &contract_id);
+    old_token_admin_client.mint(&user, &10);
+    client.initialize_with_ratio(
+        &admin,
+        &old_token_id,
+        &new_token_id,
+        &3,
+        &2,
+        &(env.ledger().timestamp() + 1_000),
+    );
+    old_token.approve(&user, &contract_id, &10, &(env.ledger().sequence() + 100));
+
+    assert!(client.try_migrate(&user, &1).is_err());
+    assert_eq!(old_token.balance(&user), 10);
+    assert_eq!(new_token.balance(&user), 0);
+
+    client.migrate(&user, &2);
+    assert_eq!(old_token.balance(&user), 8);
+    assert_eq!(old_token.balance(&contract_id), 0);
+    assert_eq!(new_token.balance(&user), 3);
+    assert_eq!(client.ratio_denominator(), 2);
+}
+
+#[test]
+fn vested_migration_holds_new_tokens_until_claim() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let old_token_admin = Address::generate(&env);
+    let contract_id = env.register(TokenMigrationContract, ());
+    let old_token_id = env
+        .register_stellar_asset_contract_v2(old_token_admin.clone())
+        .address();
+    let new_token_id = env
+        .register_stellar_asset_contract_v2(contract_id.clone())
+        .address();
+    let old_token = token::Client::new(&env, &old_token_id);
+    let old_token_admin_client = token::StellarAssetClient::new(&env, &old_token_id);
+    let new_token = token::Client::new(&env, &new_token_id);
+    let client = TokenMigrationContractClient::new(&env, &contract_id);
+    old_token_admin_client.mint(&user, &100);
+    client.initialize(
+        &admin,
+        &old_token_id,
+        &new_token_id,
+        &2,
+        &(env.ledger().timestamp() + 1_000),
+    );
+    old_token.approve(&user, &contract_id, &100, &(env.ledger().sequence() + 100));
+
+    let schedule_id = client.migrate_vested(&user, &100, &0, &100);
+    assert_eq!(old_token.balance(&user), 0);
+    assert_eq!(new_token.balance(&user), 0);
+    assert_eq!(new_token.balance(&contract_id), 200);
+
+    env.ledger().with_mut(|ledger| ledger.sequence_number += 50);
+    assert_eq!(client.claim_vesting(&user, &schedule_id), 100);
+    assert_eq!(new_token.balance(&user), 100);
+    assert_eq!(new_token.balance(&contract_id), 100);
+}

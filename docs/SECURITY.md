@@ -21,7 +21,7 @@ We use the following service level objectives for security issues identified thr
 
 ### Triage Workflow
 
-1. Automated scanners (`cargo-audit`, `npm audit`, Dependabot) raise issues in CI.
+1. Automated scanners (`cargo-audit`, `npm audit`) raise issues in CI.
 2. Security team reviews findings daily and assigns severity.
 3. Critical/high issues block merges until remediated or accepted with documented risk.
 4. Remediation PRs are labeled `security` and reviewed by at least one maintainer.
@@ -33,7 +33,6 @@ CI runs continuous vulnerability checks on every commit:
 
 - `cargo-audit` on `contracts/Cargo.lock`
 - `npm audit --audit-level=high` on `frontend` and `backend`
-- Dependabot opens automated PRs for outdated or vulnerable dependencies
 
 ## Secure Development Practices
 

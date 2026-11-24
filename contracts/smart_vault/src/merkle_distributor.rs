@@ -61,15 +61,17 @@ impl MerkleDistributor {
     ) -> bool {
         let mut current = leaf.clone();
         for sibling in proof.iter() {
-            let mut combined = Bytes::new(env);
-            if current.to_array() < sibling.to_array() {
-                combined.append(&current.clone().into());
-                combined.append(&sibling.clone().into());
+            let current_array = current.to_array();
+            let sibling_array = sibling.to_array();
+            let mut pair = [0u8; 64];
+            if current_array < sibling_array {
+                pair[..32].copy_from_slice(&current_array);
+                pair[32..].copy_from_slice(&sibling_array);
             } else {
-                combined.append(&sibling.clone().into());
-                combined.append(&current.clone().into());
+                pair[..32].copy_from_slice(&sibling_array);
+                pair[32..].copy_from_slice(&current_array);
             }
-            current = env.crypto().sha256(&combined).into();
+            current = env.crypto().sha256(&Bytes::from_array(env, &pair)).into();
         }
         current == *root
     }
@@ -98,7 +100,9 @@ impl MerkleDistributor {
             claimed_amount: 0,
             start_time: env.ledger().timestamp(),
         };
-        env.storage().instance().set(&DistributorKey::Config, &config);
+        env.storage()
+            .instance()
+            .set(&DistributorKey::Config, &config);
     }
 
     /// Retrieves current airdrop distribution configuration.
@@ -115,13 +119,7 @@ impl MerkleDistributor {
     }
 
     /// Processes claim with cryptographic Merkle proof and marks index in bitmap.
-    pub fn claim(
-        env: &Env,
-        index: u32,
-        account: Address,
-        amount: i128,
-        proof: Vec<BytesN<32>>,
-    ) {
+    pub fn claim(env: &Env, index: u32, account: Address, amount: i128, proof: Vec<BytesN<32>>) {
         account.require_auth();
         if amount <= 0 {
             panic_with_error!(env, DistributorError::ZeroAmount);
@@ -149,7 +147,9 @@ impl MerkleDistributor {
             panic_with_error!(env, DistributorError::InsufficientRemaining);
         }
 
-        env.storage().instance().set(&DistributorKey::Config, &config);
+        env.storage()
+            .instance()
+            .set(&DistributorKey::Config, &config);
 
         if let Some(token_addr) = config.token {
             let client = soroban_sdk::token::Client::new(env, &token_addr);
@@ -166,7 +166,11 @@ impl MerkleDistributor {
         }
 
         let current_time = env.ledger().timestamp();
-        if current_time < config.start_time.saturating_add(AIRDROP_CLAWBACK_WINDOW_SECONDS) {
+        if current_time
+            < config
+                .start_time
+                .saturating_add(AIRDROP_CLAWBACK_WINDOW_SECONDS)
+        {
             panic_with_error!(env, DistributorError::ClawbackWindowActive);
         }
 
@@ -177,7 +181,9 @@ impl MerkleDistributor {
 
         if remaining > 0 {
             config.claimed_amount = config.total_amount;
-            env.storage().instance().set(&DistributorKey::Config, &config);
+            env.storage()
+                .instance()
+                .set(&DistributorKey::Config, &config);
 
             if let Some(token_addr) = config.token {
                 let client = soroban_sdk::token::Client::new(env, &token_addr);

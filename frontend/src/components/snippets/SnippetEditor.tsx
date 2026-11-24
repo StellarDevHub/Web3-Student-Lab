@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import '@/lib/editor/monaco-loader';
 import Editor, { DiffEditor } from '@monaco-editor/react';
 import {
   Save,

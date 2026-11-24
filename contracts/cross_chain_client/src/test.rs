@@ -12,6 +12,8 @@ use ed25519_dalek::{Signer, SigningKey};
 use soroban_sdk::testutils::{Address as _, Ledger as _};
 use soroban_sdk::Env;
 
+extern crate std;
+
 fn setup(env: &Env) -> (CrossChainClientClient<'static>, Address) {
     let admin = Address::generate(env);
     let contract_id = env.register(CrossChainClient, ());
@@ -34,6 +36,46 @@ fn compute_root(env: &Env, leaf: &BytesN<32>, proof: &Vec<BytesN<32>>) -> BytesN
             .into();
     }
     current
+}
+
+fn rlp_string(value: &[u8]) -> std::vec::Vec<u8> {
+    if value.len() == 1 && value[0] < 0x80 {
+        return std::vec![value[0]];
+    }
+    let mut encoded = std::vec::Vec::new();
+    if value.len() < 56 {
+        encoded.push(0x80 + value.len() as u8);
+    } else {
+        let length = (value.len() as u32).to_be_bytes();
+        let first_nonzero = length.iter().position(|byte| *byte != 0).unwrap();
+        let length_bytes = &length[first_nonzero..];
+        encoded.push(0xb7 + length_bytes.len() as u8);
+        encoded.extend_from_slice(length_bytes);
+    }
+    encoded.extend_from_slice(value);
+    encoded
+}
+
+fn rlp_list(items: &[u8]) -> std::vec::Vec<u8> {
+    let mut encoded = std::vec::Vec::new();
+    if items.len() < 56 {
+        encoded.push(0xc0 + items.len() as u8);
+    } else {
+        let length = (items.len() as u32).to_be_bytes();
+        let first_nonzero = length.iter().position(|byte| *byte != 0).unwrap();
+        let length_bytes = &length[first_nonzero..];
+        encoded.push(0xf7 + length_bytes.len() as u8);
+        encoded.extend_from_slice(length_bytes);
+    }
+    encoded.extend_from_slice(items);
+    encoded
+}
+
+fn valid_empty_receipt() -> std::vec::Vec<u8> {
+    let mut contents = std::vec![0x01, 0x01];
+    contents.extend_from_slice(&rlp_string(&[0u8; 256]));
+    contents.push(0xc0);
+    rlp_list(&contents)
 }
 
 #[test]

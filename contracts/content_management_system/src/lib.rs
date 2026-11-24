@@ -418,7 +418,14 @@ impl ContentManagementSystem {
         price: i128,
         duration_seconds: u64,
     ) -> Result<licensing::LicenseTerms, Error> {
-        licensing::set_license_terms(&env, author, content_id, payment_token, price, duration_seconds)
+        licensing::set_license_terms(
+            &env,
+            author,
+            content_id,
+            payment_token,
+            price,
+            duration_seconds,
+        )
     }
 
     /// Get licensing terms for a content item

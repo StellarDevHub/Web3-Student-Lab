@@ -22,7 +22,7 @@ enum TimelockKey {
 /// delay and is visible as a new event.
 pub fn propose_admin(env: &Env, caller: &Address, candidate: &Address) -> u64 {
     caller.require_auth();
-    crate::require_admin!(env, caller);
+    crate::require_admin(env, caller);
     if candidate == caller {
         soroban_sdk::panic_with_error!(env, AcError::InvalidAdminProposal);
     }
@@ -71,7 +71,7 @@ pub fn claim_admin(env: &Env, candidate: &Address) {
 /// Cancel a pending transfer. Only the current admin can cancel.
 pub fn cancel_admin_proposal(env: &Env, caller: &Address) {
     caller.require_auth();
-    crate::require_admin!(env, caller);
+    crate::require_admin(env, caller);
     let proposal = pending_admin(env)
         .unwrap_or_else(|| soroban_sdk::panic_with_error!(env, AcError::NoPendingTransfer));
     env.storage().instance().remove(&TimelockKey::PendingAdmin);

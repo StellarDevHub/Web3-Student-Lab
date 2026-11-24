@@ -1,9 +1,9 @@
 //! Decentralized Bounty Board with milestone claim validation, auto-refund, and collaborative split payouts.
 
+use crate::{DataKey, FreelanceError};
 use soroban_sdk::{
     contracttype, panic_with_error, symbol_short, token, Address, BytesN, Env, Symbol, Vec,
 };
-use crate::{DataKey, FreelanceError};
 
 const BPS_DENOMINATOR: u32 = 10_000;
 
@@ -77,19 +77,17 @@ pub fn create_bounty(
         split_bps: Vec::new(env),
     };
 
-    env.storage().instance().set(&DataKey::Bounty(bounty_id), &bounty);
-    env.events().publish((symbol_short!("bounty_c"), funder), (bounty_id, amount));
+    env.storage()
+        .instance()
+        .set(&DataKey::Bounty(bounty_id), &bounty);
+    env.events()
+        .publish((symbol_short!("bounty_c"), funder), (bounty_id, amount));
 
     bounty_id
 }
 
 /// Submits work evidence hash for single contributor claim.
-pub fn claim_bounty(
-    env: &Env,
-    claimant: Address,
-    bounty_id: u64,
-    evidence_hash: BytesN<32>,
-) {
+pub fn claim_bounty(env: &Env, claimant: Address, bounty_id: u64, evidence_hash: BytesN<32>) {
     claimant.require_auth();
     let mut bounty: Bounty = env
         .storage()
@@ -115,8 +113,11 @@ pub fn claim_bounty(
     bounty.claimants = claimants;
     bounty.split_bps = split_bps;
 
-    env.storage().instance().set(&DataKey::Bounty(bounty_id), &bounty);
-    env.events().publish((symbol_short!("bounty_m"), claimant), bounty_id);
+    env.storage()
+        .instance()
+        .set(&DataKey::Bounty(bounty_id), &bounty);
+    env.events()
+        .publish((symbol_short!("bounty_m"), claimant), bounty_id);
 }
 
 /// Submits collaborative work evidence with proportional split basis points.
@@ -162,8 +163,11 @@ pub fn claim_bounty_collaborative(
     bounty.claimants = claimants;
     bounty.split_bps = split_bps;
 
-    env.storage().instance().set(&DataKey::Bounty(bounty_id), &bounty);
-    env.events().publish((symbol_short!("bounty_cl"), submitter), bounty_id);
+    env.storage()
+        .instance()
+        .set(&DataKey::Bounty(bounty_id), &bounty);
+    env.events()
+        .publish((symbol_short!("bounty_cl"), submitter), bounty_id);
 }
 
 /// Verifies submitted pull request evidence and releases payouts (single or split).
@@ -207,8 +211,11 @@ pub fn verify_and_payout(env: &Env, funder: Address, bounty_id: u64) {
     }
 
     bounty.status = BountyStatus::Completed;
-    env.storage().instance().set(&DataKey::Bounty(bounty_id), &bounty);
-    env.events().publish((symbol_short!("bounty_p"), funder), bounty_id);
+    env.storage()
+        .instance()
+        .set(&DataKey::Bounty(bounty_id), &bounty);
+    env.events()
+        .publish((symbol_short!("bounty_p"), funder), bounty_id);
 }
 
 /// Allows funder to claim a 100% refund once expiration has elapsed without valid completion.
@@ -241,8 +248,11 @@ pub fn claim_refund(env: &Env, funder: Address, bounty_id: u64) {
     token_client.transfer(&contract_addr, &funder, &bounty.amount);
 
     bounty.status = BountyStatus::Refunded;
-    env.storage().instance().set(&DataKey::Bounty(bounty_id), &bounty);
-    env.events().publish((symbol_short!("bounty_r"), funder), bounty_id);
+    env.storage()
+        .instance()
+        .set(&DataKey::Bounty(bounty_id), &bounty);
+    env.events()
+        .publish((symbol_short!("bounty_r"), funder), bounty_id);
 }
 
 /// Retrieves bounty details by ID.

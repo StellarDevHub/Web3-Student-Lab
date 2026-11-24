@@ -210,7 +210,7 @@ impl ParametricInsuranceContract {
         let policy = Policy {
             id,
             buyer,
-            trigger_key,
+            trigger_key: trigger_key.clone(),
             trigger_value,
             trigger_above,
             premium,

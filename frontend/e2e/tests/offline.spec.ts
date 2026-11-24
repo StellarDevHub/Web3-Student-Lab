@@ -59,11 +59,13 @@ test.describe('offline experience', () => {
     await expect(page.getByRole('heading', { name: /back online/i })).toBeVisible();
 
     await context.setOffline(true);
+    await page.evaluate(() => window.dispatchEvent(new Event('offline')));
     await expect(page.getByRole('heading', { name: /you're offline/i })).toBeVisible();
     await expect(page.getByText('Available offline')).toBeVisible();
     await expect(page.getByRole('button', { name: /try again/i })).toBeVisible();
 
     await context.setOffline(false);
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
     await expect(page.getByRole('heading', { name: /back online/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /reload now/i })).toBeVisible();
   });

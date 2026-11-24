@@ -3,8 +3,8 @@
 //! Provides cryptographic verification of on-chain collusion proofs submitted
 //! by independent investigators to detect Sybil clusters gaming quadratic funding pools.
 
-use soroban_sdk::{contracttype, Address, Bytes, BytesN, Env, Vec};
 use crate::slasher::SlasherError;
+use soroban_sdk::{contracttype, Address, Bytes, BytesN, Env, Vec};
 
 /// Cryptographic evidence submitted by an investigator proving collusive cluster activity.
 #[contracttype]

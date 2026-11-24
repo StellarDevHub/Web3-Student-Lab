@@ -133,3 +133,6 @@ impl StudentRecordV2 {
         env.storage().persistent().get(&ImplDataKey::Name(student))
     }
 }
+
+#[cfg(test)]
+mod tests;

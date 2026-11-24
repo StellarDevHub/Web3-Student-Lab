@@ -12,7 +12,7 @@ services:
       # Switch to sentinel or cluster as needed for HA testing:
       #   REDIS_MODE=sentinel  |  REDIS_MODE=cluster  |  REDIS_MODE=standalone
       - REDIS_MODE=${REDIS_MODE:-sentinel}
-      - REDIS_SENTINELS=redis-sentinel-1:26379,redis-sentinel-2:26380,redis-sentinel-3:26381
+      - REDIS_SENTINELS=redis-sentinel-1:26379,redis-sentinel-2:26379,redis-sentinel-3:26379
       - REDIS_SENTINEL_NAME=mymaster
       - REDIS_CLUSTER_NODES=redis-cluster-1:6381,redis-cluster-2:6382,redis-cluster-3:6383
     depends_on:
@@ -32,3 +32,32 @@ services:
         condition: service_healthy
       redis-cluster-3:
         condition: service_healthy
+
+  nginx:
+    image: nginx:alpine
+    container_name: web3-student-lab-proxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - certs_data:/etc/nginx/certs:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+      indexer:
+        condition: service_healthy
+    networks:
+      - web3-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  certs_data:
