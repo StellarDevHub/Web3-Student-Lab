@@ -43,6 +43,7 @@ members = [
     "certificate",
     "storage_ttl_manager",
     "peer_review",
+    "yield_farming",
     "contract_events",
     "automated_testing_suite",
 ]
