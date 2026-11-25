@@ -21,6 +21,10 @@ import {
   WASM_PAGE_SIZE_BYTES,
   type WasmInspection,
 } from '../simulator/wasmModuleInspector.js';
+import {
+  countWasmInstructions,
+  MAX_WEIGHTED_INSTRUCTIONS,
+} from '../simulator/wasmAstInspector.js';
 
 // tsconfig targets lib ES2022 without DOM, which carries no WebAssembly typings;
 // declare just the static surface this module uses (the runtime always has it).
@@ -47,7 +51,8 @@ export type WasmValidationCode =
   | 'memory-unbounded'
   | 'memory-limit-exceeded'
   | 'unsupported-feature'
-  | 'missing-export';
+  | 'missing-export'
+  | 'ast-too-complex';
 
 export interface WasmValidationIssue {
   code: WasmValidationCode;
@@ -164,6 +169,21 @@ export function validateWasmModule(
   // Validation only — this does not compile or execute anything.
   if (!WebAssembly.validate(bytes)) {
     return fail('invalid-module', 'Module failed WebAssembly structural validation.');
+  }
+
+  // -------------------------------------------------------------------------
+  // AST Instruction Ceiling — BE-074
+  // Walk the Code section at the opcode level and accumulate a weighted
+  // instruction budget.  Reject before spawning any worker so that
+  // pathologically large modules cannot tie up the metering pass itself.
+  // -------------------------------------------------------------------------
+  const astResult = countWasmInstructions(bytes);
+  if (astResult.exceeded) {
+    return fail(
+      'ast-too-complex',
+      `Module contains too many instructions (weighted budget ${astResult.weightedCount} ≥ ` +
+        `ceiling ${MAX_WEIGHTED_INSTRUCTIONS}). Reduce code size and avoid pathological control flow.`
+    );
   }
 
   const sections = scanSections(bytes);

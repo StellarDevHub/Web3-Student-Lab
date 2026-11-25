@@ -35,6 +35,7 @@ import os from 'os';
 import { Worker } from 'worker_threads';
 import logger from '../utils/logger.js';
 import { validateWasmModule, type WasmValidationCode } from '../utils/wasmValidator.js';
+import { GAS_COST_TABLE, MAX_WEIGHTED_INSTRUCTIONS } from '../simulator/wasmAstInspector.js';
 
 export const SANDBOX_MEMORY_LIMIT_BYTES = 50 * 1024 * 1024;
 export const SANDBOX_GAS_LIMIT = 1_000_000;
@@ -42,6 +43,12 @@ export const SANDBOX_TIMEOUT_MS = 2_000;
 /** Budget for spawning the worker and metering/compiling the module, separate from execution time. */
 export const SANDBOX_STARTUP_TIMEOUT_MS = 10_000;
 export const MAX_TEST_CASES = 64;
+
+/**
+ * Re-exported from wasmAstInspector for callers that want to understand the
+ * calibration without depending on the simulator layer directly.
+ */
+export { GAS_COST_TABLE, MAX_WEIGHTED_INSTRUCTIONS };
 
 export type SandboxTerminationReason =
   | 'completed'
@@ -51,6 +58,7 @@ export type SandboxTerminationReason =
   | 'stack-overflow'
   | 'trap'
   | 'validation-failed'
+  | 'ast-too-complex'
   | 'internal-error';
 
 export type WasmArgument = number | string;
@@ -113,6 +121,11 @@ type WorkerToHostMessage =
  * The worker's program. Kept as a source string and spawned with
  * `eval: true` so it runs identically under tsx, compiled `dist/` output and
  * babel-jest without depending on how the host module was loaded.
+ *
+ * The `costTable` passed to `meterWASM` weights loop back-edges and call
+ * instructions at higher gas cost than sequential arithmetic blocks, which
+ * calibrates the gas budget to reflect actual computational expense more
+ * accurately than a flat per-block charge.
  */
 const WORKER_SOURCE = `
 const { parentPort, workerData } = require('worker_threads');
@@ -122,6 +135,38 @@ const { wasm, tests, gasLimit, memoryLimitPages, importsMemory, gasCounter } = w
 const gas = new Int32Array(gasCounter);
 const OUT_OF_GAS = '__SANDBOX_OUT_OF_GAS__';
 const send = (msg) => parentPort.postMessage(msg);
+
+// ---------------------------------------------------------------------------
+// Calibrated cost table — BE-074
+//
+// wasm-metering inserts a usegas(N) call before every *basic block* (not
+// every opcode). The cost here is charged once per block entry, so a tight
+// loop body is charged on every iteration.
+//
+// Key design choices:
+//   code.loop  = 10  — each loop iteration costs 10; a 1M-gas budget allows
+//                       at most 100,000 unbounded iterations, which bounds
+//                       wall-clock time tightly even before the timer fires.
+//   code.call  = 10  — matches loop cost; recursive call chains hit the
+//                       limit quickly.
+//   code.DEFAULT = 1 — straight-line arithmetic is cheap.
+// ---------------------------------------------------------------------------
+const calibratedCostTable = {
+  'start': 0,
+  'type': { 'params': { 'DEFAULT': 0 }, 'return_type': { 'DEFAULT': 0 } },
+  'import': 0,
+  'code': {
+    'locals': { 'DEFAULT': 0 },
+    'code': {
+      'loop': 10,
+      'call': 10,
+      'call_indirect': 10,
+      'DEFAULT': 1,
+    },
+  },
+  'memory': 0,
+  'data': 0,
+};
 
 const classify = (err, gasExceeded) => {
   const message = err && err.message ? String(err.message) : String(err);
@@ -158,7 +203,10 @@ const sameValue = (actual, expected) => {
 
 let module;
 try {
-  const meteredBytes = metering.meterWASM(Buffer.from(wasm), { meterType: 'i32' });
+  const meteredBytes = metering.meterWASM(Buffer.from(wasm), {
+    meterType: 'i32',
+    costTable: calibratedCostTable,
+  });
   module = new WebAssembly.Module(meteredBytes);
 } catch (err) {
   send({ type: 'fatal', terminationReason: 'validation-failed', error: 'Unable to meter module: ' + (err && err.message ? err.message : String(err)) });
