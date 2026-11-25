@@ -8,7 +8,13 @@
 //!  - Constants meet the acceptance criteria (≥ 100,000 ledger bump target).
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Bytes, Env};
+use soroban_sdk::{
+    testutils::{
+        storage::{Instance as _, Persistent as _},
+        Address as _, Ledger as _,
+    },
+    Bytes, Env,
+};
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 
@@ -85,8 +91,8 @@ fn test_threshold_and_bump_constants_meet_acceptance_criteria() {
 
     assert_eq!(
         client.threshold(),
-        10_000,
-        "threshold must be 10,000 ledgers"
+        100_000,
+        "threshold must be 100,000 ledgers"
     );
 
     let bump = client.bump_amount();
@@ -101,9 +107,35 @@ fn test_threshold_and_bump_constants_meet_acceptance_criteria() {
         "instance bump must be ≥ 100,000 ledgers (got {instance_bump})"
     );
 
-    // Verify the exact values match the 30-day target.
-    assert_eq!(bump, 518_400);
-    assert_eq!(instance_bump, 518_400);
+    assert_eq!(bump, 500_000);
+    assert_eq!(instance_bump, 500_000);
+}
+
+#[test]
+fn test_ttl_is_bumped_after_threshold_is_crossed() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(StorageTTLManager, ());
+    let client = StorageTTLManagerClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    let user = Address::generate(&env);
+
+    client.set_user_data(&user, &42);
+    env.ledger()
+        .with_mut(|ledger| ledger.sequence_number += 450_001);
+    assert_eq!(client.get_user_data(&user), Some(42));
+
+    let (persistent_ttl, instance_ttl) = env.as_contract(&contract_id, || {
+        (
+            env.storage()
+                .persistent()
+                .get_ttl(&TTLKey::UserData(user.clone())),
+            env.storage().instance().get_ttl(),
+        )
+    });
+    assert!(persistent_ttl >= PERSISTENT_BUMP_LEDGERS);
+    assert!(instance_ttl >= INSTANCE_BUMP_LEDGERS);
 }
 
 /// Calling `inspect_and_bump` twice must produce the same count — the

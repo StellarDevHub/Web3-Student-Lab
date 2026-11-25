@@ -2,6 +2,7 @@
 //!
 //! Manages unallocated treasury reserves and token allocations.
 
+use soroban_certificate_contract::storage_ttl;
 use soroban_sdk::{contracttype, Address, Env};
 
 #[contracttype]
@@ -22,17 +23,23 @@ pub struct Treasury;
 
 impl Treasury {
     pub fn get_state(env: &Env) -> TreasuryState {
-        env.storage()
+        let key = TreasuryKey::State;
+        let state = env
+            .storage()
             .persistent()
-            .get(&TreasuryKey::State)
+            .get(&key)
             .unwrap_or(TreasuryState {
                 total_reserves: 0,
                 total_shares: 0,
-            })
+            });
+        storage_ttl::bump_persistent(env, &key);
+        state
     }
 
     pub fn set_state(env: &Env, state: &TreasuryState) {
-        env.storage().persistent().set(&TreasuryKey::State, state);
+        let key = TreasuryKey::State;
+        env.storage().persistent().set(&key, state);
+        storage_ttl::bump_persistent(env, &key);
     }
 
     pub fn deposit_reserves(env: &Env, amount: u128) {
@@ -42,10 +49,13 @@ impl Treasury {
     }
 
     pub fn get_shares(env: &Env, user: &Address) -> u128 {
-        env.storage()
+        let key = TreasuryKey::UserShares(user.clone());
+        let shares = env.storage()
             .persistent()
-            .get(&TreasuryKey::UserShares(user.clone()))
-            .unwrap_or(0)
+            .get(&key)
+            .unwrap_or(0);
+        storage_ttl::bump_persistent(env, &key);
+        shares
     }
 
     pub fn set_shares(env: &Env, user: &Address, shares: u128) {
@@ -56,9 +66,9 @@ impl Treasury {
         } else {
             state.total_shares = state.total_shares.saturating_sub(prev - shares);
         }
-        env.storage()
-            .persistent()
-            .set(&TreasuryKey::UserShares(user.clone()), &shares);
+        let key = TreasuryKey::UserShares(user.clone());
+        env.storage().persistent().set(&key, &shares);
+        storage_ttl::bump_persistent(env, &key);
         Self::set_state(env, &state);
     }
 }

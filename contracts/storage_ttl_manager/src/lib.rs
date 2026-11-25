@@ -22,9 +22,9 @@
 //!
 //! | Constant                   | Value    | Notes                         |
 //! |----------------------------|----------|-------------------------------|
-//! | `TTL_THRESHOLD_LEDGERS`    | 10,000   | Trigger bump below this TTL   |
-//! | `PERSISTENT_BUMP_LEDGERS`  | 518,400  | 30 days at 5 s/ledger        |
-//! | `INSTANCE_BUMP_LEDGERS`    | 518,400  | Matches persistent target     |
+//! | `TTL_THRESHOLD_LEDGERS`    | 100,000  | Trigger bump below this TTL   |
+//! | `PERSISTENT_BUMP_LEDGERS`  | 500,000  | Target persistent TTL         |
+//! | `INSTANCE_BUMP_LEDGERS`    | 500,000  | Target instance TTL            |
 //! | `TEMP_BUMP_LEDGERS`        | 17,280   | 1 day (scratchpads)          |
 
 use soroban_sdk::{
@@ -34,11 +34,11 @@ use soroban_sdk::{
 // ── Acceptance-criteria constants ────────────────────────────────────────────
 
 /// Bump threshold: extend when TTL falls below this many ledgers.
-pub const TTL_THRESHOLD_LEDGERS: u32 = 10_000;
+pub const TTL_THRESHOLD_LEDGERS: u32 = 100_000;
 /// Target TTL for persistent storage (≥100,000 ledgers per acceptance criteria).
-pub const PERSISTENT_BUMP_LEDGERS: u32 = 518_400; // 30 × 17,280
+pub const PERSISTENT_BUMP_LEDGERS: u32 = 500_000;
 /// Target TTL for instance storage (≥100,000 ledgers per acceptance criteria).
-pub const INSTANCE_BUMP_LEDGERS: u32 = 518_400;
+pub const INSTANCE_BUMP_LEDGERS: u32 = 500_000;
 /// Target TTL for temporary scratchpad storage.
 pub const TEMP_BUMP_LEDGERS: u32 = 17_280; // 1 × 17,280
 /// Threshold for temporary storage bumps.

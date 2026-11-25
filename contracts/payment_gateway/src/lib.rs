@@ -24,6 +24,7 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
     Env, Symbol, Vec,
 };
+use soroban_certificate_contract::storage_ttl;
 
 // ── Storage keys ────────────────────────────────────────────────────────────
 const ADMIN: Symbol = symbol_short!("ADMIN");
@@ -138,6 +139,7 @@ impl PaymentGateway {
     // ── Initialization ──────────────────────────────────────────────────────
 
     pub fn initialize(env: Env, admin: Address) {
+        storage_ttl::bump_instance(&env);
         admin.require_auth();
         env.storage().instance().set(&ADMIN, &admin);
         env.storage()
@@ -150,6 +152,7 @@ impl PaymentGateway {
     // ── Deposit ─────────────────────────────────────────────────────────────
 
     pub fn deposit(env: Env, user: Address, amount: i128) {
+        storage_ttl::bump_instance(&env);
         user.require_auth();
         Self::require_not_paused(&env);
         if amount <= 0 {
@@ -161,12 +164,14 @@ impl PaymentGateway {
             .persistent()
             .get(&DataKey::Balance(user.clone()))
             .unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &DataKey::Balance(user.clone()));
 
         balance = balance.checked_add(amount).expect("balance overflow");
 
         env.storage()
             .persistent()
             .set(&DataKey::Balance(user.clone()), &balance);
+        storage_ttl::bump_persistent(&env, &DataKey::Balance(user.clone()));
 
         let mut total: i128 = env.storage().instance().get(&TOTAL_DEPOSITED).unwrap_or(0);
         total = total.checked_add(amount).expect("total overflow");
@@ -179,6 +184,7 @@ impl PaymentGateway {
     // ── Withdraw ────────────────────────────────────────────────────────────
 
     pub fn withdraw(env: Env, user: Address, amount: i128) -> i128 {
+        storage_ttl::bump_instance(&env);
         user.require_auth();
         Self::require_not_paused(&env);
         if amount <= 0 {
@@ -190,6 +196,7 @@ impl PaymentGateway {
             .persistent()
             .get(&DataKey::Balance(user.clone()))
             .unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &DataKey::Balance(user.clone()));
 
         if balance < amount {
             panic_with_error!(&env, Error::InsufficientBalance);
@@ -199,6 +206,7 @@ impl PaymentGateway {
         env.storage()
             .persistent()
             .set(&DataKey::Balance(user.clone()), &balance);
+        storage_ttl::bump_persistent(&env, &DataKey::Balance(user.clone()));
 
         env.events()
             .publish((symbol_short!("withdraw"), user.clone()), amount);
@@ -216,6 +224,7 @@ impl PaymentGateway {
         metadata: Symbol,
         payment_id: u64,
     ) -> PaymentRecord {
+        storage_ttl::bump_instance(&env);
         payer.require_auth();
         Self::require_not_paused(&env);
         if amount <= 0 {
@@ -236,6 +245,7 @@ impl PaymentGateway {
             .persistent()
             .get(&DataKey::Balance(payer.clone()))
             .unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &DataKey::Balance(payer.clone()));
 
         if payer_balance < total_debit {
             panic_with_error!(&env, Error::InsufficientBalance);
@@ -247,17 +257,20 @@ impl PaymentGateway {
         env.storage()
             .persistent()
             .set(&DataKey::Balance(payer.clone()), &payer_balance);
+        storage_ttl::bump_persistent(&env, &DataKey::Balance(payer.clone()));
 
         let mut payee_balance: i128 = env
             .storage()
             .persistent()
             .get(&DataKey::Balance(payee.clone()))
             .unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &DataKey::Balance(payee.clone()));
 
         payee_balance = payee_balance.checked_add(amount).expect("payee overflow");
         env.storage()
             .persistent()
             .set(&DataKey::Balance(payee.clone()), &payee_balance);
+        storage_ttl::bump_persistent(&env, &DataKey::Balance(payee.clone()));
 
         let mut total_paid: i128 = env.storage().instance().get(&TOTAL_PAID_OUT).unwrap_or(0);
         total_paid = total_paid.checked_add(amount).expect("total overflow");
@@ -277,6 +290,7 @@ impl PaymentGateway {
         env.storage()
             .persistent()
             .set(&DataKey::Payment(payment_id), &record);
+        storage_ttl::bump_persistent(&env, &DataKey::Payment(payment_id));
 
         env.events()
             .publish((symbol_short!("payment"), payer, payee), amount);
@@ -287,6 +301,7 @@ impl PaymentGateway {
     // ── Refund ──────────────────────────────────────────────────────────────
 
     pub fn refund(env: Env, caller: Address, payment_id: u64) -> PaymentRecord {
+        storage_ttl::bump_instance(&env);
         caller.require_auth();
         Self::require_not_paused(&env);
 
@@ -296,6 +311,7 @@ impl PaymentGateway {
             .persistent()
             .get(&key)
             .unwrap_or_else(|| panic_with_error!(&env, Error::RecordNotFound));
+        storage_ttl::bump_persistent(&env, &key);
 
         // Only admin or original payer can request refund
         let admin: Address = env
@@ -318,6 +334,7 @@ impl PaymentGateway {
             .persistent()
             .get(&DataKey::Balance(record.payer.clone()))
             .unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &DataKey::Balance(record.payer.clone()));
 
         payer_balance = payer_balance
             .checked_add(record.amount)
@@ -325,12 +342,14 @@ impl PaymentGateway {
         env.storage()
             .persistent()
             .set(&DataKey::Balance(record.payer.clone()), &payer_balance);
+        storage_ttl::bump_persistent(&env, &DataKey::Balance(record.payer.clone()));
 
         let mut payee_balance: i128 = env
             .storage()
             .persistent()
             .get(&DataKey::Balance(record.payee.clone()))
             .unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &DataKey::Balance(record.payee.clone()));
 
         payee_balance = payee_balance
             .checked_sub(record.amount)
@@ -338,6 +357,7 @@ impl PaymentGateway {
         env.storage()
             .persistent()
             .set(&DataKey::Balance(record.payee.clone()), &payee_balance);
+        storage_ttl::bump_persistent(&env, &DataKey::Balance(record.payee.clone()));
 
         let refunded = PaymentRecord {
             id: record.id,
@@ -351,6 +371,7 @@ impl PaymentGateway {
         };
 
         env.storage().persistent().set(&key, &refunded);
+        storage_ttl::bump_persistent(&env, &key);
 
         env.events().publish((symbol_short!("refund"),), payment_id);
 
@@ -360,20 +381,29 @@ impl PaymentGateway {
     // ── View helpers ────────────────────────────────────────────────────────
 
     pub fn get_balance(env: Env, user: Address) -> i128 {
-        env.storage()
+        storage_ttl::bump_instance(&env);
+        let key = DataKey::Balance(user);
+        let value = env.storage()
             .persistent()
-            .get(&DataKey::Balance(user))
-            .unwrap_or(0)
+            .get(&key)
+            .unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &key);
+        value
     }
 
     pub fn get_payment(env: Env, payment_id: u64) -> PaymentRecord {
-        env.storage()
+        storage_ttl::bump_instance(&env);
+        let key = DataKey::Payment(payment_id);
+        let payment = env.storage()
             .persistent()
-            .get(&DataKey::Payment(payment_id))
-            .unwrap_or_else(|| panic_with_error!(&env, Error::RecordNotFound))
+            .get(&key)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::RecordNotFound));
+        storage_ttl::bump_persistent(&env, &key);
+        payment
     }
 
     pub fn get_admin(env: Env) -> Address {
+        storage_ttl::bump_instance(&env);
         env.storage()
             .instance()
             .get(&ADMIN)
@@ -381,6 +411,7 @@ impl PaymentGateway {
     }
 
     pub fn is_paused(env: Env) -> bool {
+        storage_ttl::bump_instance(&env);
         env.storage().instance().get(&PAUSED).unwrap_or(false)
     }
 
@@ -417,6 +448,7 @@ impl PaymentGateway {
 #[contractimpl]
 impl PaymentGateway {
     pub fn pause(env: Env, admin: Address) {
+        storage_ttl::bump_instance(&env);
         admin.require_auth();
         Self::require_admin(&env, &admin);
         env.storage().instance().set(&PAUSED, &true);
@@ -424,6 +456,7 @@ impl PaymentGateway {
     }
 
     pub fn unpause(env: Env, admin: Address) {
+        storage_ttl::bump_instance(&env);
         admin.require_auth();
         Self::require_admin(&env, &admin);
         env.storage().instance().set(&PAUSED, &false);
@@ -431,6 +464,7 @@ impl PaymentGateway {
     }
 
     pub fn update_fee_bps(env: Env, admin: Address, new_fee_bps: u32) {
+        storage_ttl::bump_instance(&env);
         admin.require_auth();
         Self::require_admin(&env, &admin);
         env.storage()
@@ -441,6 +475,7 @@ impl PaymentGateway {
     }
 
     pub fn transfer_admin(env: Env, admin: Address, new_admin: Address) {
+        storage_ttl::bump_instance(&env);
         admin.require_auth();
         Self::require_admin(&env, &admin);
         env.storage().instance().set(&ADMIN, &new_admin);
@@ -494,6 +529,7 @@ impl PaymentGateway {
         shares: Vec<EscrowShare>,
         amount: i128,
     ) -> Escrow {
+        storage_ttl::bump_instance(&env);
         payer.require_auth();
         Self::require_not_paused(&env);
 
@@ -510,6 +546,7 @@ impl PaymentGateway {
             .persistent()
             .get(&DataKey::Balance(payer.clone()))
             .unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &DataKey::Balance(payer.clone()));
         if payer_balance < amount {
             panic_with_error!(&env, Error::InsufficientBalance);
         }
@@ -517,6 +554,7 @@ impl PaymentGateway {
         env.storage()
             .persistent()
             .set(&DataKey::Balance(payer.clone()), &payer_balance);
+        storage_ttl::bump_persistent(&env, &DataKey::Balance(payer.clone()));
 
         let escrow = Escrow {
             id: escrow_id,
@@ -529,6 +567,7 @@ impl PaymentGateway {
         env.storage()
             .persistent()
             .set(&DataKey::Escrow(escrow_id), &escrow);
+        storage_ttl::bump_persistent(&env, &DataKey::Escrow(escrow_id));
 
         env.events()
             .publish((symbol_short!("esc_new"), payer), (escrow_id, amount));
@@ -542,6 +581,7 @@ impl PaymentGateway {
     /// per escrow. See the module-level doc comment above for why this
     /// credits balances instead of pushing funds directly to stakeholders.
     pub fn distribute_escrow(env: Env, caller: Address, escrow_id: u64) -> Escrow {
+        storage_ttl::bump_instance(&env);
         caller.require_auth();
         Self::require_not_paused(&env);
 
@@ -551,6 +591,7 @@ impl PaymentGateway {
             .persistent()
             .get(&key)
             .unwrap_or_else(|| panic_with_error!(&env, Error::EscrowNotFound));
+        storage_ttl::bump_persistent(&env, &key);
 
         Self::require_payer_or_admin(&env, &caller, &escrow.payer);
 
@@ -582,12 +623,20 @@ impl PaymentGateway {
                 .persistent()
                 .get(&DataKey::Balance(share.stakeholder.clone()))
                 .unwrap_or(0);
+            storage_ttl::bump_persistent(
+                &env,
+                &DataKey::Balance(share.stakeholder.clone()),
+            );
             balance = balance
                 .checked_add(share_amount)
                 .expect("stakeholder overflow");
             env.storage()
                 .persistent()
                 .set(&DataKey::Balance(share.stakeholder.clone()), &balance);
+            storage_ttl::bump_persistent(
+                &env,
+                &DataKey::Balance(share.stakeholder.clone()),
+            );
 
             distributed = distributed
                 .checked_add(share_amount)
@@ -596,6 +645,7 @@ impl PaymentGateway {
 
         escrow.status = EscrowStatus::Distributed;
         env.storage().persistent().set(&key, &escrow);
+        storage_ttl::bump_persistent(&env, &key);
 
         env.events()
             .publish((symbol_short!("esc_dist"),), (escrow_id, distributed));
@@ -606,6 +656,7 @@ impl PaymentGateway {
     /// Returns an un-distributed escrow's locked funds to the payer's
     /// withdrawable balance. Only valid while `status == Funded`.
     pub fn cancel_escrow(env: Env, caller: Address, escrow_id: u64) -> Escrow {
+        storage_ttl::bump_instance(&env);
         caller.require_auth();
         Self::require_not_paused(&env);
 
@@ -615,6 +666,7 @@ impl PaymentGateway {
             .persistent()
             .get(&key)
             .unwrap_or_else(|| panic_with_error!(&env, Error::EscrowNotFound));
+        storage_ttl::bump_persistent(&env, &key);
 
         Self::require_payer_or_admin(&env, &caller, &escrow.payer);
 
@@ -627,15 +679,18 @@ impl PaymentGateway {
             .persistent()
             .get(&DataKey::Balance(escrow.payer.clone()))
             .unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &DataKey::Balance(escrow.payer.clone()));
         payer_balance = payer_balance
             .checked_add(escrow.total_amount)
             .expect("payer overflow");
         env.storage()
             .persistent()
             .set(&DataKey::Balance(escrow.payer.clone()), &payer_balance);
+        storage_ttl::bump_persistent(&env, &DataKey::Balance(escrow.payer.clone()));
 
         escrow.status = EscrowStatus::Cancelled;
         env.storage().persistent().set(&key, &escrow);
+        storage_ttl::bump_persistent(&env, &key);
 
         env.events().publish((symbol_short!("esc_cxl"),), escrow_id);
 
@@ -643,10 +698,14 @@ impl PaymentGateway {
     }
 
     pub fn get_escrow(env: Env, escrow_id: u64) -> Escrow {
-        env.storage()
+        storage_ttl::bump_instance(&env);
+        let key = DataKey::Escrow(escrow_id);
+        let escrow = env.storage()
             .persistent()
-            .get(&DataKey::Escrow(escrow_id))
-            .unwrap_or_else(|| panic_with_error!(&env, Error::EscrowNotFound))
+            .get(&key)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::EscrowNotFound));
+        storage_ttl::bump_persistent(&env, &key);
+        escrow
     }
 
     fn require_payer_or_admin(env: &Env, caller: &Address, payer: &Address) {

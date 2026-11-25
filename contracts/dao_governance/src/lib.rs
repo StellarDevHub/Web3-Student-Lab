@@ -39,6 +39,7 @@
 use soroban_sdk::{
     contract, contractimpl, contracttype, panic_with_error, symbol_short, Address, Env, String, Vec,
 };
+use soroban_certificate_contract::storage_ttl;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -195,6 +196,7 @@ pub struct DaoGovernance;
 impl DaoGovernance {
     /// Initialise the DAO.  Must be called exactly once.
     pub fn initialize(env: Env, admin: Address) {
+        storage_ttl::bump_instance(&env);
         if env.storage().instance().has(&Key::Admin) {
             panic_with_error!(&env, DaoError::AlreadyInitialized);
         }
@@ -206,12 +208,15 @@ impl DaoGovernance {
     /// Grant `credits` voice-credits to `member`.  Admin only.
     /// Updates the circulating supply and the member's grant log.
     pub fn grant_credits(env: Env, member: Address, credits: u128) {
+        storage_ttl::bump_instance(&env);
         Self::only_admin(&env);
         let key = Key::Credits(member.clone());
         let prev: u128 = env.storage().persistent().get(&key).unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &key);
         env.storage()
             .persistent()
             .set(&key, &prev.saturating_add(credits));
+        storage_ttl::bump_persistent(&env, &key);
 
         let total = read_total_granted(&env).saturating_add(credits);
         env.storage().instance().set(&Key::TotalGranted, &total);
@@ -223,11 +228,13 @@ impl DaoGovernance {
             .persistent()
             .get::<Key, Vec<GrantEntry>>(&log_key)
             .unwrap_or_else(|| Vec::new(&env));
+        storage_ttl::bump_persistent(&env, &log_key);
         log.push_back(GrantEntry {
             seq,
             amount: credits,
         });
         env.storage().persistent().set(&log_key, &log);
+        storage_ttl::bump_persistent(&env, &log_key);
 
         env.events()
             .publish((symbol_short!("credits"),), (member, credits));
@@ -246,6 +253,7 @@ impl DaoGovernance {
         description: String,
         duration: u64,
     ) -> u64 {
+        storage_ttl::bump_instance(&env);
         creator.require_auth();
 
         let period = if duration == 0 {
@@ -290,6 +298,7 @@ impl DaoGovernance {
     /// * Each address may vote at most once per proposal.
     /// * Only credits not granted after the proposal was created are spendable.
     pub fn vote(env: Env, voter: Address, proposal_id: u64, votes: i64) {
+        storage_ttl::bump_instance(&env);
         voter.require_auth();
         Self::internal_vote(&env, voter, proposal_id, votes);
     }
@@ -303,12 +312,14 @@ impl DaoGovernance {
         nonce: u64,
         _home_domain: String,
     ) {
+        storage_ttl::bump_instance(&env);
         voter.require_auth();
         let nonce_key = Key::UsedNonce(voter.clone(), nonce);
         if env.storage().persistent().has(&nonce_key) {
             panic_with_error!(&env, DaoError::AlreadyVoted);
         }
         env.storage().persistent().set(&nonce_key, &true);
+        storage_ttl::bump_persistent(&env, &nonce_key);
         Self::internal_vote(&env, voter, proposal_id, votes);
     }
 
@@ -329,6 +340,7 @@ impl DaoGovernance {
         if env.storage().persistent().has(&vote_key) {
             panic_with_error!(env, DaoError::AlreadyVoted);
         }
+        storage_ttl::bump_persistent(env, &vote_key);
 
         // Quadratic cost: cost = |votes|^2
         let abs_v = votes.unsigned_abs() as u128;
@@ -343,11 +355,13 @@ impl DaoGovernance {
         env.storage()
             .persistent()
             .set(&credits_key, &bal.saturating_sub(cost));
+        storage_ttl::bump_persistent(env, &credits_key);
 
         proposal.tally += votes as i128;
         proposal.credits_spent = proposal.credits_spent.saturating_add(cost);
         Self::store_proposal(env, &proposal);
         env.storage().persistent().set(&vote_key, &votes);
+        storage_ttl::bump_persistent(env, &vote_key);
 
         env.events()
             .publish((symbol_short!("vote"),), (voter, proposal_id, votes, cost));
@@ -360,6 +374,7 @@ impl DaoGovernance {
     /// `eta = now + TIMELOCK_DELAY`. Otherwise it is marked `Failed`
     /// (including quorum failure); no panic is raised for that outcome.
     pub fn finalize(env: Env, proposal_id: u64) {
+        storage_ttl::bump_instance(&env);
         let mut proposal = load_proposal(&env, proposal_id)
             .unwrap_or_else(|| panic_with_error!(&env, DaoError::ProposalNotFound));
 
@@ -387,6 +402,7 @@ impl DaoGovernance {
     /// Fails with `ProposalClosed` unless the status is `Passed`, and with
     /// `TimelockNotElapsed` until `now >= eta` (48 hours after finalize).
     pub fn execute(env: Env, caller: Address, proposal_id: u64) {
+        storage_ttl::bump_instance(&env);
         Self::only_admin(&env);
         caller.require_auth();
 
@@ -409,6 +425,7 @@ impl DaoGovernance {
 
     /// Set the default voting period. Must be within [1 day, 30 days]. Admin only.
     pub fn set_voting_period(env: Env, period: u64) {
+        storage_ttl::bump_instance(&env);
         Self::only_admin(&env);
         check_voting_period(&env, period);
         env.storage().instance().set(&Key::VotingPeriod, &period);
@@ -417,6 +434,7 @@ impl DaoGovernance {
 
     /// Set the minimum credits a proposal creator must hold. Admin only.
     pub fn set_proposal_threshold(env: Env, min_credits: u128) {
+        storage_ttl::bump_instance(&env);
         Self::only_admin(&env);
         env.storage()
             .instance()
@@ -428,35 +446,43 @@ impl DaoGovernance {
     // ── Views ─────────────────────────────────────────────────────────────────
 
     pub fn get_proposal(env: Env, id: u64) -> Option<Proposal> {
+        storage_ttl::bump_instance(&env);
         load_proposal(&env, id)
     }
 
     pub fn credits_of(env: Env, member: Address) -> u128 {
+        storage_ttl::bump_instance(&env);
         credits_balance(&env, &member)
     }
 
     pub fn vote_of(env: Env, proposal_id: u64, voter: Address) -> Option<i64> {
-        env.storage()
-            .persistent()
-            .get(&Key::Vote(proposal_id, voter))
+        storage_ttl::bump_instance(&env);
+        let key = Key::Vote(proposal_id, voter);
+        let vote = env.storage().persistent().get(&key);
+        storage_ttl::bump_persistent(&env, &key);
+        vote
     }
 
     /// Circulating governance supply: total credits ever granted.
     pub fn total_granted(env: Env) -> u128 {
+        storage_ttl::bump_instance(&env);
         read_total_granted(&env)
     }
 
     pub fn get_voting_period(env: Env) -> u64 {
+        storage_ttl::bump_instance(&env);
         read_voting_period(&env)
     }
 
     pub fn get_proposal_threshold(env: Env) -> u128 {
+        storage_ttl::bump_instance(&env);
         read_proposal_threshold(&env)
     }
 
     // ── Treasury & Ragequit (SC-042) ──────────────────────────────────────────
 
     pub fn deposit_treasury(env: Env, caller: Address, amount: u128) {
+        storage_ttl::bump_instance(&env);
         caller.require_auth();
         Treasury::deposit_reserves(&env, amount);
         env.events()
@@ -464,6 +490,7 @@ impl DaoGovernance {
     }
 
     pub fn grant_shares(env: Env, member: Address, shares: u128) {
+        storage_ttl::bump_instance(&env);
         Self::only_admin(&env);
         let current = Treasury::get_shares(&env, &member);
         Treasury::set_shares(&env, &member, current.saturating_add(shares));
@@ -472,14 +499,17 @@ impl DaoGovernance {
     }
 
     pub fn treasury_shares_of(env: Env, member: Address) -> u128 {
+        storage_ttl::bump_instance(&env);
         Treasury::get_shares(&env, &member)
     }
 
     pub fn get_treasury_state(env: Env) -> TreasuryState {
+        storage_ttl::bump_instance(&env);
         Treasury::get_state(&env)
     }
 
     pub fn ragequit(env: Env, voter: Address, proposal_id: u64, shares_to_burn: u128) -> u128 {
+        storage_ttl::bump_instance(&env);
         let payout = Ragequit::execute_ragequit(&env, voter.clone(), proposal_id, shares_to_burn);
         env.events().publish(
             (symbol_short!("ragequit"),),
@@ -500,10 +530,11 @@ impl DaoGovernance {
     }
 
     fn store_proposal(env: &Env, proposal: &Proposal) {
-        env.storage().persistent().set(
-            &Key::CompactProposal(proposal.id),
-            &StoredProposal::from_proposal(proposal),
-        );
+        let key = Key::CompactProposal(proposal.id);
+        env.storage()
+            .persistent()
+            .set(&key, &StoredProposal::from_proposal(proposal));
+        storage_ttl::bump_persistent(env, &key);
         env.storage()
             .persistent()
             .remove(&Key::Proposal(proposal.id));
@@ -511,14 +542,19 @@ impl DaoGovernance {
 }
 
 pub(crate) fn load_proposal(env: &Env, id: u64) -> Option<Proposal> {
+    let compact_key = Key::CompactProposal(id);
     if let Some(proposal) = env
         .storage()
         .persistent()
-        .get::<Key, StoredProposal>(&Key::CompactProposal(id))
+        .get::<Key, StoredProposal>(&compact_key)
     {
+        storage_ttl::bump_persistent(env, &compact_key);
         return Some(proposal.into_proposal(id));
     }
-    env.storage().persistent().get(&Key::Proposal(id))
+    let key = Key::Proposal(id);
+    let proposal = env.storage().persistent().get(&key);
+    storage_ttl::bump_persistent(env, &key);
+    proposal
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -558,21 +594,26 @@ fn check_voting_period(env: &Env, period: u64) {
 }
 
 fn credits_balance(env: &Env, member: &Address) -> u128 {
-    env.storage()
+    let key = Key::Credits(member.clone());
+    let balance = env.storage()
         .persistent()
-        .get::<Key, u128>(&Key::Credits(member.clone()))
-        .unwrap_or(0)
+        .get::<Key, u128>(&key)
+        .unwrap_or(0);
+    storage_ttl::bump_persistent(env, &key);
+    balance
 }
 
 /// Credits `voter` may spend on a proposal created at `created_seq`:
 /// current balance minus every grant received after that proposal was created.
 fn eligible_credits(env: &Env, voter: &Address, created_seq: u64) -> u128 {
     let balance = credits_balance(env, voter);
+    let log_key = Key::GrantLog(voter.clone());
     let log = env
         .storage()
         .persistent()
-        .get::<Key, Vec<GrantEntry>>(&Key::GrantLog(voter.clone()))
+        .get::<Key, Vec<GrantEntry>>(&log_key)
         .unwrap_or_else(|| Vec::new(env));
+    storage_ttl::bump_persistent(env, &log_key);
     let mut late: u128 = 0;
     for entry in log.iter() {
         if entry.seq > created_seq {

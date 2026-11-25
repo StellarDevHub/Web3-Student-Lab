@@ -41,6 +41,7 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, token,
     Address, Env, IntoVal, Symbol,
 };
+use soroban_certificate_contract::storage_ttl;
 
 pub mod flash_loan;
 pub mod interest;
@@ -167,6 +168,7 @@ impl LendingPool {
         min_coll_ratio: i128,
         liq_bonus: i128,
     ) {
+        storage_ttl::bump_instance(&env);
         if env.storage().instance().has(&Key::Admin) {
             panic_with_error!(&env, LPError::AlreadyInitialized);
         }
@@ -185,6 +187,7 @@ impl LendingPool {
     /// * `coll_factor`  – Max LTV in BPS (e.g. `7_500` = 75 %).
     /// * `borrow_rate`  – Annual interest in BPS (e.g. `500` = 5 %).
     pub fn add_asset(env: Env, token: Address, coll_factor: i128, borrow_rate: i128) {
+        storage_ttl::bump_instance(&env);
         Self::only_admin(&env);
         env.storage()
             .persistent()
@@ -204,12 +207,17 @@ impl LendingPool {
                 .persistent()
                 .set(&Key::LastUpdate(token.clone()), &env.ledger().timestamp());
         }
+        storage_ttl::bump_persistent(&env, &Key::CollFactor(token.clone()));
+        storage_ttl::bump_persistent(&env, &Key::BorrowRate(token.clone()));
+        storage_ttl::bump_persistent(&env, &Key::GlobalIdx(token.clone()));
+        storage_ttl::bump_persistent(&env, &Key::LastUpdate(token));
     }
 
     // ── User actions ──────────────────────────────────────────────────────────
 
     /// Deposit `amount` of `token` as collateral.
     pub fn deposit_collateral(env: Env, user: Address, token: Address, amount: i128) {
+        storage_ttl::bump_instance(&env);
         user.require_auth();
         Self::check_not_paused(&env);
         Self::check_nonzero(&env, amount);
@@ -220,10 +228,12 @@ impl LendingPool {
 
         let key = Key::Collateral(user.clone(), token.clone());
         let prev: i128 = env.storage().persistent().get(&key).unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &key);
         let new_bal = prev
             .checked_add(amount)
             .unwrap_or_else(|| panic_with_error!(&env, LPError::Overflow));
         env.storage().persistent().set(&key, &new_bal);
+        storage_ttl::bump_persistent(&env, &key);
 
         Self::unlock(&env);
         env.events()
@@ -240,6 +250,7 @@ impl LendingPool {
         debt_token: Address,
         amount: i128,
     ) {
+        storage_ttl::bump_instance(&env);
         user.require_auth();
         Self::check_not_paused(&env);
         Self::check_nonzero(&env, amount);
@@ -251,10 +262,12 @@ impl LendingPool {
 
         let debt_key = Key::Debt(user.clone(), debt_token.clone());
         let prev: i128 = env.storage().persistent().get(&debt_key).unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &debt_key);
         let new_debt = prev
             .checked_add(amount)
             .unwrap_or_else(|| panic_with_error!(&env, LPError::Overflow));
         env.storage().persistent().set(&debt_key, &new_debt);
+        storage_ttl::bump_persistent(&env, &debt_key);
 
         // Snapshot user index.
         let gidx: i128 = env
@@ -265,6 +278,7 @@ impl LendingPool {
         env.storage()
             .persistent()
             .set(&Key::UserIdx(user.clone(), debt_token.clone()), &gidx);
+        storage_ttl::bump_persistent(&env, &Key::UserIdx(user.clone(), debt_token.clone()));
 
         // Health check: collateral value × coll_factor ≥ debt value × min_coll_ratio
         Self::assert_healthy(&env, &user, &collateral_token, &debt_token);
@@ -282,6 +296,7 @@ impl LendingPool {
 
     /// Repay up to `amount` of `token` debt.
     pub fn repay(env: Env, user: Address, token: Address, amount: i128) {
+        storage_ttl::bump_instance(&env);
         user.require_auth();
         Self::check_not_paused(&env);
         Self::check_nonzero(&env, amount);
@@ -293,6 +308,7 @@ impl LendingPool {
 
         let debt_key = Key::Debt(user.clone(), token.clone());
         let debt: i128 = env.storage().persistent().get(&debt_key).unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &debt_key);
         let actual = if amount > debt { debt } else { amount };
 
         token::Client::new(&env, &token).transfer(&user, &env.current_contract_address(), &actual);
@@ -301,6 +317,7 @@ impl LendingPool {
             .checked_sub(actual)
             .unwrap_or_else(|| panic_with_error!(&env, LPError::Underflow));
         env.storage().persistent().set(&debt_key, &new_debt);
+        storage_ttl::bump_persistent(&env, &debt_key);
 
         Self::unlock(&env);
         env.events()
@@ -315,6 +332,7 @@ impl LendingPool {
         debt_token: Address,
         amount: i128,
     ) {
+        storage_ttl::bump_instance(&env);
         user.require_auth();
         Self::check_not_paused(&env);
         Self::check_nonzero(&env, amount);
@@ -322,6 +340,7 @@ impl LendingPool {
 
         let coll_key = Key::Collateral(user.clone(), collateral_token.clone());
         let bal: i128 = env.storage().persistent().get(&coll_key).unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &coll_key);
         if amount > bal {
             Self::unlock(&env);
             panic_with_error!(&env, LPError::InsufficientBal);
@@ -330,6 +349,7 @@ impl LendingPool {
             .checked_sub(amount)
             .unwrap_or_else(|| panic_with_error!(&env, LPError::Underflow));
         env.storage().persistent().set(&coll_key, &new_bal);
+        storage_ttl::bump_persistent(&env, &coll_key);
 
         Self::assert_healthy(&env, &user, &collateral_token, &debt_token);
 
@@ -359,6 +379,7 @@ impl LendingPool {
         debt_token: Address,
         repay_amount: i128,
     ) {
+        storage_ttl::bump_instance(&env);
         liquidator.require_auth();
         Self::check_not_paused(&env);
         Self::check_nonzero(&env, repay_amount);
@@ -384,6 +405,7 @@ impl LendingPool {
 
         let debt_key = Key::Debt(borrower.clone(), debt_token.clone());
         let debt: i128 = env.storage().persistent().get(&debt_key).unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &debt_key);
         let actual_repay = if repay_amount > debt {
             debt
         } else {
@@ -392,6 +414,7 @@ impl LendingPool {
 
         let coll_key = Key::Collateral(borrower.clone(), collateral_token.clone());
         let coll_bal: i128 = env.storage().persistent().get(&coll_key).unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &coll_key);
         let actual_seize = if seize > coll_bal { coll_bal } else { seize };
 
         // Liquidator transfers debt repayment to the pool.
@@ -405,12 +428,14 @@ impl LendingPool {
             .checked_sub(actual_repay)
             .unwrap_or_else(|| panic_with_error!(&env, LPError::Underflow));
         env.storage().persistent().set(&debt_key, &new_debt);
+        storage_ttl::bump_persistent(&env, &debt_key);
 
         // Pool transfers seized collateral (+ bounty) to liquidator.
         let new_coll = coll_bal
             .checked_sub(actual_seize)
             .unwrap_or_else(|| panic_with_error!(&env, LPError::Underflow));
         env.storage().persistent().set(&coll_key, &new_coll);
+        storage_ttl::bump_persistent(&env, &coll_key);
         token::Client::new(&env, &collateral_token).transfer(
             &env.current_contract_address(),
             &liquidator,
@@ -427,6 +452,7 @@ impl LendingPool {
     /// Emergency collateral withdrawal — available even when the circuit
     /// breaker is active, so admin can recover funds during a pause.
     pub fn emergency_withdraw(env: Env, user: Address, collateral_token: Address, amount: i128) {
+        storage_ttl::bump_instance(&env);
         user.require_auth();
         // NOTE: intentionally does NOT call check_not_paused — this is the
         // exempted emergency path (SC-HARD-19).
@@ -435,6 +461,7 @@ impl LendingPool {
 
         let coll_key = Key::Collateral(user.clone(), collateral_token.clone());
         let bal: i128 = env.storage().persistent().get(&coll_key).unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &coll_key);
         if amount > bal {
             Self::unlock(&env);
             panic_with_error!(&env, LPError::InsufficientBal);
@@ -443,6 +470,7 @@ impl LendingPool {
             .checked_sub(amount)
             .unwrap_or_else(|| panic_with_error!(&env, LPError::Underflow));
         env.storage().persistent().set(&coll_key, &new_bal);
+        storage_ttl::bump_persistent(&env, &coll_key);
 
         token::Client::new(&env, &collateral_token).transfer(
             &env.current_contract_address(),
@@ -459,6 +487,7 @@ impl LendingPool {
 
     /// Pause the contract (admin only).
     pub fn set_paused(env: Env, admin: Address, paused: bool) {
+        storage_ttl::bump_instance(&env);
         admin.require_auth();
         Self::only_admin(&env);
         env.storage().instance().set(&PAUSED_KEY, &paused);
@@ -475,6 +504,7 @@ impl LendingPool {
         amount: i128,
         params: soroban_sdk::Bytes,
     ) -> i128 {
+        storage_ttl::bump_instance(&env);
         Self::check_not_paused(&env);
         Self::check_supported(&env, &token);
         flash_loan::FlashLoan::execute_flash_loan(&env, receiver, token, amount, params)
@@ -490,6 +520,7 @@ impl LendingPool {
         reward_rate: u128,
         duration_seconds: u64,
     ) {
+        storage_ttl::bump_instance(&env);
         Self::only_admin(&env);
         staking_rewards::StakingRewards::initialize(
             &env,
@@ -502,6 +533,7 @@ impl LendingPool {
 
     /// Stake tokens into the yield farming pool.
     pub fn stake(env: Env, user: Address, amount: u128) {
+        storage_ttl::bump_instance(&env);
         user.require_auth();
         Self::check_not_paused(&env);
         staking_rewards::StakingRewards::stake(&env, user, amount);
@@ -509,42 +541,55 @@ impl LendingPool {
 
     /// Unstake tokens from the yield farming pool.
     pub fn unstake(env: Env, user: Address, amount: u128) {
+        storage_ttl::bump_instance(&env);
         user.require_auth();
         staking_rewards::StakingRewards::unstake(&env, user, amount);
     }
 
     /// Claim accumulated yield farming rewards.
     pub fn claim_reward(env: Env, user: Address) -> u128 {
+        storage_ttl::bump_instance(&env);
         user.require_auth();
         staking_rewards::StakingRewards::claim_reward(&env, user)
     }
 
     /// View earned rewards for a user.
     pub fn earned(env: Env, user: Address) -> u128 {
+        storage_ttl::bump_instance(&env);
         staking_rewards::StakingRewards::earned(&env, &user)
     }
 
     // ── Views ─────────────────────────────────────────────────────────────────
 
     pub fn collateral_of(env: Env, user: Address, token: Address) -> i128 {
-        env.storage()
+        storage_ttl::bump_instance(&env);
+        let key = Key::Collateral(user, token);
+        let value = env.storage()
             .persistent()
-            .get(&Key::Collateral(user, token))
-            .unwrap_or(0)
+            .get(&key)
+            .unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &key);
+        value
     }
 
     pub fn debt_of(env: Env, user: Address, token: Address) -> i128 {
-        env.storage()
+        storage_ttl::bump_instance(&env);
+        let key = Key::Debt(user, token);
+        let value = env.storage()
             .persistent()
-            .get(&Key::Debt(user, token))
-            .unwrap_or(0)
+            .get(&key)
+            .unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &key);
+        value
     }
 
     pub fn health_ok(env: Env, user: Address, coll_token: Address, debt_token: Address) -> bool {
+        storage_ttl::bump_instance(&env);
         Self::is_healthy(&env, &user, &coll_token, &debt_token)
     }
 
     pub fn paused(env: Env) -> bool {
+        storage_ttl::bump_instance(&env);
         env.storage()
             .instance()
             .get::<Symbol, bool>(&PAUSED_KEY)
@@ -555,34 +600,41 @@ impl LendingPool {
 
     /// Accrue global borrow index for `token` (first-order compound interest).
     fn accrue(env: &Env, token: &Address) {
+        let last_key = Key::LastUpdate(token.clone());
         let last: u64 = env
             .storage()
             .persistent()
-            .get(&Key::LastUpdate(token.clone()))
+            .get(&last_key)
             .unwrap_or_else(|| env.ledger().timestamp());
+        storage_ttl::bump_persistent(env, &last_key);
         let now = env.ledger().timestamp();
         if now <= last {
             return;
         }
 
+        let rate_key = Key::BorrowRate(token.clone());
         let rate: i128 = env
             .storage()
             .persistent()
-            .get(&Key::BorrowRate(token.clone()))
+            .get(&rate_key)
             .unwrap_or(0);
+        storage_ttl::bump_persistent(env, &rate_key);
         if rate == 0 {
             env.storage()
                 .persistent()
-                .set(&Key::LastUpdate(token.clone()), &now);
+                .set(&last_key, &now);
+            storage_ttl::bump_persistent(env, &last_key);
             return;
         }
 
         let elapsed = (now - last) as i128;
+        let index_key = Key::GlobalIdx(token.clone());
         let old_idx: i128 = env
             .storage()
             .persistent()
-            .get(&Key::GlobalIdx(token.clone()))
+            .get(&index_key)
             .unwrap_or(SCALE);
+        storage_ttl::bump_persistent(env, &index_key);
 
         // Δindex = old_idx × rate × elapsed / (BPS × SECS_PER_YEAR)
         let new_idx = interest::next_index(old_idx, rate, elapsed)
@@ -590,66 +642,80 @@ impl LendingPool {
 
         env.storage()
             .persistent()
-            .set(&Key::GlobalIdx(token.clone()), &new_idx);
-        env.storage()
-            .persistent()
-            .set(&Key::LastUpdate(token.clone()), &now);
+            .set(&index_key, &new_idx);
+        storage_ttl::bump_persistent(env, &index_key);
+        env.storage().persistent().set(&last_key, &now);
+        storage_ttl::bump_persistent(env, &last_key);
     }
 
     /// Apply accrued interest to a user's recorded principal.
     fn accrue_user(env: &Env, user: &Address, token: &Address) {
+        let debt_key = Key::Debt(user.clone(), token.clone());
         let principal: i128 = env
             .storage()
             .persistent()
-            .get(&Key::Debt(user.clone(), token.clone()))
+            .get(&debt_key)
             .unwrap_or(0);
+        storage_ttl::bump_persistent(env, &debt_key);
         if principal == 0 {
             return;
         }
+        let index_key = Key::GlobalIdx(token.clone());
         let gidx: i128 = env
             .storage()
             .persistent()
-            .get(&Key::GlobalIdx(token.clone()))
+            .get(&index_key)
             .unwrap_or(SCALE);
+        storage_ttl::bump_persistent(env, &index_key);
+        let user_index_key = Key::UserIdx(user.clone(), token.clone());
         let uidx: i128 = env
             .storage()
             .persistent()
-            .get(&Key::UserIdx(user.clone(), token.clone()))
+            .get(&user_index_key)
             .unwrap_or(SCALE);
+        storage_ttl::bump_persistent(env, &user_index_key);
         if let Some(new_principal) = interest::accrued_principal(principal, gidx, uidx) {
             env.storage()
                 .persistent()
-                .set(&Key::Debt(user.clone(), token.clone()), &new_principal);
+                .set(&debt_key, &new_principal);
+            storage_ttl::bump_persistent(env, &debt_key);
             env.storage()
                 .persistent()
-                .set(&Key::UserIdx(user.clone(), token.clone()), &gidx);
+                .set(&user_index_key, &gidx);
+            storage_ttl::bump_persistent(env, &user_index_key);
         }
     }
 
     /// Returns `true` when the (collateral, debt) pair is sufficiently collateralised.
     fn is_healthy(env: &Env, user: &Address, coll_token: &Address, debt_token: &Address) -> bool {
+        let debt_key = Key::Debt(user.clone(), debt_token.clone());
         let debt: i128 = env
             .storage()
             .persistent()
-            .get(&Key::Debt(user.clone(), debt_token.clone()))
+            .get(&debt_key)
             .unwrap_or(0);
+        storage_ttl::bump_persistent(env, &debt_key);
         if debt == 0 {
             return true;
         }
 
+        let coll_key = Key::Collateral(user.clone(), coll_token.clone());
         let coll_bal: i128 = env
             .storage()
             .persistent()
-            .get(&Key::Collateral(user.clone(), coll_token.clone()))
+            .get(&coll_key)
             .unwrap_or(0);
+        storage_ttl::bump_persistent(env, &coll_key);
 
         let coll_price = Self::price(env, coll_token);
         let debt_price = Self::price(env, debt_token);
+        let coll_factor_key = Key::CollFactor(coll_token.clone());
         let cf: i128 = env
             .storage()
             .persistent()
-            .get(&Key::CollFactor(coll_token.clone()))
+            .get(&coll_factor_key)
             .unwrap_or(7_500);
+        storage_ttl::bump_persistent(env, &coll_factor_key);
         let mcr: i128 = env
             .storage()
             .instance()
@@ -711,13 +777,11 @@ impl LendingPool {
     }
 
     fn check_supported(env: &Env, token: &Address) {
-        if !env
-            .storage()
-            .persistent()
-            .has(&Key::CollFactor(token.clone()))
-        {
+        let key = Key::CollFactor(token.clone());
+        if !env.storage().persistent().has(&key) {
             panic_with_error!(env, LPError::UnsupportedToken);
         }
+        storage_ttl::bump_persistent(env, &key);
     }
 
     /// Check circuit-breaker pause state.

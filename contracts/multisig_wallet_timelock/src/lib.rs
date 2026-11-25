@@ -45,6 +45,7 @@ pub struct MultiSigWalletContract;
 #[contractimpl]
 impl MultiSigWalletContract {
     pub fn initialize(env: Env, signers: Vec<Address>, threshold: u32, timelock_period: u64) {
+        soroban_certificate_contract::storage_ttl::bump_instance(&env);
         if env.storage().instance().has(&DataKey::Signers) {
             panic_with_error!(&env, Error::AlreadyInitialized);
         }
@@ -71,6 +72,7 @@ impl MultiSigWalletContract {
         function: Symbol,
         args: Vec<Val>,
     ) -> u32 {
+        soroban_certificate_contract::storage_ttl::bump_instance(&env);
         proposer.require_auth();
         Self::lock(&env);
 
@@ -103,6 +105,10 @@ impl MultiSigWalletContract {
         env.storage()
             .persistent()
             .set(&DataKey::Proposal(proposal_count), &proposal);
+        soroban_certificate_contract::storage_ttl::bump_persistent(
+            &env,
+            &DataKey::Proposal(proposal_count),
+        );
         env.storage()
             .instance()
             .set(&DataKey::ProposalCount, &(proposal_count + 1));
@@ -112,6 +118,7 @@ impl MultiSigWalletContract {
     }
 
     pub fn approve_proposal(env: Env, signer: Address, proposal_id: u32) {
+        soroban_certificate_contract::storage_ttl::bump_instance(&env);
         signer.require_auth();
         Self::lock(&env);
 
@@ -120,19 +127,23 @@ impl MultiSigWalletContract {
 
         let proposal_key = DataKey::Proposal(proposal_id);
         let mut proposal: Proposal = env.storage().persistent().get(&proposal_key).unwrap();
+        soroban_certificate_contract::storage_ttl::bump_persistent(&env, &proposal_key);
 
         assert!(!proposal.executed, "Already executed");
         assert!(!proposal.approvals.contains(&signer), "Already approved");
 
         proposal.approvals.push_back(signer);
         env.storage().persistent().set(&proposal_key, &proposal);
+        soroban_certificate_contract::storage_ttl::bump_persistent(&env, &proposal_key);
         Self::unlock(&env);
     }
 
     pub fn execute_proposal(env: Env, proposal_id: u32) {
+        soroban_certificate_contract::storage_ttl::bump_instance(&env);
         Self::lock(&env);
         let proposal_key = DataKey::Proposal(proposal_id);
         let mut proposal: Proposal = env.storage().persistent().get(&proposal_key).unwrap();
+        soroban_certificate_contract::storage_ttl::bump_persistent(&env, &proposal_key);
         let threshold: u32 = env.storage().instance().get(&DataKey::Threshold).unwrap();
         let now = env.ledger().timestamp();
 
@@ -145,11 +156,13 @@ impl MultiSigWalletContract {
 
         proposal.executed = true;
         env.storage().persistent().set(&proposal_key, &proposal);
+        soroban_certificate_contract::storage_ttl::bump_persistent(&env, &proposal_key);
         let _: Val = env.invoke_contract(&proposal.to, &proposal.function, proposal.args);
         Self::unlock(&env);
     }
 
     pub fn add_signer(env: Env, new_signer: Address) {
+        soroban_certificate_contract::storage_ttl::bump_instance(&env);
         Self::lock(&env);
         env.current_contract_address().require_auth();
 
@@ -163,6 +176,7 @@ impl MultiSigWalletContract {
     }
 
     pub fn remove_signer(env: Env, signer: Address) {
+        soroban_certificate_contract::storage_ttl::bump_instance(&env);
         Self::lock(&env);
         env.current_contract_address().require_auth();
 
@@ -177,7 +191,7 @@ impl MultiSigWalletContract {
         Self::unlock(&env);
     }
 
-    // â”€â”€ Reentrancy guards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Reentrancy guards ─────────────────────────────────────────────────
 
     fn lock(env: &Env) {
         let locked: bool = env.storage().temporary().get(&LOCK).unwrap_or(false);

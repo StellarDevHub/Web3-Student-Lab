@@ -13,6 +13,7 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, token,
     Address, Env, Map, Vec,
 };
+use soroban_certificate_contract::storage_ttl;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -46,6 +47,7 @@ pub struct PaymentSplitter;
 impl PaymentSplitter {
     /// Initialize the payment splitter with immutable beneficiaries and share weights.
     pub fn initialize(env: Env, payees: Vec<Address>, shares: Vec<u32>) {
+        storage_ttl::bump_instance(&env);
         if env.storage().instance().has(&SplitterDataKey::Initialized) {
             panic_with_error!(&env, SplitterError::AlreadyInitialized);
         }
@@ -80,6 +82,7 @@ impl PaymentSplitter {
             env.storage()
                 .persistent()
                 .set(&SplitterDataKey::Shares(payee.clone()), &share);
+            storage_ttl::bump_persistent(&env, &SplitterDataKey::Shares(payee));
         }
 
         env.storage()
@@ -100,6 +103,7 @@ impl PaymentSplitter {
 
     /// Deposit arbitrary Soroban token to the splitter contract.
     pub fn deposit(env: Env, sender: Address, token: Address, amount: i128) {
+        storage_ttl::bump_instance(&env);
         sender.require_auth();
         Self::require_initialized(&env);
 
@@ -116,6 +120,7 @@ impl PaymentSplitter {
 
     /// Release accrued tokens to a specific beneficiary. Pull-payment pattern.
     pub fn release(env: Env, token: Address, payee: Address) -> i128 {
+        storage_ttl::bump_instance(&env);
         payee.require_auth();
         Self::require_initialized(&env);
 
@@ -132,6 +137,10 @@ impl PaymentSplitter {
             &SplitterDataKey::Released(token.clone(), payee.clone()),
             &new_released,
         );
+        storage_ttl::bump_persistent(
+            &env,
+            &SplitterDataKey::Released(token.clone(), payee.clone()),
+        );
 
         let current_total_released = Self::total_released(env.clone(), token.clone());
         let new_total_released = current_total_released
@@ -141,6 +150,7 @@ impl PaymentSplitter {
             &SplitterDataKey::TotalReleased(token.clone()),
             &new_total_released,
         );
+        storage_ttl::bump_persistent(&env, &SplitterDataKey::TotalReleased(token.clone()));
 
         let client = token::Client::new(&env, &token);
         client.transfer(&env.current_contract_address(), &payee, &payment);
@@ -153,6 +163,7 @@ impl PaymentSplitter {
 
     /// View pending withdrawable payment for a given token and beneficiary.
     pub fn pending_payment(env: Env, token: Address, payee: Address) -> i128 {
+        storage_ttl::bump_instance(&env);
         Self::require_initialized(&env);
 
         let payee_share = Self::shares(env.clone(), payee.clone());
@@ -181,6 +192,7 @@ impl PaymentSplitter {
 
     /// Total shares configured across all beneficiaries.
     pub fn total_shares(env: Env) -> u128 {
+        storage_ttl::bump_instance(&env);
         env.storage()
             .instance()
             .get(&SplitterDataKey::TotalShares)
@@ -189,14 +201,19 @@ impl PaymentSplitter {
 
     /// Individual share weight for a beneficiary.
     pub fn shares(env: Env, payee: Address) -> u32 {
-        env.storage()
+        storage_ttl::bump_instance(&env);
+        let key = SplitterDataKey::Shares(payee);
+        let shares = env.storage()
             .persistent()
-            .get(&SplitterDataKey::Shares(payee))
-            .unwrap_or(0)
+            .get(&key)
+            .unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &key);
+        shares
     }
 
     /// List of all beneficiaries.
     pub fn payees(env: Env) -> Vec<Address> {
+        storage_ttl::bump_instance(&env);
         env.storage()
             .instance()
             .get(&SplitterDataKey::Payees)
@@ -205,18 +222,26 @@ impl PaymentSplitter {
 
     /// Total amount of a specific token released across all beneficiaries.
     pub fn total_released(env: Env, token: Address) -> i128 {
-        env.storage()
+        storage_ttl::bump_instance(&env);
+        let key = SplitterDataKey::TotalReleased(token);
+        let released = env.storage()
             .persistent()
-            .get(&SplitterDataKey::TotalReleased(token))
-            .unwrap_or(0)
+            .get(&key)
+            .unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &key);
+        released
     }
 
     /// Total amount of a specific token released to a specific beneficiary.
     pub fn released(env: Env, token: Address, payee: Address) -> i128 {
-        env.storage()
+        storage_ttl::bump_instance(&env);
+        let key = SplitterDataKey::Released(token, payee);
+        let released = env.storage()
             .persistent()
-            .get(&SplitterDataKey::Released(token, payee))
-            .unwrap_or(0)
+            .get(&key)
+            .unwrap_or(0);
+        storage_ttl::bump_persistent(&env, &key);
+        released
     }
 
     fn require_initialized(env: &Env) {
