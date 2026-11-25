@@ -47,6 +47,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -56,6 +58,12 @@ jobs:
       - name: Install dependencies
         working-directory: ./backend
         run: npm ci || npm install
+      - name: Verify OpenAPI route drift
+        working-directory: ./backend
+        env:
+          OPENAPI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          OPENAPI_HEAD_SHA: ${{ github.sha }}
+        run: npm run openapi:verify-drift
       - name: Build
         working-directory: ./backend
         run: npm run build

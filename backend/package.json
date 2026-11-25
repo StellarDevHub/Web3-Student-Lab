@@ -17,6 +17,8 @@
     "migration:verify": "tsx scripts/migration-rollback.ts --verify",
     "migration:deploy:locked": "tsx scripts/migrate-with-lock.ts",
     "schema:verify-drift": "tsx scripts/verify-schema-drift.ts",
+    "openapi:verify-drift": "tsx scripts/verify-openapi-drift.ts",
+    "openapi:generate-client": "tsx scripts/generate-openapi-client.ts",
     "validate:curriculum": "tsx scripts/validate-curriculum.ts",
     "bench": "tsx benchmarks/runBenchmarks.ts",
     "collaboration": "tsx src/collaborationServer.ts",
