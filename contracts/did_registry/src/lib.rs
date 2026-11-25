@@ -13,15 +13,15 @@
 //     only canonical `did:stellar:<64 hex>` DIDs and reject malformed strings
 //     with `DIDError::MalformedDID`; `validate_did` is a non-panicking view.
 //
-// Cryptographic *verification* of Ed25519 signatures over contributor proofs
-// is performed by the off-chain resolver (see backend `didResolver`), which
-// reads this on-chain state. On-chain we only store the binding so the
-// resolver can fetch the trusted public key.
+// Cryptographic verification of contributor-proof signatures remains in the
+// off-chain resolver. Quadratic-voting identity nullifiers are verified
+// on-chain against the DID's registered Ed25519 verification key.
 
 #![no_std]
 use soroban_sdk::{
     contract, contracterror, contractimpl, Address, Bytes, BytesN, Env, Map, String, Symbol, Vec,
 };
+use soroban_sdk::xdr::ToXdr;
 
 pub mod types;
 pub mod verification;
@@ -38,6 +38,8 @@ pub enum DIDError {
 
 #[contract]
 pub struct DIDRegistryContract;
+
+const QUADRATIC_VOTING_NULLIFIER_DOMAIN: &[u8] = b"WSL-QV-IDENTITY-NULLIFIER-V1";
 
 #[contractimpl]
 impl DIDRegistryContract {
@@ -323,6 +325,59 @@ impl DIDRegistryContract {
             .get(&DataKey::DIDs)
             .unwrap_or_else(|| Map::new(&env));
         dids.get(did).and_then(|d| d.verification_key)
+    }
+
+    pub fn is_active_owner(env: Env, did: BytesN<32>, owner: Address) -> bool {
+        let dids: Map<BytesN<32>, DIDDocument> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::DIDs)
+            .unwrap_or_else(|| Map::new(&env));
+        dids.get(did)
+            .map(|document| !document.revoked && document.owner == owner)
+            .unwrap_or(false)
+    }
+
+    pub fn get_proof_count(env: Env, did: BytesN<32>) -> u32 {
+        let proofs: Map<BytesN<32>, Vec<ContributorProof>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Proofs)
+            .unwrap_or_else(|| Map::new(&env));
+        proofs.get(did).map(|entries| entries.len()).unwrap_or(0)
+    }
+
+    pub fn verify_identity_nullifier(
+        env: Env,
+        did: BytesN<32>,
+        proposal_id: u32,
+        nullifier: BytesN<32>,
+        voting_contract: Address,
+        signature: BytesN<64>,
+    ) -> bool {
+        let dids: Map<BytesN<32>, DIDDocument> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::DIDs)
+            .unwrap_or_else(|| Map::new(&env));
+        let Some(document) = dids.get(did.clone()) else {
+            return false;
+        };
+        if document.revoked {
+            return false;
+        }
+        let Some(verification_key) = document.verification_key else {
+            return false;
+        };
+
+        let mut message = Bytes::from_slice(&env, QUADRATIC_VOTING_NULLIFIER_DOMAIN);
+        message.append(&Bytes::from(did));
+        message.append(&Bytes::from_array(&env, &proposal_id.to_be_bytes()));
+        message.append(&Bytes::from(nullifier));
+        message.append(&voting_contract.to_xdr(&env));
+        env.crypto()
+            .ed25519_verify(&verification_key, &message, &signature);
+        true
     }
 
     /// Returns all stored contributor proofs for a DID.
