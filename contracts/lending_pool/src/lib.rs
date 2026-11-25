@@ -83,6 +83,12 @@ pub enum Key {
     Debt(Address, Address),
     /// User-level index snapshot: (user, token) → i128.
     UserIdx(Address, Address),
+    /// Protocol reserve funds per token: token → i128.
+    Reserves(Address),
+    /// Cumulative bad debt socialized per token: token → i128.
+    TotalBadDebt(Address),
+    /// Explicit dynamic liquidation bonus override flag.
+    DynamicBonus,
 }
 
 // ── Errors (SC-HARD-20: range 1–99) ──────────────────────────────────────────
@@ -376,7 +382,15 @@ impl LendingPool {
 
         let debt_price = Self::price(&env, &debt_token);
         let coll_price = Self::price(&env, &collateral_token);
-        let liq_bonus: i128 = env.storage().instance().get(&Key::LiqBonus).unwrap_or(500);
+        let hf = Self::compute_health_factor(&env, &borrower, &collateral_token, &debt_token);
+        let configured_bonus: i128 = env.storage().instance().get(&Key::LiqBonus).unwrap_or(500);
+        let dynamic_override: Option<bool> = env.storage().instance().get(&Key::DynamicBonus);
+        let use_dynamic = dynamic_override.unwrap_or(configured_bonus == 500);
+        let liq_bonus = if use_dynamic {
+            liquidation::dynamic_liquidation_bonus(hf)
+        } else {
+            configured_bonus
+        };
 
         // seize = repay_amount × (debt_price / coll_price) × (1 + liq_bonus / BPS)
         let seize = liquidation::seize_amount(repay_amount, debt_price, coll_price, liq_bonus)
@@ -416,6 +430,11 @@ impl LendingPool {
             &liquidator,
             &actual_seize,
         );
+
+        // If an underwater position has zero collateral left, socialize the remaining deficit across protocol reserve funds.
+        if new_coll == 0 && new_debt > 0 {
+            Self::socialize_debt_internal(&env, &borrower, &debt_token, new_debt);
+        }
 
         Self::unlock(&env);
         env.events().publish(
@@ -524,6 +543,72 @@ impl LendingPool {
         staking_rewards::StakingRewards::earned(&env, &user)
     }
 
+    // ── Reserves and Bad Debt Socialization (SC-062) ──────────────────────────
+
+    /// Deposit funds into the protocol reserve fund.
+    pub fn deposit_reserves(env: Env, from: Address, token: Address, amount: i128) {
+        from.require_auth();
+        Self::check_not_paused(&env);
+        Self::check_nonzero(&env, amount);
+        Self::check_supported(&env, &token);
+        Self::lock(&env);
+
+        token::Client::new(&env, &token).transfer(&from, &env.current_contract_address(), &amount);
+
+        let res_key = Key::Reserves(token.clone());
+        let prev: i128 = env.storage().persistent().get(&res_key).unwrap_or(0);
+        let new_res = prev
+            .checked_add(amount)
+            .unwrap_or_else(|| panic_with_error!(&env, LPError::Overflow));
+        env.storage().persistent().set(&res_key, &new_res);
+
+        Self::unlock(&env);
+        env.events()
+            .publish((symbol_short!("res_dep"),), (from, token, amount));
+    }
+
+    /// Socialize remaining deficit across protocol reserve funds if the underwater borrower
+    /// has zero collateral remaining.
+    pub fn socialize_bad_debt(
+        env: Env,
+        caller: Address,
+        borrower: Address,
+        collateral_token: Address,
+        debt_token: Address,
+    ) -> i128 {
+        caller.require_auth();
+        Self::check_not_paused(&env);
+        Self::lock(&env);
+
+        Self::accrue(&env, &debt_token);
+        Self::accrue_user(&env, &borrower, &debt_token);
+
+        let coll_key = Key::Collateral(borrower.clone(), collateral_token.clone());
+        let coll_bal: i128 = env.storage().persistent().get(&coll_key).unwrap_or(0);
+        if coll_bal > 0 {
+            Self::unlock(&env);
+            panic_with_error!(&env, LPError::BelowMinCollRatio);
+        }
+
+        let debt_key = Key::Debt(borrower.clone(), debt_token.clone());
+        let debt: i128 = env.storage().persistent().get(&debt_key).unwrap_or(0);
+        if debt == 0 {
+            Self::unlock(&env);
+            return 0;
+        }
+
+        let covered = Self::socialize_debt_internal(&env, &borrower, &debt_token, debt);
+        Self::unlock(&env);
+        covered
+    }
+
+    /// Enable or disable dynamic liquidation bonus curve (admin only).
+    pub fn set_dynamic_bonus(env: Env, admin: Address, enabled: bool) {
+        admin.require_auth();
+        Self::only_admin(&env);
+        env.storage().instance().set(&Key::DynamicBonus, &enabled);
+    }
+
     // ── Views ─────────────────────────────────────────────────────────────────
 
     pub fn collateral_of(env: Env, user: Address, token: Address) -> i128 {
@@ -542,6 +627,50 @@ impl LendingPool {
 
     pub fn health_ok(env: Env, user: Address, coll_token: Address, debt_token: Address) -> bool {
         Self::is_healthy(&env, &user, &coll_token, &debt_token)
+    }
+
+    /// View protocol reserve fund balance for `token`.
+    pub fn reserves_of(env: Env, token: Address) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&Key::Reserves(token))
+            .unwrap_or(0)
+    }
+
+    /// View total bad debt socialized for `token`.
+    pub fn total_bad_debt(env: Env, token: Address) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&Key::TotalBadDebt(token))
+            .unwrap_or(0)
+    }
+
+    /// View health factor of a position in basis points (10_000 = 1.0).
+    pub fn health_factor(
+        env: Env,
+        user: Address,
+        coll_token: Address,
+        debt_token: Address,
+    ) -> i128 {
+        Self::compute_health_factor(&env, &user, &coll_token, &debt_token)
+    }
+
+    /// View current liquidation bonus for a position in basis points (BPS).
+    pub fn current_liquidation_bonus(
+        env: Env,
+        user: Address,
+        coll_token: Address,
+        debt_token: Address,
+    ) -> i128 {
+        let hf = Self::compute_health_factor(&env, &user, &coll_token, &debt_token);
+        let configured_bonus: i128 = env.storage().instance().get(&Key::LiqBonus).unwrap_or(500);
+        let dynamic_override: Option<bool> = env.storage().instance().get(&Key::DynamicBonus);
+        let use_dynamic = dynamic_override.unwrap_or(configured_bonus == 500);
+        if use_dynamic {
+            liquidation::dynamic_liquidation_bonus(hf)
+        } else {
+            configured_bonus
+        }
     }
 
     pub fn paused(env: Env) -> bool {
@@ -626,15 +755,20 @@ impl LendingPool {
         }
     }
 
-    /// Returns `true` when the (collateral, debt) pair is sufficiently collateralised.
-    fn is_healthy(env: &Env, user: &Address, coll_token: &Address, debt_token: &Address) -> bool {
+    /// Computes the health factor of a position in basis points (`10_000` = 1.0).
+    fn compute_health_factor(
+        env: &Env,
+        user: &Address,
+        coll_token: &Address,
+        debt_token: &Address,
+    ) -> i128 {
         let debt: i128 = env
             .storage()
             .persistent()
             .get(&Key::Debt(user.clone(), debt_token.clone()))
             .unwrap_or(0);
         if debt == 0 {
-            return true;
+            return i128::MAX;
         }
 
         let coll_bal: i128 = env
@@ -662,13 +796,75 @@ impl LendingPool {
             .and_then(|v| v.checked_mul(cf))
             .and_then(|v| v.checked_div(BPS))
             .unwrap_or(0);
+
         // req_coll = debt * debt_price * mcr / BPS
         let req_coll = debt
             .checked_mul(debt_price)
             .and_then(|v| v.checked_mul(mcr))
             .and_then(|v| v.checked_div(BPS))
             .unwrap_or(i128::MAX);
-        adj_coll >= req_coll
+
+        if req_coll == 0 {
+            return i128::MAX;
+        }
+
+        adj_coll
+            .checked_mul(BPS)
+            .and_then(|v| v.checked_div(req_coll))
+            .unwrap_or(0)
+    }
+
+    /// Returns `true` when the (collateral, debt) pair is sufficiently collateralised.
+    fn is_healthy(env: &Env, user: &Address, coll_token: &Address, debt_token: &Address) -> bool {
+        let debt: i128 = env
+            .storage()
+            .persistent()
+            .get(&Key::Debt(user.clone(), debt_token.clone()))
+            .unwrap_or(0);
+        if debt == 0 {
+            return true;
+        }
+        let hf = Self::compute_health_factor(env, user, coll_token, debt_token);
+        hf >= BPS
+    }
+
+    /// Socialize deficit across protocol reserve funds.
+    fn socialize_debt_internal(
+        env: &Env,
+        borrower: &Address,
+        debt_token: &Address,
+        deficit: i128,
+    ) -> i128 {
+        let res_key = Key::Reserves(debt_token.clone());
+        let reserves: i128 = env.storage().persistent().get(&res_key).unwrap_or(0);
+        let covered = deficit.min(reserves);
+
+        if covered > 0 {
+            let new_res = reserves - covered;
+            env.storage().persistent().set(&res_key, &new_res);
+
+            let debt_key = Key::Debt(borrower.clone(), debt_token.clone());
+            let current_debt: i128 = env.storage().persistent().get(&debt_key).unwrap_or(0);
+            let remaining_debt = current_debt.saturating_sub(covered);
+            env.storage().persistent().set(&debt_key, &remaining_debt);
+
+            let bad_debt_key = Key::TotalBadDebt(debt_token.clone());
+            let prev_bad_debt: i128 = env.storage().persistent().get(&bad_debt_key).unwrap_or(0);
+            env.storage()
+                .persistent()
+                .set(&bad_debt_key, &(prev_bad_debt + covered));
+
+            env.events().publish(
+                (symbol_short!("socializ"),),
+                (
+                    borrower.clone(),
+                    debt_token.clone(),
+                    covered,
+                    remaining_debt,
+                ),
+            );
+        }
+        covered
     }
 
     fn assert_healthy(env: &Env, user: &Address, coll_token: &Address, debt_token: &Address) {
@@ -1154,3 +1350,6 @@ mod tests {
 
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
+mod fuzz_lending_suite;
