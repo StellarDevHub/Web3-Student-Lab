@@ -50,10 +50,7 @@ impl Treasury {
 
     pub fn get_shares(env: &Env, user: &Address) -> u128 {
         let key = TreasuryKey::UserShares(user.clone());
-        let shares = env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(0);
+        let shares = env.storage().persistent().get(&key).unwrap_or(0);
         storage_ttl::bump_persistent(env, &key);
         shares
     }

@@ -9,11 +9,11 @@
 //! - Beneficiaries can pull their exact accrued share at any time.
 //! - Accurately tracks accumulated total shares without integer truncation loss.
 
+use soroban_certificate_contract::storage_ttl;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, token,
     Address, Env, Map, Vec,
 };
-use soroban_certificate_contract::storage_ttl;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -203,10 +203,7 @@ impl PaymentSplitter {
     pub fn shares(env: Env, payee: Address) -> u32 {
         storage_ttl::bump_instance(&env);
         let key = SplitterDataKey::Shares(payee);
-        let shares = env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(0);
+        let shares = env.storage().persistent().get(&key).unwrap_or(0);
         storage_ttl::bump_persistent(&env, &key);
         shares
     }
@@ -224,10 +221,7 @@ impl PaymentSplitter {
     pub fn total_released(env: Env, token: Address) -> i128 {
         storage_ttl::bump_instance(&env);
         let key = SplitterDataKey::TotalReleased(token);
-        let released = env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(0);
+        let released = env.storage().persistent().get(&key).unwrap_or(0);
         storage_ttl::bump_persistent(&env, &key);
         released
     }
@@ -236,10 +230,7 @@ impl PaymentSplitter {
     pub fn released(env: Env, token: Address, payee: Address) -> i128 {
         storage_ttl::bump_instance(&env);
         let key = SplitterDataKey::Released(token, payee);
-        let released = env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(0);
+        let released = env.storage().persistent().get(&key).unwrap_or(0);
         storage_ttl::bump_persistent(&env, &key);
         released
     }

@@ -36,10 +36,10 @@
 
 #![no_std]
 
+use soroban_certificate_contract::storage_ttl;
 use soroban_sdk::{
     contract, contractimpl, contracttype, panic_with_error, symbol_short, Address, Env, String, Vec,
 };
-use soroban_certificate_contract::storage_ttl;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -595,7 +595,8 @@ fn check_voting_period(env: &Env, period: u64) {
 
 fn credits_balance(env: &Env, member: &Address) -> u128 {
     let key = Key::Credits(member.clone());
-    let balance = env.storage()
+    let balance = env
+        .storage()
         .persistent()
         .get::<Key, u128>(&key)
         .unwrap_or(0);

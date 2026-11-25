@@ -20,11 +20,11 @@
 pub mod payment_splitter;
 pub use payment_splitter::*;
 
+use soroban_certificate_contract::storage_ttl;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
     Env, Symbol, Vec,
 };
-use soroban_certificate_contract::storage_ttl;
 
 // ── Storage keys ────────────────────────────────────────────────────────────
 const ADMIN: Symbol = symbol_short!("ADMIN");
@@ -383,10 +383,7 @@ impl PaymentGateway {
     pub fn get_balance(env: Env, user: Address) -> i128 {
         storage_ttl::bump_instance(&env);
         let key = DataKey::Balance(user);
-        let value = env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(0);
+        let value = env.storage().persistent().get(&key).unwrap_or(0);
         storage_ttl::bump_persistent(&env, &key);
         value
     }
@@ -394,7 +391,8 @@ impl PaymentGateway {
     pub fn get_payment(env: Env, payment_id: u64) -> PaymentRecord {
         storage_ttl::bump_instance(&env);
         let key = DataKey::Payment(payment_id);
-        let payment = env.storage()
+        let payment = env
+            .storage()
             .persistent()
             .get(&key)
             .unwrap_or_else(|| panic_with_error!(&env, Error::RecordNotFound));
@@ -623,20 +621,14 @@ impl PaymentGateway {
                 .persistent()
                 .get(&DataKey::Balance(share.stakeholder.clone()))
                 .unwrap_or(0);
-            storage_ttl::bump_persistent(
-                &env,
-                &DataKey::Balance(share.stakeholder.clone()),
-            );
+            storage_ttl::bump_persistent(&env, &DataKey::Balance(share.stakeholder.clone()));
             balance = balance
                 .checked_add(share_amount)
                 .expect("stakeholder overflow");
             env.storage()
                 .persistent()
                 .set(&DataKey::Balance(share.stakeholder.clone()), &balance);
-            storage_ttl::bump_persistent(
-                &env,
-                &DataKey::Balance(share.stakeholder.clone()),
-            );
+            storage_ttl::bump_persistent(&env, &DataKey::Balance(share.stakeholder.clone()));
 
             distributed = distributed
                 .checked_add(share_amount)
@@ -700,7 +692,8 @@ impl PaymentGateway {
     pub fn get_escrow(env: Env, escrow_id: u64) -> Escrow {
         storage_ttl::bump_instance(&env);
         let key = DataKey::Escrow(escrow_id);
-        let escrow = env.storage()
+        let escrow = env
+            .storage()
             .persistent()
             .get(&key)
             .unwrap_or_else(|| panic_with_error!(&env, Error::EscrowNotFound));

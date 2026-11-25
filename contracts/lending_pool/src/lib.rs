@@ -37,11 +37,11 @@
 #[cfg(test)]
 extern crate std;
 
+use soroban_certificate_contract::storage_ttl;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, token,
     Address, Env, IntoVal, Symbol,
 };
-use soroban_certificate_contract::storage_ttl;
 
 pub mod flash_loan;
 pub mod interest;
@@ -564,10 +564,7 @@ impl LendingPool {
     pub fn collateral_of(env: Env, user: Address, token: Address) -> i128 {
         storage_ttl::bump_instance(&env);
         let key = Key::Collateral(user, token);
-        let value = env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(0);
+        let value = env.storage().persistent().get(&key).unwrap_or(0);
         storage_ttl::bump_persistent(&env, &key);
         value
     }
@@ -575,10 +572,7 @@ impl LendingPool {
     pub fn debt_of(env: Env, user: Address, token: Address) -> i128 {
         storage_ttl::bump_instance(&env);
         let key = Key::Debt(user, token);
-        let value = env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(0);
+        let value = env.storage().persistent().get(&key).unwrap_or(0);
         storage_ttl::bump_persistent(&env, &key);
         value
     }
@@ -613,36 +607,24 @@ impl LendingPool {
         }
 
         let rate_key = Key::BorrowRate(token.clone());
-        let rate: i128 = env
-            .storage()
-            .persistent()
-            .get(&rate_key)
-            .unwrap_or(0);
+        let rate: i128 = env.storage().persistent().get(&rate_key).unwrap_or(0);
         storage_ttl::bump_persistent(env, &rate_key);
         if rate == 0 {
-            env.storage()
-                .persistent()
-                .set(&last_key, &now);
+            env.storage().persistent().set(&last_key, &now);
             storage_ttl::bump_persistent(env, &last_key);
             return;
         }
 
         let elapsed = (now - last) as i128;
         let index_key = Key::GlobalIdx(token.clone());
-        let old_idx: i128 = env
-            .storage()
-            .persistent()
-            .get(&index_key)
-            .unwrap_or(SCALE);
+        let old_idx: i128 = env.storage().persistent().get(&index_key).unwrap_or(SCALE);
         storage_ttl::bump_persistent(env, &index_key);
 
         // Δindex = old_idx × rate × elapsed / (BPS × SECS_PER_YEAR)
         let new_idx = interest::next_index(old_idx, rate, elapsed)
             .unwrap_or_else(|| panic_with_error!(env, LPError::Overflow));
 
-        env.storage()
-            .persistent()
-            .set(&index_key, &new_idx);
+        env.storage().persistent().set(&index_key, &new_idx);
         storage_ttl::bump_persistent(env, &index_key);
         env.storage().persistent().set(&last_key, &now);
         storage_ttl::bump_persistent(env, &last_key);
@@ -651,21 +633,13 @@ impl LendingPool {
     /// Apply accrued interest to a user's recorded principal.
     fn accrue_user(env: &Env, user: &Address, token: &Address) {
         let debt_key = Key::Debt(user.clone(), token.clone());
-        let principal: i128 = env
-            .storage()
-            .persistent()
-            .get(&debt_key)
-            .unwrap_or(0);
+        let principal: i128 = env.storage().persistent().get(&debt_key).unwrap_or(0);
         storage_ttl::bump_persistent(env, &debt_key);
         if principal == 0 {
             return;
         }
         let index_key = Key::GlobalIdx(token.clone());
-        let gidx: i128 = env
-            .storage()
-            .persistent()
-            .get(&index_key)
-            .unwrap_or(SCALE);
+        let gidx: i128 = env.storage().persistent().get(&index_key).unwrap_or(SCALE);
         storage_ttl::bump_persistent(env, &index_key);
         let user_index_key = Key::UserIdx(user.clone(), token.clone());
         let uidx: i128 = env
@@ -675,13 +649,9 @@ impl LendingPool {
             .unwrap_or(SCALE);
         storage_ttl::bump_persistent(env, &user_index_key);
         if let Some(new_principal) = interest::accrued_principal(principal, gidx, uidx) {
-            env.storage()
-                .persistent()
-                .set(&debt_key, &new_principal);
+            env.storage().persistent().set(&debt_key, &new_principal);
             storage_ttl::bump_persistent(env, &debt_key);
-            env.storage()
-                .persistent()
-                .set(&user_index_key, &gidx);
+            env.storage().persistent().set(&user_index_key, &gidx);
             storage_ttl::bump_persistent(env, &user_index_key);
         }
     }
@@ -689,22 +659,14 @@ impl LendingPool {
     /// Returns `true` when the (collateral, debt) pair is sufficiently collateralised.
     fn is_healthy(env: &Env, user: &Address, coll_token: &Address, debt_token: &Address) -> bool {
         let debt_key = Key::Debt(user.clone(), debt_token.clone());
-        let debt: i128 = env
-            .storage()
-            .persistent()
-            .get(&debt_key)
-            .unwrap_or(0);
+        let debt: i128 = env.storage().persistent().get(&debt_key).unwrap_or(0);
         storage_ttl::bump_persistent(env, &debt_key);
         if debt == 0 {
             return true;
         }
 
         let coll_key = Key::Collateral(user.clone(), coll_token.clone());
-        let coll_bal: i128 = env
-            .storage()
-            .persistent()
-            .get(&coll_key)
-            .unwrap_or(0);
+        let coll_bal: i128 = env.storage().persistent().get(&coll_key).unwrap_or(0);
         storage_ttl::bump_persistent(env, &coll_key);
 
         let coll_price = Self::price(env, coll_token);
