@@ -70,9 +70,7 @@ pub const TEMP_THRESHOLD_LEDGERS: u32 = 5_000;
 /// **Call this on every state-mutating invocation** to satisfy SC-HARD-16.
 #[inline(always)]
 pub fn bump_instance(env: &Env) {
-    env.storage()
-        .instance()
-        .extend_ttl(TTL_THRESHOLD, TTL_BUMP);
+    env.storage().instance().extend_ttl(TTL_THRESHOLD, TTL_BUMP);
 }
 
 /// Bump a persistent storage entry's TTL when it exists.

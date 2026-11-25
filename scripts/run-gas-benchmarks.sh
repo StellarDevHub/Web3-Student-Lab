@@ -58,7 +58,7 @@ endpoints = load_raw(raw_path)
 current = {
     "commit": "PR",
     "timestamp": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    "soroban_sdk_version": "26.1.0",
+    "soroban_sdk_version": "28.0.0",
     "endpoints": [
         {
             "endpoint": e["endpoint"],
