@@ -496,6 +496,124 @@ fn test_bidirectional_trade_allowed_in_different_blocks() {
     assert!(out2 > 0);
 }
 
+// ── Fuzz-style tests: reentrancy mutex must never persist past tx boundaries ──
+
+/// Verifies that the reentrancy guard is absent after a successful `add_liquidity`.
+#[test]
+fn fuzz_guard_cleared_after_add_liquidity() {
+    let env = Env::default();
+    let (admin, client, _, _, _) = setup(&env);
+
+    client.add_liquidity(&admin, &1_000_000, &1_000_000, &0);
+
+    let held = env.as_contract(&client.address, || env.storage().temporary().has(&RG_KEY));
+    assert!(!held, "guard must be absent after add_liquidity");
+}
+
+/// Verifies that a failed `add_liquidity` (slippage) leaves no guard in storage.
+#[test]
+fn fuzz_guard_cleared_after_failed_add_liquidity() {
+    let env = Env::default();
+    let (admin, client, token_a, token_b, _) = setup(&env);
+
+    let user = Address::generate(&env);
+    token::StellarAssetClient::new(&env, &token_a).mint(&user, &1_000);
+    token::StellarAssetClient::new(&env, &token_b).mint(&user, &1_000);
+
+    // Demand impossibly high min_shares — will panic with SlippageExceeded.
+    let _ = client.try_add_liquidity(&user, &1_000, &1_000, &i128::MAX);
+
+    let held = env.as_contract(&client.address, || env.storage().temporary().has(&RG_KEY));
+    assert!(!held, "guard must be absent after failed add_liquidity");
+}
+
+/// Verifies that the reentrancy guard is absent after a successful `remove_liquidity`.
+#[test]
+fn fuzz_guard_cleared_after_remove_liquidity() {
+    let env = Env::default();
+    let (admin, client, _, _, _) = setup(&env);
+
+    let shares = client.add_liquidity(&admin, &1_000_000, &1_000_000, &0);
+    client.remove_liquidity(&admin, &(shares / 10), &0, &0);
+
+    let held = env.as_contract(&client.address, || env.storage().temporary().has(&RG_KEY));
+    assert!(!held, "guard must be absent after remove_liquidity");
+}
+
+/// Verifies that the reentrancy guard is absent after a successful `swap_a_for_b`.
+#[test]
+fn fuzz_guard_cleared_after_swap_a_for_b() {
+    let env = Env::default();
+    let (admin, client, token_a, _, _) = setup(&env);
+
+    client.add_liquidity(&admin, &10_000_000, &10_000_000, &0);
+
+    let user = Address::generate(&env);
+    token::StellarAssetClient::new(&env, &token_a).mint(&user, &1_000);
+    client.swap_a_for_b(&user, &1_000, &0);
+
+    let held = env.as_contract(&client.address, || env.storage().temporary().has(&RG_KEY));
+    assert!(!held, "guard must be absent after swap_a_for_b");
+}
+
+/// Verifies that the reentrancy guard is absent after a successful `swap_b_for_a`.
+#[test]
+fn fuzz_guard_cleared_after_swap_b_for_a() {
+    let env = Env::default();
+    let (admin, client, _, token_b, _) = setup(&env);
+
+    client.add_liquidity(&admin, &10_000_000, &10_000_000, &0);
+
+    let user = Address::generate(&env);
+    token::StellarAssetClient::new(&env, &token_b).mint(&user, &1_000);
+    client.swap_b_for_a(&user, &1_000, &0);
+
+    let held = env.as_contract(&client.address, || env.storage().temporary().has(&RG_KEY));
+    assert!(!held, "guard must be absent after swap_b_for_a");
+}
+
+/// Verifies that a failed swap (slippage) leaves no guard in storage.
+#[test]
+fn fuzz_guard_cleared_after_failed_swap() {
+    let env = Env::default();
+    let (admin, client, token_a, _, _) = setup(&env);
+
+    client.add_liquidity(&admin, &10_000_000, &10_000_000, &0);
+
+    let user = Address::generate(&env);
+    token::StellarAssetClient::new(&env, &token_a).mint(&user, &1_000);
+    // Demand impossibly high min_amount_out — will panic with SlippageExceeded.
+    let _ = client.try_swap_a_for_b(&user, &1_000, &i128::MAX);
+
+    let held = env.as_contract(&client.address, || env.storage().temporary().has(&RG_KEY));
+    assert!(!held, "guard must be absent after failed swap");
+}
+
+/// Verifies that many consecutive state-mutating calls never leave the guard set.
+#[test]
+fn fuzz_guard_never_persists_across_multiple_operations() {
+    let env = Env::default();
+    let (admin, client, token_a, token_b, _) = setup(&env);
+
+    let user = Address::generate(&env);
+    token::StellarAssetClient::new(&env, &token_a).mint(&user, &10_000_000);
+    token::StellarAssetClient::new(&env, &token_b).mint(&user, &10_000_000);
+
+    for i in 1i128..=5 {
+        client.add_liquidity(&user, &(i * 100_000), &(i * 100_000), &0);
+
+        let held = env.as_contract(&client.address, || env.storage().temporary().has(&RG_KEY));
+        assert!(!held, "guard must be absent after add_liquidity iteration {i}");
+
+        token::StellarAssetClient::new(&env, &token_a).mint(&user, &10_000);
+        client.swap_a_for_b(&user, &10_000, &0);
+
+        let held = env.as_contract(&client.address, || env.storage().temporary().has(&RG_KEY));
+        assert!(!held, "guard must be absent after swap iteration {i}");
+    }
+}
+
+#[allow(dead_code)]
 fn test_guardian_pause_blocks_amm_operations() {
     let env = Env::default();
     let (admin, client, token_a, _, _) = setup(&env);
