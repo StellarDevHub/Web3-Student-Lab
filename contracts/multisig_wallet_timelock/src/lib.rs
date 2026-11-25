@@ -4,13 +4,13 @@
 #![no_std]
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
-    Bytes, Env, Map, Symbol, Vec,
+    Env, Symbol, Val, Vec,
 };
-
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Error {
     Reentrancy = 1,
+    AlreadyInitialized = 2,
 }
 
 const MAX_SIGNERS: usize = 10;
@@ -22,7 +22,8 @@ pub struct Proposal {
     pub proposer: Address,
     pub to: Address,
     pub value: i128,
-    pub data: Bytes,
+    pub function: Symbol,
+    pub args: Vec<Val>,
     pub approvals: Vec<Address>,
     pub executed: bool,
     pub created_at: u64,
@@ -33,7 +34,7 @@ pub struct Proposal {
 pub enum DataKey {
     Signers,
     Threshold,
-    Proposals,
+    Proposal(u32),
     ProposalCount,
     TimelockPeriod,
 }
@@ -44,6 +45,9 @@ pub struct MultiSigWalletContract;
 #[contractimpl]
 impl MultiSigWalletContract {
     pub fn initialize(env: Env, signers: Vec<Address>, threshold: u32, timelock_period: u64) {
+        if env.storage().instance().has(&DataKey::Signers) {
+            panic_with_error!(&env, Error::AlreadyInitialized);
+        }
         assert!(signers.len() <= MAX_SIGNERS as u32, "Too many signers");
         assert!(
             threshold > 0 && threshold <= signers.len(),
@@ -64,7 +68,8 @@ impl MultiSigWalletContract {
         proposer: Address,
         to: Address,
         value: i128,
-        data: Bytes,
+        function: Symbol,
+        args: Vec<Val>,
     ) -> u32 {
         proposer.require_auth();
         Self::lock(&env);
@@ -72,11 +77,6 @@ impl MultiSigWalletContract {
         let signers: Vec<Address> = env.storage().instance().get(&DataKey::Signers).unwrap();
         assert!(signers.contains(&proposer), "Not a signer");
 
-        let mut proposals: Map<u32, Proposal> = env
-            .storage()
-            .instance()
-            .get(&DataKey::Proposals)
-            .unwrap_or_else(|| Map::new(&env));
         let proposal_count: u32 = env
             .storage()
             .instance()
@@ -93,16 +93,16 @@ impl MultiSigWalletContract {
             proposer: proposer.clone(),
             to,
             value,
-            data,
+            function,
+            args,
             approvals: Vec::new(&env),
             executed: false,
             created_at: now,
             timelock: now + timelock_period,
         };
-        proposals.set(proposal_count, proposal);
         env.storage()
-            .instance()
-            .set(&DataKey::Proposals, &proposals);
+            .persistent()
+            .set(&DataKey::Proposal(proposal_count), &proposal);
         env.storage()
             .instance()
             .set(&DataKey::ProposalCount, &(proposal_count + 1));
@@ -118,26 +118,21 @@ impl MultiSigWalletContract {
         let signers: Vec<Address> = env.storage().instance().get(&DataKey::Signers).unwrap();
         assert!(signers.contains(&signer), "Not a signer");
 
-        let mut proposals: Map<u32, Proposal> =
-            env.storage().instance().get(&DataKey::Proposals).unwrap();
-        let mut proposal = proposals.get(proposal_id).unwrap();
+        let proposal_key = DataKey::Proposal(proposal_id);
+        let mut proposal: Proposal = env.storage().persistent().get(&proposal_key).unwrap();
 
         assert!(!proposal.executed, "Already executed");
         assert!(!proposal.approvals.contains(&signer), "Already approved");
 
         proposal.approvals.push_back(signer);
-        proposals.set(proposal_id, proposal);
-        env.storage()
-            .instance()
-            .set(&DataKey::Proposals, &proposals);
+        env.storage().persistent().set(&proposal_key, &proposal);
         Self::unlock(&env);
     }
 
     pub fn execute_proposal(env: Env, proposal_id: u32) {
         Self::lock(&env);
-        let mut proposals: Map<u32, Proposal> =
-            env.storage().instance().get(&DataKey::Proposals).unwrap();
-        let mut proposal = proposals.get(proposal_id).unwrap();
+        let proposal_key = DataKey::Proposal(proposal_id);
+        let mut proposal: Proposal = env.storage().persistent().get(&proposal_key).unwrap();
         let threshold: u32 = env.storage().instance().get(&DataKey::Threshold).unwrap();
         let now = env.ledger().timestamp();
 
@@ -148,13 +143,9 @@ impl MultiSigWalletContract {
         );
         assert!(now >= proposal.timelock, "Timelock not expired");
 
-        // Execute transaction logic here (e.g., transfer funds)
-
         proposal.executed = true;
-        proposals.set(proposal_id, proposal);
-        env.storage()
-            .instance()
-            .set(&DataKey::Proposals, &proposals);
+        env.storage().persistent().set(&proposal_key, &proposal);
+        let _: Val = env.invoke_contract(&proposal.to, &proposal.function, proposal.args);
         Self::unlock(&env);
     }
 
@@ -186,25 +177,37 @@ impl MultiSigWalletContract {
         Self::unlock(&env);
     }
 
-    // ── Reentrancy guards ─────────────────────────────────────────────────
+    // â”€â”€ Reentrancy guards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     fn lock(env: &Env) {
-        let locked: bool = env.storage().instance().get(&LOCK).unwrap_or(false);
+        let locked: bool = env.storage().temporary().get(&LOCK).unwrap_or(false);
         if locked {
             panic_with_error!(&env, Error::Reentrancy);
         }
-        env.storage().instance().set(&LOCK, &true);
+        env.storage().temporary().set(&LOCK, &true);
     }
 
     fn unlock(env: &Env) {
-        env.storage().instance().set(&LOCK, &false);
+        env.storage().temporary().remove(&LOCK);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, testutils::Ledger, Env};
+    use soroban_sdk::{
+        contract, contractimpl, testutils::Address as _, testutils::Ledger, Env, IntoVal,
+    };
+
+    #[contract]
+    pub struct ExecutionTarget;
+
+    #[contractimpl]
+    impl ExecutionTarget {
+        pub fn record(_env: Env, value: i128) -> i128 {
+            value
+        }
+    }
 
     #[test]
     fn test_multisig_flow() {
@@ -220,9 +223,10 @@ mod tests {
 
         client.initialize(&signers, &2, &10);
 
-        let to = Address::generate(&env);
-        let data = Bytes::new(&env);
-        let proposal_id = client.submit_proposal(&signer1, &to, &100, &data);
+        let to = env.register(ExecutionTarget, ());
+        let args = Vec::from_array(&env, [100i128.into_val(&env)]);
+        let proposal_id =
+            client.submit_proposal(&signer1, &to, &100, &symbol_short!("record"), &args);
 
         client.approve_proposal(&signer1, &proposal_id);
         client.approve_proposal(&signer2, &proposal_id);
@@ -232,10 +236,12 @@ mod tests {
 
         client.execute_proposal(&proposal_id);
 
-        let proposals: Map<u32, Proposal> = env.as_contract(&contract_id, || {
-            env.storage().instance().get(&DataKey::Proposals).unwrap()
+        let proposal: Proposal = env.as_contract(&contract_id, || {
+            env.storage()
+                .persistent()
+                .get(&DataKey::Proposal(proposal_id))
+                .unwrap()
         });
-        let proposal = proposals.get(proposal_id).unwrap();
         assert!(proposal.executed);
     }
 }
