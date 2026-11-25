@@ -19,9 +19,54 @@ fn setup() -> (Env, Address, PaymentGatewayClient<'static>) {
     env.mock_all_auths();
     let contract_id = env.register(PaymentGateway, ());
     let admin = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let payment_token = env
+        .register_stellar_asset_contract_v2(token_admin)
+        .address();
     let client = PaymentGatewayClient::new(&env, &contract_id);
-    client.initialize(&admin);
+    client.initialize(&admin, &payment_token);
     (env, admin, client)
+}
+
+fn fund_and_deposit(
+    env: &Env,
+    client: &PaymentGatewayClient<'_>,
+    user: &Address,
+    amount: i128,
+) {
+    let payment_token = client.get_payment_token();
+    token::StellarAssetClient::new(env, &payment_token).mint(user, &amount);
+    client.deposit(user, &amount);
+}
+
+#[test]
+fn gateway_deposit_and_withdraw_move_real_tokens_and_preserve_total() {
+    let (env, _admin, client) = setup();
+    let user = Address::generate(&env);
+    let payment_token = client.get_payment_token();
+    let token_admin = token::StellarAssetClient::new(&env, &payment_token);
+    let token_client = token::Client::new(&env, &payment_token);
+    token_admin.mint(&user, &1_000);
+
+    client.deposit(&user, &700);
+    assert_eq!(token_client.balance(&user), 300);
+    assert_eq!(client.get_token_balance(), 700);
+    assert_eq!(client.get_balance(&user), 700);
+    assert_eq!(client.get_total_deposited(), 700);
+
+    client.withdraw(&user, &250);
+    assert_eq!(token_client.balance(&user), 550);
+    assert_eq!(client.get_token_balance(), 450);
+    assert_eq!(client.get_balance(&user), 450);
+    assert_eq!(client.get_total_deposited(), 450);
+}
+
+#[test]
+#[should_panic]
+fn deposit_without_user_tokens_cannot_create_a_gateway_balance() {
+    let (env, _admin, client) = setup();
+    let user = Address::generate(&env);
+    client.deposit(&user, &500);
 }
 
 #[test]
@@ -31,7 +76,7 @@ fn test_create_escrow_locks_payer_balance() {
     let alice = Address::generate(&env);
     let bob = Address::generate(&env);
 
-    client.deposit(&payer, &10_000);
+    fund_and_deposit(&env, &client, &payer, 10_000);
 
     let shares = vec![
         &env,
@@ -63,7 +108,7 @@ fn test_create_escrow_insufficient_balance_panics() {
     let payer = Address::generate(&env);
     let alice = Address::generate(&env);
 
-    client.deposit(&payer, &100);
+    fund_and_deposit(&env, &client, &payer, 100);
     let shares = vec![
         &env,
         EscrowShare {
@@ -83,7 +128,7 @@ fn test_create_escrow_shares_not_summing_to_10000_panics() {
     let alice = Address::generate(&env);
     let bob = Address::generate(&env);
 
-    client.deposit(&payer, &10_000);
+    fund_and_deposit(&env, &client, &payer, 10_000);
     let shares = vec![
         &env,
         EscrowShare {
@@ -104,7 +149,7 @@ fn test_create_escrow_shares_not_summing_to_10000_panics() {
 fn test_create_escrow_empty_shares_panics() {
     let (env, _admin, client) = setup();
     let payer = Address::generate(&env);
-    client.deposit(&payer, &10_000);
+    fund_and_deposit(&env, &client, &payer, 10_000);
 
     let shares: Vec<EscrowShare> = vec![&env];
     client.create_escrow(&payer, &1u64, &shares, &10_000);
@@ -117,7 +162,7 @@ fn test_create_escrow_zero_bps_share_panics() {
     let payer = Address::generate(&env);
     let alice = Address::generate(&env);
     let bob = Address::generate(&env);
-    client.deposit(&payer, &10_000);
+    fund_and_deposit(&env, &client, &payer, 10_000);
 
     let shares = vec![
         &env,
@@ -140,7 +185,7 @@ fn test_create_escrow_duplicate_stakeholder_panics() {
     let (env, _admin, client) = setup();
     let payer = Address::generate(&env);
     let alice = Address::generate(&env);
-    client.deposit(&payer, &10_000);
+    fund_and_deposit(&env, &client, &payer, 10_000);
 
     let shares = vec![
         &env,
@@ -163,7 +208,7 @@ fn test_create_escrow_duplicate_id_panics() {
     let (env, _admin, client) = setup();
     let payer = Address::generate(&env);
     let alice = Address::generate(&env);
-    client.deposit(&payer, &20_000);
+    fund_and_deposit(&env, &client, &payer, 20_000);
 
     let shares = vec![
         &env,
@@ -185,7 +230,7 @@ fn test_distribute_escrow_credits_stakeholders_proportionally() {
     let bob = Address::generate(&env);
     let carol = Address::generate(&env);
 
-    client.deposit(&payer, &10_000);
+    fund_and_deposit(&env, &client, &payer, 10_000);
     let shares = vec![
         &env,
         EscrowShare {
@@ -227,7 +272,7 @@ fn test_distribute_escrow_rounding_remainder_goes_to_last_stakeholder() {
     // 10_000 split three ways (3_333 bps each + 1 bps) doesn't divide the
     // raw amount evenly — verifies the remainder-to-last-stakeholder rule
     // conserves the total exactly instead of losing/creating dust.
-    client.deposit(&payer, &100);
+    fund_and_deposit(&env, &client, &payer, 100);
     let shares = vec![
         &env,
         EscrowShare {
@@ -256,7 +301,7 @@ fn test_distribute_escrow_twice_panics() {
     let (env, _admin, client) = setup();
     let payer = Address::generate(&env);
     let alice = Address::generate(&env);
-    client.deposit(&payer, &10_000);
+    fund_and_deposit(&env, &client, &payer, 10_000);
 
     let shares = vec![
         &env,
@@ -275,7 +320,7 @@ fn test_admin_can_distribute_on_payers_behalf() {
     let (env, admin, client) = setup();
     let payer = Address::generate(&env);
     let alice = Address::generate(&env);
-    client.deposit(&payer, &10_000);
+    fund_and_deposit(&env, &client, &payer, 10_000);
 
     let shares = vec![
         &env,
@@ -299,7 +344,7 @@ fn test_unrelated_caller_cannot_distribute() {
     let payer = Address::generate(&env);
     let alice = Address::generate(&env);
     let stranger = Address::generate(&env);
-    client.deposit(&payer, &10_000);
+    fund_and_deposit(&env, &client, &payer, 10_000);
 
     let shares = vec![
         &env,
@@ -318,7 +363,7 @@ fn test_cancel_escrow_returns_funds_to_payer() {
     let (env, _admin, client) = setup();
     let payer = Address::generate(&env);
     let alice = Address::generate(&env);
-    client.deposit(&payer, &10_000);
+    fund_and_deposit(&env, &client, &payer, 10_000);
 
     let shares = vec![
         &env,
@@ -342,7 +387,7 @@ fn test_cancel_already_distributed_escrow_panics() {
     let (env, _admin, client) = setup();
     let payer = Address::generate(&env);
     let alice = Address::generate(&env);
-    client.deposit(&payer, &10_000);
+    fund_and_deposit(&env, &client, &payer, 10_000);
 
     let shares = vec![
         &env,
@@ -377,7 +422,7 @@ fn test_one_stakeholder_never_withdrawing_does_not_block_others() {
     let bob = Address::generate(&env); // "unresponsive" — never withdraws
     let carol = Address::generate(&env); // will also withdraw, after Bob's turn
 
-    client.deposit(&payer, &9_000);
+    fund_and_deposit(&env, &client, &payer, 9_000);
     let shares = vec![
         &env,
         EscrowShare {
@@ -429,8 +474,8 @@ fn test_multiple_escrows_are_independent() {
     let payer2 = Address::generate(&env);
     let alice = Address::generate(&env);
 
-    client.deposit(&payer1, &5_000);
-    client.deposit(&payer2, &7_000);
+    fund_and_deposit(&env, &client, &payer1, 5_000);
+    fund_and_deposit(&env, &client, &payer2, 7_000);
 
     let shares = vec![
         &env,
