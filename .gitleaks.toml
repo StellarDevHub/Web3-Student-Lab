@@ -1,66 +1,98 @@
-# Gitleaks configuration for Web3-Student-Lab
-# Docs: https://github.com/gitleaks/gitleaks#configuration
+# .gitleaks.toml — Gitleaks configuration for Web3-Student-Lab
+# BE-089: Automated Dependency Vulnerability Gatekeeper
+#
+# Gitleaks docs: https://github.com/gitleaks/gitleaks#configuration
+# This file is read by the secret-scan.yml workflow.
+#
+# Structure:
+#   [extend]        – inherit from the built-in ruleset (recommended baseline)
+#   [[rules]]       – project-specific rules that extend or override the built-in set
+#   [[allowlist]]   – repository-wide false-positive suppression
+#   [allowlist]     – path/commit-level suppressions
+
+# ---------------------------------------------------------------------------
+# Extend the official Gitleaks default ruleset so we keep all built-in
+# detectors (AWS keys, GCP keys, GitHub PATs, Slack tokens, etc.) and only
+# add/tune on top of them.
+# ---------------------------------------------------------------------------
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# Project-specific rules
+# Web3 / Stellar / Soroban-aware additions beyond the built-in ruleset.
+# ---------------------------------------------------------------------------
+
+[[rules]]
+id          = "stellar-secret-key"
+description = "Stellar / Soroban secret key (S…) leaked in source"
+# Stellar secret keys are base32-encoded 56-character strings starting with S.
+regex       = '''(?i)(stellar[_\-]?secret|SECRET[_\-]?KEY|STELLAR[_\-]?SK)\s*[:=]\s*["']?S[A-Z2-7]{55}["']?'''
+entropy     = 4.0
+tags        = ["stellar", "secret-key", "web3"]
+
+[[rules]]
+id          = "mnemonic-seed-phrase"
+description = "BIP-39 mnemonic seed phrase (12 or 24 words)"
+# Matches a sequence of 11–24 lower-case words separated by spaces, which is the
+# canonical form of a BIP-39 mnemonic. Intentionally conservative to avoid
+# false positives on prose.
+regex       = '''(?i)(mnemonic|seed[_\- ]?phrase|recovery[_\- ]?phrase)\s*[:=]\s*["']?([a-z]+\s){11,23}[a-z]+["']?'''
+tags        = ["crypto", "mnemonic", "web3"]
+
+[[rules]]
+id          = "ethereum-private-key"
+description = "Ethereum / EVM raw private key (hex)"
+regex       = '''(?i)(private[_\-]?key|PRIVATE_KEY|ETH[_\-]?KEY)\s*[:=]\s*["']?0x[0-9a-fA-F]{64}["']?'''
+entropy     = 3.5
+tags        = ["ethereum", "private-key", "web3"]
+
+[[rules]]
+id          = "generic-api-token-assignment"
+description = "Generic API_TOKEN / API_SECRET / ACCESS_TOKEN assignment"
+regex       = '''(?i)(api[_\-]?token|api[_\-]?secret|access[_\-]?token|auth[_\-]?token)\s*[:=]\s*["'][A-Za-z0-9\-_\.]{20,}["']'''
+entropy     = 3.5
+tags        = ["generic", "api-key"]
+
+[[rules]]
+id          = "snyk-token"
+description = "Snyk API token committed to source"
+regex       = '''(?i)(snyk[_\-]?token|SNYK_TOKEN)\s*[:=]\s*["'][0-9a-f\-]{36}["']'''
+tags        = ["snyk", "api-key"]
+
+# ---------------------------------------------------------------------------
+# Repository-wide allowlist
+# Add entries here for known false positives — test fixtures, example values,
+# documentation snippets, etc. Each entry MUST include an `id` and a comment
+# explaining why it is safe to allow.
+# ---------------------------------------------------------------------------
 
 [allowlist]
-  description = "Known safe patterns that should not trigger secret scanning alerts"
+description = "Global allowlist — test fixtures and documentation examples"
 
-  # Example/placeholder values in .env.example — not real secrets
-  regexes = [
-    '''CHANGE_THIS_.*''',
-    '''test-jwt-secret''',
-    '''test-github-client-id''',
-    '''test-github-client-secret''',
-    '''test-github-redirect-uri''',
-  ]
+# Paths that must never be scanned (generated artifacts, vendored binaries).
+paths = [
+    # Compiled WASM artifacts contain arbitrary byte patterns that
+    # can look like base32/hex keys.
+    '''.*\.wasm$''',
+    # Rust/cargo generated files and lock files carry hash digests,
+    # not live secrets.
+    '''Cargo\.lock$''',
+    # Test fixture directory: contains deliberately invalid/fake credentials.
+    '''tests/fixtures/''',
+    # Changelog and release notes may reference redacted token examples.
+    '''CHANGELOG\.md$''',
+]
 
-  # Test fixture files and mock values
-  paths = [
-    # Test snapshots and fixtures
-    '''.*__snapshots__/.*''',
-    '''.*__fixtures__/.*''',
-    '''.*test_fixtures/.*''',
-    '''.*\.test\.(ts|tsx|js|jsx|rs)$''',
-    '''.*\.spec\.(ts|tsx|js|jsx|rs)$''',
+# Specific commits to ignore (use sparingly; prefer path-level allowlist).
+# commits = ["<full-sha>"]
 
-    # Example env template
-    '''\.env\.example$''',
-
-    # Documentation and policy files
-    '''docs/.*''',
-    '''README\.md$''',
-    '''MVP_READINESS\.md$''',
-    '''INTEGRATION_GUIDE\.md$''',
-
-    # Generated, dependency cache and workflow configs
-    '''\.pnpm-store/.*''',
-    '''\.github/workflows/.*''',
-    '''docker-compose.*\.ya?ml$''',
-    '''scripts/setup\.sh$''',
-    '''backend/coverage/.*''',
-    '''frontend/coverage/.*''',
-    '''backend/dist/.*''',
-  ]
-
-[[rules]]
-  id = "stellar-secret-seed"
-  description = "Stellar Ed25519 secret key seed"
-  regex = '''S[A-Z0-9]{55}'''
-  tags = ["stellar", "secret", "key"]
-
-[[rules]]
-  id = "jwt-secret"
-  description = "JWT secret or token"
-  regex = '''(?i)jwt[_\-]?secret\s*[:=]\s*['"]?[A-Za-z0-9\-_]{32,}['"]?'''
-  tags = ["jwt", "secret"]
-
-[[rules]]
-  id = "generic-api-key"
-  description = "Generic API key"
-  regex = '''(?i)api[_\-\s]?key\s*[:=]\s*['"]?[A-Za-z0-9\-_]{16,}['"]?'''
-  tags = ["api-key", "secret"]
-
-[[rules]]
-  id = "private-key-block"
-  description = "PEM private key block"
-  regex = '''-----BEGIN ((RSA|EC|DSA|OPENSSH) )?PRIVATE KEY-----'''
-  tags = ["pem", "private-key"]
+# Regex patterns that are globally safe to ignore across all rules.
+regexes = [
+    # Placeholder values used in documentation and configuration templates.
+    '''YOUR_.*_HERE''',
+    '''<YOUR_.*>''',
+    '''example\.(com|org|io)''',
+    # GitHub Actions expression syntax (not actual secret values).
+    '''\$\{\{.*secrets\..*\}\}''',
+]
