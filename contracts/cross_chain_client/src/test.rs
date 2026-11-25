@@ -8,8 +8,8 @@
 //!   * gating which headers are accepted.
 
 use super::*;
-use soroban_sdk::testutils::{Address as _, Ledger as _};
-use soroban_sdk::Env;
+use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
+use soroban_sdk::{symbol_short, xdr, Env, Symbol, TryFromVal, Val};
 
 extern crate std;
 
@@ -93,6 +93,51 @@ fn validator_registration_and_threshold() {
 
     client.unregister_validator(&admin, &validator);
     assert!(!client.is_validator(&validator));
+}
+
+#[test]
+fn validator_events_keep_legacy_topics_and_scalar_payload() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let validator = BytesN::from_array(&env, &[9u8; 32]);
+
+    client.register_validator(&admin, &validator);
+    let mut registration_event = false;
+    for event in env.events().all().events() {
+        let xdr::ContractEventBody::V0(v0) = &event.body;
+        let topics: Vec<Val> = Vec::try_from_val(&env, &v0.topics).unwrap();
+        if topics.len() == 1
+            && Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap()
+                == symbol_short!("validator")
+        {
+            assert_eq!(
+                BytesN::<32>::try_from_val(&env, &v0.data).unwrap(),
+                validator
+            );
+            registration_event = true;
+        }
+    }
+    assert!(registration_event);
+
+    client.unregister_validator(&admin, &validator);
+    let mut removal_event = false;
+    for event in env.events().all().events() {
+        let xdr::ContractEventBody::V0(v0) = &event.body;
+        let topics: Vec<Val> = Vec::try_from_val(&env, &v0.topics).unwrap();
+        if topics.len() == 1
+            && Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap()
+                == symbol_short!("val_rm")
+        {
+            assert_eq!(
+                BytesN::<32>::try_from_val(&env, &v0.data).unwrap(),
+                validator
+            );
+            removal_event = true;
+        }
+    }
+    assert!(removal_event);
 }
 
 #[test]

@@ -9,7 +9,7 @@ pub mod mpt;
 pub mod rlp;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
+    contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error, Address,
     Bytes, BytesN, Env, Vec,
 };
 
@@ -115,6 +115,103 @@ pub enum ClientError {
     InvalidLockEvent = 19,
 }
 
+// ── Typed contract events ─────────────────────────────────────────────────────
+
+/// Emitted when a validator pubkey is registered.
+///
+/// Topics: `(validator)`; data: `validator`.
+#[contractevent(topics = ["validator"], data_format = "single-value")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatorRegisteredEvent {
+    pub validator: BytesN<32>,
+}
+
+/// Emitted when a validator pubkey is unregistered.
+///
+/// Topics: `(val_rm)`; data: `validator`.
+#[contractevent(topics = ["val_rm"], data_format = "single-value")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatorRemovedEvent {
+    pub validator: BytesN<32>,
+}
+
+/// Emitted when an RLP-verified EVM header is accepted.
+///
+/// Topics: `(evm_hdr, chain_id)`;
+/// data: `(block_number, block_hash, receipts_root)`.
+#[contractevent(topics = ["evm_hdr"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvmHeaderSubmittedEvent {
+    #[topic]
+    pub chain_id: ChainId,
+    pub block_number: u64,
+    pub block_hash: BytesN<32>,
+    pub receipts_root: BytesN<32>,
+}
+
+/// Emitted when a wrapped asset is unlocked from a verified receipt.
+///
+/// Topics: `(ast_unlk, chain_id)`;
+/// data: `(tx_hash, block_number, transaction_index, asset_id, recipient, amount)`.
+#[contractevent(topics = ["ast_unlk"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AssetUnlockedEvent {
+    #[topic]
+    pub chain_id: ChainId,
+    pub tx_hash: BytesN<32>,
+    pub block_number: u64,
+    pub transaction_index: u64,
+    pub asset_id: BytesN<32>,
+    pub recipient: Bytes,
+    pub amount: i128,
+}
+
+/// Emitted when a relayer pubkey is added.
+///
+/// Topics: `(rly_add)`; data: `pubkey`.
+#[contractevent(topics = ["rly_add"], data_format = "single-value")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RelayerAddedEvent {
+    pub pubkey: BytesN<32>,
+}
+
+/// Emitted when a relayer pubkey is removed.
+///
+/// Topics: `(rly_rm)`; data: `pubkey`.
+#[contractevent(topics = ["rly_rm"], data_format = "single-value")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RelayerRemovedEvent {
+    pub pubkey: BytesN<32>,
+}
+
+/// Emitted when a cross-chain message is ingested.
+///
+/// Topics: `(xc_msg, source_chain)`;
+/// data: `(nonce, message_id, payload_len)`.
+#[contractevent(topics = ["xc_msg"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CrossChainMessageEvent {
+    #[topic]
+    pub source_chain: ChainId,
+    pub nonce: u64,
+    pub message_id: BytesN<32>,
+    pub payload_len: u32,
+}
+
+/// Emitted when a receipt proof is consumed during an unlock.
+///
+/// Topics: `(rcpt_ok, chain_id)`;
+/// data: `(block_number, transaction_index, receipts_root)`.
+#[contractevent(topics = ["rcpt_ok"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReceiptVerifiedEvent {
+    #[topic]
+    pub chain_id: ChainId,
+    pub block_number: u64,
+    pub transaction_index: u64,
+    pub receipts_root: BytesN<32>,
+}
+
 #[contract]
 pub struct CrossChainClient;
 
@@ -173,8 +270,7 @@ impl CrossChainClient {
         env.storage()
             .persistent()
             .set(&ClientKey::Validator(validator.clone()), &true);
-        env.events()
-            .publish((symbol_short!("validator"),), validator);
+        ValidatorRegisteredEvent { validator }.publish(&env);
     }
 
     /// Remove a validator from the trusted set.
@@ -184,7 +280,7 @@ impl CrossChainClient {
         env.storage()
             .persistent()
             .set(&ClientKey::Validator(validator.clone()), &false);
-        env.events().publish((symbol_short!("val_rm"),), validator);
+        ValidatorRemovedEvent { validator }.publish(&env);
     }
 
     /// Set the minimum number of validator signatures required for block verification.
@@ -390,10 +486,13 @@ impl CrossChainClient {
         env.storage()
             .instance()
             .set(&ClientKey::LatestHeader(chain_id), &block_number);
-        env.events().publish(
-            (symbol_short!("evm_hdr"), chain_id),
-            (block_number, block_hash.clone(), receipts_root),
-        );
+        EvmHeaderSubmittedEvent {
+            chain_id,
+            block_number,
+            block_hash: block_hash.clone(),
+            receipts_root,
+        }
+        .publish(&env);
         block_hash
     }
 
@@ -490,17 +589,16 @@ impl CrossChainClient {
         env.storage()
             .persistent()
             .set(&ClientKey::ProcessedTx(tx_hash.clone()), &true);
-        env.events().publish(
-            (symbol_short!("ast_unlk"), chain_id),
-            (
-                tx_hash,
-                block_number,
-                transaction_index,
-                asset_id,
-                recipient_bytes,
-                amount,
-            ),
-        );
+        AssetUnlockedEvent {
+            chain_id,
+            tx_hash,
+            block_number,
+            transaction_index,
+            asset_id,
+            recipient: recipient_bytes,
+            amount,
+        }
+        .publish(&env);
         true
     }
 
@@ -630,7 +728,7 @@ impl CrossChainClient {
         env.storage()
             .persistent()
             .set(&ClientKey::Relayer(pubkey.clone()), &true);
-        env.events().publish((symbol_short!("rly_add"),), pubkey);
+        RelayerAddedEvent { pubkey }.publish(&env);
     }
 
     /// Deactivate a relayer (admin only).
@@ -640,7 +738,7 @@ impl CrossChainClient {
         env.storage()
             .persistent()
             .set(&ClientKey::Relayer(pubkey.clone()), &false);
-        env.events().publish((symbol_short!("rly_rm"),), pubkey);
+        RelayerRemovedEvent { pubkey }.publish(&env);
     }
 
     /// Ingest a cross-chain message.
@@ -694,10 +792,13 @@ impl CrossChainClient {
             .persistent()
             .set(&ClientKey::Message(message_id.clone()), &record);
 
-        env.events().publish(
-            (symbol_short!("xc_msg"), source_chain),
-            (nonce, message_id.clone(), payload.len()),
-        );
+        CrossChainMessageEvent {
+            source_chain,
+            nonce,
+            message_id: message_id.clone(),
+            payload_len: payload.len(),
+        }
+        .publish(&env);
 
         message_id
     }
@@ -809,10 +910,13 @@ impl CrossChainClient {
             env.storage()
                 .persistent()
                 .set(&ClientKey::HasReceiptIndex(chain_id, block_number), &true);
-            env.events().publish(
-                (symbol_short!("rcpt_ok"), chain_id),
-                (block_number, transaction_index, header.receipts_root),
-            );
+            ReceiptVerifiedEvent {
+                chain_id,
+                block_number,
+                transaction_index,
+                receipts_root: header.receipts_root,
+            }
+            .publish(env);
         }
         true
     }

@@ -3,8 +3,8 @@
 pub mod events;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
-    Bytes, BytesN, Env, String, Vec,
+    contract, contractevent, contractimpl, contracttype, panic_with_error, Address, Bytes, BytesN,
+    Env, String, Vec,
 };
 
 #[contracttype]
@@ -133,7 +133,10 @@ pub struct RevocationAuditLog {
 }
 
 /// Structured event published whenever a certificate is revoked.
-#[contracttype]
+///
+/// The event keeps its original wire shape: a single `cert_rev` topic and a
+/// map payload keyed by field name.
+#[contractevent(topics = ["cert_rev"])]
 #[derive(Clone, Debug)]
 pub struct CertificateRevokedEvent {
     pub cert_id: BytesN<32>,
@@ -601,15 +604,13 @@ impl CertificateContract {
             &record.revocation_reason,
         );
 
-        env.events().publish(
-            (symbol_short!("cert_rev"),),
-            CertificateRevokedEvent {
-                cert_id,
-                issuer,
-                reason_code,
-                timestamp: env.ledger().timestamp(),
-            },
-        );
+        CertificateRevokedEvent {
+            cert_id,
+            issuer,
+            reason_code,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(env);
     }
 
     /// Builds the signed message for institutional revocation:
