@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { Badge } from '@/components/ui/Badge';
 import {
+  AlertCircle,
   AlertTriangle,
   ArrowRightLeft,
   CheckCircle2,
