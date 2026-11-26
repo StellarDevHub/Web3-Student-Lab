@@ -64,7 +64,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
+          targets: wasm32v1-none
           components: clippy, rustfmt
 
       - name: Cache Cargo registry & build
@@ -75,9 +75,9 @@ jobs:
       - name: Build WASM binaries and check size budget (<64KB)
         continue-on-error: true
         run: |
-          cargo build --target wasm32-unknown-unknown --release --manifest-path contracts/Cargo.toml
+          cargo build --target wasm32v1-none --release --manifest-path contracts/Cargo.toml
           OVERSIZED=0
-          for f in target/wasm32-unknown-unknown/release/*.wasm; do
+          for f in contracts/target/wasm32v1-none/release/*.wasm; do
             if [ -f "$f" ]; then
               SIZE=$(stat -c%s "$f")
               FNAME=$(basename "$f")

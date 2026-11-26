@@ -24,7 +24,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
+          targets: wasm32v1-none
           components: clippy, rustfmt
 
       - name: Cache Cargo registry & build artifacts
@@ -58,11 +58,11 @@ jobs:
       - name: Compile Release WASM Bytecodes
         continue-on-error: true
         working-directory: ./contracts
-        run: cargo build --workspace --target wasm32-unknown-unknown --release
+        run: cargo build --workspace --target wasm32v1-none --release
 
       - name: Upload Compiled WASM Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: soroban-wasm-binaries
-          path: contracts/target/wasm32-unknown-unknown/release/*.wasm
+          path: contracts/target/wasm32v1-none/release/*.wasm
           retention-days: 30

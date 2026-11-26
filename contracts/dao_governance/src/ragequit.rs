@@ -5,6 +5,7 @@
 
 use crate::treasury::Treasury;
 use crate::{load_proposal, DaoError, Key, ProposalStatus};
+use soroban_certificate_contract::storage_ttl;
 use soroban_sdk::{panic_with_error, Address, Env};
 
 pub struct Ragequit;
@@ -33,6 +34,7 @@ impl Ragequit {
         // Voter must not have voted "Yes" (positive vote) on the active proposal
         let vote_key = Key::Vote(proposal_id, voter.clone());
         if let Some(voted) = env.storage().persistent().get::<Key, i64>(&vote_key) {
+            storage_ttl::bump_persistent(env, &vote_key);
             if voted > 0 {
                 panic_with_error!(env, DaoError::YesVoterCannotRagequit);
             }

@@ -554,6 +554,7 @@ dependencies = [
 name = "dao-governance"
 version = "0.1.0"
 dependencies = [
+ "soroban-certificate-contract",
  "soroban-sdk",
 ]
 
@@ -1214,6 +1215,7 @@ version = "0.1.0"
 dependencies = [
  "access-control",
  "proptest",
+ "soroban-certificate-contract",
  "soroban-sdk",
 ]
 
@@ -1262,6 +1264,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 name = "multisig-wallet-timelock"
 version = "0.1.0"
 dependencies = [
+ "soroban-certificate-contract",
  "soroban-sdk",
 ]
 
@@ -1353,6 +1356,7 @@ name = "payment-gateway"
 version = "0.1.0"
 dependencies = [
  "rand 0.9.5",
+ "soroban-certificate-contract",
  "soroban-sdk",
 ]
 

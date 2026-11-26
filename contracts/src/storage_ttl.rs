@@ -10,11 +10,10 @@
 //!
 //! ## Design
 //!
-//! - `TTL_THRESHOLD_LEDGERS = 10_000` : when remaining TTL drops below this,
+//! - `TTL_THRESHOLD = 100_000` : when remaining TTL drops below this,
 //!   trigger a bump.
-//! - `PERSISTENT_BUMP_LEDGERS = 518_400` (≈30 days at 5 s/ledger): target
+//! - `TTL_BUMP = 500_000` (≈29 days at 5 s/ledger): target
 //!   TTL after a persistent bump.
-//! - `INSTANCE_BUMP_LEDGERS = 518_400` : target TTL for instance storage.
 //! - `TEMP_BUMP_LEDGERS = 17_280` (≈1 day): scratchpad TTL.
 //!
 //! The `extend_ttl` helper is a **floor**: it only extends when the remaining
@@ -40,19 +39,19 @@
 //! );
 //! ```
 
-use soroban_sdk::{Env, Symbol, Vec};
+use soroban_sdk::{Env, IntoVal, Symbol, Val, Vec};
 
 // ── Canonical TTL constants ───────────────────────────────────────────────────
 
 /// Bump trigger: extend TTL when remaining lifetime drops below this value.
-pub const TTL_THRESHOLD_LEDGERS: u32 = 10_000;
+pub const TTL_THRESHOLD: u32 = 100_000;
 
-/// Target persistent storage TTL: 518,400 ledgers ≈ 30 days at 5 s/ledger.
-/// Satisfies the acceptance criterion of > 100,000 ledgers.
-pub const PERSISTENT_BUMP_LEDGERS: u32 = 518_400;
+/// Target persistent and instance storage TTL.
+pub const TTL_BUMP: u32 = 500_000;
 
-/// Target instance storage TTL: same as persistent (518,400 ledgers).
-pub const INSTANCE_BUMP_LEDGERS: u32 = 518_400;
+pub const TTL_THRESHOLD_LEDGERS: u32 = TTL_THRESHOLD;
+pub const PERSISTENT_BUMP_LEDGERS: u32 = TTL_BUMP;
+pub const INSTANCE_BUMP_LEDGERS: u32 = TTL_BUMP;
 
 /// Target TTL for temporary scratchpad storage (17,280 ledgers ≈ 1 day).
 pub const TEMP_BUMP_LEDGERS: u32 = 17_280;
@@ -71,20 +70,22 @@ pub const TEMP_THRESHOLD_LEDGERS: u32 = 5_000;
 /// **Call this on every state-mutating invocation** to satisfy SC-HARD-16.
 #[inline(always)]
 pub fn bump_instance(env: &Env) {
-    env.storage()
-        .instance()
-        .extend_ttl(TTL_THRESHOLD_LEDGERS, INSTANCE_BUMP_LEDGERS);
+    env.storage().instance().extend_ttl(TTL_THRESHOLD, TTL_BUMP);
 }
 
-/// Bump a persistent storage entry's TTL.
-///
-/// `key` is any value that implements `IntoVal<Env, soroban_sdk::Val>` and
-/// `TryFromVal<Env, soroban_sdk::Val>` — i.e. any `#[contracttype]` enum or
-/// tuple key.
+/// Bump a persistent storage entry's TTL when it exists.
+pub fn bump_persistent<K>(env: &Env, key: &K)
+where
+    K: IntoVal<Env, Val>,
+{
+    let persistent = env.storage().persistent();
+    if persistent.has(key) {
+        persistent.extend_ttl(key, TTL_THRESHOLD, TTL_BUMP);
+    }
+}
+
 pub fn bump_persistent_sym(env: &Env, key: &Symbol) {
-    env.storage()
-        .persistent()
-        .extend_ttl(key, TTL_THRESHOLD_LEDGERS, PERSISTENT_BUMP_LEDGERS);
+    bump_persistent(env, key);
 }
 
 /// Bump a temporary storage entry's TTL.
