@@ -1,10 +1,29 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useWebRTC } from '@/hooks/useWebRTC';
+import type { VerifiedPeerKeyAgreement } from '@/lib/p2p-crypto';
 
-export default function CallRoom() {
+interface CallRoomProps {
+  onRoomChange?: (roomId: string) => void;
+  onAgreementChange?: (agreement: VerifiedPeerKeyAgreement | null) => void;
+  onIdentityWarningChange?: (warning: string | null) => void;
+  onLocalPublicKeyChange?: (publicKey: string | null) => void;
+}
+
+function truncateStellarKey(key: string): string {
+  if (key.length <= 14) return key;
+  return `${key.slice(0, 6)}...${key.slice(-6)}`;
+}
+
+export default function CallRoom({
+  onRoomChange,
+  onAgreementChange,
+  onIdentityWarningChange,
+  onLocalPublicKeyChange,
+}: CallRoomProps = {}) {
   const [roomId, setRoomId] = useState('study-lab-room');
+  const [expectedPeerPublicKey, setExpectedPeerPublicKey] = useState('');
   const [muted, setMuted] = useState(false);
   const [videoEnabled, setVideoEnabled] = useState(true);
   const {
@@ -12,6 +31,11 @@ export default function CallRoom() {
     remoteStream,
     isConnected,
     isCallActive,
+    isE2EEVerified,
+    localPublicKey,
+    peerPublicKey,
+    verifiedAgreement,
+    identityWarning,
     error,
     joinRoom,
     startCall,
@@ -19,8 +43,26 @@ export default function CallRoom() {
     endCall,
     muteAudio,
     toggleVideo,
-  } = useWebRTC({ roomId });
+  } = useWebRTC({
+    roomId,
+    expectedPeerPublicKey: expectedPeerPublicKey.trim() || undefined,
+  });
 
+  useEffect(() => {
+    onRoomChange?.(roomId);
+  }, [roomId, onRoomChange]);
+
+  useEffect(() => {
+    onAgreementChange?.(verifiedAgreement);
+  }, [verifiedAgreement, onAgreementChange]);
+
+  useEffect(() => {
+    onIdentityWarningChange?.(identityWarning);
+  }, [identityWarning, onIdentityWarningChange]);
+
+  useEffect(() => {
+    onLocalPublicKeyChange?.(localPublicKey);
+  }, [localPublicKey, onLocalPublicKeyChange]);
 
   return (
     <section className="space-y-6 p-6 rounded-xl bg-slate-950/80 text-slate-100 shadow-lg">
@@ -34,10 +76,41 @@ export default function CallRoom() {
               onChange={(event) => setRoomId(event.target.value)}
             />
           </label>
-          <div className="grid gap-2 text-slate-300">
-            <span>WebSocket status: {isConnected ? 'Connected' : 'Disconnected'}</span>
-            <span>Call status: {isCallActive ? 'Active' : 'Idle'}</span>
-          </div>
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-300">
+            Expected peer Stellar Ed25519 key (optional pin)
+            <input
+              className="rounded border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100 placeholder:text-slate-500"
+              placeholder="G... (pin mentor/student wallet key)"
+              value={expectedPeerPublicKey}
+              onChange={(event) => setExpectedPeerPublicKey(event.target.value)}
+            />
+          </label>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4 rounded-lg border border-slate-800 bg-slate-900/70 px-4 py-3 text-xs text-slate-300">
+          <span>WebSocket: {isConnected ? 'Connected' : 'Disconnected'}</span>
+          <span className="text-slate-600">·</span>
+          <span>Call: {isCallActive ? 'Active' : 'Idle'}</span>
+          <span className="text-slate-600">·</span>
+          <span
+            className={
+              isE2EEVerified
+                ? 'font-semibold text-emerald-400'
+                : 'font-medium text-amber-400'
+            }
+          >
+            {isE2EEVerified
+              ? `E2EE Verified (Peer: ${peerPublicKey ? truncateStellarKey(peerPublicKey) : 'verified'})`
+              : 'E2EE Handshake Pending (Ed25519 + ECDH)'}
+          </span>
+          {localPublicKey ? (
+            <>
+              <span className="text-slate-600">·</span>
+              <span className="font-mono text-slate-400" title={localPublicKey}>
+                Your Ed25519 Key: {truncateStellarKey(localPublicKey)}
+              </span>
+            </>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap gap-3">
@@ -95,7 +168,20 @@ export default function CallRoom() {
           </button>
         </div>
 
-        {error ? <p className="rounded border border-rose-500 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</p> : null}
+        {identityWarning ? (
+          <div
+            role="alert"
+            className="rounded border border-amber-500 bg-amber-500/10 p-3 text-sm text-amber-200"
+          >
+            <strong className="font-semibold">Identity Mismatch Warning:</strong> {identityWarning}
+          </div>
+        ) : null}
+
+        {error && error !== identityWarning ? (
+          <p className="rounded border border-rose-500 bg-rose-500/10 p-3 text-sm text-rose-200">
+            {error}
+          </p>
+        ) : null}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
