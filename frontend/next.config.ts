@@ -1,5 +1,13 @@
 import type { NextConfig } from 'next';
 import path from 'path';
+import { validatePublicEnv } from './src/lib/env';
+
+if (process.env.NODE_ENV === 'production') {
+  const { errors } = validatePublicEnv();
+  if (errors.length > 0) {
+    throw new Error(`Invalid frontend build configuration:\n- ${errors.join('\n- ')}`);
+  }
+}
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { HEAVY_LIBRARIES, packagesRegExp } = require('./scripts/bundle/heavy-libraries');
