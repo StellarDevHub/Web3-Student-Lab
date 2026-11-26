@@ -475,7 +475,10 @@ router.get(
         network_passphrase: challenge.networkPassphrase,
       });
     } catch (error: any) {
-      if (error.message?.includes('Invalid Stellar public key')) {
+      if (
+        error.message?.includes('Invalid Stellar public key') ||
+        error.message?.includes('Home domain mismatch')
+      ) {
         res.status(400).json({ error: error.message });
         return;
       }
