@@ -110,8 +110,8 @@
     padding: 16px;
   }
 
-  html.dark .mobileDrawerPanel,
-  html.oled .mobileDrawerPanel {
+  html[data-theme='dark'] .mobileDrawerPanel,
+  html[data-theme='oled'] .mobileDrawerPanel {
     background: var(--color-bg-primary, #000000);
     color: var(--color-text-primary, #ffffff);
     border-right-color: var(--color-border-medium, #3d3d3d);

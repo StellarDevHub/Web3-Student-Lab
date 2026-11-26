@@ -14,6 +14,10 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Search, Download, Trophy, BookOpen, Award, Users, TrendingUp, Filter } from 'lucide-react';
 import { motion } from 'framer-motion';
+import VirtualizedLeaderboard, {
+  type LeaderboardColumn,
+} from '@/components/leaderboard/VirtualizedLeaderboard';
+import { studentLeaderboardColumns } from '@/components/leaderboard/StudentLeaderboardPanel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,6 +71,37 @@ interface SearchResponse {
   pageSize: number;
   totalPages: number;
 }
+
+const courseLeaderboardColumns: LeaderboardColumn<CourseLeaderboardEntry>[] = [
+  {
+    key: 'rank',
+    header: 'Rank',
+    className: 'w-12 shrink-0 font-bold text-gray-500',
+    headerClassName: 'w-12 shrink-0',
+    render: (entry) => `#${entry.rank}`,
+  },
+  {
+    key: 'course',
+    header: 'Course',
+    className: 'flex-1 font-medium',
+    headerClassName: 'flex-1',
+    render: (entry) => <span className="block truncate">{entry.courseTitle}</span>,
+  },
+  {
+    key: 'instructor',
+    header: 'Instructor',
+    className: 'hidden w-52 shrink-0 text-gray-400 sm:block',
+    headerClassName: 'hidden w-52 shrink-0 sm:block',
+    render: (entry) => <span className="block truncate">{entry.instructor}</span>,
+  },
+  {
+    key: 'issued',
+    header: 'Issued',
+    className: 'w-20 shrink-0 text-right font-bold text-blue-400',
+    headerClassName: 'w-20 shrink-0 text-right',
+    render: (entry) => entry.certificateCount,
+  },
+];
 
 // ─── API Base ─────────────────────────────────────────────────────────────────
 
@@ -142,8 +177,8 @@ export default function CertificateExplorerPage() {
     setLoadingStats(true);
     Promise.all([
       fetchJson<ExplorerStats>('/certificates/explorer/stats').catch(() => null),
-      fetchJson<LeaderboardEntry[]>('/certificates/explorer/leaderboard/students?limit=10').catch(() => []),
-      fetchJson<CourseLeaderboardEntry[]>('/certificates/explorer/leaderboard/courses?limit=10').catch(() => []),
+      fetchJson<LeaderboardEntry[]>('/certificates/explorer/leaderboard/students?limit=50').catch(() => []),
+      fetchJson<CourseLeaderboardEntry[]>('/certificates/explorer/leaderboard/courses?limit=50').catch(() => []),
     ])
       .then(([s, students, courses]) => {
         if (s) setStats(s);
@@ -342,58 +377,28 @@ export default function CertificateExplorerPage() {
         {/* Student Leaderboard Tab */}
         {activeTab === 'students' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div className="overflow-hidden rounded-xl border border-white/10">
-              <table className="w-full text-sm">
-                <thead className="border-b border-white/10 bg-white/5">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-gray-400">Rank</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-gray-400">Student</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-gray-400 hidden sm:table-cell">Wallet</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-widest text-gray-400">Certificates</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {studentLeaderboard.map((entry, i) => (
-                    <tr key={entry.studentId} className={`border-b border-white/5 ${i % 2 === 0 ? '' : 'bg-white/[0.02]'}`}>
-                      <td className="px-4 py-3 font-bold text-gray-500">#{entry.rank}</td>
-                      <td className="px-4 py-3 font-medium">{entry.studentName}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-500 hidden sm:table-cell">
-                        {entry.walletAddress ? `${entry.walletAddress.slice(0, 8)}…${entry.walletAddress.slice(-4)}` : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold text-red-400">{entry.certificateCount}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <VirtualizedLeaderboard
+              rows={studentLeaderboard}
+              columns={studentLeaderboardColumns}
+              getRowKey={(entry) => entry.studentId}
+              ariaLabel="Student leaderboard"
+              emptyMessage="No students ranked yet."
+              rowClassName={(_, index) => (index % 2 === 0 ? '' : 'bg-white/[0.02]')}
+            />
           </motion.div>
         )}
 
         {/* Course Leaderboard Tab */}
         {activeTab === 'courses' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div className="overflow-hidden rounded-xl border border-white/10">
-              <table className="w-full text-sm">
-                <thead className="border-b border-white/10 bg-white/5">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-gray-400">Rank</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-gray-400">Course</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-gray-400 hidden sm:table-cell">Instructor</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-widest text-gray-400">Issued</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {courseLeaderboard.map((entry, i) => (
-                    <tr key={entry.courseId} className={`border-b border-white/5 ${i % 2 === 0 ? '' : 'bg-white/[0.02]'}`}>
-                      <td className="px-4 py-3 font-bold text-gray-500">#{entry.rank}</td>
-                      <td className="px-4 py-3 font-medium">{entry.courseTitle}</td>
-                      <td className="px-4 py-3 text-gray-400 hidden sm:table-cell">{entry.instructor}</td>
-                      <td className="px-4 py-3 text-right font-bold text-blue-400">{entry.certificateCount}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <VirtualizedLeaderboard
+              rows={courseLeaderboard}
+              columns={courseLeaderboardColumns}
+              getRowKey={(entry) => entry.courseId}
+              ariaLabel="Course leaderboard"
+              emptyMessage="No courses ranked yet."
+              rowClassName={(_, index) => (index % 2 === 0 ? '' : 'bg-white/[0.02]')}
+            />
           </motion.div>
         )}
 

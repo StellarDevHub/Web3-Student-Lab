@@ -10,7 +10,11 @@ import { Select } from '@/components/ui/Select';
 import { Slider } from '@/components/ui/Slider';
 import { Switch } from '@/components/ui/Switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { scValToNative, xdr } from '@stellar/stellar-sdk';
+import {
+  formatValueForDisplay,
+  safeDecodeScVal,
+  type DecodedContractEvent,
+} from '@/lib/stellar/xdr-stream';
 import {
   Activity,
   AlertTriangle,
@@ -41,24 +45,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-// ─── Interfaces ───────────────────────────────────────────────────────────────
-
-export interface DecodedContractEvent {
-  id: string;
-  ledger: number;
-  ledgerClosedAt: string;
-  contractId: string;
-  type: 'contract' | 'system' | 'diagnostic';
-  topicsRaw: string[];
-  topicsDecoded: any[];
-  valueRaw: string;
-  valueDecoded: any;
-  txHash: string;
-  pagingToken: string;
-  timestamp: number;
-}
-
-// D3 Node & Link Interfaces for Topology View
+// ─── D3 Node & Link Interfaces for Topology View ──────────────────────────────
 interface Node {
   id: string;
   name: string;
@@ -129,31 +116,6 @@ interface AccountData {
   balance: string;
   sequence: number;
   lastActivity: Date;
-}
-
-// ─── XDR Decoding Helpers ──────────────────────────────────────────────────────
-
-export function safeDecodeScVal(base64Xdr: string): any {
-  if (!base64Xdr) return null;
-  try {
-    const val = xdr.ScVal.fromXDR(base64Xdr, 'base64');
-    return scValToNative(val);
-  } catch {
-    // Fallback: return raw string if not valid ScVal XDR
-    return base64Xdr;
-  }
-}
-
-export function formatValueForDisplay(val: any): string {
-  if (val === null || val === undefined) return 'null';
-  if (typeof val === 'object') {
-    try {
-      return JSON.stringify(val);
-    } catch {
-      return String(val);
-    }
-  }
-  return String(val);
 }
 
 // ─── Pre-built XDR Samples for realistic event simulation ──────────────────────
@@ -943,6 +905,8 @@ export default function NetworkLedgerStreamer() {
                     Event Type
                   </Label>
                   <Select
+                    id="type-filter"
+                    aria-label="Event Type"
                     value={typeFilter}
                     onValueChange={(val) => setTypeFilter(val as any)}
                     className="text-xs"

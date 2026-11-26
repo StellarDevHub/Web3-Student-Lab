@@ -7,8 +7,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Production runtime connects via PgBouncer in transaction pooling mode
+// (DATABASE_URL with ?pgbouncer=true), while Prisma migrations use DIRECT_URL
+// (configured in backend/prisma.config.ts) to bypass PgBouncer (BE-080).
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Student {
@@ -42,6 +46,8 @@ model Student {
   webauthnCredentials WebAuthnCredential[]
   hashSimulations  HashSimulation[]
   subscriptions    Subscription[]
+  submissions      ExerciseSubmission[]
+  similarityFlagsAsSubject ExerciseSimilarityFlag[] @relation("SimilaritySubject")
 
   @@index([workspaceId, email])
   @@index([firstName, lastName])
@@ -346,6 +352,27 @@ model AuditLog {
 
   @@index([createdAt])
   @@map("audit_logs")
+  @@index([createdAt])
+  @@index([hash])
+}
+
+model MerkleAnchor {
+  id              String   @id @default(cuid())
+  merkleRoot      String   @unique
+  prevMerkleRoot  String?
+  periodStart     DateTime
+  periodEnd       DateTime
+  logCount        Int
+  transactionHash String
+  contractAddress String?
+  network         String?
+  status          String   @default("ANCHORED") // ANCHORED, FAILED, PENDING
+  anchoredAt      DateTime @default(now())
+  metadata        Json?
+
+  @@map("merkle_anchors")
+  @@index([periodStart, periodEnd])
+  @@index([transactionHash])
 }
 
 model AuthNonce {
@@ -395,4 +422,579 @@ model Canvas {
   @@index([studentId])
   @@index([createdAt])
   @@map("canvases")
+}
+
+model DecentralizedAsset {
+  id             String    @id @default(cuid())
+  workspaceId    String    @default("default")
+  resourceType   String
+  resourceId     String
+  name           String
+  kind           String
+  provider       String    @default("pinata")
+  cid            String    @unique
+  ipfsUri        String
+  gatewayUrl     String
+  mimeType       String?
+  sizeBytes      Int?
+  status         String    @default("queued")
+  referenceCount Int       @default(1)
+  metadata       Json?
+  error          String?
+  pinnedAt       DateTime?
+  unpinnedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([workspaceId, resourceType, resourceId, name], map: "decentralized_assets_workspaceId_resourceType_resourceId_name_k")
+  @@index([workspaceId, status])
+  @@index([workspaceId, resourceType, resourceId])
+  @@map("decentralized_assets")
+}
+
+model WebhookSubscription {
+  id          String   @id @default(cuid())
+  workspaceId String   @default("default")
+  url         String
+  secret      String?
+  events      Json // Array of event names e.g., ["lesson.completed"]
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, url])
+  @@map("webhook_subscriptions")
+}
+
+model NotificationPreferences {
+  id              String   @id @default(cuid())
+  workspaceId     String   @default("default")
+  studentId       String
+  emailEnabled    Boolean  @default(true)
+  pushEnabled     Boolean  @default(true)
+  inAppEnabled    Boolean  @default(true)
+  courseUpdates   Boolean  @default(true)
+  announcements   Boolean  @default(true)
+  newCourses      Boolean  @default(true)
+  reminders       Boolean  @default(true)
+  frequency       String   @default("immediate")
+  quietHoursStart String?
+  quietHoursEnd   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([studentId])
+  @@index([studentId])
+  @@index([workspaceId, studentId])
+  @@map("notification_preferences")
+}
+
+model StudentActivity {
+  id        String   @id @default(cuid())
+  studentId String
+  courseId  String
+  lessonId  String
+  action    String
+  timestamp DateTime @default(now())
+
+  @@map("student_activities")
+}
+
+model TranslationEntry {
+  id          String   @id @default(cuid())
+  workspaceId String   @default("default")
+  locale      String
+  namespace   String   @default("platform")
+  key         String
+  value       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, locale, namespace, key])
+  @@index([workspaceId, locale, namespace])
+  @@map("translation_entries")
+}
+
+model VestingSchedule {
+  id             String   @id @default(cuid())
+  workspaceId    String   @default("default")
+  projectId      String   @unique
+  tokenName      String
+  tokenSymbol    String
+  amount         Float
+  cliffMonths    Int
+  durationMonths Int
+  beneficiary    String
+  claimedAmount  Float    @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([projectId])
+  @@map("vesting_schedules")
+}
+
+model Idea {
+  id          String   @id @default(cuid())
+  workspaceId String   @default("default")
+  title       String
+  description String
+  studentId   String
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  votes   Vote[]
+
+  @@index([workspaceId])
+  @@index([studentId])
+  @@map("ideas")
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  ideaId    String
+  studentId String
+  value     Int // 1 for upvote, -1 for downvote
+  createdAt DateTime @default(now())
+
+  idea    Idea    @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([ideaId, studentId])
+  @@map("votes")
+}
+
+model HashSimulation {
+  id        String   @id @default(cuid())
+  studentId String
+  inputData String
+  hashType  String // e.g., "SHA-256"
+  hashValue String
+  createdAt DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@map("hash_simulations")
+}
+
+model P2PNode {
+  id          String   @id @default(cuid())
+  workspaceId String   @default("default")
+  nodeId      String   @unique
+  nodeName    String
+  status      String   @default("online")
+  ipAddress   String?
+  port        Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messagesSent     P2PMessage[] @relation("MessagesSent")
+  messagesReceived P2PMessage[] @relation("MessagesReceived")
+
+  @@index([workspaceId])
+  @@map("p2p_nodes")
+}
+
+model P2PMessage {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  payload    Json
+  status     String   @default("pending") // pending, delivered, failed
+  createdAt  DateTime @default(now())
+
+  sender   P2PNode @relation("MessagesSent", fields: [senderId], references: [nodeId], onDelete: Cascade)
+  receiver P2PNode @relation("MessagesReceived", fields: [receiverId], references: [nodeId], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@map("p2p_messages")
+}
+
+model ProcessedBlock {
+  id           String    @id @default(cuid())
+  chain        String
+  blockNumber  Int
+  blockHash    String    @unique
+  parentHash   String
+  timestamp    DateTime  @default(now())
+  processedAt  DateTime  @default(now())
+  isRolledBack Boolean   @default(false)
+  rolledBackAt DateTime?
+
+  bridgeEvents BridgeEvent[]
+
+  @@index([chain, blockNumber])
+  @@map("processed_blocks")
+}
+
+model BridgeEvent {
+  id               String    @id @default(cuid())
+  chain            String
+  blockNumber      Int
+  blockHash        String
+  processedBlockId String
+  eventId          String
+  eventType        String
+  sourceChain      String
+  targetChain      String
+  data             Json
+  transactionHash  String?
+  logIndex         Int?
+  processed        Boolean   @default(false)
+  processedAt      DateTime?
+
+  processedBlock ProcessedBlock @relation(fields: [processedBlockId], references: [id], onDelete: Cascade)
+
+  @@unique([chain, eventId])
+  @@index([processedBlockId])
+  @@map("bridge_events")
+}
+
+model ContributorProof {
+  id            String   @id @default(cuid())
+  workspaceId   String   @default("default")
+  did           String
+  walletAddress String
+  githubHandle  String
+  proofHash     String   @unique
+  documentId    String?
+  versionId     String?
+  createdAt     DateTime @default(now())
+
+  @@index([did])
+  @@index([proofHash])
+  @@index([workspaceId, createdAt])
+  @@map("contributor_proofs")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  walletAddress String   @unique(map: "idx_users_wallet_address") @map("wallet_address")
+  nonce         String
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model PayoutTransaction {
+  id             String    @id @default(uuid())
+  anchorId       String    @map("anchor_id")
+  status         String    // ESCROWED, SETTLED, FAILED
+  escrowedAt     DateTime  @default(now()) @map("escrowed_at")
+  settledAt      DateTime? @map("settled_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([anchorId, status], map: "idx_payout_anchor_status")
+  @@map("v2_payout_transactions")
+}
+
+model SubscriptionPlan {
+  id                String         @id @default(cuid())
+  name              String
+  description       String?
+  priceXLM          Float
+  billingPeriodDays Int            @default(30)
+  features          Json?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  subscriptions     Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                 String           @id @default(cuid())
+  studentId          String
+  planId             String
+  status             String           @default("active") // active, cancelled, expired
+  currentPeriodStart DateTime         @default(now())
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean          @default(false)
+  txHash             String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  student            Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  plan               SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  payments           PaymentRecord[]
+
+  @@index([studentId])
+  @@index([planId])
+  @@map("subscriptions")
+}
+
+model PaymentRecord {
+  id             String       @id @default(cuid())
+  subscriptionId String
+  amountXLM      Float
+  txHash         String?
+  status         String       @default("completed")
+  paidAt         DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@map("payment_records")
+}
+
+// Immutable IPFS/Filecoin pins for certificates and course media (BE-011)
+model PinnedAsset {
+  id               String    @id @default(cuid())
+  resourceType     String
+  resourceId       String
+  kind             String
+  cid              String
+  contentType      String
+  sizeBytes        Int
+  sha256           String
+  provider         String
+  filecoinProvider String?
+  filecoinCid      String?
+  filecoinStatus   String    @default("pending") // pending | stored | failed | disabled
+  cdnUrl           String
+  gatewayVerified  Boolean   @default(false)
+  verifiedGateway  String?
+  verifiedAt       DateTime?
+  pinLatencyMs     Int
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([resourceType, resourceId, kind])
+  @@index([cid])
+  @@map("pinned_assets")
+}
+
+// Append-only SHA-256 hash chain of audit events (BE-009)
+model AuditChainEntry {
+  sequence  BigInt   @id
+  eventType String
+  actorId   String?
+  entity    String?
+  entityId  String?
+  payload   Json
+  prevHash  String
+  entryHash String   @unique
+  createdAt DateTime
+
+  @@index([createdAt])
+  @@map("audit_chain_entries")
+}
+
+// Merkle roots of audit chain ranges anchored on the Stellar ledger (BE-009)
+model AuditChainAnchor {
+  id           String    @id @default(cuid())
+  fromSequence BigInt
+  toSequence   BigInt
+  entryCount   Int
+  merkleRoot   String
+  headHash     String
+  network      String
+  txHash       String?
+  status       String    @default("pending") // pending | anchored | failed
+  error        String?
+  createdAt    DateTime  @default(now())
+  anchoredAt   DateTime?
+
+  @@index([toSequence])
+  @@index([status])
+  @@map("audit_chain_anchors")
+}
+
+// Off-chain state channel between a student and a mentor (#1589 / BE-017).
+// Only funding and the final (or disputed) state are settled on Soroban.
+model StateChannel {
+  id               String    @id @default(cuid())
+  courseId         String
+  contractId       String
+  studentPublicKey String
+  mentorPublicKey  String
+  rewardStroops    String
+  status           String    @default("pending_funding") // pending_funding, open, disputed, settling, settled
+  latestSequence   Int       @default(0)
+  latestState      Json?
+  latestStudentSig String?
+  latestMentorSig  String?
+  fundingTxHash    String?
+  settlementTxHash String?
+  disputeInitiator String?
+  disputeDeadline  DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  updates StateChannelUpdate[]
+
+  @@index([status, disputeDeadline])
+  @@index([studentPublicKey])
+  @@index([mentorPublicKey])
+  @@map("state_channels")
+}
+
+model StateChannelUpdate {
+  id         String   @id @default(cuid())
+  channelId  String
+  sequence   Int
+  stateHash  String
+  state      Json
+  studentSig String
+  mentorSig  String
+  createdAt  DateTime @default(now())
+
+  channel StateChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, sequence])
+  @@map("state_channel_updates")
+}
+
+// Periodic Yjs document snapshot (#1592 / BE-020). Redis streams hold the
+// updates appended since `lastStreamId`.
+model YjsDocumentSnapshot {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  state        Bytes
+  stateVector  Bytes
+  lastStreamId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("yjs_document_snapshots")
+}
+
+model CurriculumSearchEntry {
+  id           String                   @id
+  workspaceId  String                   @default("default")
+  entityType   String
+  entityId     String
+  courseId     String?
+  title        String
+  content      String
+  difficulty   String?
+  searchVector Unsupported("tsvector")?
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  @@unique([workspaceId, entityType, entityId])
+  @@index([workspaceId, entityType])
+  @@index([workspaceId, courseId])
+  @@index([searchVector], map: "curriculum_search_entries_search_idx", type: Gin)
+  @@ignore
+  @@map("curriculum_search_entries")
+}
+
+model Job {
+  id              String    @id @default(uuid()) @db.Uuid
+  jobType         String    @map("job_type") @db.VarChar(50)
+  status          String    @default("queued") @db.VarChar(20)
+  payload         Json
+  result          Json?
+  progressPercent Int       @default(0) @map("progress_percent")
+  progressMessage String    @default("Queued") @map("progress_message") @db.VarChar(255)
+  webhookUrl      String?   @map("webhook_url") @db.VarChar(500)
+  webhookHeaders  Json?     @map("webhook_headers")
+  webhookSecret   String?   @map("webhook_secret") @db.VarChar(255)
+  errorMessage    String?   @map("error_message")
+  errorType       String?   @map("error_type") @db.VarChar(50)
+  timeoutSecs     Int       @default(300) @map("timeout_secs")
+  retryCount      Int       @default(0) @map("retry_count")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  startedAt       DateTime? @map("started_at") @db.Timestamptz(6)
+  completedAt     DateTime? @map("completed_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status], map: "idx_jobs_status")
+  @@index([createdAt], map: "idx_jobs_created_at")
+  @@index([status, createdAt], map: "idx_jobs_status_created_at")
+  @@ignore
+  @@map("jobs")
+}
+
+model LedgerFeeSample {
+  ledgerSequence   BigInt                 @id @map("ledger_sequence")
+  collectedAt      DateTime               @map("collected_at") @db.Timestamp(6)
+  baseReserve      BigInt                 @map("base_reserve")
+  baseFee          BigInt                 @map("base_fee")
+  maxFee           BigInt                 @map("max_fee")
+  feeCharged       BigInt                 @map("fee_charged")
+  transactionCount Int                    @map("transaction_count")
+  ledgerCloseTime  DateTime               @map("ledger_close_time") @db.Timestamp(6)
+  txRecords        TransactionFeeRecord[]
+
+  @@index([ledgerSequence], map: "idx_fee_samples_sequence")
+  @@index([ledgerCloseTime], map: "idx_fee_samples_close_time")
+  @@ignore
+  @@map("ledger_fee_samples")
+}
+
+model TransactionFeeRecord {
+  id               String          @id
+  ledgerSequence   BigInt          @map("ledger_sequence")
+  txHash           String          @map("tx_hash") @db.VarChar(64)
+  feeBid           BigInt          @map("fee_bid")
+  feeCharged       BigInt          @map("fee_charged")
+  resourceFee      BigInt          @map("resource_fee")
+  inclusionSuccess Boolean         @map("inclusion_success")
+  recordedAt       DateTime        @default(now()) @map("recorded_at") @db.Timestamp(6)
+  ledgerSample     LedgerFeeSample @relation(fields: [ledgerSequence], references: [ledgerSequence], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([ledgerSequence], map: "idx_tx_records_ledger")
+  @@index([txHash], map: "idx_tx_records_hash")
+  @@index([recordedAt], map: "idx_tx_records_recorded_at")
+  @@ignore
+  @@map("transaction_fee_records")
+}
+
+// Student exercise submission used for plagiarism / structural similarity analysis (BE-098)
+model ExerciseSubmission {
+  id              String   @id @default(cuid())
+  workspaceId     String   @default("default")
+  studentId       String
+  courseId        String
+  exerciseId      String
+  sourceCode      String
+  normalizedAst   Json?
+  tokenFingerprint String?
+  astNodeCount    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  similarityFlagsAsSource ExerciseSimilarityFlag[] @relation("SimilaritySource")
+  similarityFlagsAsMatch  ExerciseSimilarityFlag[] @relation("SimilarityMatch")
+
+  @@index([workspaceId, exerciseId])
+  @@index([studentId])
+  @@index([courseId, exerciseId])
+  @@index([tokenFingerprint])
+  @@map("exercise_submissions")
+}
+
+// Pairwise similarity result flagged for instructor review (BE-098)
+model ExerciseSimilarityFlag {
+  id                String   @id @default(cuid())
+  workspaceId       String   @default("default")
+  exerciseId        String
+  sourceSubmissionId String
+  matchSubmissionId  String
+  subjectStudentId   String?
+  astSimilarity     Float    @db.Real
+  levenshteinSimilarity Float @db.Real
+  combinedScore     Float    @db.Real
+  status            String   @default("pending_review") // pending_review, cleared, confirmed
+  reviewedBy        String?
+  reviewedAt        DateTime?
+  createdAt         DateTime @default(now())
+
+  sourceSubmission ExerciseSubmission @relation("SimilaritySource", fields: [sourceSubmissionId], references: [id], onDelete: Cascade)
+  matchSubmission  ExerciseSubmission @relation("SimilarityMatch", fields: [matchSubmissionId], references: [id], onDelete: Cascade)
+  subjectStudent   Student?           @relation("SimilaritySubject", fields: [subjectStudentId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceSubmissionId, matchSubmissionId])
+  @@index([workspaceId, exerciseId, status])
+  @@index([combinedScore])
+  @@map("exercise_similarity_flags")
 }

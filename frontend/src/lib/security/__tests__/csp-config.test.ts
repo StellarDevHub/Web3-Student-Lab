@@ -33,15 +33,18 @@ describe('CSP Configuration', () => {
       process.env.NEXT_PUBLIC_API_URL = 'https://api.example.com';
       process.env.NEXT_PUBLIC_WS_URL = 'wss://api.example.com';
       process.env.NEXT_PUBLIC_FRONTEND_URL = 'https://example.com';
+      delete process.env.NEXT_PUBLIC_CSP_REPORT_URI;
 
-      const config = getProductionCSP();
+      const config = getProductionCSP('test-nonce');
 
       expect(config.directives['default-src']).toEqual(["'self'"]);
       expect(config.directives['script-src']).toContain("'self'");
-      expect(config.directives['script-src']).toContain("'nonce-{nonce}'");
+      expect(config.directives['script-src']).toContain("'nonce-test-nonce'");
+      expect(config.directives['script-src']).not.toContain("'unsafe-inline'");
       expect(config.directives['object-src']).toEqual(["'none'"]);
       expect(config.directives['frame-ancestors']).toEqual(["'none'"]);
       expect(config.reportOnly).toBe(false);
+      expect(config.reportUri).toBe('/api/security/csp-report');
     });
 
     it('should include Stellar endpoints in connect-src', () => {
@@ -144,14 +147,14 @@ describe('CSP Configuration', () => {
     it('should convert directives to CSP string', () => {
       const directives = {
         'default-src': ["'self'"],
-        'script-src': ["'self'", "'nonce-{nonce}'"],
+        'script-src': ["'self'", "'nonce-test-nonce'"],
         'style-src': ["'self'", "'unsafe-inline'"],
       };
 
       const result = cspDirectivesToString(directives);
 
       expect(result).toContain("default-src 'self'");
-      expect(result).toContain("script-src 'self' 'nonce-{nonce}'");
+      expect(result).toContain("script-src 'self' 'nonce-test-nonce'");
       expect(result).toContain("style-src 'self' 'unsafe-inline'");
       expect(result).toContain('; ');
     });

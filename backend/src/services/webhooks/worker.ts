@@ -12,7 +12,7 @@ import {
 import type { WebhookDeliveryJobData } from './types.js';
 import { recordDeliveryState } from './dispatcher.js';
 
-const requestTimeoutMs = Number(process.env.WEBHOOK_REQUEST_TIMEOUT_MS || '10000');
+const requestTimeoutMs = Number(process.env.WEBHOOK_REQUEST_TIMEOUT_MS || '5000');
 
 export class PermanentWebhookDeliveryError extends Error {
   constructor(message: string, public readonly statusCode?: number) {
