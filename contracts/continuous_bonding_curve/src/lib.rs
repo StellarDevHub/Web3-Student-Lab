@@ -100,16 +100,23 @@ pub mod fp18 {
     /// Checked multiply of two 18-decimal FP values.
     #[inline]
     pub fn mul(a: i128, b: i128) -> Option<i128> {
-        a.checked_mul(b)?.checked_div(SCALE18)
+        let rounding = if (a < 0) ^ (b < 0) {
+            math::Rounding::Up
+        } else {
+            math::Rounding::Down
+        };
+        math::checked_mul_div_signed(a, b, SCALE18, rounding)
     }
 
     /// Checked divide of two 18-decimal FP values.
     #[inline]
     pub fn div(a: i128, b: i128) -> Option<i128> {
-        if b == 0 {
-            return None;
-        }
-        a.checked_mul(SCALE18)?.checked_div(b)
+        let rounding = if (a < 0) ^ (b < 0) {
+            math::Rounding::Up
+        } else {
+            math::Rounding::Down
+        };
+        math::checked_mul_div_signed(a, SCALE18, b, rounding)
     }
 }
 
@@ -634,6 +641,12 @@ mod tests {
     fn polynomial_integral_matches_buy_and_sell_costs() {
         assert_eq!(pricing::curve_cost(3, 2, 2 * FP, FP), Some(12));
         assert_eq!(pricing::curve_payout(5, 2, 2 * FP, FP), Some(12));
+    }
+
+    #[test]
+    fn fp18_helpers_accept_full_width_intermediates() {
+        assert_eq!(fp18::mul(i128::MAX, fp18::SCALE18), Some(i128::MAX));
+        assert_eq!(fp18::div(i128::MAX, i128::MAX), Some(fp18::SCALE18));
     }
 
     #[test]

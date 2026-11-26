@@ -1,10 +1,20 @@
-import { ImageResponse } from '@vercel/og';
+import { ImageResponse } from 'next/og';
 import { NextRequest } from 'next/server';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  const certificateId = params.id;
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const { id: certificateId } = await context.params;
+  const { searchParams } = new URL(request.url);
+  const studentName = searchParams.get('studentName') || searchParams.get('name') || 'Stellar Builder';
+  const courseTitle =
+    searchParams.get('course') ||
+    searchParams.get('courseTitle') ||
+    'Soroban Smart Contract Developer';
+  const completionDate = searchParams.get('date') || new Date().toISOString().slice(0, 10);
 
   return new ImageResponse(
     (
@@ -97,7 +107,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
               textAlign: 'center',
             }}
           >
-            CERTIFICATE #{certificateId}
+            {studentName}
           </div>
 
           <div
@@ -109,7 +119,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
               textAlign: 'center',
             }}
           >
-            This cryptographic token proves execution and mastery of the linked learning module.
+            Successfully completed: {courseTitle}
           </div>
 
           <div
@@ -122,12 +132,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <span style={{ fontSize: '14px', letterSpacing: '0.2em', marginBottom: '8px' }}>NETWORK</span>
-              <span style={{ color: '#6b7280' }}>Stellar Testnet</span>
+              <span style={{ fontSize: '14px', letterSpacing: '0.2em', marginBottom: '8px' }}>COMPLETED</span>
+              <span style={{ color: '#6b7280' }}>{completionDate}</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <span style={{ fontSize: '14px', letterSpacing: '0.2em', marginBottom: '8px' }}>STANDARD</span>
-              <span style={{ color: '#6b7280' }}>Soroban NFT</span>
+              <span style={{ fontSize: '14px', letterSpacing: '0.2em', marginBottom: '8px' }}>CERTIFICATE</span>
+              <span style={{ color: '#6b7280' }}>#{certificateId}</span>
             </div>
           </div>
         </div>

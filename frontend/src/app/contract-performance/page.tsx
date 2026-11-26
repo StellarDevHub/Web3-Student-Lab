@@ -1,6 +1,11 @@
-import ScatterPlot, { type ScatterDatum } from '@/components/analytics/PerformanceVisualizations/ScatterPlot';
-import Heatmap, { type HeatmapDatum } from '@/components/analytics/PerformanceVisualizations/Heatmap';
-import NetworkGraph, { type LinkDatum, type NodeDatum } from '@/components/analytics/PerformanceVisualizations/NetworkGraph';
+import type { ScatterDatum } from '@/components/analytics/PerformanceVisualizations/ScatterPlot';
+import type { HeatmapDatum } from '@/components/analytics/PerformanceVisualizations/Heatmap';
+import type { LinkDatum, NodeDatum } from '@/components/analytics/PerformanceVisualizations/NetworkGraph';
+import {
+  LazyHeatmap as Heatmap,
+  LazyPerformanceNetworkGraph as NetworkGraph,
+  LazyScatterPlot as ScatterPlot,
+} from '@/components/charts/LazyCharts';
 
 const scatterData: ScatterDatum[] = Array.from({ length: 80 }, (_, index) => ({
   x: Math.random() * 100,

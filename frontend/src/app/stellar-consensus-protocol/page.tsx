@@ -1,6 +1,9 @@
 'use client';
 
-import { QuorumSliceExplorer, SCPVisualizer } from '@/components/stellar-scp';
+import {
+  LazyQuorumSliceExplorer as QuorumSliceExplorer,
+  LazySCPVisualizer as SCPVisualizer,
+} from '@/components/charts/LazyCharts';
 
 export default function SCPPage() {
   return (

@@ -232,11 +232,10 @@ soroban events \
    ```bash
    soroban contract invoke \
      --id <CONTRACT_ID> \
-     --source <ADMIN_SECRET_KEY> \
+     --source <GUARDIAN_SECRET_KEY> \
      -- \
-     set_paused \
-     --caller <ADMIN_ADDRESS> \
-     --paused true
+     pause \
+     --caller <GUARDIAN_ADDRESS>
    ```
 
 2. Investigate issue
