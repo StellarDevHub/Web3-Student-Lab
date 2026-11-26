@@ -3,6 +3,7 @@
 import { BlockHistory } from '@/components/mempool-auction/BlockHistory';
 import { LazyLiveFeeMarket as LiveFeeMarket } from '@/components/charts/LazyCharts';
 import { MempoolGrid } from '@/components/mempool-auction/MempoolGrid';
+import { MempoolCanvas } from '@/components/simulator/MempoolCanvas';
 import { useMempoolSimulator } from '@/hooks/useMempoolSimulator';
 import { MAX_FEE_BID, MIN_FEE_BID, selectForBlock, totalGas } from '@/lib/mempool';
 import { useMemo } from 'react';
@@ -154,6 +155,15 @@ export default function MempoolAuctionPage() {
               Highest bidders that clear the base fee and fit the gas limit.
             </p>
           </div>
+        </div>
+
+        {/* High-frequency WebGL mempool particle stream (FE-086) */}
+        <div className="mb-8">
+          <MempoolCanvas
+            pool={pool}
+            baseFee={settings.baseFee}
+            minedBlockCount={blocks.length}
+          />
         </div>
 
         {/* Auction view */}
