@@ -99,6 +99,34 @@
   --foreground: var(--text);
 }
 
+.high-contrast,
+[data-high-contrast='true'] {
+  --bg: #000000;
+  --bg-panel: #0a0a0a;
+  --bg-panel-strong: #121212;
+  --text-strong: #ffffff;
+  --text: #f5f5f5;
+  --muted: #b8b8b8;
+  --line: #d4d4d4;
+  --brand: #ffd400;
+  --brand-strong: #ffea70;
+  --brand-soft: #fff3b0;
+  --accent: #70d6ff;
+  --success: #5cff8a;
+  --warning: #ffd400;
+  --body-bg: #000000;
+  --background: var(--bg);
+  --foreground: var(--text);
+}
+
+.high-contrast button:focus-visible,
+.high-contrast a:focus-visible,
+[data-high-contrast='true'] button:focus-visible,
+[data-high-contrast='true'] a:focus-visible {
+  outline: 3px solid #ffd400;
+  outline-offset: 2px;
+}
+
 @theme inline {
   --font-sans: var(--font-outfit), var(--font-inter), 'Outfit', 'Inter', 'Sora', 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
