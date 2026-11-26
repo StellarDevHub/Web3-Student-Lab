@@ -8,16 +8,18 @@
  *   GET  /api/v1/metrics/performance — raw performance entries
  *   GET  /api/v1/metrics/errors      — error entries, messages redacted
  *   GET  /api/v1/metrics/business    — raw business event entries
+ *   POST /api/v1/metrics             — ingest browser Web Vitals spans
  *   POST /api/v1/metrics/reset       — clear all metrics (admin use)
  *
- * The whole router is behind `requireMetricsAuth` (shared monitoring token) and
- * a sliding-window rate limit, consistent with the other operational
- * endpoints. See METRICS_DOCUMENTATION.md for metric names, units, dashboards
- * and alert thresholds.
+ * Operational endpoints are behind `requireMetricsAuth` (shared monitoring
+ * token) and a sliding-window rate limit. Browser telemetry ingestion is
+ * separately rate-limited and accepts only a small allowlist of span fields.
+ * See METRICS_DOCUMENTATION.md for details.
  */
 
-import { Router, Request, Response } from 'express';
+import express, { Router, Request, Response } from 'express';
 import metricsCollector from '../metrics/MetricsCollector.js';
+import { normalizeRouteLabel } from '../metrics/MetricsExporter.js';
 import {
   METRICS_SCHEMA_VERSION,
   PROMETHEUS_CONTENT_TYPE,
@@ -82,6 +84,127 @@ prometheusBasicRouter.get('/', async (_req: Request, res: Response) => {
 });
 
 const router: ReturnType<typeof Router> = Router();
+
+const CLIENT_SPAN_NAMES = new Set(['web-vital', 'route-change', 'slow-interaction']);
+const CLIENT_SPAN_ATTRIBUTES = new Set([
+  'web_vital.name',
+  'web_vital.value',
+  'web_vital.rating',
+  'web_vital.id',
+  'page.route',
+  'device.hardware_concurrency',
+  'device.memory_gb',
+  'device.connection',
+  'diagnostic.type',
+  'diagnostic.component',
+  'interaction.target',
+  'interaction.type',
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function sanitizeClientAttributes(
+  value: unknown
+): Record<string, string | number | boolean> | null {
+  if (!isRecord(value)) return null;
+  const attributes: Record<string, string | number | boolean> = {};
+
+  for (const [key, attribute] of Object.entries(value)) {
+    if (!CLIENT_SPAN_ATTRIBUTES.has(key)) continue;
+    if (typeof attribute === 'string') {
+      attributes[key] = attribute.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 200);
+    } else if (typeof attribute === 'number' && Number.isFinite(attribute)) {
+      attributes[key] = attribute;
+    } else if (typeof attribute === 'boolean') {
+      attributes[key] = attribute;
+    }
+  }
+
+  return attributes;
+}
+
+router.post(
+  '/',
+  slidingWindowRateLimiter({
+    windowMs: 60_000,
+    limit: Number(process.env.CLIENT_METRICS_RATE_LIMIT || '120'),
+    keyPrefix: 'client-metrics',
+  }),
+  express.text({ type: 'text/plain', limit: '16kb' }),
+  (req: Request, res: Response) => {
+    let body: unknown = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body) as unknown;
+      } catch {
+        return res.status(400).json({ status: 'error', message: 'Invalid client telemetry JSON' });
+      }
+    }
+
+    const spans = isRecord(body) ? body['spans'] : undefined;
+    if (!Array.isArray(spans) || spans.length === 0 || spans.length > 20) {
+      return res.status(400).json({ status: 'error', message: 'Invalid client telemetry batch' });
+    }
+
+    const events: Array<{ name: string; attributes: Record<string, string | number | boolean> }> =
+      [];
+    for (const item of spans) {
+      if (!isRecord(item) || typeof item.name !== 'string' || !CLIENT_SPAN_NAMES.has(item.name)) {
+        return res.status(400).json({ status: 'error', message: 'Invalid client telemetry span' });
+      }
+
+      const attributes = sanitizeClientAttributes(item.attributes);
+      if (
+        !attributes ||
+        typeof attributes['page.route'] !== 'string' ||
+        !attributes['page.route'].startsWith('/')
+      ) {
+        return res
+          .status(400)
+          .json({ status: 'error', message: 'Invalid client telemetry attributes' });
+      }
+      attributes['page.route'] = normalizeRouteLabel(attributes['page.route']);
+
+      if (item.name === 'web-vital') {
+        if (
+          !['LCP', 'INP', 'CLS', 'FCP', 'TTFB'].includes(String(attributes['web_vital.name'])) ||
+          typeof attributes['web_vital.value'] !== 'number' ||
+          attributes['web_vital.value'] < 0 ||
+          !['good', 'needs-improvement', 'poor'].includes(String(attributes['web_vital.rating']))
+        ) {
+          return res
+            .status(400)
+            .json({ status: 'error', message: 'Invalid Web Vital measurement' });
+        }
+      }
+
+      if (
+        item.name === 'slow-interaction' &&
+        (typeof attributes['web_vital.value'] !== 'number' || attributes['web_vital.value'] <= 200)
+      ) {
+        return res
+          .status(400)
+          .json({ status: 'error', message: 'Invalid slow interaction diagnostic' });
+      }
+
+      events.push({ name: item.name, attributes });
+    }
+
+    for (const event of events) {
+      const eventName =
+        event.name === 'web-vital'
+          ? 'client.web_vital'
+          : event.name === 'slow-interaction'
+            ? 'client.slow_interaction'
+            : 'client.route_change';
+      metricsCollector.recordEvent(eventName, event.attributes);
+    }
+
+    return res.status(202).json({ status: 'success', accepted: events.length });
+  }
+);
 
 // Operational access controls: shared-secret auth + scrape rate ceiling.
 router.use(requireMetricsAuth);
@@ -150,6 +273,24 @@ router.get('/snapshot', (_req: Request, res: Response) => {
 /**
  * @openapi
  * /api/v1/metrics:
+ *   post:
+ *     summary: Ingest browser Web Vitals spans
+ *     description: Accepts a bounded batch of allowlisted client-side telemetry attributes.
+ *     tags: [Metrics]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         text/plain:
+ *           schema:
+ *             type: string
+ *             example: '{"spans":[{"name":"web-vital","attributes":{"web_vital.name":"LCP","web_vital.value":1800,"web_vital.rating":"good","page.route":"/"}}]}'
+ *     responses:
+ *       202:
+ *         description: Telemetry accepted
+ *       400:
+ *         description: Invalid telemetry payload
+ *       429:
+ *         $ref: '#/components/responses/RateLimited'
  *   get:
  *     summary: Get aggregated metrics summary
  *     description: Public endpoint returning high-level aggregated metrics. No raw or sensitive data.

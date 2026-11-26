@@ -363,6 +363,78 @@ describe('Metrics Routes', () => {
     mockAuthenticateToken.mockClear();
   });
 
+  describe('POST /metrics — browser Web Vitals ingestion', () => {
+    it('accepts validated spans without monitoring credentials and records them', async () => {
+      const app = buildApp({ authEnabled: true });
+      const res = await request(app)
+        .post('/metrics')
+        .set('Content-Type', 'text/plain;charset=UTF-8')
+        .send(
+          JSON.stringify({
+            spans: [
+              {
+                name: 'web-vital',
+                attributes: {
+                  'web_vital.name': 'INP',
+                  'web_vital.value': 240,
+                  'web_vital.rating': 'poor',
+                  'page.route': '/courses/123456789?user=private',
+                  'interaction.target': 'button.submit',
+                  'unapproved.attribute': 'not stored',
+                },
+              },
+              {
+                name: 'slow-interaction',
+                attributes: {
+                  'web_vital.value': 240,
+                  'page.route': '/courses',
+                  'interaction.target': 'button.submit',
+                },
+              },
+            ],
+          })
+        );
+
+      expect(res.status).toBe(202);
+      expect(res.body.accepted).toBe(2);
+      const events = metricsCollector.getBusinessMetrics();
+      expect(events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            event: 'client.web_vital',
+            metadata: expect.objectContaining({
+              'web_vital.name': 'INP',
+              'page.route': '/courses/:id',
+            }),
+          }),
+          expect.objectContaining({ event: 'client.slow_interaction' }),
+        ])
+      );
+      expect(
+        events.find((event) => event.event === 'client.web_vital')?.metadata
+      ).not.toHaveProperty('unapproved.attribute');
+    });
+
+    it('rejects malformed or oversized telemetry batches', async () => {
+      const app = buildApp({ authEnabled: true });
+      const invalid = await request(app)
+        .post('/metrics')
+        .send({ spans: [{ name: 'untrusted' }] });
+      const oversized = await request(app)
+        .post('/metrics')
+        .send({
+          spans: Array.from({ length: 21 }, () => ({
+            name: 'route-change',
+            attributes: { 'page.route': '/' },
+          })),
+        });
+
+      expect(invalid.status).toBe(400);
+      expect(oversized.status).toBe(400);
+      expect(metricsCollector.getBusinessMetrics()).toHaveLength(0);
+    });
+  });
+
   // ── Public aggregate endpoint (GET /metrics) ────────────────────────────────
   describe('GET /metrics — public aggregate endpoint', () => {
     it('returns 200 with a summary object when unauthenticated', async () => {

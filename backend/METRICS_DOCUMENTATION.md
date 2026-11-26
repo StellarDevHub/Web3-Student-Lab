@@ -13,13 +13,14 @@ can consume without manual parsing.
 | `GET /api/v1/metrics/performance` | JSON | Retained per-request samples (ring buffer). |
 | `GET /api/v1/metrics/errors` | JSON | Error entries with **messages redacted**. |
 | `GET /api/v1/metrics/business` | JSON | Domain event entries. |
+| `POST /api/v1/metrics` | `text/plain` JSON | Rate-limited browser Web Vitals span ingestion. |
 | `POST /api/v1/metrics/reset` | JSON | Clears counters (admin/manual use). |
 | `GET /api/v1/cache/metrics` | JSON | Cache hit/miss plus backend reachability. |
 
 ### Authorization and rate control
 
-All of the above require the monitoring secret `METRICS_AUTH_TOKEN`, sent as
-either header:
+Operational read and reset endpoints require the monitoring secret
+`METRICS_AUTH_TOKEN`, sent as either header:
 
 ```
 X-Metrics-Token: <token>
@@ -31,6 +32,16 @@ open in development and test but return `503 SERVICE_UNAVAILABLE` in production,
 so a deployed instance is never unprotected. Scrapes are rate limited to
 `METRICS_RATE_LIMIT` requests/minute per identity (default 120). Failures use the
 standard [error envelope](./API_ERROR_CONTRACT.md).
+
+Browser telemetry ingestion is intentionally unauthenticated so page visitors
+can report vitals without exposing the monitoring secret. It has a separate
+`CLIENT_METRICS_RATE_LIMIT` per-IP limit (default 120/minute), accepts at most
+20 spans and 16 KiB per request, and retains only allowlisted metric, route,
+device-capability and interaction-target attributes. It records `client.web_vital`,
+`client.route_change` and `client.slow_interaction` business events. INP above
+200 ms includes an interaction target to help identify the slow component.
+The frontend sends this data through OpenTelemetry spans using `sendBeacon`,
+with a keepalive fetch fallback.
 
 Example Prometheus scrape config:
 

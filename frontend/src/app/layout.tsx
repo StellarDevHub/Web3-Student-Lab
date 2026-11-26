@@ -23,11 +23,11 @@ import { TutorialProvider } from '@/contexts/TutorialContext';
 import { WalletProvider } from '@/contexts/WalletContext';
 import { Web3OnboardingProvider } from '@/contexts/Web3OnboardingContext';
 import { I18nProvider, type Locale, getDir } from '@/i18n';
-import { SocketWorkerProvider } from './providers';
+import { WebVitalsReporter } from '@/lib/telemetry/WebVitalsReporter';
 import type { Metadata, Viewport } from 'next';
-import { headers } from 'next/headers';
 import { Inter, Outfit } from 'next/font/google';
 import { cookies, headers } from 'next/headers';
+import { SocketWorkerProvider } from './providers';
 import './globals.css';
 
 /** RTL locale BCP-47 tags used to detect direction from Accept-Language. */
@@ -126,6 +126,7 @@ export default async function RootLayout({
         <QueryProvider>
           <SocketWorkerProvider>
             <ThemeProvider>
+              <WebVitalsReporter />
           <WalletProvider>
             <TelemetryContextBridge />
             <AuthProvider>
