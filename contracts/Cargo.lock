@@ -456,6 +456,7 @@ dependencies = [
 name = "cross-chain-client"
 version = "0.1.0"
 dependencies = [
+ "ed25519-dalek",
  "soroban-sdk",
 ]
 
@@ -664,6 +665,7 @@ dependencies = [
 name = "did_registry"
 version = "0.0.0"
 dependencies = [
+ "ed25519-dalek",
  "soroban-sdk",
 ]
 
