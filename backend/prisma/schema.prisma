@@ -729,18 +729,73 @@ model Subscription {
 }
 
 model PaymentRecord {
-  id             String       @id @default(cuid())
-  subscriptionId String
-  amountXLM      Float
-  txHash         String?
-  status         String       @default("completed")
-  paidAt         DateTime     @default(now())
-  createdAt      DateTime     @default(now())
+  id                   String       @id @default(cuid())
+  subscriptionId       String
+  amountXLM            Float
+  currency             String       @default("XLM") // XLM, USDC, EURC
+  expectedAmount       Float?
+  settledAmount        Float?
+  slippageBps          Int?
+  txHash               String?
+  ledgerSequence       BigInt?
+  status               String       @default("completed")
+  reconciliationStatus String       @default("pending") // pending, reconciled, partial_payment, slippage_exceeded, discrepancy, flagged, unmatched
+  reconciledAt         DateTime?
+  alertTriggered       Boolean      @default(false)
+  reviewNotes          String?
+  paidAt               DateTime     @default(now())
+  createdAt            DateTime     @default(now())
 
-  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  subscription         Subscription          @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  alerts               ReconciliationAlert[]
 
   @@index([subscriptionId])
+  @@index([reconciliationStatus])
+  @@index([txHash])
   @@map("payment_records")
+}
+
+// Automated accounting alerts for payment reconciliation discrepancies (BE-092)
+model ReconciliationAlert {
+  id              String        @id @default(cuid())
+  paymentRecordId String
+  txHash          String?
+  currency        String
+  alertType       String // partial_payment, slippage_exceeded, amount_mismatch, currency_mismatch, missing_on_chain, tx_failed
+  severity        String        @default("high") // low, medium, high, critical
+  expectedAmount  Float
+  settledAmount   Float?
+  slippageBps     Int?
+  message         String
+  resolved        Boolean       @default(false)
+  resolvedAt      DateTime?
+  resolvedBy      String?
+  createdAt       DateTime      @default(now())
+
+  paymentRecord   PaymentRecord @relation(fields: [paymentRecordId], references: [id], onDelete: Cascade)
+
+  @@index([paymentRecordId])
+  @@index([resolved, createdAt])
+  @@map("reconciliation_alerts")
+}
+
+// Daily financial reconciliation audit reports (BE-092)
+model ReconciliationReport {
+  id                       String   @id @default(cuid())
+  reportDate               DateTime
+  totalPayments            Int
+  reconciledCount          Int
+  flaggedCount             Int
+  discrepancyCount         Int
+  totalExpectedByCurrency  Json
+  totalSettledByCurrency   Json
+  averageSlippageBps       Float    @default(0)
+  maxSlippageBps           Int      @default(0)
+  summary                  Json
+  createdAt                DateTime @default(now())
+
+  @@index([reportDate])
+  @@map("reconciliation_reports")
 }
 
 // Immutable IPFS/Filecoin pins for certificates and course media (BE-011)
