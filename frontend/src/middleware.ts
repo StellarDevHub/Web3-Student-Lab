@@ -6,6 +6,7 @@ import {
   extractClientIp,
   extractStudentId,
 } from './lib/security/edgeRateLimit';
+import { evaluateBotPolicy, isReadOnlyMethod } from './lib/security/botDetection';
 
 const NONCE_HEADER = 'x-nonce';
 const ADMIN_ROUTE_PREFIX = '/admin';
@@ -16,11 +17,33 @@ const ALLOWED_ADMIN_IPS = (process.env.ALLOWED_ADMIN_IPS || '').split(',').filte
 const ALLOWED_ADMIN_COUNTRIES = (process.env.ALLOWED_ADMIN_COUNTRIES || '').split(',').filter(Boolean);
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev';
 
-// Bot Detection
-const BOT_USER_AGENTS = ['bot', 'crawler', 'spider', 'headless', 'scraper'];
-function isBot(userAgent: string): boolean {
-  const ua = userAgent.toLowerCase();
-  return BOT_USER_AGENTS.some((bot) => ua.includes(bot));
+// Rate Limiting (In-memory simple rate limit for edge, resets per worker)
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const MAX_REQUESTS = 100;
+const STRICT_MAX_REQUESTS = 20;
+const WINDOW_MS = 60 * 1000;
+
+function checkRateLimit(ip: string, maxRequests = MAX_REQUESTS): boolean {
+  if (
+    process.env.CI ||
+    process.env.NODE_ENV === 'test' ||
+    ip === '127.0.0.1' ||
+    ip === '::1' ||
+    ip === 'localhost'
+  ) {
+    return true;
+  }
+  const now = Date.now();
+  const record = rateLimitMap.get(ip);
+  if (!record || now > record.resetTime) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + WINDOW_MS });
+    return true;
+  }
+  if (record.count >= maxRequests) {
+    return false;
+  }
+  record.count += 1;
+  return true;
 }
 
 // Web Crypto JWT Validation
@@ -93,9 +116,20 @@ export async function middleware(request: NextRequest) {
   const studentId = extractStudentId(request);
   const userAgent = request.headers.get('user-agent') || '';
 
-  // 1. Bot detection
-  if (isBot(userAgent)) {
-    return new NextResponse('Bot detected', { status: 403 });
+  // 1. SEO-safe crawler classification & anti-scraper enforcement (FE-062)
+  const botDecision = evaluateBotPolicy({
+    userAgent,
+    pathname: request.nextUrl.pathname,
+    method: request.method,
+  });
+
+  if (botDecision.action !== 'allow') {
+    return new NextResponse(botDecision.reason, {
+      status: botDecision.status ?? 403,
+      headers: {
+        'X-Bot-Category': botDecision.classification.category,
+      },
+    });
   }
 
   // 2. Distributed rate limiting via Upstash Redis
@@ -109,7 +143,10 @@ export async function middleware(request: NextRequest) {
 
   // 3. Admin routes protection
   if (request.nextUrl.pathname.startsWith(ADMIN_ROUTE_PREFIX)) {
-    const country = request.geo?.country;
+    const country =
+      request.headers.get('x-vercel-ip-country') ||
+      request.headers.get('cf-ipcountry') ||
+      undefined;
 
     // Geo-fencing
     if (ALLOWED_ADMIN_COUNTRIES.length > 0 && country && !ALLOWED_ADMIN_COUNTRIES.includes(country)) {

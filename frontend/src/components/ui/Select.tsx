@@ -3,11 +3,11 @@ import { cn } from '@/lib/utils';
 
 const SelectContext = React.createContext<any>({});
 
-const Select = ({ value, onValueChange, children, className }: any) => {
+const Select = ({ value, onValueChange, children, className, ...props }: any) => {
   const [open, setOpen] = React.useState(false);
   return (
     <SelectContext.Provider value={{ value, onValueChange, open, setOpen }}>
-      <div className={cn('relative', className)} onClick={() => setOpen(!open)}>
+      <div className={cn('relative', className)} {...props} onClick={() => setOpen(!open)}>
         {children}
       </div>
     </SelectContext.Provider>

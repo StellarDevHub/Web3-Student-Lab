@@ -7,6 +7,7 @@ import {
   validateSubscriptionUpdate,
 } from '../middleware/validation.js';
 import { cacheMiddleware } from '../middleware/cache.js';
+import { idempotency } from '../middleware/idempotency.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -31,17 +32,20 @@ router.get('/user', cacheMiddleware(60), subscriptionController.getUserSubscript
 router.post(
   '/create',
   subscriptionRateLimit,
+  idempotency(),
   validateSubscriptionCreate,
   subscriptionController.createSubscription
 );
 router.post(
   '/:subscriptionId/cancel',
   subscriptionRateLimit,
+  idempotency(),
   subscriptionController.cancelSubscription
 );
 router.post(
   '/:subscriptionId/renew',
   subscriptionRateLimit,
+  idempotency(),
   subscriptionController.renewSubscription
 );
 router.get('/:subscriptionId', cacheMiddleware(60), subscriptionController.getSubscription);

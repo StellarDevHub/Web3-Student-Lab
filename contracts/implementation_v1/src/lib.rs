@@ -31,6 +31,7 @@ pub enum ImplDataKey {
     Score(Address),
 }
 
+
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ImplError {
@@ -47,9 +48,21 @@ impl StudentRecordV1 {
     // -----------------------------------------------------------------------
     // UUPS Proxy Admin Logic
     // Must be included in every implementation to maintain upgradeability.
+    // Upgrades are governance-only: the caller must be the admin (the timelocked
+    // security council proxy), and the target hash must match the proposal
+    // previously recorded by the proxy's 48-hour timelock.
     pub fn upgrade_to(env: Env, caller: Address, new_implementation: BytesN<32>) {
         caller.require_auth();
         Self::require_admin(&env, &caller);
+
+        let approved: BytesN<32> = env
+            .storage()
+            .instance()
+            .get(&ProxyDataKey::ImplementationWasm)
+            .unwrap_or_else(|| panic_with_error!(&env, ImplError::NotInitialized));
+        if approved != new_implementation {
+            panic_with_error!(&env, ImplError::Unauthorized);
+        }
 
         env.storage()
             .instance()

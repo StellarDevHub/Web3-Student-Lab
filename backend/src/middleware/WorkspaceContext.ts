@@ -1,5 +1,15 @@
+import { NextFunction, Request, Response } from 'express';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { Request, Response, NextFunction } from 'express';
+
+export class WorkspaceAuthorizationError extends Error {
+  readonly statusCode = 403;
+  readonly code = 'WORKSPACE_AUTHORIZATION_REQUIRED';
+
+  constructor(message = 'Forbidden: authenticated workspace context is required') {
+    super(message);
+    this.name = 'WorkspaceAuthorizationError';
+  }
+}
 
 export const workspaceContextStorage = new AsyncLocalStorage<string>();
 
@@ -27,12 +37,20 @@ export const runWithWorkspace = <T>(workspaceId: string, fn: () => T): T => {
   return systemContextStorage.exit(() => workspaceContextStorage.run(workspaceId, fn));
 };
 
+const getHeaderWorkspaceId = (req: Request): string | undefined => {
+  const header = req.headers['x-workspace-id'];
+  const headerValue = Array.isArray(header) ? header[0] : header;
+  const queryValue = typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined;
+  const value = headerValue || queryValue;
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+};
+
 export const requireWorkspaceMiddleware = (
   req: Request,
   res: Response,
   next: NextFunction
 ): void => {
-  let workspaceId = (req.headers['x-workspace-id'] || req.query.workspaceId) as string;
+  let workspaceId = getHeaderWorkspaceId(req);
 
   // Extract workspaceId from OAuth state parameter if present
   if (!workspaceId && req.query.state && typeof req.query.state === 'string') {
@@ -43,13 +61,9 @@ export const requireWorkspaceMiddleware = (
   }
 
   if (!workspaceId) {
-    if (process.env.NODE_ENV === 'test' && req.headers['x-test-bypass-workspace'] !== 'false') {
-      workspaceContextStorage.run('default', () => {
-        next();
-      });
-      return;
-    }
-    res.status(400).json({ error: 'x-workspace-id header is missing or invalid' });
+    res.status(403).json({
+      error: 'Forbidden: x-workspace-id header is missing or invalid',
+    });
     return;
   }
 
@@ -63,7 +77,7 @@ export const optionalWorkspaceMiddleware = (
   res: Response,
   next: NextFunction
 ): void => {
-  let workspaceId = (req.headers['x-workspace-id'] || req.query.workspaceId) as string;
+  let workspaceId = getHeaderWorkspaceId(req);
 
   // Extract workspaceId from OAuth state parameter if present
   if (!workspaceId && req.query.state && typeof req.query.state === 'string') {
