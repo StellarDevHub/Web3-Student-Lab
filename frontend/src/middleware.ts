@@ -1,5 +1,11 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import {
+  checkEdgeRateLimit,
+  createRateLimitHeaders,
+  extractClientIp,
+  extractStudentId,
+} from './lib/security/edgeRateLimit';
 import { evaluateBotPolicy, isReadOnlyMethod } from './lib/security/botDetection';
 
 const NONCE_HEADER = 'x-nonce';
@@ -106,7 +112,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(destination, 301);
   }
 
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
+  const ip = extractClientIp(request);
+  const studentId = extractStudentId(request);
   const userAgent = request.headers.get('user-agent') || '';
 
   // 1. SEO-safe crawler classification & anti-scraper enforcement (FE-062)
@@ -125,14 +132,13 @@ export async function middleware(request: NextRequest) {
     });
   }
 
-  // 2. Rate limiting (stricter limit on mutating endpoints or flagged traffic)
-  const rateLimitMax =
-    botDecision.strictRateLimit || !isReadOnlyMethod(request.method)
-      ? STRICT_MAX_REQUESTS
-      : MAX_REQUESTS;
-
-  if (!checkRateLimit(ip, rateLimitMax)) {
-    return new NextResponse('Too many requests', { status: 429 });
+  // 2. Distributed rate limiting via Upstash Redis
+  const rateLimit = await checkEdgeRateLimit({ ip, studentId });
+  if (!rateLimit.allowed) {
+    return new NextResponse('Too many requests', {
+      status: 429,
+      headers: createRateLimitHeaders(rateLimit),
+    });
   }
 
   // 3. Admin routes protection
