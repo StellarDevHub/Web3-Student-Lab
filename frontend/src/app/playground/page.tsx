@@ -33,6 +33,11 @@ const CodeEditor = dynamic(() => import('@/components/playground/CodeEditor').th
   ssr: false,
 });
 
+const DisassemblerPane = dynamic(
+  () => import('@/components/editor/DisassemblerPane').then((mod) => mod.DisassemblerPane),
+  { ssr: false },
+);
+
 const DEFAULT_CARGO_TOML = `[package]
 name = "soroban-contract"
 version = "0.1.0"
@@ -152,7 +157,7 @@ impl HelloContract {
   const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'offline' | 'error'>('idle');
   const [isOnline, setIsOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
-  const [activeTab, setActiveTab] = useState<'editor' | 'output' | 'prsim'>('editor');
+  const [activeTab, setActiveTab] = useState<'editor' | 'output' | 'prsim' | 'disasm'>('editor');
 
   // ── Cancellable execution hook ──────────────────────────────────────────
   const {
@@ -332,6 +337,16 @@ impl HelloContract {
           >
             PR Simulation
           </button>
+          <button
+            onClick={() => setActiveTab('disasm')}
+            className={`flex-1 py-3 text-xs font-bold tracking-widest uppercase rounded-lg transition-all flex items-center justify-center gap-2 ${
+              activeTab === 'disasm'
+                ? 'bg-red-600 text-white'
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            WASM Disassembler
+          </button>
         </div>
 
         {/* Mobile Tab Switcher */}
@@ -366,6 +381,16 @@ impl HelloContract {
           >
             PR Sim
           </button>
+          <button
+            onClick={() => setActiveTab('disasm')}
+            className={`flex-1 py-3 text-xs font-bold tracking-widest uppercase rounded-lg transition-all min-h-[44px] flex items-center justify-center ${
+              activeTab === 'disasm'
+                ? 'bg-red-600 text-white'
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            WASM
+          </button>
         </div>
 
         {/* PR Simulation Panel — standalone view */}
@@ -375,7 +400,17 @@ impl HelloContract {
           </div>
         )}
 
-        <div className={`grid flex-grow grid-cols-1 gap-12 lg:grid-cols-2 ${activeTab === 'prsim' ? 'hidden lg:grid' : ''}`}>
+        {activeTab === 'disasm' && (
+          <div className="flex-grow">
+            <DisassemblerPane />
+          </div>
+        )}
+
+        <div
+          className={`grid flex-grow grid-cols-1 gap-12 lg:grid-cols-2 ${
+            activeTab === 'disasm' ? 'hidden' : activeTab === 'prsim' ? 'hidden lg:grid' : ''
+          }`}
+        >
           {/* Editor Placeholder */}
           <div className="relative flex min-h-[600px] flex-col rounded-3xl border border-white/10 bg-zinc-950 p-8 shadow-2xl" data-tour-step="playground-editor">
             <div className="mb-6 flex items-center justify-between gap-2 border-b border-white/5 pb-4">
