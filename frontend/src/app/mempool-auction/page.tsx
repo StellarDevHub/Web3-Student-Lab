@@ -1,7 +1,7 @@
 'use client';
 
 import { BlockHistory } from '@/components/mempool-auction/BlockHistory';
-import { LiveFeeMarket } from '@/components/mempool-auction/LiveFeeMarket';
+import { LazyLiveFeeMarket as LiveFeeMarket } from '@/components/charts/LazyCharts';
 import { MempoolGrid } from '@/components/mempool-auction/MempoolGrid';
 import { useMempoolSimulator } from '@/hooks/useMempoolSimulator';
 import { MAX_FEE_BID, MIN_FEE_BID, selectForBlock, totalGas } from '@/lib/mempool';

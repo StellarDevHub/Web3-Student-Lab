@@ -3,12 +3,15 @@ import { KeyboardShortcutsProvider } from '@/components/keyboard/KeyboardShortcu
 import Navbar from '@/components/layout/Navbar';
 import {
   DeferredCommandPalette,
+  DeferredCourseNotificationListener,
   DeferredOfflineNotification,
   DeferredRenderWarningModal,
 } from '@/components/layout/DeferredLayoutWidgets';
 import ResiliencyBanner from '@/components/layout/ResiliencyBanner';
 import WalletGate from '@/components/layout/WalletGate';
-import { CourseNotificationListener, ToastContainer } from '@/components/notifications';
+// Direct module import (not the notifications barrel) so unrelated exports
+// are not pulled into the root layout bundle (FE-076).
+import { ToastContainer } from '@/components/notifications/ToastContainer';
 import { OfflineSyncHandler } from '@/components/OfflineSyncHandler';
 import { SkipLink } from '@/components/ui/SkipLink';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -70,7 +73,7 @@ export default function RootLayout({
             <AuthProvider>
               <I18nProvider>
                 <NotificationProvider>
-                  <CourseNotificationListener />
+                  <DeferredCourseNotificationListener />
                   <Web3OnboardingProvider>
                     <KeyboardShortcutsProvider>
                       <TutorialProvider>

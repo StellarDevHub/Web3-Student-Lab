@@ -262,6 +262,9 @@ backend/dist/
 !commitlint.config.js
 !commitlint.config.cjs
 !frontend/public/sw.js
+# Bundle budget gate (FE-076): source scripts, not build output
+!frontend/scripts/check-bundle-size.js
+!frontend/scripts/bundle/*.js
 
 
 # temp error logs
