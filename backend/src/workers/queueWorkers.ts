@@ -12,17 +12,20 @@
 
 import { startTracing } from '../instrumentation.js';
 import { getQueueManager } from '../queues/queueManager.js';
+import { QUEUE_FAILOVER_BUDGET_MS } from '../config/redis.js';
 import logger from '../utils/logger.js';
 import { startEvaluationWorker, stopEvaluationWorker } from './evaluationWorker.js';
 import { startMintingWorker, stopMintingWorker } from './mintingWorker.js';
+import { startVideoTranscodingWorker, stopVideoTranscodingWorker } from './videoTranscodingWorker.js';
 
 export function startQueueWorkers(): void {
   startMintingWorker();
   startEvaluationWorker();
+  startVideoTranscodingWorker();
 }
 
 export async function stopQueueWorkers(): Promise<void> {
-  await Promise.allSettled([stopMintingWorker(), stopEvaluationWorker()]);
+  await Promise.allSettled([stopMintingWorker(), stopEvaluationWorker(), stopVideoTranscodingWorker()]);
   await getQueueManager().close();
 }
 
@@ -32,11 +35,19 @@ if (isEntrypoint) {
   // Start the OTLP exporter before consuming any jobs so every job span is
   // exported. startTracing() is idempotent and a no-op when OTEL_SDK_DISABLED=true.
   void startTracing().then(() => {
+    const manager = getQueueManager();
+    logger.info('[queueWorkers] Redis queue topology resolved', {
+      ...manager.getRedisTopology(),
+      failoverBudgetMs: QUEUE_FAILOVER_BUDGET_MS,
+    });
     startQueueWorkers();
   });
   const shutdown = (signal: string) => {
     logger.info(`[queueWorkers] ${signal} received; draining workers`);
-    stopQueueWorkers().finally(() => process.exit(0));
+    stopQueueWorkers().finally(() => {
+      logger.info('[queueWorkers] Redis queue failover stats', manager.getQueueFailoverStats());
+      process.exit(0);
+    });
   };
   process.once('SIGTERM', () => shutdown('SIGTERM'));
   process.once('SIGINT', () => shutdown('SIGINT'));

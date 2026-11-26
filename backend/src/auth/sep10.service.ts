@@ -160,7 +160,11 @@ export const buildSep10Challenge = async (
   await enforceChallengRateLimit(clientAccountID);
 
   const serverKeypair = getServerKeypair();
-  const targetHomeDomain = homeDomain || getHomeDomain();
+  const configuredHomeDomain = getHomeDomain();
+  const targetHomeDomain = homeDomain || configuredHomeDomain;
+  if (targetHomeDomain !== configuredHomeDomain) {
+    throw new Error('Home domain mismatch: requested home domain does not match configured server domain');
+  }
   const targetWebAuthDomain = webAuthDomain || getWebAuthDomain();
   const networkPassphrase = getNetworkPassphrase();
 
@@ -236,7 +240,11 @@ export const verifySep10Challenge = async (
   }
 
   const serverKeypair = getServerKeypair();
-  const targetHomeDomain = homeDomain || getHomeDomain();
+  const configuredHomeDomain = getHomeDomain();
+  const targetHomeDomain = homeDomain || configuredHomeDomain;
+  if (targetHomeDomain !== configuredHomeDomain) {
+    throw new Error('Home domain mismatch: requested home domain does not match configured server domain');
+  }
   const targetWebAuthDomain = webAuthDomain || getWebAuthDomain();
   const networkPassphrase = getNetworkPassphrase();
 
@@ -249,12 +257,16 @@ export const verifySep10Challenge = async (
       signedChallengeXdr,
       serverKeypair.publicKey(),
       networkPassphrase,
-      [targetHomeDomain],
+      [configuredHomeDomain],
       targetWebAuthDomain
     );
   } catch (err: any) {
     logger.warn('Failed to parse SEP-0010 challenge envelope:', err);
     throw new Error(err.message || 'Invalid challenge transaction envelope');
+  }
+
+  if (parsedChallenge.matchedHomeDomain !== configuredHomeDomain) {
+    throw new Error('Home domain mismatch: challenge home domain does not match configured server domain');
   }
 
   const clientAccountID = parsedChallenge.clientAccountID;
@@ -263,47 +275,57 @@ export const verifySep10Challenge = async (
     throw new Error('Client public key does not match transaction source');
   }
 
-  // --- Strict server-side time bounds verification ---
-  const now = Math.floor(Date.now() / 1000);
-  if (tx.timeBounds) {
-    const minTime = parseInt(tx.timeBounds.minTime, 10);
-    const maxTime = parseInt(tx.timeBounds.maxTime, 10);
+  // --- Strict server-side time bounds verification (T_min <= T_now <= T_max) ---
+  if (!tx.timeBounds) {
+    throw new Error('Challenge transaction is missing timebounds');
+  }
 
-    if (now < minTime || now > maxTime) {
-      throw new Error('Challenge transaction has expired');
-    }
+  const now = Math.floor(Date.now() / 1000);
+  const minTime = parseInt(tx.timeBounds.minTime, 10);
+  const maxTime = parseInt(tx.timeBounds.maxTime, 10);
+
+  if (Number.isNaN(minTime) || Number.isNaN(maxTime) || maxTime <= 0 || minTime > maxTime) {
+    throw new Error('Challenge transaction has invalid timebounds');
+  }
+
+  if (now < minTime || now > maxTime) {
+    throw new Error('Challenge transaction has expired');
   }
 
   // --- Atomic nonce/replay protection via Redis ---
-  // We use atomic check-then-set to claim the transaction hash.
+  // Use atomic SET ... EX 300 NX to claim the transaction hash.
   // If a concurrent or replayed request races us, exactly one succeeds.
   const txHash = tx.hash().toString('hex');
   let boundNonce: string | undefined;
 
   try {
     const redis = getRedisClient();
-    if (redis && typeof redis.get === 'function' && typeof redis.set === 'function') {
-      // Check for replay: was this hash already consumed?
-      const isUsed = await redis.get(`sep10:used:${txHash}`);
-      if (isUsed) {
+    if (redis && typeof redis.set === 'function') {
+      const acquired = await redis.set(
+        `sep10:used:${txHash}`,
+        '1',
+        'EX',
+        CHALLENGE_TTL_SECONDS,
+        'NX'
+      );
+      if (!acquired) {
         throw new Error('Challenge transaction has already been used');
       }
 
-      // Atomically mark as used (TTL = challenge lifetime + verification window)
-      await redis.set(`sep10:used:${txHash}`, '1', 'EX', CHALLENGE_TTL_SECONDS + 60);
-
       // Retrieve the nonce that was bound to this challenge at generation time
-      const challengeData = await redis.get(`sep10:ch:${txHash}`);
-      if (challengeData) {
-        try {
-          const parsed = JSON.parse(challengeData);
-          boundNonce = parsed.nonce;
-        } catch {
-          // Legacy format: plain accountId string (no nonce binding)
-          boundNonce = undefined;
-        }
-        if (typeof redis.del === 'function') {
-          await redis.del(`sep10:ch:${txHash}`);
+      if (typeof redis.get === 'function') {
+        const challengeData = await redis.get(`sep10:ch:${txHash}`);
+        if (challengeData) {
+          try {
+            const parsed = JSON.parse(challengeData);
+            boundNonce = parsed.nonce;
+          } catch {
+            // Legacy format: plain accountId string (no nonce binding)
+            boundNonce = undefined;
+          }
+          if (typeof redis.del === 'function') {
+            await redis.del(`sep10:ch:${txHash}`);
+          }
         }
       }
     }

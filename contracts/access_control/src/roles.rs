@@ -1,5 +1,5 @@
 use crate::AcError;
-use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol};
+use soroban_sdk::{contracttype, symbol_short, Address, Env};
 
 /// Roles supported by the shared access-control module.
 ///
@@ -21,11 +21,8 @@ pub enum Role {
 #[derive(Clone)]
 pub(crate) enum StorageKey {
     Admin,
-    Paused,
     RoleMember(Role, Address),
 }
-
-pub(crate) const PAUSED_KEY: Symbol = symbol_short!("AC_PAUSED");
 
 /// Initializes access control once. Repeated calls never replace the admin.
 pub fn initialize(env: &Env, initial_admin: &Address) {
@@ -35,7 +32,9 @@ pub fn initialize(env: &Env, initial_admin: &Address) {
     }
     initial_admin.require_auth();
     env.storage().instance().set(&key, initial_admin);
-    env.storage().instance().set(&PAUSED_KEY, &false);
+    // The admin is the initial guardian; the breaker's unpause timelock lives
+    // in `circuit_breaker`.
+    crate::circuit_breaker::initialize(env, initial_admin, initial_admin);
     env.events().publish(
         (symbol_short!("AC_ROLE"), Role::Admin),
         (initial_admin.clone(), true, initial_admin.clone()),
@@ -108,32 +107,4 @@ pub fn revoke_role(env: &Env, caller: &Address, role: Role, account: &Address) {
         (symbol_short!("AC_ROLE"), role),
         (account.clone(), false, caller.clone()),
     );
-}
-
-/// Returns true if the contract is currently paused.
-pub fn is_paused(env: &Env) -> bool {
-    env.storage()
-        .instance()
-        .get::<Symbol, bool>(&PAUSED_KEY)
-        .unwrap_or(false)
-}
-
-/// Pause application operations. Admins and guardians may pause.
-pub fn pause(env: &Env, caller: &Address) {
-    caller.require_auth();
-    if !has_role(env, caller, Role::Admin) && !has_role(env, caller, Role::Guardian) {
-        soroban_sdk::panic_with_error!(env, AcError::Unauthorized);
-    }
-    env.storage().instance().set(&PAUSED_KEY, &true);
-    env.events()
-        .publish((symbol_short!("AC_PAUSE"),), caller.clone());
-}
-
-/// Resume application operations. Only the admin may unpause.
-pub fn unpause(env: &Env, caller: &Address) {
-    caller.require_auth();
-    crate::require_admin(env, caller);
-    env.storage().instance().set(&PAUSED_KEY, &false);
-    env.events()
-        .publish((symbol_short!("AC_UNPAUS"),), caller.clone());
 }

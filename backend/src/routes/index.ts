@@ -3,7 +3,7 @@ import activityLogRouter from '../dashboard/activityLog.routes.js';
 import dashboardRoutes from '../dashboard/dashboard.routes.js';
 import feedbackRouter from '../feedback/feedback.routes.js';
 import licenseRoutes from '../licenses/license.routes.js';
-import { optionalWorkspaceMiddleware } from '../middleware/WorkspaceContext.js';
+import { optionalWorkspaceMiddleware, requireWorkspaceMiddleware } from '../middleware/WorkspaceContext.js';
 import { validateWorkspaceMembership } from '../middleware/workspaceMembership.js';
 import userRouter from '../user/routes.js';
 import analyticsRouter from './analytics.routes.js';
@@ -46,21 +46,21 @@ import adminDLQRouter from './admin/dlq.routes.js';
 import adminQueuesRouter from './admin/queues.routes.js';
 import adminWebhooksRouter from './admin/webhooks.routes.js';
 import apiRouter from './api.js';
+import canvasRouter from './canvas.routes.js';
+import channelsRouter from './channels.routes.js';
 import contributorProofsRouter from './contributor-proofs.routes.js';
 import deployRouter from './deploy.routes.js';
 import didRouter from './did.routes.js';
+import gasStationRouter from './gasStation.routes.js';
 import identityRouter from './identity.routes.js';
+import passkeyRouter from './passkey.routes.js';
 import policyRouter from './policy/policy.routes.js';
 import relayerRouter from './relayer.routes.js';
 import storageRouter from './storage.routes.js';
 import streamsRouter from './streams.routes.js';
-import sybilRouter from './sybil.routes.js';
-import passkeyRouter from './passkey.routes.js';
-import webhooksRouter from './webhooks.js';
-import canvasRouter from './canvas.routes.js';
-import channelsRouter from './channels.routes.js';
-import gasStationRouter from './gasStation.routes.js';
 import subscriptionsRouter from './subscriptions.routes.js';
+import sybilRouter from './sybil.routes.js';
+import webhooksRouter from './webhooks.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -79,12 +79,12 @@ router.use('/students', studentsRouter);
 // (#1119). Runs after the workspace context is populated above; requests
 // without an authenticated user or workspace header pass through, while
 // the Prisma extension still applies per-query tenant filtering.
-router.use('/certificates', validateWorkspaceMembership, certificatesRouter);
-router.use('/courses', validateWorkspaceMembership, coursesRouter);
-router.use('/enrollments', validateWorkspaceMembership, enrollmentsRouter);
-router.use('/feedback', validateWorkspaceMembership, feedbackRouter);
-router.use('/learning', validateWorkspaceMembership, learningRoutes);
-router.use('/canvas', validateWorkspaceMembership, canvasRouter);
+router.use('/certificates', requireWorkspaceMiddleware, validateWorkspaceMembership, certificatesRouter);
+router.use('/courses', requireWorkspaceMiddleware, validateWorkspaceMembership, coursesRouter);
+router.use('/enrollments', requireWorkspaceMiddleware, validateWorkspaceMembership, enrollmentsRouter);
+router.use('/feedback', requireWorkspaceMiddleware, validateWorkspaceMembership, feedbackRouter);
+router.use('/learning', requireWorkspaceMiddleware, validateWorkspaceMembership, learningRoutes);
+router.use('/canvas', requireWorkspaceMiddleware, validateWorkspaceMembership, canvasRouter);
 
 router.use('/media', mediaRouter);
 router.use('/dashboard', dashboardRoutes);
@@ -135,5 +135,8 @@ router.use('/oauth', oauthRouter);
 router.use('/', apiRouter);
 router.use('/tokenomics', tokenomicsRouter);
 router.use('/contributor-proofs', contributorProofsRouter);
+
+// This middleware is now applied at the API root to ensure tenant-scoped routes cannot run unpartitioned.
+router.use(requireWorkspaceMiddleware);
 
 export default router;

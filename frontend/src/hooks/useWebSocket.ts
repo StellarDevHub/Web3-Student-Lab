@@ -1,121 +1,81 @@
+'use client';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ConnectionStatus,
-  WebSocketMessage,
-  getWebSocketClient,
-} from '@/lib/websocket';
-import { getSessionBroadcastManager } from '@/services/session/broadcastSync';
+import type { ConnectionStatus, WebSocketMessage } from '@/lib/websocket';
 
 export interface UseWebSocketOptions {
   url?: string;
   token?: string | null;
   autoConnect?: boolean;
-  preventDuplicateTabs?: boolean;
   channels?: string[];
-  heartbeatIntervalMs?: number;
-  heartbeatTimeoutMs?: number;
-  maxReconnectAttempts?: number;
-  baseReconnectDelayMs?: number;
-  maxReconnectDelayMs?: number;
-  maxBufferSize?: number;
 }
+
+type WorkerEvent =
+  | { type: 'status'; status: ConnectionStatus }
+  | { type: 'message'; message: WebSocketMessage }
+  | { type: 'error'; message: string };
+type WorkerCommand =
+  | { type: 'connect'; url: string; token?: string | null }
+  | { type: 'disconnect' }
+  | { type: 'send'; messageType: string; data: unknown }
+  | { type: 'subscribe'; channel: string; payload?: Record<string, unknown> }
+  | { type: 'unsubscribe'; channel: string };
+
+const DEFAULT_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080';
+let worker: SharedWorker | null = null;
+let activeConsumers = 0;
+
+function getWorker(): SharedWorker | null {
+  if (typeof window === 'undefined' || typeof SharedWorker === 'undefined') return null;
+  if (!worker) {
+    worker = new SharedWorker(new URL('../workers/socket.sharedworker.ts', import.meta.url), {
+      name: 'web3-student-lab-socket',
+    });
+    worker.port.start();
+  }
+  return worker;
+}
+
+/** Used by the root provider to prepare the shared transport after hydration. */
+export function warmSocketWorker() { getWorker(); }
 
 export const useWebSocket = (urlOrOptions?: string | UseWebSocketOptions) => {
   const options = typeof urlOrOptions === 'string' ? { url: urlOrOptions } : urlOrOptions ?? {};
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
-  const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [bufferedCount, setBufferedCount] = useState(0);
-  const clientRef = useRef(getWebSocketClient());
+  const [bufferedCount] = useState(0);
+  const portRef = useRef<MessagePort | null>(null);
 
-  const sendMessage = useCallback((type: string, data: any) => {
-    clientRef.current.send(type, data);
-    setBufferedCount(clientRef.current.getBufferedCount());
-  }, []);
-
-  const subscribe = useCallback((channel: string, payload?: Record<string, unknown>) => {
-    clientRef.current.subscribe(channel, payload);
-  }, []);
-
-  const unsubscribe = useCallback((channel: string) => {
-    clientRef.current.unsubscribe(channel);
-  }, []);
-
-  const disconnect = useCallback(() => {
-    clientRef.current.disconnect();
-  }, []);
-
-  const reconnect = useCallback(() => {
-    clientRef.current.connect();
-  }, []);
+  const post = useCallback((command: WorkerCommand) => portRef.current?.postMessage(command), []);
+  const sendMessage = useCallback((type: string, data: unknown) => post({ type: 'send', messageType: type, data }), [post]);
+  const subscribe = useCallback((channel: string, payload?: Record<string, unknown>) => post({ type: 'subscribe', channel, payload }), [post]);
+  const unsubscribe = useCallback((channel: string) => post({ type: 'unsubscribe', channel }), [post]);
+  const disconnect = useCallback(() => post({ type: 'disconnect' }), [post]);
+  const reconnect = useCallback(() => post({ type: 'connect', url: options.url ?? DEFAULT_URL, token: options.token ?? localStorage.getItem('auth_token') }), [options.token, options.url, post]);
 
   useEffect(() => {
-    const client = clientRef.current;
-    const token = options.token ?? localStorage.getItem('auth_token');
-    if (!token) {
-      return undefined;
-    }
-
-    const unsubscribeStatus = client.onStatusChange((nextStatus) => {
-      setStatus(nextStatus);
-      setIsConnected(nextStatus === 'connected');
-    });
-
-    const unsubscribeMessage = client.onMessage((message) => {
-      setLastMessage(message);
-      setBufferedCount(client.getBufferedCount());
-    });
-
-    const unsubscribeError = client.onError((err) => {
-      setError(err.message);
-    });
-
-    options.channels?.forEach((channel) => client.subscribe(channel));
-
-    const connectIfAllowed = () => {
-      if (options.preventDuplicateTabs) {
-        if (getSessionBroadcastManager().isLeader()) {
-          client.connect();
-        } else {
-          client.disconnect();
-        }
-      } else if (options.autoConnect ?? true) {
-        client.connect();
-      }
+    const activeWorker = getWorker();
+    if (!activeWorker) { setError('SharedWorker is not supported by this browser.'); return undefined; }
+    const port = activeWorker.port;
+    portRef.current = port;
+    activeConsumers += 1;
+    const onMessage = (event: MessageEvent<WorkerEvent>) => {
+      if (event.data.type === 'status') setStatus(event.data.status);
+      if (event.data.type === 'message') setLastMessage(event.data.message);
+      if (event.data.type === 'error') setError(event.data.message);
     };
-
-    connectIfAllowed();
-
-    let unsubLeadership: (() => void) | undefined;
-    if (options.preventDuplicateTabs) {
-      unsubLeadership = getSessionBroadcastManager().onLeadershipChange((isLeader) => {
-        if (isLeader) {
-          client.connect();
-        } else {
-          client.disconnect();
-        }
-      });
-    }
-
+    port.addEventListener('message', onMessage);
+    if (options.autoConnect ?? true) port.postMessage({ type: 'connect', url: options.url ?? DEFAULT_URL, token: options.token ?? localStorage.getItem('auth_token') } satisfies WorkerCommand);
+    options.channels?.forEach((channel) => port.postMessage({ type: 'subscribe', channel } satisfies WorkerCommand));
     return () => {
-      unsubscribeStatus();
-      unsubscribeMessage();
-      unsubscribeError();
-      unsubLeadership?.();
+      options.channels?.forEach((channel) => port.postMessage({ type: 'unsubscribe', channel } satisfies WorkerCommand));
+      activeConsumers -= 1;
+      if (activeConsumers === 0) port.postMessage({ type: 'disconnect' } satisfies WorkerCommand);
+      port.removeEventListener('message', onMessage);
+      portRef.current = null;
     };
-  }, [options.token, options.autoConnect, options.preventDuplicateTabs, options.channels?.join(',')]);
+  }, [options.autoConnect, options.channels?.join(','), options.token, options.url]);
 
-  return {
-    status,
-    isConnected,
-    lastMessage,
-    error,
-    bufferedCount,
-    sendMessage,
-    subscribe,
-    unsubscribe,
-    disconnect,
-    reconnect,
-  };
+  return { status, isConnected: status === 'connected', lastMessage, error, bufferedCount, sendMessage, subscribe, unsubscribe, disconnect, reconnect };
 };

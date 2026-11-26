@@ -4,7 +4,7 @@ import express, { Request, Response } from 'express';
 import { createCorsMiddleware } from './config/cors.config.js';
 import { securityHeadersMiddleware } from './middleware/securityHeaders.js';
 import swaggerDocsRouter from './config/swagger.serve.js';
-import { jsonBodySizeLimit } from './middleware/bodySizeLimit.js';
+import { jsonBodySizeLimit, jsonBodyParsingErrorHandler } from './middleware/bodySizeLimit.js';
 import { dbRoutingMiddleware } from './middleware/dbRouting.js';
 import { dynamicRateLimiter } from './middleware/dynamicRateLimiter.js';
 import { tracingMiddleware } from './middleware/tracingMiddleware.js';
@@ -38,12 +38,10 @@ app.use(securityHeadersMiddleware);
 
 app.use(createCorsMiddleware());
 
-// Contract evaluation submissions carry base64 WASM, so they may use the full
-// 1MB body ceiling enforced by jsonBodySizeLimit instead of the 100kb default.
-app.use('/api/v1/evaluations', express.json({ limit: '1mb' }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use(jsonBodySizeLimit);
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(jsonBodyParsingErrorHandler);
 // Attach DB routing context middleware to ensure GETs are routed to replicas
 app.use(dbRoutingMiddleware);
 
@@ -71,7 +69,7 @@ app.get('/health', (_req: Request, res: Response) => {
 app.get('/health/live', livenessHandler);
 app.get('/health/ready', readinessHandler);
 
-app.post('/api/security/csp-report', express.json(), (req: Request, res: Response) => {
+app.post('/api/security/csp-report', (req: Request, res: Response) => {
   const report = req.body;
   logger.warn('CSP violation report', {
     report,

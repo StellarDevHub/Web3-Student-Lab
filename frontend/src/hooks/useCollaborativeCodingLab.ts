@@ -41,6 +41,10 @@ export interface CollaborativeCodingLabOptions {
   wsUrl?: string;
   /** y-webrtc signalling server. Defaults to wss://signaling.yjs.dev. */
   signalingUrl?: string;
+  /** End-to-end encryption key derived from Ed25519-authenticated ECDH key agreement. */
+  encryptionKey?: string;
+  /** When true, delays opening WebRTC/WS sync channels until encryptionKey is available. */
+  requireVerifiedPeer?: boolean;
 }
 
 export interface CollaborativeCodingLab {
@@ -55,6 +59,8 @@ export interface CollaborativeCodingLab {
   isWebRtc: boolean;
   /** True while neither provider reports a connection. */
   isDisconnected: boolean;
+  /** True when editor sync is protected by an Ed25519-derived encryption key. */
+  isEncrypted: boolean;
   /** Append output to the shared execution log (synchronized to all peers). */
   appendExecutionOutput: (text: string) => void;
   /** Clear the shared execution log. */
@@ -64,7 +70,8 @@ export interface CollaborativeCodingLab {
 export function useCollaborativeCodingLab(
   options: CollaborativeCodingLabOptions,
 ): CollaborativeCodingLab {
-  const { roomId, userId, userName, wsUrl, signalingUrl } = options;
+  const { roomId, userId, userName, wsUrl, signalingUrl, encryptionKey, requireVerifiedPeer } =
+    options;
   const docRef = useRef<Y.Doc | null>(null);
   const webrtcRef = useRef<WebrtcProvider | null>(null);
   const wsRef = useRef<WebsocketProvider | null>(null);
@@ -92,6 +99,12 @@ export function useCollaborativeCodingLab(
   }, [executionLog]);
 
   useEffect(() => {
+    if (requireVerifiedPeer && !encryptionKey) {
+      setIsWebRtc(false);
+      setIsDisconnected(true);
+      return;
+    }
+
     const room = `web3-student-lab:${roomId}`;
 
     // Set local awareness before providers connect so peers see us early.
@@ -100,9 +113,10 @@ export function useCollaborativeCodingLab(
       color: `#${Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0')}`,
     });
 
-    // WebRTC P2P provider (primary transport).
+    // WebRTC P2P provider (primary transport), end-to-end encrypted when encryptionKey is set.
     const webrtc = new WebrtcProvider(room, doc, {
       signaling: [signalingUrl ?? 'wss://signaling.yjs.dev'],
+      password: encryptionKey,
       maxConns: 20 + Math.floor(Math.random() * 15),
     });
     webrtcRef.current = webrtc;
@@ -123,16 +137,19 @@ export function useCollaborativeCodingLab(
       }
     });
 
-    // WebSocket fallback provider sharing the same Y.Doc. It only becomes the
-    // active transport when WebRTC cannot connect.
-    const ws = new WebsocketProvider(wsUrl ?? 'wss://demos.yjs.dev', room, doc);
-    wsRef.current = ws;
+    // WebSocket fallback provider sharing the same Y.Doc. Disabled when an E2EE
+    // peer key is required so plaintext updates never traverse an unencrypted relay.
+    let ws: WebsocketProvider | null = null;
+    if (!requireVerifiedPeer) {
+      ws = new WebsocketProvider(wsUrl ?? 'wss://demos.yjs.dev', room, doc);
+      wsRef.current = ws;
 
-    const wsConnected = () => setIsDisconnected(false);
-    ws.on('status', (event: { status: string }) => {
-      if (event.status === 'connected') wsConnected();
-      else setIsDisconnected(true);
-    });
+      const wsConnected = () => setIsDisconnected(false);
+      ws.on('status', (event: { status: string }) => {
+        if (event.status === 'connected') wsConnected();
+        else setIsDisconnected(true);
+      });
+    }
 
     // Awareness sync.
     const onAwarenessChange = () => {
@@ -143,10 +160,10 @@ export function useCollaborativeCodingLab(
 
     return () => {
       doc.awareness.off('change', onAwarenessChange);
-      ws.destroy();
+      ws?.destroy();
       webrtc.destroy();
     };
-  }, [roomId, userId, userName, wsUrl, signalingUrl, doc]);
+  }, [roomId, userId, userName, wsUrl, signalingUrl, doc, encryptionKey, requireVerifiedPeer]);
 
   return {
     doc,
@@ -155,6 +172,7 @@ export function useCollaborativeCodingLab(
     awarenessStates,
     isWebRtc,
     isDisconnected,
+    isEncrypted: Boolean(encryptionKey),
     appendExecutionOutput,
     clearExecutionOutput,
   };

@@ -35,6 +35,34 @@ export const createWebhookSignature = (
 };
 
 /**
+ * Direct HMAC-SHA256 payload signature for `X-Signature-SHA256` (Issue BE-075):
+ * `HMAC_SHA256(payload, secret)`.
+ */
+export const createPayloadSignatureSha256 = (payload: string, secret: string): string => {
+  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+};
+
+/**
+ * Constant-time verification for `X-Signature-SHA256` headers (accepts either
+ * raw hex or `sha256=<hex>`).
+ */
+export const verifyPayloadSignatureSha256 = (
+  payload: string,
+  signature: string,
+  secret: string
+): boolean => {
+  if (!signature || !secret) {
+    return false;
+  }
+  const expected = createPayloadSignatureSha256(payload, secret);
+  try {
+    return safeCompare(signature.replace(/^sha256=/, ''), expected);
+  } catch {
+    return false;
+  }
+};
+
+/**
  * GitHub-compatible `X-Hub-Signature-256` value (Issue BE-015). The signed
  * material binds the unix timestamp and a single-use nonce to the body so a
  * captured delivery cannot be replayed once the receiver has seen the nonce
@@ -122,6 +150,7 @@ export const buildSignedWebhookHeaders = (params: {
 }): SignedWebhookHeaders => {
   const timestamp = params.timestamp ?? new Date().toISOString();
   const signature = createWebhookSignature(params.payload, params.secret, timestamp);
+  const payloadSignature = createPayloadSignatureSha256(params.payload, params.secret);
   const nonce = params.nonce ?? createWebhookNonce();
   const unixTimestamp = String(Math.floor(Date.parse(timestamp) / 1000));
   const hubSignature = createHubSignature(params.payload, params.secret, unixTimestamp, nonce);
@@ -132,6 +161,7 @@ export const buildSignedWebhookHeaders = (params: {
     'x-webhook-event': params.eventType,
     'x-webhook-signature': `sha256=${signature}`,
     'x-webhook-timestamp': timestamp,
+    'x-signature-sha256': payloadSignature,
     'x-hub-signature-256': `sha256=${hubSignature}`,
     'x-webhook-nonce': nonce,
     'x-webhook-unix-timestamp': unixTimestamp,

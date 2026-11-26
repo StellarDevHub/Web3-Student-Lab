@@ -113,7 +113,8 @@ impl AMMContract {
         }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
-        circuit_breaker::set_guardian(&env, &admin);
+        // Admin is the initial guardian; unpausing is admin-only and timelocked.
+        access_control::circuit_breaker::initialize(&env, &admin, &admin);
         env.storage().instance().set(&DataKey::TokenA, &token_a);
         env.storage().instance().set(&DataKey::TokenB, &token_b);
         env.storage()
@@ -147,36 +148,56 @@ impl AMMContract {
         Self::unlock(&env);
     }
 
-    /// Set the address authorized to trigger the emergency pause.
+    /// Set the address authorized to trigger the emergency pause. Admin only;
+    /// the guardian can pause but can never unpause.
     pub fn set_guardian(env: Env, admin: Address, guardian: Address) {
         Self::lock(&env);
-        admin.require_auth();
-        if admin != circuit_breaker::admin(&env) {
-            panic_with_error!(&env, AmmError::Unauthorized);
-        }
-        circuit_breaker::set_guardian(&env, &guardian);
+        access_control::circuit_breaker::set_guardian(&env, &admin, &guardian);
         events::guardian_changed(&env, &admin, &guardian);
         Self::unlock(&env);
     }
 
-    /// Pause swaps and liquidity changes immediately. The admin or designated
-    /// guardian can pause; only the admin can unpause.
-    pub fn set_paused(env: Env, caller: Address, paused: bool) {
+    /// Pause swaps and liquidity additions immediately. The admin or the
+    /// designated guardian may call this. Liquidity removal stays available so
+    /// providers can exit their position during an incident.
+    pub fn pause(env: Env, caller: Address) {
         Self::lock(&env);
-        caller.require_auth();
-        let is_admin = caller == circuit_breaker::admin(&env);
-        if !is_admin && !circuit_breaker::is_guardian(&env, &caller) {
-            panic_with_error!(&env, AmmError::Unauthorized);
-        }
-        if !paused && !is_admin {
-            panic_with_error!(&env, AmmError::Unauthorized);
-        }
-        circuit_breaker::set_paused(&env, paused, &caller);
+        access_control::circuit_breaker::pause(&env, &caller);
+        events::pause_changed(&env, &caller, true);
         Self::unlock(&env);
     }
 
+    /// Propose resuming the pool. Admin only; the proposal becomes executable
+    /// after `access_control::circuit_breaker::UNPAUSE_TIMELOCK_SECONDS`.
+    pub fn propose_unpause(env: Env, admin: Address) -> u64 {
+        Self::lock(&env);
+        let unlock_at = access_control::circuit_breaker::propose_unpause(&env, &admin);
+        Self::unlock(&env);
+        unlock_at
+    }
+
+    /// Cancel a pending unpause while staying paused. Admin only.
+    pub fn cancel_unpause(env: Env, admin: Address) {
+        Self::lock(&env);
+        access_control::circuit_breaker::cancel_unpause(&env, &admin);
+        Self::unlock(&env);
+    }
+
+    /// Resume swaps after the unpause timelock has elapsed. Admin only.
+    pub fn unpause(env: Env, admin: Address) {
+        Self::lock(&env);
+        access_control::circuit_breaker::unpause(&env, &admin);
+        events::pause_changed(&env, &admin, false);
+        Self::unlock(&env);
+    }
+
+    /// Timestamp at which a pending unpause becomes executable, if any.
+    pub fn unpause_unlock_at(env: Env) -> Option<u64> {
+        access_control::circuit_breaker::unpause_unlock_at(&env)
+    }
+
     pub fn is_paused(env: Env) -> bool {
-        circuit_breaker::is_paused(&env)
+        access_control::circuit_breaker::is_paused(&env)
     }
 
     /// Adds liquidity and mints pool shares. Requires equal value deposit (x * y = k maintained).
@@ -189,7 +210,7 @@ impl AMMContract {
     ) -> i128 {
         provider.require_auth();
         Self::lock(&env);
-        circuit_breaker::assert_not_paused(&env);
+        access_control::require_not_paused!(&env, AmmError::ContractPaused);
         if amount_a <= 0 || amount_b <= 0 {
             Self::unlock(&env);
             panic_with_error!(&env, AmmError::InvalidAmount);
@@ -286,7 +307,9 @@ impl AMMContract {
     ) -> (i128, i128) {
         provider.require_auth();
         Self::lock(&env);
-        circuit_breaker::assert_not_paused(&env);
+        // Deliberately not gated by the pause: liquidity providers must be
+        // able to exit during an incident. The rolling outflow budget below
+        // still rate-limits the exit.
         if shares <= 0 {
             Self::unlock(&env);
             panic_with_error!(&env, AmmError::InvalidAmount);
@@ -363,7 +386,7 @@ impl AMMContract {
     pub fn swap_a_for_b(env: Env, user: Address, amount_in: i128, min_amount_out: i128) -> i128 {
         user.require_auth();
         Self::lock(&env);
-        circuit_breaker::assert_not_paused(&env);
+        access_control::require_not_paused!(&env, AmmError::ContractPaused);
         if amount_in <= 0 {
             panic_with_error!(&env, AmmError::InvalidAmount);
         }
@@ -454,7 +477,7 @@ impl AMMContract {
     pub fn swap_b_for_a(env: Env, user: Address, amount_in: i128, min_amount_out: i128) -> i128 {
         user.require_auth();
         Self::lock(&env);
-        circuit_breaker::assert_not_paused(&env);
+        access_control::require_not_paused!(&env, AmmError::ContractPaused);
         if amount_in <= 0 {
             panic_with_error!(&env, AmmError::InvalidAmount);
         }
