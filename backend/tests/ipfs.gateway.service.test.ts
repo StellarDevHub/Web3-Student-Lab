@@ -20,6 +20,12 @@ import {
   isValidCid,
   buildDefaultPinProviders,
 } from '../src/services/ipfs.gateway.service.js';
+import {
+  IpfsService,
+  CidMismatchError,
+  ContentIntegrityError,
+} from '../src/services/ipfs.service.js';
+import { loadIpfsClusterConfig } from '../src/config/ipfs.config.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -619,5 +625,217 @@ describe('IpfsGatewayService', () => {
       expect(health?.circuitState).toBe('open');
       expect(health?.consecutiveErrors).toBeGreaterThanOrEqual(1);
     });
+  });
+});
+
+// ─── Multi-Provider Pinning Cluster (BE-064) ──────────────────────────────────
+
+describe('IpfsService — Multi-Provider Pinning Cluster (BE-064)', () => {
+  const SHARED_CID = 'bafybeiczsscdsbs7ffqz55asqdf3smv6klcw3gofszvwlyarci47bgf354';
+  const DIFFERENT_CID = 'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+
+  const CLUSTER_PROVIDERS: PinProviderConfig[] = [
+    {
+      name: 'Pinata',
+      type: 'pinata',
+      endpoint: 'https://api.pinata.cloud/pinning/pinFileToIPFS',
+      authToken: 'pinata-jwt',
+      timeoutMs: 5_000,
+    },
+    {
+      name: 'Infura',
+      type: 'infura',
+      endpoint: 'https://ipfs.infura.io:5001/api/v0/add',
+      authToken: 'infura-id',
+      authSecret: 'infura-secret',
+      timeoutMs: 5_000,
+    },
+    {
+      name: 'Kubo-Local',
+      type: 'kubo',
+      endpoint: 'http://127.0.0.1:5001/api/v0/add',
+      timeoutMs: 5_000,
+    },
+  ];
+
+  const CERT_METADATA = {
+    name: 'Web3 Student Lab Diploma',
+    student: 'GABC123',
+    course: 'Soroban Smart Contracts',
+  };
+
+  function okJson(body: unknown) {
+    return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+  }
+
+  it('dispatches parallel pins across Pinata, Infura, and Kubo-Local and verifies identical CIDs', async () => {
+    const calledUrls: string[] = [];
+    const fetchFn = jest.fn().mockImplementation(async (url: string) => {
+      calledUrls.push(url);
+      if (url.includes('pinata.cloud')) return okJson({ IpfsHash: SHARED_CID });
+      return okJson({ Hash: SHARED_CID });
+    }) as jest.Mock;
+
+    const service = new IpfsService({
+      config: { providers: CLUSTER_PROVIDERS },
+      fetchFn: fetchFn as typeof fetch,
+    });
+
+    const result = await service.pinJson(CERT_METADATA, 'certificate.json');
+
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+    expect(calledUrls.some((u) => u.includes('pinata.cloud'))).toBe(true);
+    expect(calledUrls.some((u) => u.includes('ipfs.infura.io'))).toBe(true);
+    expect(calledUrls.some((u) => u.includes('127.0.0.1:5001'))).toBe(true);
+
+    expect(result.cid).toBe(SHARED_CID);
+    expect(result.cidConsistent).toBe(true);
+    expect(result.pinnedProviders.map((p) => p.provider)).toEqual([
+      'Pinata',
+      'Infura',
+      'Kubo-Local',
+    ]);
+    expect(result.failedProviders).toHaveLength(0);
+    expect(result.sha256).toBe(sha256Hex(Buffer.from(JSON.stringify(CERT_METADATA), 'utf8')));
+  });
+
+  it('succeeds in certificate issuance even when Pinata is completely offline', async () => {
+    const fetchFn = jest.fn().mockImplementation(async (url: string) => {
+      if (url.includes('pinata.cloud')) {
+        throw new Error('ECONNREFUSED pinata offline');
+      }
+      return okJson({ Hash: SHARED_CID });
+    }) as jest.Mock;
+
+    const service = new IpfsService({
+      config: { providers: CLUSTER_PROVIDERS },
+      fetchFn: fetchFn as typeof fetch,
+    });
+
+    const result = await service.pinJson(CERT_METADATA, 'certificate.json');
+
+    expect(result.cid).toBe(SHARED_CID);
+    expect(result.cidConsistent).toBe(true);
+    expect(result.pinnedProviders.map((p) => p.provider)).toEqual(['Infura', 'Kubo-Local']);
+    expect(result.failedProviders).toHaveLength(1);
+    expect(result.failedProviders[0]?.provider).toBe('Pinata');
+  });
+
+  it('succeeds when both Pinata (429 rate-limited) and Infura fail, falling back to Kubo-Local', async () => {
+    const fetchFn = jest.fn().mockImplementation(async (url: string) => {
+      if (url.includes('pinata.cloud')) return { ok: false, status: 429, text: async () => 'rate limited' };
+      if (url.includes('ipfs.infura.io')) throw new Error('Infura outage');
+      return okJson({ Hash: SHARED_CID });
+    }) as jest.Mock;
+
+    const service = new IpfsService({
+      config: { providers: CLUSTER_PROVIDERS },
+      fetchFn: fetchFn as typeof fetch,
+    });
+
+    const result = await service.pinDiplomaAsset('<svg>Diploma</svg>', 'diploma.svg');
+
+    expect(result.cid).toBe(SHARED_CID);
+    expect(result.primaryProvider).toBe('Kubo-Local');
+    expect(result.pinnedProviders).toHaveLength(1);
+    expect(result.failedProviders).toHaveLength(2);
+  });
+
+  it('throws CidMismatchError when providers return different CIDs for the same content', async () => {
+    const fetchFn = jest.fn().mockImplementation(async (url: string) => {
+      if (url.includes('pinata.cloud')) return okJson({ IpfsHash: SHARED_CID });
+      return okJson({ Hash: DIFFERENT_CID });
+    }) as jest.Mock;
+
+    const service = new IpfsService({
+      config: { providers: CLUSTER_PROVIDERS, verifyCidConsistency: true },
+      fetchFn: fetchFn as typeof fetch,
+    });
+
+    await expect(service.pinJson(CERT_METADATA)).rejects.toThrow(CidMismatchError);
+  });
+
+  it('catches corrupted uploads via SHA-256 read-back verification before writing to database', async () => {
+    const pinFetchFn = jest.fn().mockImplementation(async (url: string) => {
+      if (url.includes('pinata.cloud')) return okJson({ IpfsHash: SHARED_CID });
+      return okJson({ Hash: SHARED_CID });
+    }) as jest.Mock;
+
+    const corruptedBytes = Buffer.from('CORRUPTED_PAYLOAD');
+    const gatewayService = new IpfsGatewayService({
+      gateways: SINGLE_GATEWAY,
+      fetchFn: mockFetchSuccess(corruptedBytes) as typeof fetch,
+    });
+
+    const service = new IpfsService({
+      config: { providers: CLUSTER_PROVIDERS, verifyContentIntegrity: true },
+      fetchFn: pinFetchFn as typeof fetch,
+      gatewayService,
+    });
+
+    await expect(service.pinJson(CERT_METADATA)).rejects.toThrow(ContentIntegrityError);
+  });
+
+  it('passes SHA-256 read-back verification when gateway returns intact bytes', async () => {
+    const payload = Buffer.from(JSON.stringify(CERT_METADATA), 'utf8');
+    const pinFetchFn = jest.fn().mockImplementation(async (url: string) => {
+      if (url.includes('pinata.cloud')) return okJson({ IpfsHash: SHARED_CID });
+      return okJson({ Hash: SHARED_CID });
+    }) as jest.Mock;
+
+    const gatewayService = new IpfsGatewayService({
+      gateways: SINGLE_GATEWAY,
+      fetchFn: mockFetchSuccess(payload) as typeof fetch,
+    });
+
+    const service = new IpfsService({
+      config: { providers: CLUSTER_PROVIDERS, verifyContentIntegrity: true },
+      fetchFn: pinFetchFn as typeof fetch,
+      gatewayService,
+    });
+
+    const result = await service.pinJson(CERT_METADATA);
+    expect(result.cid).toBe(SHARED_CID);
+    expect(result.integrityVerified).toBe(true);
+  });
+
+  it('throws ContentIntegrityError immediately if expectedSha256 does not match input buffer', async () => {
+    const fetchFn = jest.fn() as jest.Mock;
+    const service = new IpfsService({
+      config: { providers: CLUSTER_PROVIDERS },
+      fetchFn: fetchFn as typeof fetch,
+    });
+
+    await expect(
+      service.pinContent(Buffer.from('hello'), 'hello.txt', {
+        expectedSha256: '0000000000000000000000000000000000000000000000000000000000000000',
+      })
+    ).rejects.toThrow(ContentIntegrityError);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('throws AggregateError when all pinning providers are offline', async () => {
+    const fetchFn = jest.fn().mockRejectedValue(new Error('network down')) as jest.Mock;
+    const service = new IpfsService({
+      config: { providers: CLUSTER_PROVIDERS },
+      fetchFn: fetchFn as typeof fetch,
+    });
+
+    await expect(service.pinJson(CERT_METADATA)).rejects.toThrow(AggregateError);
+  });
+
+  it('loads cluster configuration from environment variables', () => {
+    const cfg = loadIpfsClusterConfig({
+      PINATA_JWT: 'jwt-123',
+      INFURA_IPFS_PROJECT_ID: 'proj-id',
+      INFURA_IPFS_PROJECT_SECRET: 'proj-sec',
+      KUBO_API_URL: 'http://kubo.internal:5001/api/v0/add',
+      IPFS_CLUSTER_VERIFY_INTEGRITY: 'true',
+    } as NodeJS.ProcessEnv);
+
+    expect(cfg.providers.map((p) => p.name)).toEqual(['Pinata', 'Infura', 'Kubo-Local']);
+    expect(cfg.verifyCidConsistency).toBe(true);
+    expect(cfg.verifyContentIntegrity).toBe(true);
+    expect(cfg.minSuccessfulProviders).toBe(1);
   });
 });

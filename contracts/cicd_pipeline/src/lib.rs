@@ -387,7 +387,8 @@ impl CiCdPipeline {
             }
         }
 
-        (success_count * 100) / pipelines.len()
+        let total = pipelines.len();
+        (success_count * 100) / total
     }
 }
 

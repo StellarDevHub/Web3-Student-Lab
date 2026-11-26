@@ -3,13 +3,24 @@
 import { useUserStore } from '@/stores/userStore';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import en from '@/i18n/locales/en.json';
-import es from '@/i18n/locales/es.json';
-import zh from '@/i18n/locales/zh.json';
 
 export type Locale = 'en' | 'es' | 'zh';
 type Dictionary = Record<string, unknown>;
 
-const dictionaries: Record<Locale, Dictionary> = { en, es, zh };
+const SUPPORTED_LOCALES: readonly Locale[] = ['en', 'es', 'zh'];
+
+function isLocale(value: unknown): value is Locale {
+  return typeof value === 'string' && (SUPPORTED_LOCALES as readonly string[]).includes(value);
+}
+
+// English ships with the app (it is the fallback for every key). Other
+// dictionaries are fetched on demand so the root layout does not put every
+// language into every route's first-load JS (FE-076). Until one arrives,
+// lookups fall back to English exactly as they do for a missing key.
+const LOCALE_LOADERS: Record<Exclude<Locale, 'en'>, () => Promise<Dictionary>> = {
+  es: () => import('@/i18n/locales/es.json').then((m) => m.default as Dictionary),
+  zh: () => import('@/i18n/locales/zh.json').then((m) => m.default as Dictionary),
+};
 const LOCALE_KEY = 'app:locale';
 
 function getCookie(name: string): string | null {
@@ -67,16 +78,17 @@ const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>('en');
+  const [loaded, setLoaded] = useState<Partial<Record<Locale, Dictionary>>>({ en });
   const updatePreferences = useUserStore((state) => state.updatePreferences);
 
   useEffect(() => {
     const cookieLocale = getCookie(LOCALE_KEY) as Locale | null;
-    if (cookieLocale && dictionaries[cookieLocale]) {
+    if (isLocale(cookieLocale)) {
       setLocaleState(cookieLocale);
       return;
     }
     const stored = window.localStorage.getItem(LOCALE_KEY) as Locale | null;
-    if (stored && dictionaries[stored]) {
+    if (isLocale(stored)) {
       setLocaleState(stored);
       setCookie(LOCALE_KEY, stored);
       return;
@@ -88,6 +100,21 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     setLocaleState(detected);
     setCookie(LOCALE_KEY, detected);
   }, []);
+
+  useEffect(() => {
+    if (locale === 'en' || loaded[locale]) return;
+    let cancelled = false;
+    LOCALE_LOADERS[locale]()
+      .then((dictionary) => {
+        if (!cancelled) setLoaded((prev) => ({ ...prev, [locale]: dictionary }));
+      })
+      .catch(() => {
+        // Offline / chunk failure: keep showing English.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [locale, loaded]);
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -105,21 +132,23 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     [updatePreferences]
   );
 
+  const dictionary = loaded[locale] ?? en;
+
   const value = useMemo<I18nContextValue>(
     () => ({
       locale,
       setLocale: handleSetLocale,
       t: (key: string, params?: Record<string, string | number>) => {
-        const val = getNestedValue(dictionaries[locale], key);
+        const val = getNestedValue(dictionary, key);
         if (typeof val === 'string') return interpolate(val, params);
-        const fallback = getNestedValue(dictionaries.en, key);
+        const fallback = getNestedValue(en, key);
         if (typeof fallback === 'string') return interpolate(fallback, params);
         return key;
       },
       tn: <T,>(key: string) => {
-        const val = getNestedValue(dictionaries[locale], key);
+        const val = getNestedValue(dictionary, key);
         if (val !== undefined) return val as T;
-        const fallback = getNestedValue(dictionaries.en, key);
+        const fallback = getNestedValue(en, key);
         if (fallback !== undefined) return fallback as T;
         return undefined;
       },
@@ -140,13 +169,13 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       },
       pluralize: (count: number, singularKey: string, pluralKey: string, params?: Record<string, string | number>) => {
         const key = count === 1 ? singularKey : pluralKey;
-        const val = getNestedValue(dictionaries[locale], key) ?? getNestedValue(dictionaries.en, key);
+        const val = getNestedValue(dictionary, key) ?? getNestedValue(en, key);
         const template = typeof val === 'string' ? val : key;
         const pluralSuffix = count === 1 ? '' : 's';
         return interpolate(template, { count, plural: pluralSuffix, ...params });
       },
     }),
-    [locale, handleSetLocale]
+    [locale, dictionary, handleSetLocale]
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;

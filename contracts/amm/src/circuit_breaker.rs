@@ -1,32 +1,19 @@
-use crate::{AmmError, DataKey};
-use soroban_sdk::{panic_with_error, symbol_short, Address, Env, Symbol};
+//! AMM-specific rolling outflow budget.
+//!
+//! Pause state and the guardian/admin hierarchy live in the shared
+//! `access_control::circuit_breaker`; this module only tracks how much of each
+//! reserve may leave the pool in a 24-hour window.
+
+use crate::AmmError;
+use soroban_sdk::{panic_with_error, symbol_short, Env, Symbol};
 
 pub const WITHDRAWAL_WINDOW_SECONDS: u64 = 24 * 60 * 60;
 
-const PAUSED: Symbol = symbol_short!("amm_pause");
 const WINDOW_START: Symbol = symbol_short!("wstart");
 const WINDOW_LIMIT_A: Symbol = symbol_short!("wla");
 const WINDOW_LIMIT_B: Symbol = symbol_short!("wlb");
 const WINDOW_USED_A: Symbol = symbol_short!("wua");
 const WINDOW_USED_B: Symbol = symbol_short!("wub");
-
-pub fn is_paused(env: &Env) -> bool {
-    env.storage()
-        .instance()
-        .get::<_, bool>(&PAUSED)
-        .unwrap_or(false)
-}
-
-pub fn set_paused(env: &Env, paused: bool, caller: &Address) {
-    env.storage().instance().set(&PAUSED, &paused);
-    crate::events::pause_changed(env, caller, paused);
-}
-
-pub fn assert_not_paused(env: &Env) {
-    if is_paused(env) {
-        panic_with_error!(env, AmmError::ContractPaused);
-    }
-}
 
 /// Limit token outflows independently because the AMM has no common price
 /// oracle for comparing reserves denominated in different assets.
@@ -87,23 +74,4 @@ fn daily_limit(env: &Env, reserve: i128) -> i128 {
     reserve
         .checked_div(10)
         .unwrap_or_else(|| panic_with_error!(env, AmmError::Overflow))
-}
-
-pub fn admin(env: &Env) -> Address {
-    env.storage()
-        .instance()
-        .get(&DataKey::Admin)
-        .unwrap_or_else(|| panic_with_error!(env, AmmError::NotInitialized))
-}
-
-pub fn set_guardian(env: &Env, guardian: &Address) {
-    env.storage().instance().set(&DataKey::Guardian, guardian);
-}
-
-pub fn is_guardian(env: &Env, account: &Address) -> bool {
-    env.storage()
-        .instance()
-        .get::<_, Address>(&DataKey::Guardian)
-        .as_ref()
-        == Some(account)
 }

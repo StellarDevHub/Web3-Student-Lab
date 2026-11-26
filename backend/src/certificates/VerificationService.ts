@@ -1,12 +1,13 @@
 import prisma from '../db/index.js';
+import { multiTierCache } from '../lib/cache/multiTierCache.js';
 import {
-  VerificationResult,
-  CertificateMetadata,
-  CertificateStatus,
+    CertificateMetadata,
+    CertificateStatus,
+    VerificationResult,
 } from '../types/certificate.types.js';
-import { MetadataGenerator } from './MetadataGenerator.js';
 import logger from '../utils/logger.js';
 import { verifyCertificateContentHash } from './ContentHash.js';
+import { MetadataGenerator } from './MetadataGenerator.js';
 
 export class VerificationService {
   private metadataGenerator: MetadataGenerator;
@@ -20,6 +21,18 @@ export class VerificationService {
    * Public endpoint - no authentication required
    */
   async verifyByTokenId(tokenId: string): Promise<VerificationResult> {
+    return multiTierCache.getOrLoad(
+      `certificate:verification:${tokenId}`,
+      () => this.loadVerificationResult(tokenId),
+      {
+        ttlSeconds: 60,
+        staleSeconds: 30,
+        shouldCache: (result) => result.certificate !== null,
+      }
+    );
+  }
+
+  private async loadVerificationResult(tokenId: string): Promise<VerificationResult> {
     try {
       // Find certificate by either tokenId or id
       const certificate = await prisma.certificate.findFirst({
@@ -376,6 +389,16 @@ export class VerificationService {
 
     return 'GUNKNOWN';
   }
+}
+
+export async function invalidateCertificateVerificationCache(
+  ...identifiers: Array<string | null | undefined>
+): Promise<void> {
+  await Promise.all(
+    [...new Set(identifiers.filter((identifier): identifier is string => Boolean(identifier)))].map(
+      (identifier) => multiTierCache.invalidate(`certificate:verification:${identifier}`)
+    )
+  );
 }
 
 export const verificationService = new VerificationService();

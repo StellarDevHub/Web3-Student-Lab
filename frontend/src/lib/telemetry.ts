@@ -15,7 +15,7 @@ export interface TelemetryErrorEvent {
   errorStack?: string;
   componentStack?: string;
   sessionId: string;
-  recoveryAction?: 'reset' | 'dismiss' | 'home' | 'copy';
+  recoveryAction?: 'reset' | 'dismiss' | 'home' | 'copy' | 'report';
   isRecovered: boolean;
 }
 
@@ -57,6 +57,11 @@ function getAppInfo() {
 export function logTelemetryError(params: {
   error: Error & { componentStack?: string };
   componentName?: string;
+  /**
+   * React's component hierarchy for the crash. It arrives on `errorInfo` in
+   * `componentDidCatch`, not on the error itself, so it has to be passed in.
+   */
+  componentStack?: string | null;
   isRecovered?: boolean;
 }): TelemetryErrorEvent {
   const { error, componentName, isRecovered = false } = params;
@@ -72,7 +77,7 @@ export function logTelemetryError(params: {
     errorName: error.name || 'Error',
     errorMessage: error.message,
     errorStack: error.stack,
-    componentStack: error.componentStack,
+    componentStack: params.componentStack ?? error.componentStack,
     sessionId: getSessionId(),
     recoveryAction: undefined,
     isRecovered,

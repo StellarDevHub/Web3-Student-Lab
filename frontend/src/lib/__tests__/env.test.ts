@@ -92,6 +92,8 @@ describe('validatePublicEnv', () => {
     expect(errors).toContain('NEXT_PUBLIC_WS_URL: required in production but not set');
     expect(env.apiUrl).toBe('');
     expect(env.wsUrl).toBe('');
+    expect(env.fallbacks.details.api.url).toBe('');
+    expect(env.fallbacks.details.ws.url).toBe('');
   });
 
   it('falls back to local dev defaults for API/WS URL outside production without erroring', () => {

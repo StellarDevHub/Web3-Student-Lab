@@ -12,22 +12,59 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PasskeyRegistration } from '@/components/passkey/PasskeyRegistration';
 import { PasskeyLogin } from '@/components/passkey/PasskeyLogin';
 import { SocialRecovery } from '@/components/passkey/SocialRecovery';
+import { PasskeyModal } from '@/components/auth/PasskeyModal';
 import {
   getStoredCredentials,
   getStoredWalletData,
   StoredCredential,
   StoredWalletData,
   clearAllStoredData,
+  addCredential,
+  storeWalletData,
+  renameCredential,
+  removeCredential,
+  updateStoredCredential,
 } from '@/lib/credentialStorage';
+import {
+  deleteCredential,
+  validatePasskeyNickname,
+  PASSKEY_NICKNAME_MAX_LENGTH,
+  type RegistrationResult,
+  type Sep10SignInResult,
+} from '@/lib/passkey';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 type ViewMode = 'auth' | 'register' | 'wallet' | 'recovery';
+
+type ModalState =
+  | { mode: 'register' }
+  | { mode: 'reauth'; credential?: StoredCredential }
+  | null;
+
+const PASSKEY_USER_KEY = 'web3sl_passkey_user_id';
+
+/** Stable WebAuthn user handle so every key a student adds belongs to one account. */
+function getOrCreatePasskeyUserId(): string {
+  try {
+    const existing = localStorage.getItem(PASSKEY_USER_KEY);
+    if (existing) return existing;
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    const id = `user_${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
+    localStorage.setItem(PASSKEY_USER_KEY, id);
+    return id;
+  } catch {
+    return `user_${Date.now()}`;
+  }
+}
+
+function credentialLabel(cred: StoredCredential): string {
+  return cred.nickname || cred.deviceName || 'Passkey';
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -39,6 +76,16 @@ export default function PasskeyWalletPage() {
   const [walletData, setWalletData] = useState<StoredWalletData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [modal, setModal] = useState<ModalState>(null);
+  const [passkeyUserId, setPasskeyUserId] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [editError, setEditError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPasskeyUserId(getOrCreatePasskeyUserId());
+  }, []);
 
   // Load stored data on mount
   useEffect(() => {
@@ -70,9 +117,106 @@ export default function PasskeyWalletPage() {
   // Handlers
   // -------------------------------------------------------------------------
 
-  const handleRegistrationComplete = (credentialId: string, walletAddress: string) => {
-    console.log('Registration complete:', { credentialId, walletAddress });
-    loadData(); // Reload data to show wallet view
+  /** Persist a freshly registered passkey (first key creates the wallet record). */
+  const handlePasskeyRegistered = async (result: RegistrationResult & { nickname: string }) => {
+    if (!result.credentialId) throw new Error('Registration returned no credential');
+    const now = new Date().toISOString();
+    await addCredential({
+      id: result.credentialId,
+      credentialId: result.credentialId,
+      publicKeyX: result.publicKeyX ?? '',
+      publicKeyY: result.publicKeyY ?? '',
+      signCount: 0,
+      nickname: result.nickname,
+      deviceName: result.nickname,
+      authenticatorAttachment: result.authenticatorAttachment,
+      transports: result.transports,
+      prfEnabled: result.prfEnabled,
+      stellarPublicKey: result.stellarPublicKey,
+      walletAddress: result.stellarPublicKey,
+      createdAt: now,
+    });
+
+    const existingWallet = await getStoredWalletData();
+    if (!existingWallet) {
+      await storeWalletData({
+        walletAddress: result.stellarPublicKey ?? '',
+        passkeyCredentialId: result.credentialId,
+        guardians: [],
+        createdAt: now,
+        lastActivityAt: now,
+      });
+    }
+    await loadData();
+  };
+
+  /** Store the SEP-0010 session and link the derived Stellar account. */
+  const handleSep10Authenticated = async (result: Sep10SignInResult) => {
+    const auth = result.auth as { token?: string; accessToken?: string; user?: unknown } | null;
+    const token = auth?.token ?? auth?.accessToken;
+    if (token) {
+      localStorage.setItem('token', token);
+      if (auth?.user) localStorage.setItem('user', JSON.stringify(auth.user));
+    }
+
+    await updateStoredCredential(result.credentialId, {
+      stellarPublicKey: result.account,
+      walletAddress: result.account,
+      prfEnabled: true,
+      lastUsedAt: new Date().toISOString(),
+    });
+
+    const wallet = await getStoredWalletData();
+    if (wallet) {
+      await storeWalletData({
+        ...wallet,
+        walletAddress: wallet.walletAddress || result.account,
+        lastActivityAt: new Date().toISOString(),
+      });
+    }
+
+    setNotice(`Signed in to Stellar account ${result.account.slice(0, 6)}…${result.account.slice(-6)} via SEP-0010.`);
+    await loadData();
+    setViewMode('wallet');
+  };
+
+  const startRename = (cred: StoredCredential) => {
+    setEditingId(cred.credentialId);
+    setEditValue(credentialLabel(cred));
+    setEditError(null);
+  };
+
+  const saveRename = async (cred: StoredCredential) => {
+    const others = credentials
+      .filter((c) => c.credentialId !== cred.credentialId)
+      .map(credentialLabel);
+    const problem = validatePasskeyNickname(editValue, others);
+    if (problem) {
+      setEditError(problem);
+      return;
+    }
+    await renameCredential(cred.credentialId, editValue);
+    setEditingId(null);
+    await loadData();
+  };
+
+  const handleRemovePasskey = async (cred: StoredCredential) => {
+    if (credentials.length <= 1) {
+      setError('You need at least one passkey to access your wallet. Add another passkey before removing this one.');
+      return;
+    }
+    if (!window.confirm(`Remove “${credentialLabel(cred)}”? You won't be able to sign in with it anymore.`)) {
+      return;
+    }
+    try {
+      await deleteCredential(cred.credentialId);
+    } catch (err) {
+      // Local removal still proceeds; the server copy is orphaned but unusable without the device.
+      console.warn('Server passkey deletion failed:', err);
+    }
+    await removeCredential(cred.credentialId);
+    setNotice(`Removed “${credentialLabel(cred)}”.`);
+    await loadData();
   };
 
   const handleLoginSuccess = (credentialId: string) => {
@@ -176,8 +320,28 @@ export default function PasskeyWalletPage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div role="alert" className="mb-6 flex items-start justify-between gap-4 bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-red-700">{error}</p>
+            <button
+              onClick={() => setError(null)}
+              className="text-sm text-red-700 hover:text-red-900"
+              aria-label="Dismiss error"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {notice && (
+          <div role="status" className="mb-6 flex items-start justify-between gap-4 bg-green-50 border border-green-200 rounded-lg p-4">
+            <p className="text-green-800">{notice}</p>
+            <button
+              onClick={() => setNotice(null)}
+              className="text-sm text-green-800 hover:text-green-900"
+              aria-label="Dismiss message"
+            >
+              Dismiss
+            </button>
           </div>
         )}
 
@@ -197,13 +361,21 @@ export default function PasskeyWalletPage() {
         {viewMode === 'register' && (
           <div className="flex flex-col items-center justify-center min-h-[60vh]">
             <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
-              <PasskeyRegistration
-                userId={`user_${Date.now()}`}
-                userName={`user_${Date.now()}@web3-student-lab.com`}
-                userDisplayName="Web3 Student"
-                onRegistrationComplete={handleRegistrationComplete}
-                onRegistrationFailed={(err) => setError(err)}
-              />
+              <div className="text-center space-y-3">
+                <h2 className="text-2xl font-bold text-gray-900">Create your passkey wallet</h2>
+                <p className="text-gray-600">
+                  Register Touch ID, Face ID, Windows Hello or a hardware security key such as a
+                  YubiKey. No passwords, and your private key never leaves the authenticator.
+                </p>
+                <button
+                  onClick={() => setModal({ mode: 'register' })}
+                  disabled={!passkeyUserId}
+                  className="w-full mt-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium
+                             hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  Create a passkey
+                </button>
+              </div>
               <div className="mt-4 text-center">
                 <button
                   onClick={() => setViewMode('auth')}
@@ -255,9 +427,10 @@ export default function PasskeyWalletPage() {
                   </label>
                   <div className="flex items-center space-x-2">
                     <code className="flex-1 p-3 bg-gray-50 rounded-lg text-sm font-mono text-gray-900 break-all">
-                      {walletData.walletAddress}
+                      {walletData.walletAddress || 'Not linked yet — sign in with your passkey below'}
                     </code>
                     <button
+                      disabled={!walletData.walletAddress}
                       onClick={() => {
                         navigator.clipboard.writeText(walletData.walletAddress);
                       }}
@@ -281,33 +454,147 @@ export default function PasskeyWalletPage() {
                   </div>
                 </div>
 
+                {/* SEP-0010 sign-in */}
+                <div className="p-4 bg-blue-50 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-blue-900">
+                      {walletData.walletAddress
+                        ? 'Sign in to Web3 Student Lab with your passkey'
+                        : 'Link your Stellar account'}
+                    </p>
+                    <p className="text-xs text-blue-800">
+                      Your passkey signs a Stellar SEP-0010 challenge, then the server issues your session.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setModal({ mode: 'reauth' })}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Sign in with passkey
+                  </button>
+                </div>
+
                 {/* Passkeys */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-500 mb-2">
-                    Registered Passkeys ({credentials.length})
-                  </label>
-                  <div className="space-y-2">
-                    {credentials.map((cred) => (
-                      <div
-                        key={cred.credentialId}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {cred.deviceName || 'Platform Authenticator'}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Created {new Date(cred.createdAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
-                            Active
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-medium text-gray-500">
+                      Registered Passkeys ({credentials.length})
+                    </h3>
+                    <button
+                      onClick={() => setModal({ mode: 'register' })}
+                      disabled={!passkeyUserId}
+                      className="text-sm font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                    >
+                      + Add passkey
+                    </button>
                   </div>
+                  <ul className="space-y-2">
+                    {credentials.map((cred) => {
+                      const isEditing = editingId === cred.credentialId;
+                      const editInputId = `passkey-name-${cred.credentialId}`;
+                      return (
+                        <li
+                          key={cred.credentialId}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg"
+                        >
+                          <div className="min-w-0 flex-1">
+                            {isEditing ? (
+                              <form
+                                onSubmit={(e) => {
+                                  e.preventDefault();
+                                  void saveRename(cred);
+                                }}
+                                className="space-y-1"
+                              >
+                                <label htmlFor={editInputId} className="sr-only">
+                                  Passkey name
+                                </label>
+                                <div className="flex gap-2">
+                                  <input
+                                    id={editInputId}
+                                    value={editValue}
+                                    autoFocus
+                                    maxLength={PASSKEY_NICKNAME_MAX_LENGTH + 8}
+                                    onChange={(e) => {
+                                      setEditValue(e.target.value);
+                                      setEditError(null);
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Escape') setEditingId(null);
+                                    }}
+                                    aria-invalid={!!editError}
+                                    className="flex-1 min-w-0 rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
+                                  />
+                                  <button type="submit" className="text-sm text-blue-600 hover:text-blue-800">
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingId(null)}
+                                    className="text-sm text-gray-500 hover:text-gray-700"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                                {editError && (
+                                  <p role="alert" className="text-xs text-red-600">
+                                    {editError}
+                                  </p>
+                                )}
+                              </form>
+                            ) : (
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {credentialLabel(cred)}
+                              </p>
+                            )}
+                            <p className="text-xs text-gray-500">
+                              {cred.authenticatorAttachment === 'cross-platform'
+                                ? 'Security key'
+                                : cred.authenticatorAttachment === 'platform'
+                                  ? 'This device'
+                                  : 'Passkey'}
+                              {' · '}Created {new Date(cred.createdAt).toLocaleDateString()}
+                              {cred.lastUsedAt &&
+                                ` · Last used ${new Date(cred.lastUsedAt).toLocaleDateString()}`}
+                            </p>
+                          </div>
+                          {!isEditing && (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {cred.stellarPublicKey ? (
+                                <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
+                                  SEP-0010 ready
+                                </span>
+                              ) : (
+                                <span className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded-full">
+                                  Active
+                                </span>
+                              )}
+                              <button
+                                onClick={() => setModal({ mode: 'reauth', credential: cred })}
+                                className="text-xs text-blue-600 hover:text-blue-800"
+                              >
+                                Verify
+                              </button>
+                              <button
+                                onClick={() => startRename(cred)}
+                                className="text-xs text-gray-600 hover:text-gray-900"
+                                aria-label={`Rename ${credentialLabel(cred)}`}
+                              >
+                                Rename
+                              </button>
+                              <button
+                                onClick={() => void handleRemovePasskey(cred)}
+                                className="text-xs text-red-600 hover:text-red-800"
+                                aria-label={`Remove ${credentialLabel(cred)}`}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
 
                 {/* Guardians */}
@@ -403,7 +690,7 @@ export default function PasskeyWalletPage() {
                     <h4 className="font-medium text-green-800">Biometric Auth</h4>
                   </div>
                   <p className="text-sm text-green-700">
-                    Use TouchID, FaceID, or Windows Hello to sign in.
+                    Use Touch ID, Face ID, Windows Hello or a YubiKey to sign in.
                   </p>
                 </div>
 
@@ -466,6 +753,31 @@ export default function PasskeyWalletPage() {
           </div>
         )}
       </main>
+
+      {modal?.mode === 'register' && (
+        <PasskeyModal
+          mode="register"
+          open
+          onOpenChange={(open) => !open && setModal(null)}
+          userId={passkeyUserId}
+          userName={`${passkeyUserId}@web3-student-lab.com`}
+          userDisplayName="Web3 Student"
+          existingNicknames={credentials.map(credentialLabel)}
+          onRegistered={handlePasskeyRegistered}
+        />
+      )}
+
+      {modal?.mode === 'reauth' && (
+        <PasskeyModal
+          mode="reauth"
+          open
+          onOpenChange={(open) => !open && setModal(null)}
+          credentialId={modal.credential?.credentialId}
+          credentialLabel={modal.credential ? credentialLabel(modal.credential) : undefined}
+          account={modal.credential?.stellarPublicKey}
+          onAuthenticated={handleSep10Authenticated}
+        />
+      )}
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 mt-auto">

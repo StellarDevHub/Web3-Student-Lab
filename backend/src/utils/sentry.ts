@@ -5,17 +5,152 @@ import { redactSensitiveData } from './logSanitizer.js';
 
 let sentryEnabled = false;
 
+const SENTRY_SENSITIVE_KEYS = new Set([
+  'password',
+  'secret',
+  'authorization',
+  'cookie',
+  'set-cookie',
+  'walletprivatekey',
+  'privatekey',
+  'token',
+  'accesstoken',
+  'refreshtoken',
+  'apikey',
+  'x-api-key',
+  'credential',
+  'secretkey',
+  'passwd',
+  'pwd',
+]);
+
+const ROUTINE_ERROR_NAMES = new Set([
+  'ZodError',
+  'ValidationError',
+  'BadRequestError',
+  'NotFoundError',
+]);
+
+const BEARER_TOKEN_REGEX = /\bBearer\s+[A-Za-z0-9\-._~+/]+=*/gi;
+
+function scrubSentryValue(input: unknown): unknown {
+  if (input === null || input === undefined) {
+    return input;
+  }
+
+  if (typeof input === 'string') {
+    const withoutBearer = input.replace(BEARER_TOKEN_REGEX, 'Bearer [REDACTED]');
+    return redactSensitiveData(withoutBearer);
+  }
+
+  if (Array.isArray(input)) {
+    return input.map((item) => scrubSentryValue(item));
+  }
+
+  if (typeof input === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(input)) {
+      if (SENTRY_SENSITIVE_KEYS.has(key.toLowerCase())) {
+        out[key] = '[REDACTED]';
+      } else {
+        out[key] = scrubSentryValue(value);
+      }
+    }
+    return out;
+  }
+
+  return input;
+}
+
 /**
  * Scrub an outgoing Sentry payload so secrets/PII never leave the process
- * (#1425). A JSON round-trip normalises Sentry's class instances into plain
- * data before the shared sanitizer inspects it.
+ * (#1425 / BE-076). A JSON round-trip normalises Sentry's class instances into
+ * plain data before recursive key and pattern redaction inspects it.
  */
-function scrubSentryPayload<T>(payload: T): T {
+export function scrubSentryPayload<T>(payload: T): T {
   try {
-    return redactSensitiveData(JSON.parse(JSON.stringify(payload))) as T;
+    return scrubSentryValue(JSON.parse(JSON.stringify(payload))) as T;
   } catch {
     return payload;
   }
+}
+
+function extractHttpStatus(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && /^\d{3}$/.test(value)) {
+    return Number(value);
+  }
+  return undefined;
+}
+
+/**
+ * Filter high-volume routine client errors (4xx, 404s, validation failures)
+ * from Sentry alert quotas while preserving critical 5xx exceptions.
+ */
+export function shouldDropRoutineError(
+  event: Sentry.ErrorEvent,
+  hint?: Sentry.EventHint,
+): boolean {
+  const original = hint?.originalException;
+  if (original && typeof original === 'object') {
+    const errObj = original as { status?: unknown; statusCode?: unknown; name?: unknown };
+    const status = extractHttpStatus(errObj.statusCode) ?? extractHttpStatus(errObj.status);
+    if (status !== undefined && status >= 400 && status < 500) {
+      return true;
+    }
+    if (typeof errObj.name === 'string' && ROUTINE_ERROR_NAMES.has(errObj.name)) {
+      return true;
+    }
+  }
+
+  const responseStatus = extractHttpStatus(
+    (event.contexts?.response as Record<string, unknown> | undefined)?.status_code,
+  );
+  if (responseStatus !== undefined && responseStatus >= 400 && responseStatus < 500) {
+    return true;
+  }
+
+  const tagStatus = extractHttpStatus(event.tags?.status_code);
+  if (tagStatus !== undefined && tagStatus >= 400 && tagStatus < 500) {
+    return true;
+  }
+
+  return false;
+}
+
+export function getTracesSampleRate(env: string | undefined = process.env.NODE_ENV): number {
+  return env === 'production' ? 0.1 : 1.0;
+}
+
+export function sentryBeforeSend(
+  event: Sentry.ErrorEvent,
+  hint?: Sentry.EventHint,
+): Sentry.ErrorEvent | null {
+  if (process.env.NODE_ENV === 'test') {
+    return null;
+  }
+
+  if (shouldDropRoutineError(event, hint)) {
+    return null;
+  }
+
+  const scrubbed = scrubSentryPayload(event);
+  const environment = scrubbed.environment || process.env.NODE_ENV || 'development';
+  scrubbed.environment = environment;
+  scrubbed.tags = {
+    ...scrubbed.tags,
+    environment,
+  };
+
+  return scrubbed;
+}
+
+export function sentryBeforeBreadcrumb(
+  breadcrumb: Sentry.Breadcrumb,
+): Sentry.Breadcrumb | null {
+  return scrubSentryPayload(breadcrumb);
 }
 
 export function initializeSentry(app?: Application): void {
@@ -29,18 +164,14 @@ export function initializeSentry(app?: Application): void {
     dsn,
     environment: process.env.NODE_ENV || 'development',
     release: process.env.SENTRY_RELEASE || 'web3-student-lab-backend@1.0.0',
-    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+    tracesSampleRate: getTracesSampleRate(),
     attachStacktrace: true,
     normalizeDepth: 5,
     // The OpenTelemetry SDK (src/instrumentation.ts) owns the global tracer
     // provider and exports to Jaeger; Sentry keeps error tracking.
     skipOpenTelemetrySetup: isTracingEnabled(),
-    beforeSend(event) {
-      if (process.env.NODE_ENV === 'test') {
-        return null;
-      }
-      return scrubSentryPayload(event);
-    },
+    beforeSend: sentryBeforeSend,
+    beforeBreadcrumb: sentryBeforeBreadcrumb,
   });
 
   sentryEnabled = true;

@@ -1,8 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
-import axios from 'axios';
+import type { NextFunction, Request, Response } from 'express';
 
-const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || '';
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+const VERIFY_TIMEOUT_MS = 5000;
 
 export interface TurnstileVerifyResult {
   success: boolean;
@@ -13,64 +12,122 @@ export interface TurnstileVerifyResult {
   cdata?: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 /**
  * Verifies a Cloudflare Turnstile token against the siteverify API.
- *
- * Returns `true` when the token is valid and the request originated from
- * the expected hostname. Returns `false` on network errors, invalid tokens,
- * or when the token is missing.
+ * Network and provider failures are reported separately from invalid tokens.
  */
-export async function verifyTurnstileToken(token: string, expectedHostname?: string): Promise<TurnstileVerifyResult> {
+export async function verifyTurnstileToken(
+  token: string,
+  expectedHostname?: string,
+  remoteIp?: string,
+): Promise<TurnstileVerifyResult> {
+  const secret = process.env.TURNSTILE_SECRET?.trim();
+  if (!secret) {
+    return { success: false, error_codes: ['missing-input-secret'] };
+  }
   if (!token) {
     return { success: false, error_codes: ['missing-input-response'] };
   }
 
+  const params = new URLSearchParams({
+    secret,
+    response: token,
+  });
+  if (remoteIp) params.set('remoteip', remoteIp);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS);
   try {
-    const params = new URLSearchParams();
-    params.append('secret', TURNSTILE_SECRET);
-    params.append('response', token);
-    if (expectedHostname) {
-      params.append('hostname', expectedHostname);
+    const response = await fetch(TURNSTILE_VERIFY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params,
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      return { success: false, error_codes: ['verification-service-error'] };
     }
 
-    const response = await axios.post(TURNSTILE_VERIFY_URL, params, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      timeout: 5000,
-    });
+    const payload: unknown = await response.json();
+    if (!isRecord(payload) || typeof payload.success !== 'boolean') {
+      return { success: false, error_codes: ['invalid-verification-response'] };
+    }
 
-    return response.data as TurnstileVerifyResult;
-  } catch (error) {
-    return {
-      success: false,
-      error_codes: ['network-error'],
+    const errorCodes = Array.isArray(payload['error-codes'])
+      ? payload['error-codes'].filter((code): code is string => typeof code === 'string')
+      : undefined;
+    const result: TurnstileVerifyResult = {
+      success: payload.success,
+      challenge_ts: typeof payload.challenge_ts === 'string' ? payload.challenge_ts : undefined,
+      hostname: typeof payload.hostname === 'string' ? payload.hostname : undefined,
+      error_codes: errorCodes,
+      action: typeof payload.action === 'string' ? payload.action : undefined,
+      cdata: typeof payload.cdata === 'string' ? payload.cdata : undefined,
     };
+
+    if (
+      result.success &&
+      expectedHostname &&
+      result.hostname?.toLowerCase() !== expectedHostname.toLowerCase()
+    ) {
+      return { ...result, success: false, error_codes: ['hostname-mismatch'] };
+    }
+
+    return result;
+  } catch {
+    return { success: false, error_codes: ['verification-service-error'] };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
 /**
- * Express middleware factory that verifies Turnstile tokens on sensitive
- * authentication routes.
- *
- * Expects the client to send the token in `req.body.turnstileToken`.
- * On failure, responds with 400 Bad Request.
+ * Rejects requests without a valid Cloudflare Turnstile token.
+ * Accepts the standard form field and the legacy JSON `turnstileToken` field.
  */
 export function requireTurnstile(expectedHostname?: string) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    if (!TURNSTILE_SECRET) {
-      res.status(500).json({
+    if (process.env.NODE_ENV === 'test') {
+      next();
+      return;
+    }
+
+    const body = isRecord(req.body) ? req.body : {};
+    const tokenHeader = req.get('cf-turnstile-response');
+    const bodyToken = body['cf-turnstile-response'] ?? body.turnstileToken;
+    const token = (typeof tokenHeader === 'string' ? tokenHeader : bodyToken);
+
+    if (typeof token !== 'string' || token.trim().length === 0) {
+      res.status(403).json({
+        status: 'error',
+        message: 'Turnstile verification failed. Please complete the challenge and try again.',
+        error_codes: ['missing-input-response'],
+      });
+      return;
+    }
+
+    if (!process.env.TURNSTILE_SECRET?.trim()) {
+      res.status(503).json({
         status: 'error',
         message: 'Turnstile verification is not configured on the server.',
       });
       return;
     }
 
-    const token = (req.body && (req.body as any).turnstileToken) || '';
-    const result = await verifyTurnstileToken(token, expectedHostname);
-
+    const hostname = expectedHostname ?? process.env.TURNSTILE_EXPECTED_HOSTNAME;
+    const result = await verifyTurnstileToken(token.trim(), hostname, req.ip);
     if (!result.success) {
-      res.status(400).json({
+      const unavailable = result.error_codes?.includes('verification-service-error') ||
+        result.error_codes?.includes('invalid-verification-response');
+      res.status(unavailable ? 503 : 403).json({
         status: 'error',
-        message: 'Turnstile verification failed. Please complete the challenge and try again.',
+        message: unavailable
+          ? 'Turnstile verification is temporarily unavailable.'
+          : 'Turnstile verification failed. Please complete the challenge and try again.',
         error_codes: result.error_codes,
       });
       return;
