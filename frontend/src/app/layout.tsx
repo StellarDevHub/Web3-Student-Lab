@@ -14,6 +14,7 @@ import WalletGate from '@/components/layout/WalletGate';
 import { ToastContainer } from '@/components/notifications/ToastContainer';
 import { OfflineSyncHandler } from '@/components/OfflineSyncHandler';
 import { SkipLink } from '@/components/ui/SkipLink';
+import { TelemetryContextBridge } from '@/components/telemetry/TelemetryContextBridge';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { Providers as ThemeProvider } from '@/lib/theme/providers';
@@ -70,6 +71,7 @@ export default function RootLayout({
           <SocketWorkerProvider>
             <ThemeProvider>
           <WalletProvider>
+            <TelemetryContextBridge />
             <AuthProvider>
               <I18nProvider>
                 <NotificationProvider>
