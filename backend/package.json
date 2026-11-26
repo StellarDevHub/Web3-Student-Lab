@@ -18,6 +18,7 @@
     "migration:deploy:locked": "tsx scripts/migrate-with-lock.ts",
     "schema:verify-drift": "tsx scripts/verify-schema-drift.ts",
     "validate:curriculum": "tsx scripts/validate-curriculum.ts",
+    "keys:rotate": "tsx scripts/rotate-keys.ts",
     "bench": "tsx benchmarks/runBenchmarks.ts",
     "collaboration": "tsx src/collaborationServer.ts",
     "collab:graphql": "tsx src/graphqlWsServer.ts",
