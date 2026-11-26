@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { ErrorBoundary } from '@/components/ui';
+import { ZkProofPanel } from '@/components/zk/ZkProofPanel';
 import type { VerificationResult } from '@/lib/crypto/pdfVerifier';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -498,6 +499,8 @@ export default function VerifyPage() {
               )}
             </section>
           )}
+
+          <ZkProofPanel />
         </div>
       </div>
     </ErrorBoundary>
