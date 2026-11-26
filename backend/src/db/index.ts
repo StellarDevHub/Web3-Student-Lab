@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import config from '../config/env.config.js';
 import { encryptionMiddleware } from '../middleware/prismaEncryption.js';
-import { getWorkspaceId } from '../middleware/WorkspaceContext.js';
+import { getWorkspaceId, isSystemContext, WorkspaceAuthorizationError } from '../middleware/WorkspaceContext.js';
 import logger from '../utils/logger.js';
 import { rowLevelSecurityExtension, withWorkspaceTransaction } from './prismaMiddleware.js';
 import {
@@ -96,7 +96,10 @@ const workspaceExtension = {
 
         const workspaceId = getWorkspaceId();
         if (!workspaceId) {
-          return query(args);
+          if (isSystemContext()) {
+            return query(args);
+          }
+          throw new WorkspaceAuthorizationError();
         }
 
         const mutableArgs = (args ?? {}) as Record<string, any>;
@@ -139,6 +142,7 @@ const workspaceExtension = {
         }
 
         if (operation === 'findUnique' || operation === 'findUniqueOrThrow') {
+          mutableArgs.where = { ...(mutableArgs.where ?? {}), workspaceId };
           const result = await query(mutableArgs);
           if (result && (result as Record<string, unknown>).workspaceId !== workspaceId) {
             return operation === 'findUnique'
