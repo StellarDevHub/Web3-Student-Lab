@@ -1,15 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import NetworkLedgerStreamer, {
-  formatValueForDisplay,
-  safeDecodeScVal,
-} from './page';
+import { formatValueForDisplay, safeDecodeScVal } from '@/lib/stellar/xdr-stream';
+import NetworkLedgerStreamer from './page';
 
 describe('NetworkLedgerStreamer & Event Decoder Helpers', () => {
   describe('safeDecodeScVal', () => {
     it('decodes base64 symbol XDR for transfer', () => {
-      // "transfer" symbol ScVal in base64: AAAADAAAAAh0cmFuc2Zlcg==
-      const decoded = safeDecodeScVal('AAAADAAAAAh0cmFuc2Zlcg==');
+      // "transfer" symbol ScVal in base64: AAAADwAAAAh0cmFuc2Zlcg==
+      const decoded = safeDecodeScVal('AAAADwAAAAh0cmFuc2Zlcg==');
       expect(decoded).toBe('transfer');
     });
 
