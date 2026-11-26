@@ -46,6 +46,8 @@ model Student {
   webauthnCredentials WebAuthnCredential[]
   hashSimulations  HashSimulation[]
   subscriptions    Subscription[]
+  submissions      ExerciseSubmission[]
+  similarityFlagsAsSubject ExerciseSimilarityFlag[] @relation("SimilaritySubject")
 
   @@index([workspaceId, email])
   @@index([firstName, lastName])
@@ -888,4 +890,55 @@ model TransactionFeeRecord {
   @@index([recordedAt], map: "idx_tx_records_recorded_at")
   @@ignore
   @@map("transaction_fee_records")
+}
+
+// Student exercise submission used for plagiarism / structural similarity analysis (BE-098)
+model ExerciseSubmission {
+  id              String   @id @default(cuid())
+  workspaceId     String   @default("default")
+  studentId       String
+  courseId        String
+  exerciseId      String
+  sourceCode      String
+  normalizedAst   Json?
+  tokenFingerprint String?
+  astNodeCount    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  similarityFlagsAsSource ExerciseSimilarityFlag[] @relation("SimilaritySource")
+  similarityFlagsAsMatch  ExerciseSimilarityFlag[] @relation("SimilarityMatch")
+
+  @@index([workspaceId, exerciseId])
+  @@index([studentId])
+  @@index([courseId, exerciseId])
+  @@index([tokenFingerprint])
+  @@map("exercise_submissions")
+}
+
+// Pairwise similarity result flagged for instructor review (BE-098)
+model ExerciseSimilarityFlag {
+  id                String   @id @default(cuid())
+  workspaceId       String   @default("default")
+  exerciseId        String
+  sourceSubmissionId String
+  matchSubmissionId  String
+  subjectStudentId   String?
+  astSimilarity     Float    @db.Real
+  levenshteinSimilarity Float @db.Real
+  combinedScore     Float    @db.Real
+  status            String   @default("pending_review") // pending_review, cleared, confirmed
+  reviewedBy        String?
+  reviewedAt        DateTime?
+  createdAt         DateTime @default(now())
+
+  sourceSubmission ExerciseSubmission @relation("SimilaritySource", fields: [sourceSubmissionId], references: [id], onDelete: Cascade)
+  matchSubmission  ExerciseSubmission @relation("SimilarityMatch", fields: [matchSubmissionId], references: [id], onDelete: Cascade)
+  subjectStudent   Student?           @relation("SimilaritySubject", fields: [subjectStudentId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceSubmissionId, matchSubmissionId])
+  @@index([workspaceId, exerciseId, status])
+  @@index([combinedScore])
+  @@map("exercise_similarity_flags")
 }

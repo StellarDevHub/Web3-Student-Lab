@@ -6,6 +6,7 @@ import { MAX_TEST_CASES } from '../services/wasmExecutionSandbox.js';
 import { MAX_WASM_MODULE_BYTES } from '../utils/wasmValidator.js';
 import { validateRequest } from '../utils/validation.js';
 import { enqueueEvaluation, type EvaluationJobData } from '../workers/evaluationWorker.js';
+import { analyzeSubmissionSimilarity, SIMILARITY_FLAG_THRESHOLD } from '../services/antiCheatService.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -15,6 +16,10 @@ import logger from '../utils/logger.js';
  * never exhaust the API process; progress is streamed through the
  * `exerciseStatusUpdated` GraphQL subscription and the final structured
  * result can be fetched from GET /:jobId.
+ *
+ * Source-level plagiarism screening (BE-098) runs synchronously at submission
+ * time against prior submissions for the same exercise. Flagged results are
+ * surfaced on the job status payload for instructor review.
  */
 
 const router: ReturnType<typeof Router> = Router();
@@ -39,6 +44,9 @@ export const evaluationSubmissionSchema = z.object({
     )
     .min(1)
     .max(MAX_TEST_CASES),
+  // Optional Solidity/Clarity-style source accompanying the compiled module.
+  // Used only for plagiarism screening; never executed.
+  sourceCode: z.string().max(200_000).optional(),
 });
 
 /**
@@ -48,6 +56,15 @@ export const evaluationSubmissionSchema = z.object({
 router.post('/', authenticate, validateRequest(evaluationSubmissionSchema), async (req: Request, res: Response) => {
   const body = req.body as z.infer<typeof evaluationSubmissionSchema>;
   try {
+    let plagiarism: Awaited<ReturnType<typeof analyzeSubmissionSimilarity>> | null = null;
+    if (body.sourceCode) {
+      plagiarism = await analyzeSubmissionSimilarity({
+        studentId: req.user!.id,
+        exerciseId: body.exerciseId,
+        sourceCode: body.sourceCode,
+      });
+    }
+
     const data: EvaluationJobData = {
       studentId: req.user!.id,
       exerciseId: body.exerciseId,
@@ -60,7 +77,24 @@ router.post('/', authenticate, validateRequest(evaluationSubmissionSchema), asyn
       })),
     };
     const job = await enqueueEvaluation(data);
-    res.status(202).json({ status: 'success', data: { jobId: job.id, state: 'queued' } });
+    res.status(202).json({
+      status: 'success',
+      data: {
+        jobId: job.id,
+        state: 'queued',
+        ...(plagiarism
+          ? {
+              similarity: {
+                flagged: plagiarism.flagged,
+                threshold: SIMILARITY_FLAG_THRESHOLD,
+                score: plagiarism.maxScore,
+                matchedSubmissionId: plagiarism.matchedSubmissionId,
+                analysisMs: plagiarism.analysisMs,
+              },
+            }
+          : {}),
+      },
+    });
   } catch (error) {
     if (error instanceof QueueRateLimitError) {
       res.setHeader('Retry-After', Math.ceil(error.retryAfterMs / 1000));
