@@ -49,6 +49,7 @@ export const QUEUE_NAMES = {
   IPFS_PINNING: 'ipfs-pinning',
   EMAIL_NOTIFICATIONS: 'email-notifications',
   CONTRACT_EVALUATION: 'contract-evaluation',
+  VIDEO_TRANSCODING: 'video-transcoding',
 } as const;
 
 export type ManagedQueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -104,6 +105,12 @@ export function buildQueueDefinitions(): Record<ManagedQueueName, QueueDefinitio
       concurrency: envInt('EMAIL_WORKER_CONCURRENCY', 10),
       limiter: { max: envInt('EMAIL_MAX_SENDS_PER_SEC', 20), duration: 1_000 },
       userRateLimit: { max: envInt('EMAIL_USER_RATE_LIMIT_PER_MIN', 20), windowMs: 60_000 },
+    },
+    [QUEUE_NAMES.VIDEO_TRANSCODING]: {
+      name: QUEUE_NAMES.VIDEO_TRANSCODING,
+      tier: 'standard',
+      concurrency: envInt('VIDEO_TRANSCODING_CONCURRENCY', 2),
+      userRateLimit: { max: envInt('VIDEO_TRANSCODING_USER_RATE_LIMIT_PER_MIN', 10), windowMs: 60_000 },
     },
   };
 }
