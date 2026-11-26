@@ -5,7 +5,7 @@ use contract_events::topic;
 use soroban_sdk::{
     testutils::{Address as _, Events as _, Ledger as _},
     xdr::{self, ToXdr},
-    Address, Bytes, BytesN, Env, String, Symbol, TryFromVal, Val, Vec,
+    Address, Bytes, BytesN, Env, Map, String, Symbol, TryFromVal, Val, Vec,
 };
 
 /// Helper harness to set up the Soroban environment, register the contract,
@@ -237,6 +237,42 @@ fn test_revoke_emits_structured_event() {
     client.revoke_certificate(&cert_id, &String::from_str(&env, "R1"));
 
     assert!(env.events().all().events().len() > before);
+
+    // The structured revocation event keeps its original single-topic and
+    // map-shaped payload so existing indexers can keep decoding it.
+    let mut found = false;
+    for event in env.events().all().events() {
+        let xdr::ContractEventBody::V0(v0) = &event.body;
+        let topics: Vec<Val> = Vec::try_from_val(&env, &v0.topics).unwrap();
+        if topics.len() == 1
+            && Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap() == topic::CERT_REVOKED
+        {
+            let data: Map<Symbol, Val> = Map::try_from_val(&env, &v0.data).unwrap();
+            assert_eq!(data.len(), 4);
+            assert_eq!(
+                BytesN::<32>::try_from_val(&env, &data.get(Symbol::new(&env, "cert_id")).unwrap())
+                    .unwrap(),
+                cert_id
+            );
+            assert_eq!(
+                Address::try_from_val(&env, &data.get(Symbol::new(&env, "issuer")).unwrap())
+                    .unwrap(),
+                issuer
+            );
+            assert_eq!(
+                String::try_from_val(&env, &data.get(Symbol::new(&env, "reason_code")).unwrap())
+                    .unwrap(),
+                String::from_str(&env, "R1")
+            );
+            assert_eq!(
+                u64::try_from_val(&env, &data.get(Symbol::new(&env, "timestamp")).unwrap())
+                    .unwrap(),
+                env.ledger().timestamp()
+            );
+            found = true;
+        }
+    }
+    assert!(found);
 }
 
 #[test]
