@@ -161,9 +161,7 @@ const nextConfig: NextConfig = {
     return config;
   },
   compress: true,
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  // Optimize images
   images: {
     // Next's optimizer negotiates AVIF first and WebP for broader compatibility.
     formats: ['image/avif', 'image/webp'],
