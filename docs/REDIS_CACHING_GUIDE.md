@@ -358,7 +358,9 @@ leaderboard: 5 minutes
 
 1. **Password Protection**: Use `REDIS_PASSWORD` for production
 2. **Network Isolation**: Keep Redis on private networks
-3. **Encryption**: Use TLS/SSL in production (not in docker-compose)
+3. **Encryption**: Set `REDIS_TLS=true` (or a `rediss://` URL) in production;
+   `REDIS_SENTINEL_TLS` and `REDIS_CLUSTER_TLS` cover the control-plane and
+   cluster traffic. CA/cert/key accept file paths or inline PEM.
 4. **Access Control**: Use Sentinel password and cluster authentication
 5. **Data Sensitivity**: Don't cache sensitive user data longer than necessary
 

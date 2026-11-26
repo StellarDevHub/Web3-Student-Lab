@@ -21,11 +21,11 @@
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
-      "pnpm exec eslint --fix",
-      "pnpm exec prettier --write"
+      "pnpm --filter frontend exec eslint --fix",
+      "pnpm --filter frontend exec prettier --write"
     ],
     "*.{json,md,yml,yaml}": [
-      "pnpm exec prettier --write"
+      "pnpm --filter frontend exec prettier --write"
     ]
   }
 }

@@ -22,6 +22,9 @@
 //! - Pause (SC-HARD-19): State-mutating entry points call `assert_not_paused()`
 //!   which reverts with `VaultError::ContractPaused`; emergency admin
 //!   withdrawal is exempt.
+//! - Compounding (SC-075): `harvest` → swap → deposit → mint runs atomically
+//!   under the reentrancy lock, with a slippage bound and a conservation
+//!   post-condition (`total assets >= principal` and `>= total shares`).
 
 #![no_std]
 
@@ -38,11 +41,16 @@ pub mod bitmap;
 pub mod circuit_breaker;
 pub mod merkle_distributor;
 pub mod reentrancy_guard;
+pub mod strategy;
+
+#[cfg(test)]
+mod test;
 
 pub use bitmap::BitMap;
 pub use merkle_distributor::{
     DistributorError, MerkleDistributor, MerkleDistributorConfig, AIRDROP_CLAWBACK_WINDOW_SECONDS,
 };
+pub use strategy::{HarvestStrategyConfig, RewardSwapClient};
 
 // ── Storage keys ────────────────────────────────────────────────────────────
 const TOTAL_SHARES: Symbol = symbol_short!("TSHARES");
@@ -138,6 +146,12 @@ pub enum VaultError {
     RecoveryTimelockActive = 130,
     /// `131` — Replacement signer is not a valid new party.
     InvalidRecoveryTarget = 131,
+    /// `132` — Slippage tolerance is zero or above the 10% ceiling.
+    InvalidSlippage = 132,
+    /// `133` — Swap output was worse than the configured slippage bound.
+    SlippageExceeded = 133,
+    /// `134` — Strategy configuration is not authorized by its admin.
+    StrategyUnauthorized = 134,
 }
 
 // ── Data types ───────────────────────────────────────────────────────────────
@@ -317,6 +331,18 @@ impl SmartVault {
                 .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))),
         );
 
+        let principal: i128 = env
+            .storage()
+            .instance()
+            .get(&strategy::TOTAL_PRINCIPAL)
+            .unwrap_or(0);
+        env.storage().instance().set(
+            &strategy::TOTAL_PRINCIPAL,
+            &(principal
+                .checked_add(amount)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))),
+        );
+
         Self::assert_invariant(&env);
         Self::unlock(&env);
         env.events()
@@ -385,6 +411,23 @@ impl SmartVault {
                 .unwrap_or_else(|| panic_with_error!(&env, VaultError::Underflow))),
         );
 
+        let principal: i128 = env
+            .storage()
+            .instance()
+            .get(&strategy::TOTAL_PRINCIPAL)
+            .unwrap_or(0);
+        let principal_out = shares
+            .checked_mul(principal)
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))
+            .checked_div(total_shares)
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::DivisionByZero));
+        env.storage().instance().set(
+            &strategy::TOTAL_PRINCIPAL,
+            &(principal
+                .checked_sub(principal_out)
+                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Underflow))),
+        );
+
         Self::assert_invariant(&env);
         Self::unlock(&env);
         env.events()
@@ -419,12 +462,14 @@ impl SmartVault {
         circuit_breaker::assert_not_paused(&env);
         Self::lock(&env);
 
-        let reward = Self::harvest_inner(&env, &user);
+        let reward = Self::harvest_inner(&env, &user, true);
         Self::unlock(&env);
         reward
     }
 
-    fn harvest_inner(env: &Env, user: &Address) -> i128 {
+    /// Claim accrued rewards. When `credit_assets` is false the reward is left
+    /// as pending yield for `compound` to swap and deposit in the same call.
+    fn harvest_inner(env: &Env, user: &Address, credit_assets: bool) -> i128 {
         let current_ledger = env.ledger().sequence();
         let mut pos = Self::get_position(env, user);
 
@@ -463,19 +508,21 @@ impl SmartVault {
             return 0;
         }
 
-        env.storage().instance().set(
-            &TOTAL_ASSETS,
-            &(total_assets
-                .checked_add(reward)
-                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))),
-        );
-        let reserves: i128 = env.storage().instance().get(&RESERVES).unwrap_or(0);
-        env.storage().instance().set(
-            &RESERVES,
-            &(reserves
-                .checked_add(reward)
-                .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))),
-        );
+        if credit_assets {
+            env.storage().instance().set(
+                &TOTAL_ASSETS,
+                &(total_assets
+                    .checked_add(reward)
+                    .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))),
+            );
+            let reserves: i128 = env.storage().instance().get(&RESERVES).unwrap_or(0);
+            env.storage().instance().set(
+                &RESERVES,
+                &(reserves
+                    .checked_add(reward)
+                    .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))),
+            );
+        }
 
         pos.last_harvest = current_ledger;
         Self::set_position(env, user, &pos);
@@ -489,29 +536,66 @@ impl SmartVault {
 
     // ── Compound ─────────────────────────────────────────────────────────────
 
-    /// Harvest rewards and immediately re-deposit them as new shares.
+    /// Claim accrued rewards, swap them for the deposit token on the configured
+    /// AMM, deposit the result, and mint shares — all in one atomic call.
+    ///
+    /// The reentrancy lock is held for the entire sequence. The swap output is
+    /// bounded by `max_slippage_bps`, and a conservation post-condition is
+    /// asserted before the lock is released.
+    ///
+    /// Returns the number of new shares minted.
     pub fn compound(env: Env, user: Address) -> i128 {
         user.require_auth();
         circuit_breaker::assert_not_paused(&env);
         Self::lock(&env);
-        let reward = Self::harvest_inner(&env, &user);
+
+        // Claim into pending yield; assets are credited only after the swap so
+        // the AMM output (which may be smaller) is what gets deposited.
+        let reward = Self::harvest_inner(&env, &user, false);
         if reward == 0 {
             Self::unlock(&env);
             return 0;
+        }
+
+        let config: Option<HarvestStrategyConfig> =
+            env.storage().instance().get(&strategy::STRATEGY_CONFIG);
+        let deposit_amount = match config {
+            Some(cfg) if cfg.swap_contract.is_some() => {
+                let swap_contract = cfg.swap_contract.unwrap();
+                let min_amount_out = strategy::minimum_output(&env, reward, cfg.max_slippage_bps);
+                let amount_out = RewardSwapClient::new(&env, &swap_contract).swap_rewards(
+                    &env.current_contract_address(),
+                    &reward,
+                    &min_amount_out,
+                );
+                strategy::assert_no_slippage(&env, amount_out, min_amount_out);
+                amount_out
+            }
+            _ => reward,
+        };
+        if deposit_amount <= 0 {
+            panic_with_error!(&env, VaultError::ZeroAmount);
         }
 
         let total_assets: i128 = env.storage().instance().get(&TOTAL_ASSETS).unwrap_or(0i128);
         let total_shares: i128 = env.storage().instance().get(&TOTAL_SHARES).unwrap_or(0i128);
 
         let new_shares = if total_shares == 0 || total_assets == 0 {
-            reward
+            deposit_amount
         } else {
-            reward
+            deposit_amount
                 .checked_mul(total_shares)
                 .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))
                 .checked_div(total_assets)
                 .unwrap_or_else(|| panic_with_error!(&env, VaultError::DivisionByZero))
         };
+
+        let assets_after = total_assets
+            .checked_add(deposit_amount)
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow));
+        let shares_after = total_shares
+            .checked_add(new_shares)
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow));
 
         let mut pos = Self::get_position(&env, &user);
         pos.shares = pos
@@ -520,19 +604,67 @@ impl SmartVault {
             .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow));
         Self::set_position(&env, &user, &pos);
 
+        env.storage().instance().set(&TOTAL_SHARES, &shares_after);
+        env.storage().instance().set(&TOTAL_ASSETS, &assets_after);
+        let reserves: i128 = env.storage().instance().get(&RESERVES).unwrap_or(0);
         env.storage().instance().set(
-            &TOTAL_SHARES,
-            &(total_shares
-                .checked_add(new_shares)
+            &RESERVES,
+            &(reserves
+                .checked_add(deposit_amount)
                 .unwrap_or_else(|| panic_with_error!(&env, VaultError::Overflow))),
         );
 
+        let principal: i128 = env
+            .storage()
+            .instance()
+            .get(&strategy::TOTAL_PRINCIPAL)
+            .unwrap_or(0);
+        strategy::assert_conservation(&env, assets_after, principal, shares_after);
         Self::assert_invariant(&env);
         Self::unlock(&env);
-        env.events()
-            .publish((symbol_short!("compound"), user), new_shares);
+        env.events().publish(
+            (symbol_short!("compound"), user),
+            (new_shares, deposit_amount),
+        );
 
         new_shares
+    }
+
+    /// Configure automated harvesting. The first caller becomes the strategy
+    /// admin; later changes require that address.
+    pub fn configure_harvest_strategy(
+        env: Env,
+        admin: Address,
+        swap_contract: Option<Address>,
+        max_slippage_bps: u32,
+    ) {
+        admin.require_auth();
+        Self::lock(&env);
+        circuit_breaker::assert_not_paused(&env);
+
+        strategy::validate_slippage(&env, max_slippage_bps);
+        let existing: Option<HarvestStrategyConfig> =
+            env.storage().instance().get(&strategy::STRATEGY_CONFIG);
+        if let Some(ref cfg) = existing {
+            if cfg.admin != admin {
+                Self::unlock(&env);
+                panic_with_error!(&env, VaultError::StrategyUnauthorized);
+            }
+        }
+
+        let config = HarvestStrategyConfig {
+            admin: admin.clone(),
+            swap_contract,
+            reward_token: None,
+            deposit_token: None,
+            max_slippage_bps,
+        };
+        env.storage()
+            .instance()
+            .set(&strategy::STRATEGY_CONFIG, &config);
+        Self::unlock(&env);
+        env.events()
+            .publish((symbol_short!("strategy"), admin), max_slippage_bps);
     }
 
     // ── Multi-sig timelock governance ────────────────────────────────────────
@@ -801,6 +933,19 @@ impl SmartVault {
             .unwrap_or_else(|| panic_with_error!(&env, VaultError::DivisionByZero))
     }
 
+    /// Net principal deposited across all users (excludes harvested yield).
+    pub fn total_principal(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&strategy::TOTAL_PRINCIPAL)
+            .unwrap_or(0)
+    }
+
+    /// Currently configured harvest/compound strategy, if any.
+    pub fn get_harvest_strategy(env: Env) -> Option<HarvestStrategyConfig> {
+        env.storage().instance().get(&strategy::STRATEGY_CONFIG)
+    }
+
     // ── Internal helpers ─────────────────────────────────────────────────────
 
     fn get_position(env: &Env, user: &Address) -> Position {
@@ -846,7 +991,8 @@ impl SmartVault {
         reentrancy_guard::unlock(env);
     }
 
-    /// State invariant: `TOTAL_ASSETS == RESERVES` and neither is negative.
+    /// State invariant: `TOTAL_ASSETS == RESERVES`, nothing is negative, and
+    /// assets cover both recorded principal and outstanding shares (SC-075).
     fn assert_invariant(env: &Env) {
         let total_assets: i128 = env.storage().instance().get(&TOTAL_ASSETS).unwrap_or(0);
         let reserves: i128 = env.storage().instance().get(&RESERVES).unwrap_or(0);
@@ -856,6 +1002,13 @@ impl SmartVault {
         if total_assets != reserves {
             panic_with_error!(env, VaultError::InvariantViolated);
         }
+        let total_shares: i128 = env.storage().instance().get(&TOTAL_SHARES).unwrap_or(0);
+        let principal: i128 = env
+            .storage()
+            .instance()
+            .get(&strategy::TOTAL_PRINCIPAL)
+            .unwrap_or(0);
+        strategy::assert_conservation(env, total_assets, principal, total_shares);
     }
 
     // ── Synthetic Assets ──────────────────────────────────────────────────────

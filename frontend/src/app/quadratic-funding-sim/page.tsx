@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import QuadraticFundingSimulator from '@/components/quadratic-funding/QuadraticFundingSimulator';
+import { LazyQuadraticFundingSimulator as QuadraticFundingSimulator } from '@/components/charts/LazyCharts';
 
 export const metadata: Metadata = {
   title: 'Quadratic Funding Simulator · Web3 Student Lab',

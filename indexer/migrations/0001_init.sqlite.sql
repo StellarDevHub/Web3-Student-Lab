@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_events_ledger     ON events (ledger);
 CREATE INDEX IF NOT EXISTS idx_events_contract   ON events (contract_id);
 CREATE INDEX IF NOT EXISTS idx_events_type       ON events (event_type);
+CREATE INDEX IF NOT EXISTS idx_events_tx_hash    ON events (tx_hash);
 
 -- Single-row table used as the poller's cursor (last successfully processed
 -- ledger). Replaying from a START_LEDGER override is also funnelled through

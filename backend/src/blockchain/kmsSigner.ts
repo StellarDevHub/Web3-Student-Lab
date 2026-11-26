@@ -157,6 +157,9 @@ export class KmsStellarSigner {
   ): Promise<T> {
     const hash = transaction.hash();
     const signature = await this.signTransactionHash(hash);
+    if (!signature || signature.length === 0) {
+      throw new Error(`KMS signing produced an empty signature for ${purpose}`);
+    }
 
     if (signature.length !== STELLAR_ED25519_SIGNATURE_BYTES) {
       throw new Error(

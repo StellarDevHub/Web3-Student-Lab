@@ -66,7 +66,7 @@ function BrainstormContent() {
         }
 
         if (response.status === 404) {
-          const createResponse = await fetch(`${apiUrl}/canvas`, {
+          const createResponse = await fetch(getApiEndpoint('/canvas'), {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${token}`,

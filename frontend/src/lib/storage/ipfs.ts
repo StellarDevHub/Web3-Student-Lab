@@ -553,3 +553,31 @@ export function downloadCarFile(bytes: Uint8Array, filename: string): void {
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+
+/* ─── IPFS image URL resolution (FE-075) ───────────────────────────────────── */
+
+/**
+ * Convert an IPFS URI into the same-origin image proxy. Keeping gateway
+ * credentials and fallback policy on the server prevents private gateway
+ * tokens from entering client bundles or browser-visible image URLs.
+ */
+export function resolveIpfsImageSrc(src: string): string {
+  if (!src.startsWith('ipfs://')) return src;
+
+  const rawPath = src.slice('ipfs://'.length).split(/[?#]/, 1)[0];
+  const normalized = rawPath.startsWith('ipfs/') ? rawPath.slice(5) : rawPath;
+  const segments = normalized.split('/').filter(Boolean);
+
+  if (segments.length === 0 || segments.some((segment) => segment === '.' || segment === '..')) {
+    return '';
+  }
+
+  const [cid, ...path] = segments;
+  const isCidV0 = /^Qm[1-9A-HJ-NP-Za-km-z]{44}$/.test(cid);
+  const isCidV1 = /^b[a-z2-7]{20,}$/i.test(cid);
+
+  if (!isCidV0 && !isCidV1) return '';
+
+  return `/api/ipfs/${[cid, ...path].map(encodeURIComponent).join('/')}`;
+}

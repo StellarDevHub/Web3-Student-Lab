@@ -615,13 +615,15 @@ fn fuzz_guard_never_persists_across_multiple_operations() {
 
 #[allow(dead_code)]
 fn test_guardian_pause_blocks_amm_operations() {
+#[test]
+fn test_guardian_pause_blocks_swaps_but_allows_liquidity_exit() {
     let env = Env::default();
     let (admin, client, token_a, _, _) = setup(&env);
-    let shares = client.add_liquidity(&admin, &1_000_000, &1_000_000, &0);
+    client.add_liquidity(&admin, &1_000_000, &1_000_000, &0);
 
     let guardian = Address::generate(&env);
     client.set_guardian(&admin, &guardian);
-    client.set_paused(&guardian, &true);
+    client.pause(&guardian);
     assert!(client.is_paused());
 
     let user = Address::generate(&env);
@@ -630,12 +632,23 @@ fn test_guardian_pause_blocks_amm_operations() {
     assert!(client
         .try_add_liquidity(&admin, &1_000, &1_000, &0)
         .is_err());
-    assert!(client
-        .try_remove_liquidity(&admin, &shares, &0, &0)
-        .is_err());
+    assert!(client.try_pause(&user).is_err());
 
-    assert!(client.try_set_paused(&user, &true).is_err());
-    client.set_paused(&admin, &false);
+    // Emergency exit: removing liquidity still works while paused, subject to
+    // the rolling 24-hour outflow budget.
+    let (out_a, out_b) = client.remove_liquidity(&admin, &1_000, &0, &0);
+    assert!(out_a > 0 && out_b > 0);
+
+    // A guardian can never resume the pool, and the admin must wait out the
+    // unpause timelock.
+    assert!(client.try_unpause(&guardian).is_err());
+    let unlock_at = client.propose_unpause(&admin);
+    assert_eq!(client.unpause_unlock_at(), Some(unlock_at));
+    assert!(client.try_unpause(&admin).is_err());
+
+    env.ledger().with_mut(|ledger| ledger.timestamp = unlock_at);
+    client.unpause(&admin);
+
     assert!(!client.is_paused());
     assert!(client.swap_a_for_b(&user, &1_000, &0) > 0);
 }

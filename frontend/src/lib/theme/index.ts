@@ -17,5 +17,4 @@ export {
   THEME_COLORS,
   getChartColors,
   getThemeColors,
-  getThemeStyles,
 } from '@/lib/theme/themeColors';
