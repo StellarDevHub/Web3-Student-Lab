@@ -52,4 +52,12 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
   }
 };
 
+export const optionalAuthenticateToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) {
+    return next();
+  }
+  return authenticateToken(req, res, next);
+};
+
 export { AuthRequest };

@@ -19,6 +19,7 @@ import { context, isSpanContextValid, propagation, ROOT_CONTEXT, SpanKind, SpanS
 import { tracer } from '../instrumentation.js';
 import { normalizeRouteLabel } from '../metrics/MetricsExporter.js';
 import { httpServerDuration, tracingOverhead } from '../metrics/prometheusExporter.js';
+import { traceContext } from '../utils/logger.js';
 
 export interface TracingMiddlewareOptions {
   /** Exact paths that are not traced (health probes, scrapes). */
@@ -93,7 +94,20 @@ export function tracingMiddleware(options: TracingMiddlewareOptions = {}): Reque
       tracingOverhead.observe({}, overhead);
     });
 
-    context.with(trace.setSpan(parent, span), next);
+    // Run the rest of the Express pipeline inside both the OTel span context
+    // and an AsyncLocalStorage scope so Winston's traceIdFormat can read the
+    // trace ID without any manual passing.
+    context.with(trace.setSpan(parent, span), () => {
+      const store = isSpanContextValid(spanContext)
+        ? { traceId: spanContext.traceId }
+        : undefined;
+
+      if (store) {
+        traceContext.run(store, next);
+      } else {
+        next();
+      }
+    });
   };
 }
 

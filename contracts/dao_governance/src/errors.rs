@@ -47,4 +47,8 @@ pub enum DaoError {
     InvalidVotingPeriod = 417,
     /// 418 - Timelock delay (48 hours) has not elapsed since the proposal was queued.
     TimelockNotElapsed = 418,
+    /// 419 - A proposal has already been cancelled or vetoed.
+    ProposalCancelled = 419,
+    /// 420 - Administrative veto or critical security pause is active.
+    ExecutionBlocked = 420,
 }

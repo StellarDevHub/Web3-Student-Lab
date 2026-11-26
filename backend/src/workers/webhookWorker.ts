@@ -102,7 +102,7 @@ export const startWebhookWorker = (): Worker<WebhookDeliveryJobData> | null => {
           // `job.timestamp` is when the delivery was first enqueued.
           if (isRetryWindowExhausted(job.timestamp)) {
             const message = error instanceof Error ? error.message : String(error);
-            throw new UnrecoverableError(`48h webhook retry window exhausted: ${message}`);
+            throw new UnrecoverableError(`72h webhook retry window exhausted: ${message}`);
           }
 
           throw error;

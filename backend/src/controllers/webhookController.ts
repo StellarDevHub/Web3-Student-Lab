@@ -7,6 +7,7 @@ import {
   retriggerFailedDeliveries,
   webhookDeliveryLog,
 } from '../services/webhookDeliveryService.js';
+import { analyzeWebhookFailures } from '../services/webhookDispatcher.js';
 import logger from '../utils/logger.js';
 import { ApiResponse } from '../utils/response.js';
 
@@ -74,6 +75,20 @@ export const webhookController = {
     return res
       .status(202)
       .json(ApiResponse.success('Failed webhook deliveries re-triggered', { count: results.length, results }));
+  }),
+
+  // GET /admin/webhooks/analytics | GET /admin/webhooks/failure-analysis?endpoint=...&limit=...
+  getFailureAnalysis: asyncHandler(async (req: Request, res: Response) => {
+    const endpointKey = queryString(req.query.endpoint);
+    const limit = Number(req.query.limit);
+    const analysis = await analyzeWebhookFailures({
+      ...(endpointKey ? { endpointKey } : {}),
+      ...(Number.isFinite(limit) && limit > 0 ? { limit } : {}),
+    });
+
+    return res
+      .status(200)
+      .json(ApiResponse.success('Webhook failure analysis retrieved', analysis));
   }),
 
   // GET /admin/webhooks/endpoints

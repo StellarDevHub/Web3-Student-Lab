@@ -16,12 +16,14 @@ pub enum DataKey {
     Oracles,
     Quorum,
     StalenessSecs,
+    CoverageRatioBps,
     TotalCapital,
     LockedLiability,
     UnderwriterBalance(Address),
     Policy(u64),
     NextPolicyId,
     OracleReport(Symbol, Address),
+    OracleReportLedger(Symbol, Address),
     PoliciesForTrigger(Symbol),
 }
 
@@ -54,9 +56,13 @@ pub enum InsuranceError {
     PolicyLimitReached = 11,
     AlreadySettled = 12,
     Overflow = 13,
+    InvalidCoverageRatio = 14,
 }
 
 const MAX_POLICIES_PER_TRIGGER: u32 = 100;
+/// Fraction of pool reserves that may be sold as coverage, in basis points.
+const DEFAULT_COVERAGE_RATIO_BPS: u32 = 8_000;
+const MAX_COVERAGE_RATIO_BPS: u32 = 10_000;
 
 #[contract]
 pub struct ParametricInsuranceContract;
@@ -75,7 +81,7 @@ impl ParametricInsuranceContract {
         }
         if oracles.len() < oracle_consensus::MIN_ORACLES
             || oracles.len() > oracle_consensus::MAX_ORACLES
-            || quorum < oracle_consensus::MIN_ORACLES
+            || quorum < oracle_consensus::MIN_QUORUM
             || quorum > oracles.len()
         {
             panic_with_error!(&env, InsuranceError::InvalidOracleSet);
@@ -97,6 +103,9 @@ impl ParametricInsuranceContract {
             &DataKey::StalenessSecs,
             &oracle_consensus::DEFAULT_STALENESS_SECS,
         );
+        env.storage()
+            .instance()
+            .set(&DataKey::CoverageRatioBps, &DEFAULT_COVERAGE_RATIO_BPS);
         env.storage().instance().set(&DataKey::TotalCapital, &0i128);
         env.storage()
             .instance()
@@ -114,6 +123,33 @@ impl ParametricInsuranceContract {
         env.storage()
             .instance()
             .set(&DataKey::StalenessSecs, &staleness_secs);
+    }
+
+    /// Sets the share of pool reserves that may back outstanding coverage.
+    /// Lowering it below the liability already sold is rejected so the
+    /// solvency invariant cannot be broken retroactively.
+    pub fn set_coverage_ratio(env: Env, admin: Address, ratio_bps: u32) {
+        ensure_initialized(&env);
+        admin.require_auth();
+        require_admin(&env, &admin);
+        if ratio_bps == 0 || ratio_bps > MAX_COVERAGE_RATIO_BPS {
+            panic_with_error!(&env, InsuranceError::InvalidCoverageRatio);
+        }
+        if capacity_for(&env, total_capital(&env), ratio_bps) < locked_liability(&env) {
+            panic_with_error!(&env, InsuranceError::Insolvent);
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::CoverageRatioBps, &ratio_bps);
+    }
+
+    pub fn coverage_ratio_bps(env: Env) -> u32 {
+        coverage_ratio(&env)
+    }
+
+    /// Maximum total payout the pool may currently have outstanding.
+    pub fn coverage_capacity(env: Env) -> i128 {
+        capacity_for(&env, total_capital(&env), coverage_ratio(&env))
     }
 
     pub fn underwrite(env: Env, underwriter: Address, amount: i128) {
@@ -177,7 +213,9 @@ impl ParametricInsuranceContract {
         let total = total_capital(&env)
             .checked_add(premium)
             .unwrap_or_else(|| panic_with_error!(&env, InsuranceError::Overflow));
-        if total < locked {
+        // Underwriting halts as soon as the new policy would push outstanding
+        // coverage above the fraction of reserves the pool is allowed to risk.
+        if locked > capacity_for(&env, total, coverage_ratio(&env)) {
             panic_with_error!(&env, InsuranceError::Insolvent);
         }
 
@@ -247,11 +285,15 @@ impl ParametricInsuranceContract {
         }
 
         env.storage().instance().set(
-            &DataKey::OracleReport(trigger_key.clone(), oracle),
+            &DataKey::OracleReport(trigger_key.clone(), oracle.clone()),
             &oracle_consensus::OracleReport {
                 value,
                 timestamp: env.ledger().timestamp(),
             },
+        );
+        env.storage().instance().set(
+            &DataKey::OracleReportLedger(trigger_key.clone(), oracle),
+            &env.ledger().sequence(),
         );
 
         if let Some(median) = Self::aggregate_oracle_value(env.clone(), trigger_key.clone()) {
@@ -266,18 +308,40 @@ impl ParametricInsuranceContract {
             .instance()
             .get(&DataKey::StalenessSecs)
             .unwrap_or(oracle_consensus::DEFAULT_STALENESS_SECS);
-        let mut values = Vec::new(&env);
+        let mut reports: Vec<(oracle_consensus::OracleReport, u32)> = Vec::new(&env);
+        let mut newest_ledger: Option<u32> = None;
         for oracle in oracles.iter() {
             let report: Option<oracle_consensus::OracleReport> = env
                 .storage()
                 .instance()
-                .get(&DataKey::OracleReport(trigger_key.clone(), oracle));
-            if let Some(report) = report {
+                .get(&DataKey::OracleReport(trigger_key.clone(), oracle.clone()));
+            let report_ledger: Option<u32> = env
+                .storage()
+                .instance()
+                .get(&DataKey::OracleReportLedger(trigger_key.clone(), oracle));
+            // Reports written before the ledger window existed are ignored
+            // (fail closed) until that oracle posts again.
+            if let (Some(report), Some(report_ledger)) = (report, report_ledger) {
                 if oracle_consensus::is_fresh(&env, &report, staleness_secs) {
-                    values.push_back(report.value);
+                    newest_ledger = Some(match newest_ledger {
+                        Some(ledger) if ledger > report_ledger => ledger,
+                        _ => report_ledger,
+                    });
+                    reports.push_back((report, report_ledger));
                 }
             }
         }
+        let newest_ledger = newest_ledger?;
+
+        // Only reports observed inside the same ledger window may form a
+        // consensus round; an old report cannot be combined with a new one.
+        let mut values = Vec::new(&env);
+        for (report, report_ledger) in reports.iter() {
+            if oracle_consensus::within_ledger_window(newest_ledger, report_ledger) {
+                values.push_back(report.value);
+            }
+        }
+
         let quorum: u32 = env.storage().instance().get(&DataKey::Quorum)?;
         if values.len() < quorum {
             return None;
@@ -323,12 +387,12 @@ impl ParametricInsuranceContract {
 
         let total = total_capital(&env);
         let locked = locked_liability(&env);
-        if total - amount < locked {
+        let updated_total = total - amount;
+        if capacity_for(&env, updated_total, coverage_ratio(&env)) < locked {
             panic_with_error!(&env, InsuranceError::Insolvent);
         }
 
         let updated_balance = current - amount;
-        let updated_total = total - amount;
         env.storage().instance().set(
             &DataKey::UnderwriterBalance(underwriter.clone()),
             &updated_balance,
@@ -359,6 +423,20 @@ fn ensure_initialized(env: &Env) {
     if !env.storage().instance().has(&DataKey::Admin) {
         panic_with_error!(env, InsuranceError::NotInitialized);
     }
+}
+
+fn coverage_ratio(env: &Env) -> u32 {
+    env.storage()
+        .instance()
+        .get(&DataKey::CoverageRatioBps)
+        .unwrap_or(DEFAULT_COVERAGE_RATIO_BPS)
+}
+
+fn capacity_for(env: &Env, capital: i128, ratio_bps: u32) -> i128 {
+    capital
+        .checked_mul(ratio_bps as i128)
+        .unwrap_or_else(|| panic_with_error!(env, InsuranceError::Overflow))
+        / 10_000
 }
 
 fn total_capital(env: &Env) -> i128 {

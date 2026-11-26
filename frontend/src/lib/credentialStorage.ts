@@ -25,6 +25,15 @@ export interface StoredCredential {
   signCount: number;
   walletAddress?: string;
   deviceName?: string;
+  /** User-chosen label, e.g. "Work YubiKey". Falls back to `deviceName`. */
+  nickname?: string;
+  /** `platform` (Touch ID / Face ID / Windows Hello) or `cross-platform` (security key). */
+  authenticatorAttachment?: 'platform' | 'cross-platform';
+  transports?: string[];
+  /** Whether the authenticator supports the PRF extension (required for SEP-0010 signing). */
+  prfEnabled?: boolean;
+  /** Stellar account derived from this passkey's PRF output (public key only). */
+  stellarPublicKey?: string;
   createdAt: string;
   lastUsedAt?: string;
 }
@@ -441,6 +450,35 @@ export async function updateCredentialSignCount(
     credential.lastUsedAt = new Date().toISOString();
     await storeCredentials(existing, passphrase);
   }
+}
+
+/**
+ * Merge fields into a stored credential (e.g. rename, cache derived account).
+ * Returns the updated credential, or `undefined` when it does not exist.
+ */
+export async function updateStoredCredential(
+  credentialId: string,
+  patch: Partial<Omit<StoredCredential, 'id' | 'credentialId'>>,
+  passphrase?: string
+): Promise<StoredCredential | undefined> {
+  const existing = await getStoredCredentials(passphrase);
+  const index = existing.findIndex((c) => c.credentialId === credentialId);
+  if (index === -1) return undefined;
+  const updated = { ...existing[index], ...patch };
+  existing[index] = updated;
+  await storeCredentials(existing, passphrase);
+  return updated;
+}
+
+/**
+ * Rename a stored credential.
+ */
+export async function renameCredential(
+  credentialId: string,
+  nickname: string,
+  passphrase?: string
+): Promise<StoredCredential | undefined> {
+  return updateStoredCredential(credentialId, { nickname: nickname.trim() }, passphrase);
 }
 
 /**

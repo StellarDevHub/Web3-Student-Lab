@@ -82,6 +82,8 @@ export interface Certificate {
   courseId: string;
   issuedAt: string;
   certificateHash?: string;
+  contractAddress?: string;
+  network?: string;
   status: string;
   student?: User;
   course?: Course;

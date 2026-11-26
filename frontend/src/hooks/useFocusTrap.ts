@@ -41,7 +41,19 @@ export function useFocusTrap(
       }
     }
 
+    container.setAttribute('data-focus-trap-active', 'true');
+
     const handler = (event: KeyboardEvent) => {
+      const activeTraps = document.querySelectorAll<HTMLElement>('[data-focus-trap-active="true"]');
+      if (activeTraps[activeTraps.length - 1] !== container) return;
+
+      if (event.key === KEYS.ESCAPE) {
+        event.preventDefault();
+        event.stopPropagation();
+        onEscapeRef.current?.();
+        return;
+      }
+
       if (event.key !== KEYS.TAB) return;
 
       const focusableElements = getFocusableElements(container);
@@ -65,9 +77,11 @@ export function useFocusTrap(
       }
     };
 
-    container.addEventListener('keydown', handler);
+    // Capture at the document so a child widget cannot swallow Tab or Escape.
+    document.addEventListener('keydown', handler, true);
     return () => {
-      container.removeEventListener('keydown', handler);
+      container.removeAttribute('data-focus-trap-active');
+      document.removeEventListener('keydown', handler, true);
     };
   }, [containerRef, enabled, initialFocus]);
 
@@ -84,20 +98,6 @@ export function useFocusTrap(
     };
   }, [containerRef, returnFocusOnDeactivate, returnFocusRef]);
 
-  useEffect(() => {
-    if (!enabled) return;
-    const container = containerRef.current;
-    if (!container) return;
-
-    const escapeHandler = (event: KeyboardEvent) => {
-      if (event.key === KEYS.ESCAPE) {
-        onEscapeRef.current?.();
-      }
-    };
-
-    container.addEventListener('keydown', escapeHandler);
-    return () => container.removeEventListener('keydown', escapeHandler);
-  }, [containerRef, enabled]);
 }
 
 export function useRestoreFocus(
