@@ -12,6 +12,7 @@ const AVAILABLE_OFFLINE = [
 
 export default function OfflinePage() {
   const [isOnline, setIsOnline] = useState(true);
+  const [listenersReady, setListenersReady] = useState(false);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -21,6 +22,7 @@ export default function OfflinePage() {
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    setListenersReady(true);
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -29,7 +31,10 @@ export default function OfflinePage() {
   }, []);
 
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-80px)] max-w-2xl flex-col items-center justify-center p-4 text-center">
+    <div
+      data-offline-ready={listenersReady ? 'true' : 'false'}
+      className="mx-auto flex min-h-[calc(100vh-80px)] max-w-2xl flex-col items-center justify-center p-4 text-center"
+    >
       <div
         className={`mb-6 flex h-20 w-20 items-center justify-center rounded-full ${
           isOnline ? 'bg-emerald-500/10' : 'bg-violet-500/10'

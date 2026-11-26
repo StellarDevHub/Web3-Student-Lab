@@ -68,6 +68,17 @@ export function useThemeMode() {
   const isDark = currentTheme === 'dark' || currentTheme === 'oled';
   const isLight = currentTheme === 'light';
 
+  // Sync data-theme attribute on html element for zero-runtime CSS switching.
+  // next-themes sets this via the provider, but we ensure it stays in sync
+  // even if the hook is used outside the provider context.
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      const html = document.documentElement;
+      const resolved = mounted ? (theme === 'system' ? (systemTheme || 'dark') : (theme || 'dark')) : 'dark';
+      html.setAttribute('data-theme', resolved);
+    }
+  }, [mounted, theme, systemTheme]);
+
   /**
    * Toggle between light and dark themes
    *
@@ -85,6 +96,10 @@ export function useThemeMode() {
     else newTheme = 'light';
     setTheme(newTheme);
     setStoredTheme(newTheme);
+    // Apply data-theme immediately to avoid waiting on next-themes async update
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', newTheme);
+    }
   };
 
   /**

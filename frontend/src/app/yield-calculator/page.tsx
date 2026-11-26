@@ -2,39 +2,14 @@
 
 import React, { useState, useMemo } from 'react';
 
-import { LivePoolYield } from '@/components/yield-calculator/LivePoolYield';
+import type { ChartOptions } from 'chart.js';
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-  type ChartOptions,
-} from 'chart.js';
-import { Line } from 'react-chartjs-2';
+  LazyLivePoolYield as LivePoolYield,
+  LazyTwapBacktestCanvas as TwapBacktestCanvas,
+  LazyYieldProjectionChart,
+} from '@/components/charts/LazyCharts';
 import { HelpCircle, RefreshCw, Calculator, TrendingUp, DollarSign, Percent, Clock } from 'lucide-react';
-import dynamic from 'next/dynamic';
 
-const TwapBacktestCanvas = dynamic(
-  () => import('@/components/analytics/TwapBacktestCanvas').then((mod) => mod.TwapBacktestCanvas),
-  { ssr: false, loading: () => <div className="h-[480px] w-full animate-pulse rounded-2xl bg-zinc-900/40" aria-busy="true" />, },
-);
-
-// Register ChartJS modules
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
 
 type FrequencyKey = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'semi-annually' | 'annually';
 
@@ -352,7 +327,7 @@ export default function YieldCalculatorPage() {
               <TrendingUp className="text-red-500" /> Yield Projection Over Time
             </h2>
             <div className="relative h-[300px] w-full flex-grow md:h-[400px]">
-              <Line data={chartData} options={chartOptions} />
+              <LazyYieldProjectionChart data={chartData} options={chartOptions} />
             </div>
           </div>
         </div>

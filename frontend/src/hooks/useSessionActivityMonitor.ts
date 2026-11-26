@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '@/lib/api-config';
+import { clearSessionStorage, getStoredSessionToken } from '@/lib/credentialStorage';
 
 /**
  * Session Activity Monitor hook (#1116).
@@ -80,9 +81,6 @@ export function useSessionActivityMonitor(
   const callbacksRef = useRef({ onPurged, onLocked, onUnlocked });
   callbacksRef.current = { onPurged, onLocked, onUnlocked };
 
-  const getToken = (): string | null =>
-    localStorage.getItem('token') ?? localStorage.getItem('auth_token');
-
   const reportActivity = useCallback(() => {
     lastActivityRef.current = Date.now();
     if (lockedRef.current) {
@@ -90,32 +88,31 @@ export function useSessionActivityMonitor(
     }
     setRemainingIdleMs(idleLockMs);
 
-    const token = getToken();
-    if (!token) {
-      return;
-    }
     // Throttle network writes.
     const now = Date.now();
     if (now - lastPostRef.current < ACTIVITY_POST_THROTTLE_MS) {
       return;
     }
     lastPostRef.current = now;
-    fetch(`${url}/auth/session/activity`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    }).catch(() => {
-      // Non-fatal: the client-side timer still protects the terminal.
-    });
+    getStoredSessionToken()
+      .then((token) => {
+        if (!token) return;
+        return fetch(`${url}/auth/session/activity`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      })
+      .catch((error) => console.error('Failed to report session activity:', error));
   }, [idleLockMs, url]);
 
   const lock = useCallback(async () => {
     lockedRef.current = true;
     setLocked(true);
     callbacksRef.current.onLocked?.();
-    const token = getToken();
+    const token = await getStoredSessionToken();
     if (token) {
       fetch(`${url}/auth/session/lock`, {
         method: 'POST',
@@ -125,7 +122,7 @@ export function useSessionActivityMonitor(
   }, [url]);
 
   const reauthenticate = useCallback(async (): Promise<boolean> => {
-    const token = getToken();
+    const token = await getStoredSessionToken();
     if (!token) {
       return false;
     }
@@ -150,17 +147,17 @@ export function useSessionActivityMonitor(
   }, [url]);
 
   const purgeAndLogout = useCallback(() => {
-    const token = getToken();
-    if (token) {
-      fetch(`${url}/auth/session/purge`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => undefined);
-    }
+    getStoredSessionToken()
+      .then((token) => {
+        if (!token) return;
+        return fetch(`${url}/auth/session/purge`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      })
+      .catch((error) => console.error('Failed to purge session:', error));
     // Clear memory credentials and any sensitive state.
-    localStorage.removeItem('token');
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('user');
+    clearSessionStorage();
     sessionStorage.clear();
     callbacksRef.current.onPurged?.();
   }, [url]);

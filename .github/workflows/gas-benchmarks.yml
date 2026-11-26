@@ -10,17 +10,21 @@ name: Gas Benchmarks & Regression Checks
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
     paths:
-      - 'contracts/**'
-      - 'scripts/run-gas-benchmarks.sh'
-      - '.github/workflows/gas-benchmarks.yml'
+      - "contracts/**/*.rs"
+      - "contracts/**/Cargo.toml"
+      - "contracts/Cargo.toml"
+      - "contracts/gas_benchmarks/**"
+      - "scripts/run-gas-benchmarks.sh"
   pull_request:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
     paths:
-      - 'contracts/**'
-      - 'scripts/run-gas-benchmarks.sh'
-      - '.github/workflows/gas-benchmarks.yml'
+      - "contracts/**/*.rs"
+      - "contracts/**/Cargo.toml"
+      - "contracts/Cargo.toml"
+      - "contracts/gas_benchmarks/**"
+      - "scripts/run-gas-benchmarks.sh"
   workflow_dispatch:
 
 concurrency:

@@ -1,4 +1,7 @@
-use contract_events::{publish_standard_event, topic};
+use contract_events::{
+    publish_amm_guardian_changed, publish_amm_initialized, publish_liquidity_added,
+    publish_liquidity_removed, publish_pause, publish_swap_a_for_b, publish_swap_b_for_a,
+};
 use soroban_sdk::{Address, Env};
 
 pub fn initialized(
@@ -10,28 +13,19 @@ pub fn initialized(
     fee_collector: &Address,
     base_fee_bps: i128,
 ) {
-    publish_standard_event(
+    publish_amm_initialized(
         env,
-        topic::AMM_INITIALIZED,
-        admin.clone(),
-        (
-            token_a.clone(),
-            token_b.clone(),
-            pool_share.clone(),
-            fee_collector.clone(),
-            base_fee_bps,
-            env.ledger().timestamp(),
-        ),
+        admin,
+        token_a,
+        token_b,
+        pool_share,
+        fee_collector,
+        base_fee_bps,
     );
 }
 
 pub fn guardian_changed(env: &Env, admin: &Address, guardian: &Address) {
-    publish_standard_event(
-        env,
-        topic::AMM_GUARDIAN,
-        guardian.clone(),
-        (admin.clone(), env.ledger().timestamp()),
-    );
+    publish_amm_guardian_changed(env, guardian, admin);
 }
 
 pub fn liquidity_added(
@@ -43,18 +37,8 @@ pub fn liquidity_added(
     reserve_a: i128,
     reserve_b: i128,
 ) {
-    publish_standard_event(
-        env,
-        topic::LIQUIDITY_ADDED,
-        provider.clone(),
-        (
-            amount_a,
-            amount_b,
-            shares,
-            reserve_a,
-            reserve_b,
-            env.ledger().timestamp(),
-        ),
+    publish_liquidity_added(
+        env, provider, amount_a, amount_b, shares, reserve_a, reserve_b,
     );
 }
 
@@ -67,18 +51,8 @@ pub fn liquidity_removed(
     reserve_a: i128,
     reserve_b: i128,
 ) {
-    publish_standard_event(
-        env,
-        topic::LIQUIDITY_REMOVED,
-        provider.clone(),
-        (
-            amount_a,
-            amount_b,
-            shares,
-            reserve_a,
-            reserve_b,
-            env.ledger().timestamp(),
-        ),
+    publish_liquidity_removed(
+        env, provider, amount_a, amount_b, shares, reserve_a, reserve_b,
     );
 }
 
@@ -91,18 +65,8 @@ pub fn swap_a_for_b(
     reserve_a: i128,
     reserve_b: i128,
 ) {
-    publish_standard_event(
-        env,
-        topic::SWAP_A_FOR_B,
-        trader.clone(),
-        (
-            amount_in,
-            amount_out,
-            fee,
-            reserve_a,
-            reserve_b,
-            env.ledger().timestamp(),
-        ),
+    publish_swap_a_for_b(
+        env, trader, amount_in, amount_out, fee, reserve_a, reserve_b,
     );
 }
 
@@ -115,26 +79,11 @@ pub fn swap_b_for_a(
     reserve_a: i128,
     reserve_b: i128,
 ) {
-    publish_standard_event(
-        env,
-        topic::SWAP_B_FOR_A,
-        trader.clone(),
-        (
-            amount_in,
-            amount_out,
-            fee,
-            reserve_a,
-            reserve_b,
-            env.ledger().timestamp(),
-        ),
+    publish_swap_b_for_a(
+        env, trader, amount_in, amount_out, fee, reserve_a, reserve_b,
     );
 }
 
 pub fn pause_changed(env: &Env, caller: &Address, paused: bool) {
-    publish_standard_event(
-        env,
-        topic::PAUSE,
-        caller.clone(),
-        (paused, env.ledger().timestamp()),
-    );
+    publish_pause(env, caller, paused);
 }

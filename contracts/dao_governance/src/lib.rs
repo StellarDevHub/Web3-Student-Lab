@@ -13,10 +13,10 @@
 //!   (set by admin, or passed as `duration` to `create_proposal`) must lie in
 //!   `[MIN_VOTING_PERIOD, MAX_VOTING_PERIOD]` = [1 day, 30 days].
 //! - Quorum: a proposal passes only if the voice credits spent on it
-//!   (`credits_spent`, i.e. participating voting power) reach
-//!   `QUORUM_BPS` (20%) of the circulating governance supply, where supply is
-//!   the running total of all credits ever granted (`TotalGranted`).
-//!   The quorum is fixed at proposal creation.
+//!   (`credits_spent`, i.e. participating voting power) reach the fixed
+//!   quorum recorded at proposal creation. Standard proposals use a dynamic
+//!   15%-baseline quorum, while treasury actions require 30%. Historical
+//!   participation adjusts standard quorum within a 5 percentage-point range.
 //! - Timelock: finalize queues a passed proposal with `eta = now + 172800`
 //!   (48 hours). `execute` fails until `now >= eta`.
 //!
@@ -51,8 +51,16 @@ pub const MIN_VOTING_PERIOD: u64 = 86_400;
 pub const MAX_VOTING_PERIOD: u64 = 2_592_000;
 /// Mandatory timelock between finalize (queue) and execute: 48 hours.
 pub const TIMELOCK_DELAY: u64 = 172_800;
-/// Quorum as basis points of circulating supply: 20%.
-pub const QUORUM_BPS: u128 = 2_000;
+/// Standard proposal quorum: 15% of circulating governance supply.
+pub const STANDARD_QUORUM_BPS: u128 = 1_500;
+/// Treasury-action quorum: 30% of circulating governance supply.
+pub const TREASURY_QUORUM_BPS: u128 = 3_000;
+/// Legacy/default quorum constant retained for compatibility.
+pub const QUORUM_BPS: u128 = STANDARD_QUORUM_BPS;
+/// Maximum additional historical-participation quorum adjustment: 5%.
+pub const QUORUM_PARTICIPATION_BONUS_BPS: u128 = 500;
+/// Initial historical participation used before any proposal is finalized.
+pub const INITIAL_HISTORICAL_PARTICIPATION_BPS: u128 = STANDARD_QUORUM_BPS;
 /// Basis-point denominator.
 pub const BPS_DENOMINATOR: u128 = 10_000;
 
@@ -66,6 +74,7 @@ pub enum ProposalStatus {
     Passed,
     Failed,
     Executed,
+    Cancelled,
 }
 
 #[contracttype]
@@ -88,6 +97,8 @@ pub struct Proposal {
     pub quorum_required: u128,
     /// Timelock ETA (ledger timestamp) set when passed; 0 while not queued.
     pub eta: u64,
+    /// Treasury proposals require the 30% quorum; standard proposals require 15%.
+    pub treasury_action: bool,
 }
 
 /// One credit grant, stamped with its global sequence number.
@@ -111,6 +122,7 @@ struct StoredProposal {
     created_seq: u64,
     quorum_required: u128,
     eta: u64,
+    treasury_action: bool,
 }
 
 impl StoredProposal {
@@ -125,12 +137,14 @@ impl StoredProposal {
                 ProposalStatus::Passed => 1,
                 ProposalStatus::Failed => 2,
                 ProposalStatus::Executed => 3,
+                ProposalStatus::Cancelled => 4,
             },
             tally: proposal.tally,
             credits_spent: proposal.credits_spent,
             created_seq: proposal.created_seq,
             quorum_required: proposal.quorum_required,
             eta: proposal.eta,
+            treasury_action: proposal.treasury_action,
         }
     }
 
@@ -146,6 +160,7 @@ impl StoredProposal {
                 1 => ProposalStatus::Passed,
                 2 => ProposalStatus::Failed,
                 3 => ProposalStatus::Executed,
+                4 => ProposalStatus::Cancelled,
                 _ => panic!("invalid compact proposal status"),
             },
             tally: self.tally,
@@ -153,6 +168,7 @@ impl StoredProposal {
             created_seq: self.created_seq,
             quorum_required: self.quorum_required,
             eta: self.eta,
+            treasury_action: self.treasury_action,
         }
     }
 }
@@ -177,6 +193,14 @@ pub enum Key {
     VotingPeriod,
     /// Minimum credits a proposal creator must hold.
     ProposalThreshold,
+    /// Administrative veto blocks queued proposals and can be cleared by admin.
+    AdministrativeVeto,
+    /// Critical-security pause blocks proposal execution and queued proposals.
+    SecurityPaused,
+    /// Historical participation in basis points, used to dynamically adjust quorum.
+    HistoricalParticipationBps,
+    /// Number of finalized proposals used to maintain historical participation.
+    FinalizedProposalCount,
 }
 
 pub mod errors;
@@ -203,6 +227,13 @@ impl DaoGovernance {
         admin.require_auth();
         env.storage().instance().set(&Key::Admin, &admin);
         env.storage().instance().set(&Key::NextId, &0u64);
+        env.storage().instance().set(
+            &Key::HistoricalParticipationBps,
+            &INITIAL_HISTORICAL_PARTICIPATION_BPS,
+        );
+        env.storage()
+            .instance()
+            .set(&Key::FinalizedProposalCount, &0u64);
     }
 
     /// Grant `credits` voice-credits to `member`.  Admin only.
@@ -270,7 +301,8 @@ impl DaoGovernance {
         let id: u64 = env.storage().instance().get(&Key::NextId).unwrap_or(0);
         env.storage().instance().set(&Key::NextId, &(id + 1));
 
-        let quorum_required = read_total_granted(&env).saturating_mul(QUORUM_BPS) / BPS_DENOMINATOR;
+        let quorum_bps = dynamic_quorum_bps(&env, false);
+        let quorum_required = read_total_granted(&env).saturating_mul(quorum_bps) / BPS_DENOMINATOR;
 
         let proposal = Proposal {
             id,
@@ -284,10 +316,58 @@ impl DaoGovernance {
             created_seq: next_seq(&env),
             quorum_required,
             eta: 0,
+            treasury_action: false,
         };
         Self::store_proposal(&env, &proposal);
         env.events()
             .publish((symbol_short!("propose"),), (creator, id));
+        id
+    }
+
+    /// Create a treasury-action proposal. Treasury proposals use the 30% quorum.
+    pub fn create_treasury_proposal(
+        env: Env,
+        creator: Address,
+        title: String,
+        description: String,
+        duration: u64,
+    ) -> u64 {
+        creator.require_auth();
+
+        let period = if duration == 0 {
+            read_voting_period(&env)
+        } else {
+            check_voting_period(&env, duration);
+            duration
+        };
+
+        if credits_balance(&env, &creator) < read_proposal_threshold(&env) {
+            panic_with_error!(&env, DaoError::BelowProposalThreshold);
+        }
+
+        let id: u64 = env.storage().instance().get(&Key::NextId).unwrap_or(0);
+        env.storage().instance().set(&Key::NextId, &(id + 1));
+
+        let quorum_bps = dynamic_quorum_bps(&env, true);
+        let quorum_required = read_total_granted(&env).saturating_mul(quorum_bps) / BPS_DENOMINATOR;
+
+        let proposal = Proposal {
+            id,
+            creator: creator.clone(),
+            title,
+            description,
+            deadline: env.ledger().timestamp().saturating_add(period),
+            status: ProposalStatus::Active,
+            tally: 0,
+            credits_spent: 0,
+            created_seq: next_seq(&env),
+            quorum_required,
+            eta: 0,
+            treasury_action: true,
+        };
+        Self::store_proposal(&env, &proposal);
+        env.events()
+            .publish((symbol_short!("t_propose"),), (creator, id));
         id
     }
 
@@ -392,6 +472,40 @@ impl DaoGovernance {
         } else {
             proposal.status = ProposalStatus::Failed;
         }
+
+        let total = read_total_granted(&env);
+        let participation_bps = if total == 0 {
+            0
+        } else {
+            proposal
+                .credits_spent
+                .saturating_mul(BPS_DENOMINATOR)
+                .saturating_div(total)
+                .min(BPS_DENOMINATOR)
+        };
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&Key::FinalizedProposalCount)
+            .unwrap_or(0);
+        let old = env
+            .storage()
+            .instance()
+            .get::<Key, u128>(&Key::HistoricalParticipationBps)
+            .unwrap_or(INITIAL_HISTORICAL_PARTICIPATION_BPS);
+        let average = if count == 0 {
+            participation_bps
+        } else {
+            (old.saturating_mul(count as u128)
+                .saturating_add(participation_bps))
+                / (count as u128 + 1)
+        };
+        env.storage()
+            .instance()
+            .set(&Key::HistoricalParticipationBps, &average);
+        env.storage()
+            .instance()
+            .set(&Key::FinalizedProposalCount, &(count.saturating_add(1)));
         Self::store_proposal(&env, &proposal);
         env.events()
             .publish((symbol_short!("finalize"),), (proposal_id, proposal.tally));
@@ -412,6 +526,19 @@ impl DaoGovernance {
         if proposal.status != ProposalStatus::Passed {
             panic_with_error!(&env, DaoError::ProposalClosed);
         }
+        if env
+            .storage()
+            .instance()
+            .get::<Key, bool>(&Key::AdministrativeVeto)
+            .unwrap_or(false)
+            || env
+                .storage()
+                .instance()
+                .get::<Key, bool>(&Key::SecurityPaused)
+                .unwrap_or(false)
+        {
+            panic_with_error!(&env, DaoError::ExecutionBlocked);
+        }
         if env.ledger().timestamp() < proposal.eta {
             panic_with_error!(&env, DaoError::TimelockNotElapsed);
         }
@@ -419,6 +546,63 @@ impl DaoGovernance {
         Self::store_proposal(&env, &proposal);
         env.events()
             .publish((symbol_short!("execute"),), (caller, proposal_id));
+    }
+
+    // ── Veto, security pause, and cancellation ────────────────────────────────
+
+    /// Set or clear an administrative veto. Admin only.
+    pub fn set_administrative_veto(env: Env, vetoed: bool) {
+        Self::only_admin(&env);
+        env.storage()
+            .instance()
+            .set(&Key::AdministrativeVeto, &vetoed);
+        env.events().publish((symbol_short!("veto_set"),), vetoed);
+    }
+
+    /// Pause or resume execution for critical security incidents. Admin only.
+    pub fn set_security_paused(env: Env, paused: bool) {
+        Self::only_admin(&env);
+        env.storage().instance().set(&Key::SecurityPaused, &paused);
+        env.events().publish((symbol_short!("pause_set"),), paused);
+    }
+
+    /// Any token holder may cancel a queued proposal after veto or pause.
+    pub fn cancel_execution(env: Env, caller: Address, proposal_id: u64) {
+        caller.require_auth();
+        if credits_balance(&env, &caller) == 0 && Treasury::get_shares(&env, &caller) == 0 {
+            panic_with_error!(&env, DaoError::Unauthorized);
+        }
+
+        let vetoed = env
+            .storage()
+            .instance()
+            .get::<Key, bool>(&Key::AdministrativeVeto)
+            .unwrap_or(false);
+        let paused = env
+            .storage()
+            .instance()
+            .get::<Key, bool>(&Key::SecurityPaused)
+            .unwrap_or(false);
+        if !vetoed && !paused {
+            panic_with_error!(&env, DaoError::ExecutionBlocked);
+        }
+
+        let mut proposal = load_proposal(&env, proposal_id)
+            .unwrap_or_else(|| panic_with_error!(&env, DaoError::ProposalNotFound));
+        if proposal.status == ProposalStatus::Cancelled
+            || proposal.status == ProposalStatus::Executed
+        {
+            panic_with_error!(&env, DaoError::ProposalCancelled);
+        }
+        if proposal.status != ProposalStatus::Passed {
+            panic_with_error!(&env, DaoError::ProposalClosed);
+        }
+
+        proposal.status = ProposalStatus::Cancelled;
+        proposal.eta = 0;
+        Self::store_proposal(&env, &proposal);
+        env.events()
+            .publish((symbol_short!("cancel"),), (caller, proposal_id));
     }
 
     // ── Configuration (admin) ─────────────────────────────────────────────────
@@ -477,6 +661,27 @@ impl DaoGovernance {
     pub fn get_proposal_threshold(env: Env) -> u128 {
         storage_ttl::bump_instance(&env);
         read_proposal_threshold(&env)
+    }
+
+    pub fn get_historical_participation_bps(env: Env) -> u128 {
+        env.storage()
+            .instance()
+            .get(&Key::HistoricalParticipationBps)
+            .unwrap_or(INITIAL_HISTORICAL_PARTICIPATION_BPS)
+    }
+
+    pub fn get_administrative_veto(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&Key::AdministrativeVeto)
+            .unwrap_or(false)
+    }
+
+    pub fn get_security_paused(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&Key::SecurityPaused)
+            .unwrap_or(false)
     }
 
     // ── Treasury & Ragequit (SC-042) ──────────────────────────────────────────
@@ -622,6 +827,37 @@ fn eligible_credits(env: &Env, voter: &Address, created_seq: u64) -> u128 {
         }
     }
     balance.saturating_sub(late)
+}
+
+fn dynamic_quorum_bps(env: &Env, treasury_action: bool) -> u128 {
+    let base = if treasury_action {
+        TREASURY_QUORUM_BPS
+    } else {
+        STANDARD_QUORUM_BPS
+    };
+    let historical = env
+        .storage()
+        .instance()
+        .get::<Key, u128>(&Key::HistoricalParticipationBps)
+        .unwrap_or(INITIAL_HISTORICAL_PARTICIPATION_BPS);
+
+    // Low participation raises the standard quorum; high participation allows decay.
+    // Treasury proposals remain at the 30% minimum.
+    if treasury_action {
+        return base;
+    }
+    if historical < STANDARD_QUORUM_BPS {
+        let shortfall = STANDARD_QUORUM_BPS.saturating_sub(historical);
+        let bonus = QUORUM_PARTICIPATION_BONUS_BPS.saturating_mul(shortfall) / STANDARD_QUORUM_BPS;
+        base.saturating_add(bonus)
+            .min(STANDARD_QUORUM_BPS.saturating_add(QUORUM_PARTICIPATION_BONUS_BPS))
+    } else {
+        let excess = historical.saturating_sub(STANDARD_QUORUM_BPS);
+        let room = BPS_DENOMINATOR.saturating_sub(STANDARD_QUORUM_BPS);
+        let decay = QUORUM_PARTICIPATION_BONUS_BPS.saturating_mul(excess) / room;
+        base.saturating_sub(decay)
+            .max(STANDARD_QUORUM_BPS.saturating_sub(QUORUM_PARTICIPATION_BONUS_BPS))
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

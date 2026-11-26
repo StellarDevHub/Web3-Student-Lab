@@ -1,13 +1,12 @@
-use contract_events::{publish_standard_event, topic};
+use contract_events::{
+    publish_certificate_admin_initialized, publish_certificate_issued,
+    publish_certificate_reissued, publish_certificate_revoked, publish_certificate_royalty_updated,
+    publish_cohort_anchored,
+};
 use soroban_sdk::{Address, BytesN, Env, String};
 
 pub fn initialized(env: &Env, admin: &Address) {
-    publish_standard_event(
-        env,
-        topic::CERT_ADMIN,
-        admin.clone(),
-        (env.ledger().timestamp(),),
-    );
+    publish_certificate_admin_initialized(env, admin);
 }
 
 pub fn issued(
@@ -18,18 +17,7 @@ pub fn issued(
     course_id: &String,
     content_hash: &BytesN<32>,
 ) {
-    publish_standard_event(
-        env,
-        topic::CERT_ISSUED,
-        owner.clone(),
-        (
-            cert_id.clone(),
-            issuer.clone(),
-            course_id.clone(),
-            content_hash.clone(),
-            env.ledger().timestamp(),
-        ),
-    );
+    publish_certificate_issued(env, owner, issuer, cert_id, course_id, content_hash);
 }
 
 pub fn revoked(
@@ -39,17 +27,7 @@ pub fn revoked(
     cert_id: &BytesN<32>,
     reason: &String,
 ) {
-    publish_standard_event(
-        env,
-        topic::CERT_REVOKED,
-        owner.clone(),
-        (
-            cert_id.clone(),
-            issuer.clone(),
-            reason.clone(),
-            env.ledger().timestamp(),
-        ),
-    );
+    publish_certificate_revoked(env, owner, issuer, cert_id, reason);
 }
 
 pub fn reissued(
@@ -59,17 +37,7 @@ pub fn reissued(
     old_cert_id: &BytesN<32>,
     new_cert_id: &BytesN<32>,
 ) {
-    publish_standard_event(
-        env,
-        topic::CERT_REISSUED,
-        owner.clone(),
-        (
-            old_cert_id.clone(),
-            new_cert_id.clone(),
-            issuer.clone(),
-            env.ledger().timestamp(),
-        ),
-    );
+    publish_certificate_reissued(env, owner, issuer, old_cert_id, new_cert_id);
 }
 
 pub fn royalty_updated(
@@ -79,24 +47,9 @@ pub fn royalty_updated(
     issuer: &Address,
     royalty_bps: u32,
 ) {
-    publish_standard_event(
-        env,
-        topic::CERT_ROYALTY,
-        owner.clone(),
-        (
-            cert_id.clone(),
-            issuer.clone(),
-            royalty_bps,
-            env.ledger().timestamp(),
-        ),
-    );
+    publish_certificate_royalty_updated(env, owner, cert_id, issuer, royalty_bps);
 }
 
 pub fn cohort_anchored(env: &Env, cohort_id: &String, issuer: &Address, root_hash: &BytesN<32>) {
-    publish_standard_event(
-        env,
-        topic::COHORT_ROOT,
-        cohort_id.clone(),
-        (issuer.clone(), root_hash.clone(), env.ledger().timestamp()),
-    );
+    publish_cohort_anchored(env, cohort_id, issuer, root_hash);
 }

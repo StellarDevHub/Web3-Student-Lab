@@ -55,6 +55,7 @@
 | `/mempool-auction` | ✅ Complete | Mempool fee-auction simulator | `mempool-auction/loading.tsx` |
 | `/chain-reorg` | ✅ Complete | Chain-reorganisation visualiser | `chain-reorg/loading.tsx` |
 | `/merkle-tree` | ✅ Complete | Interactive Merkle-tree builder | `merkle-tree/loading.tsx` |
+| `/merkle-simulator` | ✅ Complete | Airdrop Merkle proof explorer (contract-faithful leaf/pair hashing, animated verification, `claim_airdrop` call output) | — |
 | `/stellar-consensus-protocol` | ✅ Complete | SCP / Federated Byzantine Agreement visualiser | — |
 | `/contract-performance` | ✅ Complete | D3-powered contract execution metrics | — |
 

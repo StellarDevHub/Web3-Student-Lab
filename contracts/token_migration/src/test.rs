@@ -1,8 +1,8 @@
 use super::*;
 use soroban_sdk::{
-    contract, contractimpl,
-    testutils::{Address as _, Ledger as _},
-    token, Address, Env,
+    contract, contractimpl, symbol_short,
+    testutils::{Address as _, Events as _, Ledger as _},
+    token, xdr, Address, Env, Symbol, TryFromVal, Val,
 };
 
 /// Minimal legacy token: tracks transfers but otherwise a no-op.
@@ -73,6 +73,65 @@ fn initialize_and_migrate() {
     client.migrate(&user, &100);
     assert_eq!(client.get_user_migrated(&user), 100);
     assert_eq!(client.get_total_migrated(), 100);
+}
+
+#[test]
+fn typed_events_keep_legacy_topics_and_payloads() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, user, _, _) = setup(&env);
+
+    client.migrate(&user, &100);
+
+    let mut migration_event = false;
+    for event in env.events().all().events() {
+        let xdr::ContractEventBody::V0(v0) = &event.body;
+        let topics: Vec<Val> = Vec::try_from_val(&env, &v0.topics).unwrap();
+        if topics.len() == 2
+            && Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap()
+                == symbol_short!("migrated")
+        {
+            assert_eq!(
+                Address::try_from_val(&env, &topics.get(1).unwrap()).unwrap(),
+                user
+            );
+            let data: Vec<Val> = Vec::try_from_val(&env, &v0.data).unwrap();
+            assert_eq!(data.len(), 6);
+            assert_eq!(
+                i128::try_from_val(&env, &data.get(0).unwrap()).unwrap(),
+                100
+            );
+            assert_eq!(
+                i128::try_from_val(&env, &data.get(1).unwrap()).unwrap(),
+                100
+            );
+            assert_eq!(u32::try_from_val(&env, &data.get(2).unwrap()).unwrap(), 1);
+            assert_eq!(u32::try_from_val(&env, &data.get(3).unwrap()).unwrap(), 1);
+            assert!(!bool::try_from_val(&env, &data.get(4).unwrap()).unwrap());
+            assert_eq!(
+                u64::try_from_val(&env, &data.get(5).unwrap()).unwrap(),
+                env.ledger().timestamp()
+            );
+            migration_event = true;
+        }
+    }
+    assert!(migration_event);
+
+    client.migrate_storage_batch(&admin, &10);
+    let mut storage_event = false;
+    for event in env.events().all().events() {
+        let xdr::ContractEventBody::V0(v0) = &event.body;
+        let topics: Vec<Val> = Vec::try_from_val(&env, &v0.topics).unwrap();
+        if topics.len() == 1
+            && Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap()
+                == symbol_short!("stor_mig")
+        {
+            let data = Val::try_from_val(&env, &v0.data).unwrap();
+            assert_eq!(u32::try_from_val(&env, &data).unwrap(), 1);
+            storage_event = true;
+        }
+    }
+    assert!(storage_event);
 }
 
 #[test]
