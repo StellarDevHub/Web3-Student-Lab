@@ -83,9 +83,10 @@ describe('expand-contract planner (#1426)', () => {
       'expand',
       'dual-write',
       'dual-write',
+      'backfill',
       'compat-view',
-      'contract',
     ]);
+    expect(statements.some((s) => s.phase === 'contract')).toBe(false);
     // Every phase here must be lock-free.
     expect(statements.every((s) => s.zeroDowntime)).toBe(true);
   });

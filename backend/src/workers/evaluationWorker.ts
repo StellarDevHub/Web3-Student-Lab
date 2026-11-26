@@ -16,6 +16,7 @@
 
 import { UnrecoverableError, type Job, type Worker } from 'bullmq';
 import { publishExerciseStatus, type ExerciseStatus, type ExerciseStatusEvent } from '../graphql/pubsub.js';
+import { traceEnqueue, traceJob } from '../instrumentation.js';
 import { getQueueManager, QUEUE_NAMES, type QueueManager } from '../queues/queueManager.js';
 import {
   MAX_TEST_CASES,
@@ -120,9 +121,11 @@ export async function enqueueEvaluation(
   manager: QueueManager = getQueueManager(),
   publish: Publish = publishExerciseStatus
 ): Promise<Job<EvaluationJobData>> {
-  const job = await manager.enqueue(QUEUE_NAMES.CONTRACT_EVALUATION, 'evaluate-contract', data, {
-    userId: data.studentId,
-  });
+  const job = await traceEnqueue(QUEUE_NAMES.CONTRACT_EVALUATION, data, (tracedData) =>
+    manager.enqueue(QUEUE_NAMES.CONTRACT_EVALUATION, 'evaluate-contract', tracedData, {
+      userId: data.studentId,
+    }),
+  );
   publish({ studentId: data.studentId, exerciseId: data.exerciseId, jobId: job.id ?? null, status: 'QUEUED' });
   return job;
 }
@@ -131,9 +134,10 @@ let evaluationWorker: Worker<EvaluationJobData, EvaluationJobResult> | null = nu
 
 export function startEvaluationWorker(manager: QueueManager = getQueueManager()) {
   if (!evaluationWorker) {
+    const processor = createEvaluationProcessor();
     evaluationWorker = manager.createWorker<EvaluationJobData, EvaluationJobResult>(
       QUEUE_NAMES.CONTRACT_EVALUATION,
-      createEvaluationProcessor()
+      (job) => traceJob(QUEUE_NAMES.CONTRACT_EVALUATION, job, () => processor(job)),
     );
   }
   return evaluationWorker;

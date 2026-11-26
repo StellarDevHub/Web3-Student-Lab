@@ -1,0 +1,22 @@
+# Image used by k8s/backup-cronjob.yaml.
+#
+# Contains PostgreSQL 15 client/server binaries (pg_basebackup, pg_ctl, psql),
+# the AWS CLI for multi-region S3 uploads, OpenSSL for client-side encryption,
+# and the BE-084 orchestrator script.
+#
+# Build and push from the repository root:
+#   docker build -f k8s/Dockerfile.backup-tools -t ghcr.io/stellar-devhub/db-backup-tools:1.0.0 .
+#   docker push ghcr.io/stellar-devhub/db-backup-tools:1.0.0
+
+FROM postgres:15
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends awscli openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY scripts/db-backup-pitr.sh /opt/backup/db-backup-pitr.sh
+RUN chmod 0555 /opt/backup/db-backup-pitr.sh
+
+# PostgreSQL refuses to run as root. The official postgres image ships UID/GID
+# 999 ("postgres"), which the CronJobs also set explicitly.
+USER postgres

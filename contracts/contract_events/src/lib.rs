@@ -20,7 +20,7 @@
 //!   (as returned by `env.events().all()`) back into structured values, for
 //!   indexers and integration tests.
 
-use soroban_sdk::{Address, BytesN, Env, IntoVal, Symbol, TryFromVal, Val, Vec};
+use soroban_sdk::{Address, BytesN, Env, String, Symbol, TryFromVal, Val, Vec};
 
 #[cfg(test)]
 extern crate std;
@@ -94,17 +94,386 @@ pub mod topic {
     pub const CERT_ADMIN: Symbol = symbol_short!("cert_adm");
 }
 
-/// Publish a schema event with a category symbol and one directly indexed
-/// entity key. The payload should be a typed tuple and include its timestamp.
-pub fn publish_standard_event<I, D>(env: &Env, event_type: Symbol, entity_id: I, data: D)
-where
-    I: IntoVal<Env, Val>,
-    D: IntoVal<Env, Val>,
-{
-    let mut topics = Vec::new(env);
-    topics.push_back(event_type.into_val(env));
-    topics.push_back(entity_id.into_val(env));
-    env.events().publish(topics, data);
+// ---------------------------------------------------------------------------
+// Typed AMM / certificate-lifecycle events
+// ---------------------------------------------------------------------------
+//
+// These events preserve the wire format previously emitted by the untyped
+// `publish_standard_event` helper: `(category, entity)` topics followed by a
+// positional payload (published as a `Vec` by `data_format = "vec"`). Keeping
+// both identical is required so existing indexers continue to decode them.
+
+/// [`topic::AMM_INITIALIZED`] event: an AMM pool was initialized.
+#[soroban_sdk::contractevent(topics = ["amm_init"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AmmInitializedEvent {
+    #[topic]
+    pub admin: Address,
+    pub token_a: Address,
+    pub token_b: Address,
+    pub pool_share: Address,
+    pub fee_collector: Address,
+    pub base_fee_bps: i128,
+    pub ts: u64,
+}
+
+/// [`topic::AMM_GUARDIAN`] event: the AMM guardian changed.
+#[soroban_sdk::contractevent(topics = ["amm_guard"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AmmGuardianChangedEvent {
+    #[topic]
+    pub guardian: Address,
+    pub admin: Address,
+    pub ts: u64,
+}
+
+/// [`topic::LIQUIDITY_ADDED`] event: liquidity was added to a pool.
+#[soroban_sdk::contractevent(topics = ["liq_add"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LiquidityAddedEvent {
+    #[topic]
+    pub provider: Address,
+    pub amount_a: i128,
+    pub amount_b: i128,
+    pub shares: i128,
+    pub reserve_a: i128,
+    pub reserve_b: i128,
+    pub ts: u64,
+}
+
+/// [`topic::LIQUIDITY_REMOVED`] event: liquidity was removed from a pool.
+#[soroban_sdk::contractevent(topics = ["liq_rm"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LiquidityRemovedEvent {
+    #[topic]
+    pub provider: Address,
+    pub amount_a: i128,
+    pub amount_b: i128,
+    pub shares: i128,
+    pub reserve_a: i128,
+    pub reserve_b: i128,
+    pub ts: u64,
+}
+
+/// [`topic::SWAP_A_FOR_B`] event: token A was swapped for token B.
+#[soroban_sdk::contractevent(topics = ["swap_a_b"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SwapAForBEvent {
+    #[topic]
+    pub trader: Address,
+    pub amount_in: i128,
+    pub amount_out: i128,
+    pub fee: i128,
+    pub reserve_a: i128,
+    pub reserve_b: i128,
+    pub ts: u64,
+}
+
+/// [`topic::SWAP_B_FOR_A`] event: token B was swapped for token A.
+#[soroban_sdk::contractevent(topics = ["swap_b_a"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SwapBForAEvent {
+    #[topic]
+    pub trader: Address,
+    pub amount_in: i128,
+    pub amount_out: i128,
+    pub fee: i128,
+    pub reserve_a: i128,
+    pub reserve_b: i128,
+    pub ts: u64,
+}
+
+/// [`topic::CERT_ADMIN`] event: certificate administration was initialized.
+#[soroban_sdk::contractevent(topics = ["cert_adm"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CertificateAdminEvent {
+    #[topic]
+    pub admin: Address,
+    pub ts: u64,
+}
+
+/// [`topic::CERT_ISSUED`] event: a certificate was issued.
+#[soroban_sdk::contractevent(topics = ["cert_iss"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CertificateIssuedEvent {
+    #[topic]
+    pub owner: Address,
+    pub cert_id: BytesN<32>,
+    pub issuer: Address,
+    pub course_id: String,
+    pub content_hash: BytesN<32>,
+    pub ts: u64,
+}
+
+/// [`topic::CERT_REVOKED`] event: a certificate was revoked.
+#[soroban_sdk::contractevent(topics = ["cert_rev"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CertificateRevokedEvent {
+    #[topic]
+    pub owner: Address,
+    pub cert_id: BytesN<32>,
+    pub issuer: Address,
+    pub reason: String,
+    pub ts: u64,
+}
+
+/// [`topic::CERT_REISSUED`] event: a certificate was reissued.
+#[soroban_sdk::contractevent(topics = ["cert_reis"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CertificateReissuedEvent {
+    #[topic]
+    pub owner: Address,
+    pub old_cert_id: BytesN<32>,
+    pub new_cert_id: BytesN<32>,
+    pub issuer: Address,
+    pub ts: u64,
+}
+
+/// [`topic::CERT_ROYALTY`] event: a certificate royalty changed.
+#[soroban_sdk::contractevent(topics = ["cert_roy"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CertificateRoyaltyEvent {
+    #[topic]
+    pub owner: Address,
+    pub cert_id: BytesN<32>,
+    pub issuer: Address,
+    pub royalty_bps: u32,
+    pub ts: u64,
+}
+
+/// [`topic::COHORT_ROOT`] event: a Merkle cohort root was anchored.
+#[soroban_sdk::contractevent(topics = ["cohort_rt"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CohortAnchoredEvent {
+    #[topic]
+    pub cohort_id: String,
+    pub issuer: Address,
+    pub root_hash: BytesN<32>,
+    pub ts: u64,
+}
+
+/// Publish an AMM initialization event.
+pub fn publish_amm_initialized(
+    env: &Env,
+    admin: &Address,
+    token_a: &Address,
+    token_b: &Address,
+    pool_share: &Address,
+    fee_collector: &Address,
+    base_fee_bps: i128,
+) {
+    AmmInitializedEvent {
+        admin: admin.clone(),
+        token_a: token_a.clone(),
+        token_b: token_b.clone(),
+        pool_share: pool_share.clone(),
+        fee_collector: fee_collector.clone(),
+        base_fee_bps,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Publish an AMM guardian change event.
+pub fn publish_amm_guardian_changed(env: &Env, guardian: &Address, admin: &Address) {
+    AmmGuardianChangedEvent {
+        guardian: guardian.clone(),
+        admin: admin.clone(),
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Publish a liquidity addition event.
+#[allow(clippy::too_many_arguments)]
+pub fn publish_liquidity_added(
+    env: &Env,
+    provider: &Address,
+    amount_a: i128,
+    amount_b: i128,
+    shares: i128,
+    reserve_a: i128,
+    reserve_b: i128,
+) {
+    LiquidityAddedEvent {
+        provider: provider.clone(),
+        amount_a,
+        amount_b,
+        shares,
+        reserve_a,
+        reserve_b,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Publish a liquidity removal event.
+#[allow(clippy::too_many_arguments)]
+pub fn publish_liquidity_removed(
+    env: &Env,
+    provider: &Address,
+    amount_a: i128,
+    amount_b: i128,
+    shares: i128,
+    reserve_a: i128,
+    reserve_b: i128,
+) {
+    LiquidityRemovedEvent {
+        provider: provider.clone(),
+        amount_a,
+        amount_b,
+        shares,
+        reserve_a,
+        reserve_b,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Publish a token A → B swap event.
+#[allow(clippy::too_many_arguments)]
+pub fn publish_swap_a_for_b(
+    env: &Env,
+    trader: &Address,
+    amount_in: i128,
+    amount_out: i128,
+    fee: i128,
+    reserve_a: i128,
+    reserve_b: i128,
+) {
+    SwapAForBEvent {
+        trader: trader.clone(),
+        amount_in,
+        amount_out,
+        fee,
+        reserve_a,
+        reserve_b,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Publish a token B → A swap event.
+#[allow(clippy::too_many_arguments)]
+pub fn publish_swap_b_for_a(
+    env: &Env,
+    trader: &Address,
+    amount_in: i128,
+    amount_out: i128,
+    fee: i128,
+    reserve_a: i128,
+    reserve_b: i128,
+) {
+    SwapBForAEvent {
+        trader: trader.clone(),
+        amount_in,
+        amount_out,
+        fee,
+        reserve_a,
+        reserve_b,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Publish certificate administration initialization event.
+pub fn publish_certificate_admin_initialized(env: &Env, admin: &Address) {
+    CertificateAdminEvent {
+        admin: admin.clone(),
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Publish a certificate issuance event.
+#[allow(clippy::too_many_arguments)]
+pub fn publish_certificate_issued(
+    env: &Env,
+    owner: &Address,
+    issuer: &Address,
+    cert_id: &BytesN<32>,
+    course_id: &String,
+    content_hash: &BytesN<32>,
+) {
+    CertificateIssuedEvent {
+        owner: owner.clone(),
+        cert_id: cert_id.clone(),
+        issuer: issuer.clone(),
+        course_id: course_id.clone(),
+        content_hash: content_hash.clone(),
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Publish a certificate revocation event.
+pub fn publish_certificate_revoked(
+    env: &Env,
+    owner: &Address,
+    issuer: &Address,
+    cert_id: &BytesN<32>,
+    reason: &String,
+) {
+    CertificateRevokedEvent {
+        owner: owner.clone(),
+        cert_id: cert_id.clone(),
+        issuer: issuer.clone(),
+        reason: reason.clone(),
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Publish a certificate reissue event.
+pub fn publish_certificate_reissued(
+    env: &Env,
+    owner: &Address,
+    issuer: &Address,
+    old_cert_id: &BytesN<32>,
+    new_cert_id: &BytesN<32>,
+) {
+    CertificateReissuedEvent {
+        owner: owner.clone(),
+        old_cert_id: old_cert_id.clone(),
+        new_cert_id: new_cert_id.clone(),
+        issuer: issuer.clone(),
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Publish a certificate royalty change event.
+pub fn publish_certificate_royalty_updated(
+    env: &Env,
+    owner: &Address,
+    cert_id: &BytesN<32>,
+    issuer: &Address,
+    royalty_bps: u32,
+) {
+    CertificateRoyaltyEvent {
+        owner: owner.clone(),
+        cert_id: cert_id.clone(),
+        issuer: issuer.clone(),
+        royalty_bps,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Publish a Merkle cohort root anchoring event.
+pub fn publish_cohort_anchored(
+    env: &Env,
+    cohort_id: &String,
+    issuer: &Address,
+    root_hash: &BytesN<32>,
+) {
+    CohortAnchoredEvent {
+        cohort_id: cohort_id.clone(),
+        issuer: issuer.clone(),
+        root_hash: root_hash.clone(),
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 // ---------------------------------------------------------------------------
@@ -126,18 +495,17 @@ pub fn publish_trade(
     reserve_after: i128,
     fee: i128,
 ) {
-    env.events().publish(
-        (topic::TRADE, trader.clone()),
-        (
-            action,
-            tokens,
-            reserve,
-            supply_after,
-            reserve_after,
-            fee,
-            env.ledger().timestamp(),
-        ),
-    );
+    TradeEvent {
+        trader: trader.clone(),
+        action,
+        tokens,
+        reserve,
+        supply_after,
+        reserve_after,
+        fee,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish a pool pause / unpause event.
@@ -145,10 +513,12 @@ pub fn publish_trade(
 /// Topics: `(PAUSE, admin)`
 /// Data: `(paused, ts)`
 pub fn publish_pause(env: &Env, admin: &Address, paused: bool) {
-    env.events().publish(
-        (topic::PAUSE, admin.clone()),
-        (paused, env.ledger().timestamp()),
-    );
+    PauseEvent {
+        admin: admin.clone(),
+        paused,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish a fee withdrawal event.
@@ -156,10 +526,13 @@ pub fn publish_pause(env: &Env, admin: &Address, paused: bool) {
 /// Topics: `(FEE_WITHDRAW, admin)`
 /// Data: `(treasury, amount, ts)`
 pub fn publish_fee_withdraw(env: &Env, admin: &Address, treasury: &Address, amount: i128) {
-    env.events().publish(
-        (topic::FEE_WITHDRAW, admin.clone()),
-        (treasury.clone(), amount, env.ledger().timestamp()),
-    );
+    FeeWithdrawEvent {
+        admin: admin.clone(),
+        treasury: treasury.clone(),
+        amount,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish an NFT lock / unlock event.
@@ -173,15 +546,14 @@ pub fn publish_vault_lock(
     token_id: &BytesN<32>,
     locked: bool,
 ) {
-    env.events().publish(
-        (topic::VAULT_LOCK, party.clone()),
-        (
-            nft_contract.clone(),
-            token_id.clone(),
-            locked,
-            env.ledger().timestamp(),
-        ),
-    );
+    VaultLockEvent {
+        party: party.clone(),
+        nft_contract: nft_contract.clone(),
+        token_id: token_id.clone(),
+        locked,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish a fractional shares mint event.
@@ -189,10 +561,13 @@ pub fn publish_vault_lock(
 /// Topics: `(SHARES_MINTED, recipient)`
 /// Data: `(amount, total_shares, ts)`
 pub fn publish_shares_minted(env: &Env, recipient: &Address, amount: i128, total_shares: i128) {
-    env.events().publish(
-        (topic::SHARES_MINTED, recipient.clone()),
-        (amount, total_shares, env.ledger().timestamp()),
-    );
+    SharesMintedEvent {
+        recipient: recipient.clone(),
+        amount,
+        total_shares,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish a buyout bid event.
@@ -201,10 +576,13 @@ pub fn publish_shares_minted(env: &Env, recipient: &Address, amount: i128, total
 /// Data: `(amount, refunded, ts)` — `refunded` is the amount returned to a
 /// previously-leading bidder who was outbid.
 pub fn publish_bid(env: &Env, bidder: &Address, amount: i128, refunded: i128) {
-    env.events().publish(
-        (topic::BID, bidder.clone()),
-        (amount, refunded, env.ledger().timestamp()),
-    );
+    BidEvent {
+        bidder: bidder.clone(),
+        amount,
+        refunded,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish an auction finalize / cancel event.
@@ -219,10 +597,14 @@ pub fn publish_auction(
     total_shares: i128,
     finalized: bool,
 ) {
-    env.events().publish(
-        (topic::AUCTION, winner.clone()),
-        (offer, total_shares, finalized, env.ledger().timestamp()),
-    );
+    AuctionEvent {
+        winner: winner.clone(),
+        offer,
+        total_shares,
+        finalized,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish a payout claim event.
@@ -230,10 +612,12 @@ pub fn publish_auction(
 /// Topics: `(PAYOUT, holder)`
 /// Data: `(amount, ts)`
 pub fn publish_payout(env: &Env, holder: &Address, amount: i128) {
-    env.events().publish(
-        (topic::PAYOUT, holder.clone()),
-        (amount, env.ledger().timestamp()),
-    );
+    PayoutEvent {
+        holder: holder.clone(),
+        amount,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish a submission creation event.
@@ -248,16 +632,15 @@ pub fn publish_submission(
     commit_deadline: u64,
     reveal_deadline: u64,
 ) {
-    env.events().publish(
-        (topic::SUBMISSION, creator.clone()),
-        (
-            submission_id,
-            reward_pool,
-            commit_deadline,
-            reveal_deadline,
-            env.ledger().timestamp(),
-        ),
-    );
+    SubmissionEvent {
+        creator: creator.clone(),
+        submission_id,
+        reward_pool,
+        commit_deadline,
+        reveal_deadline,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish a stake deposit / withdrawal event.
@@ -271,10 +654,14 @@ pub fn publish_stake(
     total_stake: i128,
     deposit: bool,
 ) {
-    env.events().publish(
-        (topic::STAKE, reviewer.clone()),
-        (amount, total_stake, deposit, env.ledger().timestamp()),
-    );
+    StakeEvent {
+        reviewer: reviewer.clone(),
+        amount,
+        total_stake,
+        deposit,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish a review commit event.
@@ -282,10 +669,13 @@ pub fn publish_stake(
 /// Topics: `(COMMIT, reviewer)`
 /// Data: `(submission_id, commitment, ts)`
 pub fn publish_commit(env: &Env, reviewer: &Address, submission_id: u64, commitment: &BytesN<32>) {
-    env.events().publish(
-        (topic::COMMIT, reviewer.clone()),
-        (submission_id, commitment.clone(), env.ledger().timestamp()),
-    );
+    CommitEvent {
+        reviewer: reviewer.clone(),
+        submission_id,
+        commitment: commitment.clone(),
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish a review reveal event.
@@ -293,10 +683,13 @@ pub fn publish_commit(env: &Env, reviewer: &Address, submission_id: u64, commitm
 /// Topics: `(REVEAL, reviewer)`
 /// Data: `(submission_id, grade, ts)`
 pub fn publish_reveal(env: &Env, reviewer: &Address, submission_id: u64, grade: i128) {
-    env.events().publish(
-        (topic::REVEAL, reviewer.clone()),
-        (submission_id, grade, env.ledger().timestamp()),
-    );
+    RevealEvent {
+        reviewer: reviewer.clone(),
+        submission_id,
+        grade,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish a submission finalize event.
@@ -310,10 +703,14 @@ pub fn publish_review_done(
     rewarded: u32,
     slashed: u32,
 ) {
-    env.events().publish(
-        (topic::REVIEW_DONE, submission_id),
-        (median, rewarded, slashed, env.ledger().timestamp()),
-    );
+    ReviewDoneEvent {
+        submission_id,
+        median,
+        rewarded,
+        slashed,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish a stake slash event.
@@ -321,10 +718,13 @@ pub fn publish_review_done(
 /// Topics: `(SLASH, reviewer)`
 /// Data: `(submission_id, amount, ts)`
 pub fn publish_slash(env: &Env, reviewer: &Address, submission_id: u64, amount: i128) {
-    env.events().publish(
-        (topic::SLASH, reviewer.clone()),
-        (submission_id, amount, env.ledger().timestamp()),
-    );
+    SlashEvent {
+        reviewer: reviewer.clone(),
+        submission_id,
+        amount,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish a platform enrollment event (canonical schema for the platform
@@ -333,10 +733,13 @@ pub fn publish_slash(env: &Env, reviewer: &Address, submission_id: u64, amount: 
 /// Topics: `(ENROLL, student)`
 /// Data: `(content_id, revoked, ts)`
 pub fn publish_enrollment(env: &Env, student: &Address, content_id: u64, revoked: bool) {
-    env.events().publish(
-        (topic::ENROLL, student.clone()),
-        (content_id, revoked, env.ledger().timestamp()),
-    );
+    EnrollmentEvent {
+        student: student.clone(),
+        content_id,
+        revoked,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish a milestone achievement event.
@@ -344,10 +747,13 @@ pub fn publish_enrollment(env: &Env, student: &Address, content_id: u64, revoked
 /// Topics: `(MILESTONE, student)`
 /// Data: `(content_id, milestone, ts)`
 pub fn publish_milestone(env: &Env, student: &Address, content_id: u64, milestone: Symbol) {
-    env.events().publish(
-        (topic::MILESTONE, student.clone()),
-        (content_id, milestone, env.ledger().timestamp()),
-    );
+    MilestoneEvent {
+        student: student.clone(),
+        content_id,
+        milestone,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish a certificate mint event.
@@ -355,10 +761,12 @@ pub fn publish_milestone(env: &Env, student: &Address, content_id: u64, mileston
 /// Topics: `(CERT_MINT, student)`
 /// Data: `(course_id, ts)`
 pub fn publish_certificate_mint(env: &Env, student: &Address, course_id: Symbol) {
-    env.events().publish(
-        (topic::CERT_MINT, student.clone()),
-        (course_id, env.ledger().timestamp()),
-    );
+    CertificateMintEvent {
+        student: student.clone(),
+        course_id,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 /// Publish a platform token transfer event.
@@ -366,20 +774,24 @@ pub fn publish_certificate_mint(env: &Env, student: &Address, course_id: Symbol)
 /// Topics: `(TRANSFER, from)`
 /// Data: `(to, amount, ts)`
 pub fn publish_transfer(env: &Env, from: &Address, to: &Address, amount: i128) {
-    env.events().publish(
-        (topic::TRANSFER, from.clone()),
-        (to.clone(), amount, env.ledger().timestamp()),
-    );
+    TransferEvent {
+        from: from.clone(),
+        to: to.clone(),
+        amount,
+        ts: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 // ---------------------------------------------------------------------------
 // Typed decode helpers
 // ---------------------------------------------------------------------------
 
-/// Decoded [`topic::TRADE`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::TRADE`] event.
+#[soroban_sdk::contractevent(topics = ["trade"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TradeEvent {
+    #[topic]
     pub trader: Address,
     pub action: Symbol,
     pub tokens: i128,
@@ -390,29 +802,32 @@ pub struct TradeEvent {
     pub ts: u64,
 }
 
-/// Decoded [`topic::PAUSE`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::PAUSE`] event.
+#[soroban_sdk::contractevent(topics = ["paused"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PauseEvent {
+    #[topic]
     pub admin: Address,
     pub paused: bool,
     pub ts: u64,
 }
 
-/// Decoded [`topic::FEE_WITHDRAW`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::FEE_WITHDRAW`] event.
+#[soroban_sdk::contractevent(topics = ["fee_wd"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FeeWithdrawEvent {
+    #[topic]
     pub admin: Address,
     pub treasury: Address,
     pub amount: i128,
     pub ts: u64,
 }
 
-/// Decoded [`topic::VAULT_LOCK`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::VAULT_LOCK`] event.
+#[soroban_sdk::contractevent(topics = ["vault"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VaultLockEvent {
+    #[topic]
     pub party: Address,
     pub nft_contract: Address,
     pub token_id: BytesN<32>,
@@ -420,30 +835,33 @@ pub struct VaultLockEvent {
     pub ts: u64,
 }
 
-/// Decoded [`topic::SHARES_MINTED`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::SHARES_MINTED`] event.
+#[soroban_sdk::contractevent(topics = ["shares"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SharesMintedEvent {
+    #[topic]
     pub recipient: Address,
     pub amount: i128,
     pub total_shares: i128,
     pub ts: u64,
 }
 
-/// Decoded [`topic::BID`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::BID`] event.
+#[soroban_sdk::contractevent(topics = ["bid"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BidEvent {
+    #[topic]
     pub bidder: Address,
     pub amount: i128,
     pub refunded: i128,
     pub ts: u64,
 }
 
-/// Decoded [`topic::AUCTION`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::AUCTION`] event.
+#[soroban_sdk::contractevent(topics = ["auction"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuctionEvent {
+    #[topic]
     pub winner: Address,
     pub offer: i128,
     pub total_shares: i128,
@@ -451,19 +869,21 @@ pub struct AuctionEvent {
     pub ts: u64,
 }
 
-/// Decoded [`topic::PAYOUT`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::PAYOUT`] event.
+#[soroban_sdk::contractevent(topics = ["payout"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PayoutEvent {
+    #[topic]
     pub holder: Address,
     pub amount: i128,
     pub ts: u64,
 }
 
-/// Decoded [`topic::SUBMISSION`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::SUBMISSION`] event.
+#[soroban_sdk::contractevent(topics = ["submit"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubmissionEvent {
+    #[topic]
     pub creator: Address,
     pub submission_id: u64,
     pub reward_pool: i128,
@@ -472,10 +892,11 @@ pub struct SubmissionEvent {
     pub ts: u64,
 }
 
-/// Decoded [`topic::STAKE`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::STAKE`] event.
+#[soroban_sdk::contractevent(topics = ["stake"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StakeEvent {
+    #[topic]
     pub reviewer: Address,
     pub amount: i128,
     pub total_stake: i128,
@@ -483,30 +904,33 @@ pub struct StakeEvent {
     pub ts: u64,
 }
 
-/// Decoded [`topic::COMMIT`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::COMMIT`] event.
+#[soroban_sdk::contractevent(topics = ["commit"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommitEvent {
+    #[topic]
     pub reviewer: Address,
     pub submission_id: u64,
     pub commitment: BytesN<32>,
     pub ts: u64,
 }
 
-/// Decoded [`topic::REVEAL`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::REVEAL`] event.
+#[soroban_sdk::contractevent(topics = ["reveal"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RevealEvent {
+    #[topic]
     pub reviewer: Address,
     pub submission_id: u64,
     pub grade: i128,
     pub ts: u64,
 }
 
-/// Decoded [`topic::REVIEW_DONE`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::REVIEW_DONE`] event.
+#[soroban_sdk::contractevent(topics = ["rview"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReviewDoneEvent {
+    #[topic]
     pub submission_id: u64,
     pub median: i128,
     pub rewarded: u32,
@@ -514,49 +938,54 @@ pub struct ReviewDoneEvent {
     pub ts: u64,
 }
 
-/// Decoded [`topic::SLASH`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::SLASH`] event.
+#[soroban_sdk::contractevent(topics = ["slash"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SlashEvent {
+    #[topic]
     pub reviewer: Address,
     pub submission_id: u64,
     pub amount: i128,
     pub ts: u64,
 }
 
-/// Decoded [`topic::ENROLL`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::ENROLL`] event.
+#[soroban_sdk::contractevent(topics = ["enroll"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EnrollmentEvent {
+    #[topic]
     pub student: Address,
     pub content_id: u64,
     pub revoked: bool,
     pub ts: u64,
 }
 
-/// Decoded [`topic::MILESTONE`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::MILESTONE`] event.
+#[soroban_sdk::contractevent(topics = ["milestn"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MilestoneEvent {
+    #[topic]
     pub student: Address,
     pub content_id: u64,
     pub milestone: Symbol,
     pub ts: u64,
 }
 
-/// Decoded [`topic::CERT_MINT`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::CERT_MINT`] event.
+#[soroban_sdk::contractevent(topics = ["cert"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CertificateMintEvent {
+    #[topic]
     pub student: Address,
     pub course_id: Symbol,
     pub ts: u64,
 }
 
-/// Decoded [`topic::TRANSFER`] event.
-#[soroban_sdk::contractevent]
+/// Typed [`topic::TRANSFER`] event.
+#[soroban_sdk::contractevent(topics = ["xfer"], data_format = "vec")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TransferEvent {
+    #[topic]
     pub from: Address,
     pub to: Address,
     pub amount: i128,
@@ -845,12 +1274,18 @@ mod tests {
             publish_transfer(&env, &admin, &user, 123);
         }
 
+        pub fn emit_amm_liquidity(env: Env, provider: Address) {
+            publish_liquidity_added(&env, &provider, 100, 200, 150, 1_000, 2_000);
+        }
+
         pub fn emit_standard(env: Env, user: Address) {
-            publish_standard_event(
+            publish_certificate_issued(
                 &env,
-                topic::CERT_ISSUED,
-                user,
-                (42u64, env.ledger().timestamp()),
+                &user,
+                &user,
+                &BytesN::from_array(&env, &[1u8; 32]),
+                &String::from_str(&env, "cs101"),
+                &BytesN::from_array(&env, &[2u8; 32]),
             );
         }
     }
@@ -905,9 +1340,43 @@ mod tests {
             topic::CERT_ISSUED
         );
         assert_eq!(Address::try_from_val(&env, &topics[1]).unwrap(), user);
-        assert_eq!(u64::try_from_val(&env, &payload[0]).unwrap(), 42);
+        assert_eq!(payload.len(), 5);
         assert_eq!(
-            u64::try_from_val(&env, &payload[1]).unwrap(),
+            BytesN::<32>::try_from_val(&env, &payload[0]).unwrap(),
+            BytesN::from_array(&env, &[1u8; 32])
+        );
+        assert_eq!(Address::try_from_val(&env, &payload[1]).unwrap(), user);
+        assert_eq!(
+            u64::try_from_val(&env, &payload[4]).unwrap(),
+            env.ledger().timestamp()
+        );
+    }
+
+    #[test]
+    fn amm_events_keep_canonical_topics_and_positional_payload() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let provider = addr(&env);
+        let id = env.register(EventEmitter, ());
+        EventEmitterClient::new(&env, &id).emit_amm_liquidity(&provider);
+
+        let events = raw_events(&env);
+        assert_eq!(events.len(), 1);
+        let (topics, payload) = &events[0];
+        assert_eq!(topics.len(), 2);
+        assert_eq!(
+            Symbol::try_from_val(&env, &topics[0]).unwrap(),
+            topic::LIQUIDITY_ADDED
+        );
+        assert_eq!(Address::try_from_val(&env, &topics[1]).unwrap(), provider);
+        assert_eq!(payload.len(), 6);
+        assert_eq!(i128::try_from_val(&env, &payload[0]).unwrap(), 100);
+        assert_eq!(i128::try_from_val(&env, &payload[1]).unwrap(), 200);
+        assert_eq!(i128::try_from_val(&env, &payload[2]).unwrap(), 150);
+        assert_eq!(i128::try_from_val(&env, &payload[3]).unwrap(), 1_000);
+        assert_eq!(i128::try_from_val(&env, &payload[4]).unwrap(), 2_000);
+        assert_eq!(
+            u64::try_from_val(&env, &payload[5]).unwrap(),
             env.ledger().timestamp()
         );
     }

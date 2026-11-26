@@ -1,8 +1,8 @@
-import { describe, expect, it, beforeEach, jest } from '@jest/globals';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { NextFunction, Request, Response } from 'express';
 import { workspaceModels } from '../src/db/workspaceModels.js';
-import { validateWorkspaceMembership } from '../src/middleware/workspaceMembership.js';
 import { workspaceContextStorage } from '../src/middleware/WorkspaceContext.js';
+import { validateWorkspaceMembership } from '../src/middleware/workspaceMembership.js';
 
 // Mock the DB module so the middleware can be tested without a database.
 const mockStudentFindUnique = jest.fn();
@@ -87,7 +87,10 @@ describe('Workspace RLS (#1119)', () => {
       const req = makeReq({ user: { id: 'user-1' } });
       const res = makeRes();
       await runMiddleware(req, res);
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(403);
+      expect(res.body).toEqual({
+        error: 'Forbidden: workspace context is required',
+      });
       expect(mockStudentFindUnique).not.toHaveBeenCalled();
     });
 

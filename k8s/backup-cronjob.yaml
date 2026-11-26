@@ -1,0 +1,309 @@
+# ==============================================================================
+# BE-084: PostgreSQL backup, WAL archiving and PITR drill CronJobs
+#
+# Prerequisites
+# -------------
+# 1. Build and push the tools image (bundles pg_basebackup, awscli, openssl and
+#    scripts/db-backup-pitr.sh):
+#      docker build -f k8s/Dockerfile.backup-tools \
+#        -t ghcr.io/stellar-devhub/db-backup-tools:1.0.0 .
+#      docker push ghcr.io/stellar-devhub/db-backup-tools:1.0.0
+#
+# 2. Create the credentials Secret (values are never committed):
+#      kubectl -n web3-student-lab create secret generic db-backup-pitr-secrets \
+#        --from-literal=PGPASSWORD='<postgres-password>' \
+#        --from-literal=BACKUP_ENCRYPTION_KEY="$(openssl rand -hex 32)" \
+#        --from-literal=AWS_ACCESS_KEY_ID='<key>' \
+#        --from-literal=AWS_SECRET_ACCESS_KEY='<secret>'
+#
+#    The encryption key is required to restore. Keep an offline copy in a
+#    secrets manager; losing it makes every backup unrecoverable.
+#
+# 3. Configure continuous WAL archiving in the PostgreSQL pods themselves:
+#      archive_mode = on
+#      archive_command = '/opt/backup/db-backup-pitr.sh wal-archive %p %f'
+#      archive_timeout = 30
+#    The database pod must run this image (or mount the script + AWS creds) so
+#    archive_command can encrypt and upload each segment. Without this, only
+#    the daily base backups exist and RPO cannot be met.
+#
+# 4. Create an S3 lifecycle rule for <prefix>/wal/ (e.g. expire after 14 days)
+#    and keep DEEP_ARCHIVE cold backups for the compliance retention period.
+#
+# CronJobs
+# --------
+#   postgres-base-backup     daily full physical backup
+#   postgres-wal-health      every 15 min, fails when the WAL archive lags the
+#                            RPO budget (alert on this CronJob's failures)
+#   postgres-pitr-drill      daily restore-to-staging drill with RTO/RPO gates
+#   postgres-cold-storage    monthly move of old backups to DEEP_ARCHIVE
+# ==============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-backup-pitr-config
+  namespace: web3-student-lab
+  labels:
+    app.kubernetes.io/part-of: web3-student-lab
+    app.kubernetes.io/component: database-backup
+data:
+  PGHOST: postgres-primary.web3-student-lab.svc.cluster.local
+  PGPORT: "5432"
+  PGUSER: postgres
+  PGDATABASE: postgres
+  BACKUP_STORAGE: s3
+  # Comma-separated. Every object is written to all buckets; reads use the first.
+  BACKUP_S3_BUCKETS: web3-lab-backups-us-east-1,web3-lab-backups-eu-west-1
+  BACKUP_S3_PREFIX: pitr
+  BACKUP_S3_REGION: us-east-1
+  BACKUP_RETENTION_DAYS: "30"
+  BACKUP_WAL_RETENTION_DAYS: "14"
+  BACKUP_COLD_AFTER_DAYS: "14"
+  BACKUP_ENCRYPTION: openssl
+  BACKUP_RTO_BUDGET_SECONDS: "1800"
+  BACKUP_RPO_BUDGET_SECONDS: "300"
+  STAGING_PORT: "55433"
+  PITR_VERIFY_SQL: SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-backup-scratch
+  namespace: web3-student-lab
+  labels:
+    app.kubernetes.io/part-of: web3-student-lab
+    app.kubernetes.io/component: database-backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      # Size for a full uncompressed restore of the production database plus
+      # the extracted base backup. Increase before the database grows past it.
+      storage: 100Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-base-backup
+  namespace: web3-student-lab
+  labels:
+    app.kubernetes.io/part-of: web3-student-lab
+    app.kubernetes.io/component: database-backup
+spec:
+  schedule: "0 2 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 900
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 7
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: web3-student-lab
+            app.kubernetes.io/component: database-backup
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+            fsGroup: 999
+          containers:
+            - name: base-backup
+              image: ghcr.io/stellar-devhub/db-backup-tools:1.0.0
+              imagePullPolicy: IfNotPresent
+              command: ["/opt/backup/db-backup-pitr.sh", "base-backup"]
+              envFrom:
+                - configMapRef:
+                    name: db-backup-pitr-config
+                - secretRef:
+                    name: db-backup-pitr-secrets
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 256Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-wal-health
+  namespace: web3-student-lab
+  labels:
+    app.kubernetes.io/part-of: web3-student-lab
+    app.kubernetes.io/component: database-backup
+spec:
+  schedule: "*/15 * * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 7
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: web3-student-lab
+            app.kubernetes.io/component: database-backup
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+          containers:
+            - name: wal-health
+              image: ghcr.io/stellar-devhub/db-backup-tools:1.0.0
+              imagePullPolicy: IfNotPresent
+              # Exits non-zero when the newest archived WAL is older than
+              # BACKUP_RPO_BUDGET_SECONDS. Alert on this CronJob's failures.
+              command: ["/opt/backup/db-backup-pitr.sh", "status", "--check"]
+              envFrom:
+                - configMapRef:
+                    name: db-backup-pitr-config
+                - secretRef:
+                    name: db-backup-pitr-secrets
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 250m
+                  memory: 256Mi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-pitr-drill
+  namespace: web3-student-lab
+  labels:
+    app.kubernetes.io/part-of: web3-student-lab
+    app.kubernetes.io/component: database-backup
+spec:
+  # Daily restore drill. The target is a timestamp that definitely has WAL
+  # records after it (the platform writes continuously); adjust the offset if
+  # your workload is bursty. Keep at least one WAL segment after the target.
+  schedule: "0 3 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 900
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 7
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: web3-student-lab
+            app.kubernetes.io/component: database-backup
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+            fsGroup: 999
+          initContainers:
+            - name: prepare-scratch
+              image: ghcr.io/stellar-devhub/db-backup-tools:1.0.0
+              command:
+                - /bin/bash
+                - -c
+                - find /scratch -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+              volumeMounts:
+                - name: scratch
+                  mountPath: /scratch
+          containers:
+            - name: pitr-drill
+              image: ghcr.io/stellar-devhub/db-backup-tools:1.0.0
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -euo pipefail
+                  target="$(date -u -d '2 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
+                  exec /opt/backup/db-backup-pitr.sh drill \
+                    --target-time "$target" \
+                    --dest /scratch/restore \
+                    --port "${STAGING_PORT}"
+              env:
+                - name: PITR_REPORT_PATH
+                  value: /scratch/pitr-drill-report.json
+                - name: PITR_KEEP_RESTORE
+                  value: "false"
+              envFrom:
+                - configMapRef:
+                    name: db-backup-pitr-config
+                - secretRef:
+                    name: db-backup-pitr-secrets
+              volumeMounts:
+                - name: scratch
+                  mountPath: /scratch
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 1Gi
+                limits:
+                  cpu: "2"
+                  memory: 4Gi
+          volumes:
+            - name: scratch
+              persistentVolumeClaim:
+                claimName: db-backup-scratch
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-cold-storage
+  namespace: web3-student-lab
+  labels:
+    app.kubernetes.io/part-of: web3-student-lab
+    app.kubernetes.io/component: database-backup
+spec:
+  schedule: "0 4 1 * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 900
+  successfulJobsHistoryLimit: 6
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: web3-student-lab
+            app.kubernetes.io/component: database-backup
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+          containers:
+            - name: cold-storage
+              image: ghcr.io/stellar-devhub/db-backup-tools:1.0.0
+              imagePullPolicy: IfNotPresent
+              command: ["/opt/backup/db-backup-pitr.sh", "cold-storage"]
+              envFrom:
+                - configMapRef:
+                    name: db-backup-pitr-config
+                - secretRef:
+                    name: db-backup-pitr-secrets
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi

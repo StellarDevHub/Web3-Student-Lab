@@ -52,6 +52,9 @@ test.describe('offline experience', () => {
     context,
   }) => {
     await page.goto('/offline', { waitUntil: 'domcontentloaded' });
+    // Wait until the client effect has attached online/offline listeners. The
+    // page heading is server rendered and can appear before hydration finishes.
+    await expect(page.locator('[data-offline-ready="true"]')).toBeVisible();
 
     // WalletGate would otherwise redirect every non-"/" route to its own
     // "Authentication Required" screen for a disconnected wallet.

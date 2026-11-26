@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { devtools, logger, securePersist } from './middleware';
 import { authAPI, User } from '@/lib/api';
+import { clearSessionStorage, storeEncryptedSession } from '@/lib/credentialStorage';
 
 export interface AuthState {
   user: User | null;
@@ -48,9 +49,12 @@ export const useAuthStore = create<AuthStore>()(
                 isLoading: false,
               });
 
-              // Store in localStorage for persistence
-              localStorage.setItem('token', response.token);
-              localStorage.setItem('user', JSON.stringify(response.user));
+              await storeEncryptedSession({
+                token: response.token,
+                accessToken: response.accessToken ?? response.token,
+                refreshToken: response.refreshToken ?? null,
+                user: response.user,
+              });
             } catch (err: unknown) {
               const message = err instanceof Error ? err.message : 'Login failed';
               set({ error: message, isLoading: false });
@@ -80,8 +84,12 @@ export const useAuthStore = create<AuthStore>()(
                 isLoading: false,
               });
 
-              localStorage.setItem('token', response.token);
-              localStorage.setItem('user', JSON.stringify(response.user));
+              await storeEncryptedSession({
+                token: response.token,
+                accessToken: response.accessToken ?? response.token,
+                refreshToken: response.refreshToken ?? null,
+                user: response.user,
+              });
             } catch (err: unknown) {
               const message = err instanceof Error ? err.message : 'Registration failed';
               set({ error: message, isLoading: false });
@@ -97,8 +105,7 @@ export const useAuthStore = create<AuthStore>()(
               error: null,
             });
 
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
+            clearSessionStorage();
             window.location.href = '/auth/login';
           },
 
@@ -111,13 +118,20 @@ export const useAuthStore = create<AuthStore>()(
             if (currentUser) {
               const updatedUser = { ...currentUser, ...userData };
               set({ user: updatedUser });
-              localStorage.setItem('user', JSON.stringify(updatedUser));
+              storeEncryptedSession({
+                token: get().token,
+                accessToken: get().token,
+                refreshToken: null,
+                user: updatedUser,
+              }).catch((storageError) => {
+                console.error('Failed to update encrypted auth session:', storageError);
+              });
             }
           },
         }),
         {
           name: 'auth-storage',
-          exclude: ['error', 'isLoading'], // Don't persist these
+          exclude: ['error', 'isLoading', 'token', 'user', 'isAuthenticated'],
         }
       ),
       { name: 'auth-store', enabled: true }
