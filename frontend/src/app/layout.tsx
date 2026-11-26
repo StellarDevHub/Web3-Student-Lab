@@ -22,12 +22,54 @@ import { Providers as ThemeProvider } from '@/lib/theme/providers';
 import { TutorialProvider } from '@/contexts/TutorialContext';
 import { WalletProvider } from '@/contexts/WalletContext';
 import { Web3OnboardingProvider } from '@/contexts/Web3OnboardingContext';
-import { I18nProvider } from '@/i18n';
+import { I18nProvider, type Locale, getDir } from '@/i18n';
 import { SocketWorkerProvider } from './providers';
 import type { Metadata, Viewport } from 'next';
 import { headers } from 'next/headers';
 import { Inter, Outfit } from 'next/font/google';
+import { cookies, headers } from 'next/headers';
 import './globals.css';
+
+/** RTL locale BCP-47 tags used to detect direction from Accept-Language. */
+const RTL_LANG_PREFIXES = ['ar', 'he', 'fa'];
+
+/**
+ * Determine the visitor's locale at request time (server-side) so we can set
+ * the correct `lang` and `dir` attributes before the first paint, avoiding a
+ * direction flash on RTL languages.
+ *
+ * Priority: `app:locale` cookie → `Accept-Language` header → 'en'.
+ */
+function resolveServerLocale(): { locale: Locale; dir: 'ltr' | 'rtl'; langTag: string } {
+  const localeTagMap: Record<Locale, string> = {
+    en: 'en-US', es: 'es-ES', zh: 'zh-CN', ar: 'ar-SA', he: 'he-IL', fa: 'fa-IR',
+  };
+  const validLocales = new Set<Locale>(['en', 'es', 'zh', 'ar', 'he', 'fa']);
+
+  let locale: Locale = 'en';
+
+  try {
+    const cookieStore = cookies();
+    const cookieVal = cookieStore.get('app:locale')?.value;
+    if (cookieVal && validLocales.has(cookieVal as Locale)) {
+      locale = cookieVal as Locale;
+    } else {
+      const headerStore = headers();
+      const acceptLang = headerStore.get('accept-language') ?? '';
+      const primary = acceptLang.split(',')[0]?.split(';')[0]?.trim().toLowerCase() ?? '';
+      if (primary.startsWith('ar')) locale = 'ar';
+      else if (primary.startsWith('he')) locale = 'he';
+      else if (primary.startsWith('fa')) locale = 'fa';
+      else if (primary.startsWith('es')) locale = 'es';
+      else if (primary.startsWith('zh')) locale = 'zh';
+    }
+  } catch {
+    // During static generation cookies/headers are unavailable; fall back to 'en'.
+  }
+
+  const dir = RTL_LANG_PREFIXES.some((p) => locale.startsWith(p)) ? 'rtl' : 'ltr';
+  return { locale, dir, langTag: localeTagMap[locale] };
+}
 
 // Self-hosted at build time: no render-blocking Google Fonts stylesheet or
 // extra origin connections on the critical path (FE-050 / LCP).
@@ -61,11 +103,13 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { langTag, dir } = resolveServerLocale();
   const nonce = (await headers()).get('x-nonce') ?? undefined;
 
   return (
     <html
-      lang="en"
+      lang={langTag}
+      dir={dir}
       suppressHydrationWarning
       data-scroll-behavior="smooth"
       className={`${inter.variable} ${outfit.variable} overflow-x-hidden`}
