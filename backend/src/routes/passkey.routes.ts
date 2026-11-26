@@ -1,17 +1,18 @@
 /**
- * Passkey/WebAuthn Routes
+ * Passkey/WebAuthn Routes (BE-070)
  *
- * Express API routes for WebAuthn passkey registration and authentication.
- * These routes handle the server-side operations for passwordless authentication
- * using biometric passkeys (TouchID, FaceID, Windows Hello).
+ * Express API routes for FIDO2/WebAuthn passkey registration and authentication,
+ * powered by `@simplewebauthn/server` with strict 120s Redis challenge TTLs,
+ * authenticator attachment enforcement, and cloned authenticator lockout.
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { body, query, validationResult } from 'express-validator';
-import { getPasskeyService } from '../services/passkey.service.js';
-
-const router = Router();
-const passkeyService = getPasskeyService();
+import { body, validationResult } from 'express-validator';
+import {
+  getPasskeyService,
+  PasskeyError,
+  PasskeyService,
+} from '../auth/passkey.service.js';
 
 // ---------------------------------------------------------------------------
 // Validation middleware
@@ -30,274 +31,208 @@ const handleValidationErrors = (req: Request, res: Response, next: NextFunction)
 };
 
 // ---------------------------------------------------------------------------
-// Registration routes
+// Router factory
 // ---------------------------------------------------------------------------
 
-/**
- * POST /api/passkey/register/challenge
- *
- * Generate a registration challenge for creating a new passkey.
- *
- * Request body:
- *   - userId: string (required) - The user's unique identifier
- *   - userName: string (required) - The user's email or username
- *   - userDisplayName: string (required) - The user's display name
- *
- * Response:
- *   - challenge: PublicKeyCredentialCreationOptions - For client-side WebAuthn API
- */
-router.post(
-  '/register/challenge',
-  [
-    body('userId').isString().notEmpty().withMessage('userId is required'),
-    body('userName').isEmail().withMessage('userName must be a valid email'),
-    body('userDisplayName').isString().notEmpty().withMessage('userDisplayName is required'),
-  ],
-  handleValidationErrors,
-  async (req: Request, res: Response) => {
-    try {
-      const { userId, userName, userDisplayName } = req.body;
+export function createPasskeyRouter(service?: PasskeyService): Router {
+  const router = Router();
+  const getService = () => service ?? getPasskeyService();
 
-      const challenge = await passkeyService.generateRegistrationChallenge(
-        userId,
-        userName,
-        userDisplayName
-      );
+  // -------------------------------------------------------------------------
+  // Registration routes
+  // -------------------------------------------------------------------------
 
-      // Convert Buffer fields to base64 for JSON serialization
-      const serializableChallenge = {
-        ...challenge,
-        challenge: challenge.challenge.toString('base64'),
-        user: {
-          ...challenge.user,
-          id: challenge.user.id.toString('base64'),
-        },
-        excludeCredentials: challenge.excludeCredentials.map((cred) => ({
-          ...cred,
-          id: cred.id.toString('base64'),
-        })),
-      };
+  /**
+   * POST /api/passkey/register/challenge
+   *
+   * Generate a FIDO2 registration challenge stored in Redis with a 120s TTL.
+   */
+  router.post(
+    '/register/challenge',
+    [
+      body('userId').isString().notEmpty().withMessage('userId is required'),
+      body('userName').isEmail().withMessage('userName must be a valid email'),
+      body('userDisplayName').isString().notEmpty().withMessage('userDisplayName is required'),
+    ],
+    handleValidationErrors,
+    async (req: Request, res: Response) => {
+      try {
+        const { userId, userName, userDisplayName } = req.body;
+        const options = await getService().generateRegistrationChallenge(
+          userId,
+          userName,
+          userDisplayName
+        );
 
-      res.json({
-        success: true,
-        data: serializableChallenge,
-      });
-    } catch (error) {
-      console.error('Registration challenge error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to generate registration challenge',
-      });
+        res.json({
+          success: true,
+          data: options,
+        });
+      } catch (error) {
+        console.error('Registration challenge error:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to generate registration challenge',
+        });
+      }
     }
-  }
-);
+  );
 
-/**
- * POST /api/passkey/register/verify
- *
- * Verify and store a registration response.
- *
- * Request body:
- *   - userId: string (required) - The user who registered
- *   - challenge: string (required) - The original challenge
- *   - credentialId: string (required) - The credential ID from the authenticator
- *   - attestationObject: string (required) - The attestation object
- *   - clientDataJSON: string (required) - The client data JSON
- *   - publicKeyX: string (required) - The public key X coordinate
- *   - publicKeyY: string (required) - The public key Y coordinate
- *   - signCount: number (required) - The signature counter
- *
- * Response:
- *   - credentialId: string - The stored credential ID
- *   - publicKeyX: string - The public key X coordinate
- *   - publicKeyY: string - The public key Y coordinate
- *   - signCount: number - The signature counter
- *   - deviceName: string | undefined - The device name (if available)
- */
-router.post(
-  '/register/verify',
-  [
-    body('userId').isString().notEmpty().withMessage('userId is required'),
-    body('challenge').isString().notEmpty().withMessage('challenge is required'),
-    body('credentialId').isString().notEmpty().withMessage('credentialId is required'),
-    body('attestationObject').isString().notEmpty().withMessage('attestationObject is required'),
-    body('clientDataJSON').isString().notEmpty().withMessage('clientDataJSON is required'),
-    body('publicKeyX').isString().isLength({ min: 64, max: 64 }).withMessage('publicKeyX must be 64 hex chars'),
-    body('publicKeyY').isString().isLength({ min: 64, max: 64 }).withMessage('publicKeyY must be 64 hex chars'),
-    body('signCount').isInt({ min: 0 }).withMessage('signCount must be a non-negative integer'),
-  ],
-  handleValidationErrors,
-  async (req: Request, res: Response) => {
-    try {
-      const {
-        userId,
-        challenge,
-        credentialId,
-        attestationObject,
-        clientDataJSON,
-        publicKeyX,
-        publicKeyY,
-        signCount,
-      } = req.body;
+  /**
+   * POST /api/passkey/register/verify
+   *
+   * Verify a WebAuthn registration response (RegistrationResponseJSON).
+   * Rejects expired/replayed challenges with 401 Unauthorized.
+   */
+  router.post(
+    '/register/verify',
+    [
+      body('userId').isString().notEmpty().withMessage('userId is required'),
+      body('challenge').isString().notEmpty().withMessage('challenge is required'),
+      body('response').isObject().withMessage('response must be a WebAuthn RegistrationResponseJSON object'),
+      body('response.id').isString().notEmpty().withMessage('response.id is required'),
+      body('response.rawId').isString().notEmpty().withMessage('response.rawId is required'),
+      body('response.response.clientDataJSON')
+        .isString()
+        .notEmpty()
+        .withMessage('response.response.clientDataJSON is required'),
+      body('response.response.attestationObject')
+        .isString()
+        .notEmpty()
+        .withMessage('response.response.attestationObject is required'),
+      body('deviceName').optional().isString(),
+    ],
+    handleValidationErrors,
+    async (req: Request, res: Response) => {
+      try {
+        const { userId, challenge, response, deviceName } = req.body;
+        const result = await getService().verifyRegistration(
+          userId,
+          challenge,
+          response,
+          deviceName
+        );
 
-      const result = await passkeyService.verifyRegistration(userId, challenge, {
-        credentialId,
-        attestationObject,
-        clientDataJSON,
-        publicKeyX,
-        publicKeyY,
-        signCount,
-      });
-
-      res.json({
-        success: true,
-        data: result,
-      });
-    } catch (error: any) {
-      console.error('Registration verification error:', error);
-      res.status(400).json({
-        success: false,
-        error: error.message || 'Failed to verify registration',
-      });
+        res.json({
+          success: true,
+          data: result,
+        });
+      } catch (error: any) {
+        if (error instanceof PasskeyError) {
+          return res.status(error.statusCode).json({
+            success: false,
+            code: error.code,
+            error: error.message,
+          });
+        }
+        console.error('Registration verification error:', error);
+        res.status(400).json({
+          success: false,
+          error: error?.message || 'Failed to verify registration',
+        });
+      }
     }
-  }
-);
+  );
 
-// ---------------------------------------------------------------------------
-// Authentication routes
-// ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Authentication routes
+  // -------------------------------------------------------------------------
 
-/**
- * POST /api/passkey/authenticate/challenge
- *
- * Generate an authentication challenge for signing in.
- *
- * Request body:
- *   - userId: string (optional) - The user's ID to narrow credential list
- *
- * Response:
- *   - challenge: PublicKeyCredentialRequestOptions - For client-side WebAuthn API
- */
-router.post(
-  '/authenticate/challenge',
-  [
-    body('userId').optional().isString(),
-  ],
-  handleValidationErrors,
-  async (req: Request, res: Response) => {
-    try {
-      const { userId } = req.body;
+  /**
+   * POST /api/passkey/authenticate/challenge
+   *
+   * Generate a FIDO2 authentication challenge stored in Redis with a 120s TTL.
+   */
+  router.post(
+    '/authenticate/challenge',
+    [body('userId').optional().isString()],
+    handleValidationErrors,
+    async (req: Request, res: Response) => {
+      try {
+        const { userId } = req.body;
+        const options = await getService().generateAuthenticationChallenge(userId);
 
-      const challenge = await passkeyService.generateAuthenticationChallenge(userId);
-
-      // Convert Buffer fields to base64 for JSON serialization
-      const serializableChallenge = {
-        ...challenge,
-        challenge: challenge.challenge.toString('base64'),
-        allowCredentials: challenge.allowCredentials.map((cred) => ({
-          ...cred,
-          id: cred.id.toString('base64'),
-        })),
-      };
-
-      res.json({
-        success: true,
-        data: serializableChallenge,
-      });
-    } catch (error) {
-      console.error('Authentication challenge error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to generate authentication challenge',
-      });
+        res.json({
+          success: true,
+          data: options,
+        });
+      } catch (error) {
+        console.error('Authentication challenge error:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to generate authentication challenge',
+        });
+      }
     }
-  }
-);
+  );
 
-/**
- * POST /api/passkey/authenticate/verify
- *
- * Verify an authentication response.
- *
- * Request body:
- *   - challenge: string (required) - The original challenge
- *   - credentialId: string (required) - The credential ID
- *   - authenticatorData: string (required) - The authenticator data
- *   - clientDataJSON: string (required) - The client data JSON
- *   - signature: string (required) - The signature
- *   - signCount: number (required) - The signature counter
- *
- * Response:
- *   - verified: boolean - Whether authentication was successful
- *   - credentialId: string - The credential ID
- *   - signCount: number - The updated sign count
- */
-router.post(
-  '/authenticate/verify',
-  [
-    body('challenge').isString().notEmpty().withMessage('challenge is required'),
-    body('credentialId').isString().notEmpty().withMessage('credentialId is required'),
-    body('authenticatorData').isString().notEmpty().withMessage('authenticatorData is required'),
-    body('clientDataJSON').isString().notEmpty().withMessage('clientDataJSON is required'),
-    body('signature').isString().notEmpty().withMessage('signature is required'),
-    body('signCount').isInt({ min: 0 }).withMessage('signCount must be a non-negative integer'),
-  ],
-  handleValidationErrors,
-  async (req: Request, res: Response) => {
-    try {
-      const {
-        challenge,
-        credentialId,
-        authenticatorData,
-        clientDataJSON,
-        signature,
-        signCount,
-      } = req.body;
+  /**
+   * POST /api/passkey/authenticate/verify
+   *
+   * Verify a WebAuthn authentication response (AuthenticationResponseJSON).
+   * - Expired or replayed challenges -> 401 Unauthorized
+   * - Cloned authenticators (falling counter) -> 403 Forbidden + immediate lockout
+   */
+  router.post(
+    '/authenticate/verify',
+    [
+      body('challenge').isString().notEmpty().withMessage('challenge is required'),
+      body('response')
+        .isObject()
+        .withMessage('response must be a WebAuthn AuthenticationResponseJSON object'),
+      body('response.id').isString().notEmpty().withMessage('response.id is required'),
+      body('response.rawId').isString().notEmpty().withMessage('response.rawId is required'),
+      body('response.response.authenticatorData')
+        .isString()
+        .notEmpty()
+        .withMessage('response.response.authenticatorData is required'),
+      body('response.response.clientDataJSON')
+        .isString()
+        .notEmpty()
+        .withMessage('response.response.clientDataJSON is required'),
+      body('response.response.signature')
+        .isString()
+        .notEmpty()
+        .withMessage('response.response.signature is required'),
+    ],
+    handleValidationErrors,
+    async (req: Request, res: Response) => {
+      try {
+        const { challenge, response } = req.body;
+        const result = await getService().verifyAuthentication(challenge, response);
 
-      const result = await passkeyService.verifyAuthentication(challenge, {
-        credentialId,
-        authenticatorData,
-        clientDataJSON,
-        signature,
-        signCount,
-      });
-
-      res.json({
-        success: true,
-        data: result,
-      });
-    } catch (error: any) {
-      console.error('Authentication verification error:', error);
-      res.status(400).json({
-        success: false,
-        error: error.message || 'Failed to verify authentication',
-      });
+        res.json({
+          success: true,
+          data: result,
+        });
+      } catch (error: any) {
+        if (error instanceof PasskeyError) {
+          return res.status(error.statusCode).json({
+            success: false,
+            code: error.code,
+            error: error.message,
+          });
+        }
+        console.error('Authentication verification error:', error);
+        res.status(400).json({
+          success: false,
+          error: error?.message || 'Failed to verify authentication',
+        });
+      }
     }
-  }
-);
+  );
 
-// ---------------------------------------------------------------------------
-// Credential management routes
-// ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Credential management routes
+  // -------------------------------------------------------------------------
 
-/**
- * GET /api/passkey/credentials/:userId
- *
- * Get all credentials for a user.
- *
- * Response:
- *   - credentials: PasskeyCredential[] - The user's credentials
- */
-router.get(
-  '/credentials/:userId',
-  [
-    // No validation needed, userId is a path parameter
-  ],
-  async (req: Request, res: Response) => {
+  /**
+   * GET /api/passkey/credentials/:userId
+   */
+  router.get('/credentials/:userId', async (req: Request, res: Response) => {
     try {
       const userId = req.params.userId as string;
-
-      const credentials = await passkeyService.getUserCredentials(userId);
+      const credentials = await getService().getUserCredentials(userId);
 
       res.json({
         success: true,
@@ -305,6 +240,8 @@ router.get(
           id: cred.id,
           credentialId: cred.credentialId,
           deviceName: cred.deviceName,
+          authenticatorAttachment: cred.authenticatorAttachment,
+          locked: cred.locked,
           createdAt: cred.createdAt,
           lastUsedAt: cred.lastUsedAt,
         })),
@@ -316,24 +253,15 @@ router.get(
         error: 'Failed to get credentials',
       });
     }
-  }
-);
+  });
 
-/**
- * GET /api/passkey/credentials/:userId/count
- *
- * Get the count of credentials for a user.
- *
- * Response:
- *   - count: number - The number of credentials
- */
-router.get(
-  '/credentials/:userId/count',
-  async (req: Request, res: Response) => {
+  /**
+   * GET /api/passkey/credentials/:userId/count
+   */
+  router.get('/credentials/:userId/count', async (req: Request, res: Response) => {
     try {
       const userId = req.params.userId as string;
-
-      const count = await passkeyService.getUserCredentialCount(userId);
+      const count = await getService().getUserCredentialCount(userId);
 
       res.json({
         success: true,
@@ -346,24 +274,15 @@ router.get(
         error: 'Failed to get credential count',
       });
     }
-  }
-);
+  });
 
-/**
- * DELETE /api/passkey/credentials/:credentialId
- *
- * Delete a credential.
- *
- * Response:
- *   - deleted: boolean - Whether the credential was deleted
- */
-router.delete(
-  '/credentials/:credentialId',
-  async (req: Request, res: Response) => {
+  /**
+   * DELETE /api/passkey/credentials/:credentialId
+   */
+  router.delete('/credentials/:credentialId', async (req: Request, res: Response) => {
     try {
       const credentialId = req.params.credentialId as string;
-
-      const deleted = await passkeyService.deleteCredential(credentialId);
+      const deleted = await getService().deleteCredential(credentialId);
 
       res.json({
         success: true,
@@ -376,27 +295,30 @@ router.delete(
         error: 'Failed to delete credential',
       });
     }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// Health check
-// ---------------------------------------------------------------------------
-
-/**
- * GET /api/passkey/health
- *
- * Check if the passkey service is healthy.
- */
-router.get('/health', async (_req: Request, res: Response) => {
-  res.json({
-    success: true,
-    data: {
-      service: 'passkey',
-      status: 'healthy',
-      rpId: 'web3-student-lab.com',
-    },
   });
-});
 
+  // -------------------------------------------------------------------------
+  // Health check
+  // -------------------------------------------------------------------------
+
+  /**
+   * GET /api/passkey/health
+   */
+  router.get('/health', async (_req: Request, res: Response) => {
+    const config = getService().getConfig();
+    res.json({
+      success: true,
+      data: {
+        service: 'passkey',
+        status: 'healthy',
+        rpId: config.rpId,
+        challengeTtlSeconds: config.challengeTtlSeconds,
+      },
+    });
+  });
+
+  return router;
+}
+
+const router = createPasskeyRouter();
 export default router;
