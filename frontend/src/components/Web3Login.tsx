@@ -64,10 +64,18 @@ export const Web3Login: React.FC<Web3LoginProps> = ({
 
   // Check if already connected on mount
   React.useEffect(() => {
-    const storedUser = web3AuthService.getStoredUser();
-    if (storedUser) {
-      setWalletAddress(storedUser.email);
-    }
+    let active = true;
+    web3AuthService
+      .getStoredUser()
+      .then((storedUser) => {
+        if (active && storedUser) setWalletAddress(storedUser.email);
+      })
+      .catch((storageError) => {
+        console.error('Failed to read encrypted Web3 session:', storageError);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (

@@ -28,8 +28,8 @@ function useSafeAuth() {
   } catch {
     return {
       user: null,
-      token: typeof window !== "undefined" ? localStorage.getItem("token") : null,
-      isAuthenticated: typeof window !== "undefined" && Boolean(localStorage.getItem("token")),
+      token: null,
+      isAuthenticated: false,
       isLoading: false,
     };
   }
@@ -64,8 +64,7 @@ export function LearningDashboard() {
     setCompleted(localCompleted);
     setBookmarks(localBookmarks);
 
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    if (!token && !isAuthenticated) {
+    if (!isAuthenticated) {
       return;
     }
 
@@ -127,8 +126,7 @@ export function LearningDashboard() {
     setBookmarks(next);
     saveList(storageKeys.bookmarks, next);
 
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    if (token || isAuthenticated) {
+    if (isAuthenticated) {
       learningAPI
         .syncOverallProgress({
           completedLessons: completed,
@@ -150,8 +148,7 @@ export function LearningDashboard() {
       setModalOpen(true);
     }
 
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    if (token || isAuthenticated) {
+    if (isAuthenticated) {
       learningAPI
         .syncOverallProgress({
           completedLessons: next,
