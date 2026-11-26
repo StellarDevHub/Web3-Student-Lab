@@ -46,6 +46,61 @@ scrape_configs:
       credentials_file: /etc/prometheus/w3sl-metrics-token
 ```
 
+## Prometheus scrape endpoint (BE-077)
+
+`GET /metrics` (root path, not under `/api/v1`) is the conventional scrape
+target. It is rendered by `prom-client` from the registry in
+`src/metrics/prometheusMetrics.ts` and protected by **HTTP basic auth**:
+
+```yaml
+scrape_configs:
+  - job_name: web3-student-lab-backend
+    scrape_interval: 30s
+    metrics_path: /metrics
+    basic_auth:
+      username: prometheus
+      password_file: /etc/prometheus/w3sl-metrics-password
+    static_configs:
+      - targets: ['api.internal:8080']
+```
+
+Credentials are read from `PROMETHEUS_BASIC_AUTH_USER` and
+`PROMETHEUS_BASIC_AUTH_PASSWORD`. If either is unset the endpoint stays open in
+development/test but returns `503 SERVICE_UNAVAILABLE` in production, so a
+deployed instance is never silently unprotected. Responses carry
+`Content-Type: text/plain; version=0.0.4; charset=utf-8`.
+
+Queue depth needs a Redis round-trip, so it is sampled at most once every
+`PROMETHEUS_QUEUE_METRICS_TTL_MS` (default 10000) and bounded by
+`PROMETHEUS_QUEUE_METRICS_TIMEOUT_MS` (default 1500). A failed refresh keeps
+the previous sample instead of hanging or failing the scrape.
+
+### Custom metrics exposed at /metrics
+
+| Metric | Type | Labels | Description |
+| --- | --- | --- | --- |
+| `soroban_indexer_ledger_lag_seconds` | gauge | `indexer` | Seconds the Soroban event indexer trails the network ledger head. Computed from the newest event applied per poll, with `LEDGER_CLOSE_INTERVAL_SECONDS` (default 5) per ledger. |
+| `bullmq_queue_waiting_jobs_count` | gauge | `queue` | Jobs waiting to be picked up, per managed queue and the dead-letter queue. |
+| `wasm_evaluation_duration_seconds` | histogram | `status`, `termination_reason` | Wall-clock duration of sandboxed WASM grading runs (buckets 10ms–10s). |
+| `http_request_duration_seconds` | histogram | `method`, `route`, `status_class` | Inbound request latency. `route` is the matched Express pattern (`/api/v1/certificates/:id`), or `(unmatched)`; it is never a raw URL. |
+
+Node.js process metrics (`nodejs_*`) are collected into the same registry.
+The pre-existing `w3sl_*` families remain on
+`/api/v1/metrics/prometheus`; both endpoints can be scraped, or use `/metrics`
+for everything named here.
+
+### Dashboards and alerts
+
+- Grafana: `monitoring/grafana/dashboards/backend-prometheus-exporter.json`
+  (indexer lag, queue saturation, WASM p95/outcomes, HTTP rate and latency).
+- Alerts: `monitoring/prometheus/alert.rules.yml`, group
+  `web3-student-lab-prometheus-exporter` — indexer lag > 15s (3 ledgers),
+  queue depth > 500 (warning) / > 2000 (critical), WASM p95 > 1.5s, and
+  scrape-target down.
+- Response steps: `monitoring/runbooks.md` sections `SorobanIndexerLagHigh`,
+  `BullmqQueueDepthHigh`, `WasmEvaluationLatencyHigh`,
+  `MetricsScrapeTargetDown`.
+
 ## Exported metrics
 
 All names are prefixed `w3sl_`. Counters are monotonic per process lifetime.

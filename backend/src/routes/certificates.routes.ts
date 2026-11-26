@@ -13,6 +13,7 @@ import explorerRouter from './certificates/explorer.routes.js';
 import { certificatePdfGenerator } from '../certificates/PdfGenerator.js';
 import prisma from '../db/index.js';
 import logger from '../utils/logger.js';
+import { idempotency } from '../middleware/idempotency.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -312,6 +313,7 @@ router.get(
  */
 router.post(
   '/',
+  idempotency(),
   validate(MintCertificateSchema),
   certificateController.mintCertificate.bind(certificateController)
 );

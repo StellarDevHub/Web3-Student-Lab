@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Request } from 'express';
 import { createHash } from 'crypto';
 import prisma from '../db/index.js';
@@ -43,7 +44,28 @@ function buildChainInput(
  * file storage.  Sensitive fields must be stripped by the caller before
  * passing `details`.
  */
-export async function logAudit(data: AuditLogData): Promise<void> {
+export function computeRowHash(
+  row: {
+    action: string;
+    entity?: string | null;
+    entityId?: string | null;
+    userId?: string | null;
+    userEmail?: string | null;
+    details?: unknown;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+    createdAt?: Date | string;
+  },
+  prevHash: string
+): string {
+  const serializedRow = serializeAuditRow(row);
+  return crypto.createHash('sha256').update(`${serializedRow}||${prevHash}`).digest('hex');
+}
+
+/**
+ * Logs an administrative action to the audit_logs table, maintaining an unbroken cryptographic hash-chain.
+ */
+export async function logAudit(data: AuditLogData) {
   try {
     const timestamp = new Date().toISOString();
     const correlationId = getCorrelationId();

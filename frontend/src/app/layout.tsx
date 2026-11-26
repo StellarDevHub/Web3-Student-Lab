@@ -3,14 +3,18 @@ import { KeyboardShortcutsProvider } from '@/components/keyboard/KeyboardShortcu
 import Navbar from '@/components/layout/Navbar';
 import {
   DeferredCommandPalette,
+  DeferredCourseNotificationListener,
   DeferredOfflineNotification,
   DeferredRenderWarningModal,
 } from '@/components/layout/DeferredLayoutWidgets';
 import ResiliencyBanner from '@/components/layout/ResiliencyBanner';
 import WalletGate from '@/components/layout/WalletGate';
-import { CourseNotificationListener, ToastContainer } from '@/components/notifications';
+// Direct module import (not the notifications barrel) so unrelated exports
+// are not pulled into the root layout bundle (FE-076).
+import { ToastContainer } from '@/components/notifications/ToastContainer';
 import { OfflineSyncHandler } from '@/components/OfflineSyncHandler';
 import { SkipLink } from '@/components/ui/SkipLink';
+import { TelemetryContextBridge } from '@/components/telemetry/TelemetryContextBridge';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { CSPNonceProvider } from '@/contexts/CSPNonceContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
@@ -19,6 +23,7 @@ import { TutorialProvider } from '@/contexts/TutorialContext';
 import { WalletProvider } from '@/contexts/WalletContext';
 import { Web3OnboardingProvider } from '@/contexts/Web3OnboardingContext';
 import { I18nProvider } from '@/i18n';
+import { SocketWorkerProvider } from './providers';
 import type { Metadata, Viewport } from 'next';
 import { headers } from 'next/headers';
 import { Inter, Outfit } from 'next/font/google';
@@ -67,42 +72,46 @@ export default async function RootLayout({
     >
       <body className="bg-background text-foreground min-h-screen antialiased overflow-x-hidden" suppressHydrationWarning>
         <CSPNonceProvider nonce={nonce}>
-          <QueryProvider>
+        <QueryProvider>
+          <SocketWorkerProvider>
             <ThemeProvider>
-              <WalletProvider>
-                <AuthProvider>
-                  <I18nProvider>
-                    <NotificationProvider>
-                      <CourseNotificationListener />
-                      <Web3OnboardingProvider>
-                        <KeyboardShortcutsProvider>
-                          <TutorialProvider>
-                            <SkipLink
-                              targets={[
-                                { id: 'main-content', label: 'Skip to main content' },
-                                { id: 'primary-navigation', label: 'Skip to navigation' },
-                              ]}
-                            />
-                            <Navbar />
-                            <ResiliencyBanner />
-                            <DeferredRenderWarningModal />
-                            <OfflineSyncHandler />
-                            <main id="main-content" className="flex-grow outline-none" tabIndex={-1}>
-                              <WalletGate>{children}</WalletGate>
-                            </main>
-                            <ToastContainer />
-                            <DeferredCommandPalette />
-                            <DeferredOfflineNotification />
-                          </TutorialProvider>
-                        </KeyboardShortcutsProvider>
-                      </Web3OnboardingProvider>
-                    </NotificationProvider>
-                  </I18nProvider>
-                </AuthProvider>
-              </WalletProvider>
+          <WalletProvider>
+            <TelemetryContextBridge />
+            <AuthProvider>
+              <I18nProvider>
+                <NotificationProvider>
+                  <DeferredCourseNotificationListener />
+                  <Web3OnboardingProvider>
+                    <KeyboardShortcutsProvider>
+                      <TutorialProvider>
+                        <SkipLink
+                          targets={[
+                            { id: 'main-content', label: 'Skip to main content' },
+                            { id: 'primary-navigation', label: 'Skip to navigation' },
+                          ]}
+                        />
+                        <Navbar />
+                        <ResiliencyBanner />
+                        <DeferredRenderWarningModal />
+                        <OfflineSyncHandler />
+                        <main id="main-content" className="flex-grow outline-none" tabIndex={-1}>
+                          <WalletGate>{children}</WalletGate>
+                        </main>
+                        <ToastContainer />
+                        <DeferredCommandPalette />
+                        <DeferredOfflineNotification />
+                      </TutorialProvider>
+                    </KeyboardShortcutsProvider>
+                  </Web3OnboardingProvider>
+                </NotificationProvider>
+              </I18nProvider>
+            </AuthProvider>
+          </WalletProvider>
             </ThemeProvider>
-          </QueryProvider>
+          </SocketWorkerProvider>
+        </QueryProvider>
         </CSPNonceProvider>
+
       </body>
     </html>
   );
