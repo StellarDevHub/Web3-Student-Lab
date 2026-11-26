@@ -26,6 +26,14 @@ interface CollaborativeCodingLabProps {
   wsUrl?: string;
   signalingUrl?: string;
   defaultCode?: string;
+  /** End-to-end encryption key derived from Ed25519-authenticated ECDH key agreement. */
+  encryptionKey?: string;
+  /** Verified Stellar Ed25519 public key of the connected peer. */
+  peerStellarPublicKey?: string | null;
+  /** Identity mismatch or authentication failure warning. */
+  identityWarning?: string | null;
+  /** Require a verified Ed25519 peer key agreement before syncing editor state. */
+  requireVerifiedPeer?: boolean;
 }
 
 export function CollaborativeCodingLab({
@@ -35,8 +43,20 @@ export function CollaborativeCodingLab({
   wsUrl,
   signalingUrl,
   defaultCode = '// Welcome to the collaborative coding lab\n\n',
+  encryptionKey,
+  peerStellarPublicKey,
+  identityWarning,
+  requireVerifiedPeer = false,
 }: CollaborativeCodingLabProps) {
-  const lab = useCollaborativeCodingLab({ roomId, userId, userName, wsUrl, signalingUrl });
+  const lab = useCollaborativeCodingLab({
+    roomId,
+    userId,
+    userName,
+    wsUrl,
+    signalingUrl,
+    encryptionKey,
+    requireVerifiedPeer,
+  });
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const bindingRef = useRef<MonacoBinding | null>(null);
   const [output, setOutput] = useState('');
@@ -123,6 +143,24 @@ export function CollaborativeCodingLab({
           <span className="text-slate-400">
             {peers.length} peer{peers.length === 1 ? '' : 's'} online
           </span>
+          {lab.isEncrypted ? (
+            <>
+              <span className="text-slate-500">·</span>
+              <span
+                className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300"
+                title={peerStellarPublicKey ? `Verified peer: ${peerStellarPublicKey}` : undefined}
+              >
+                E2EE Ed25519
+              </span>
+            </>
+          ) : requireVerifiedPeer ? (
+            <>
+              <span className="text-slate-500">·</span>
+              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300">
+                Awaiting Ed25519 Key Agreement
+              </span>
+            </>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -142,7 +180,16 @@ export function CollaborativeCodingLab({
         </div>
       </div>
 
-      {lab.isDisconnected && <ReconnectBanner />}
+      {identityWarning && (
+        <div
+          role="alert"
+          className="rounded-lg border border-rose-500/60 bg-rose-950/60 px-3 py-2 text-xs text-rose-200"
+        >
+          <strong className="font-semibold">Peer Identity Warning:</strong> {identityWarning}
+        </div>
+      )}
+
+      {lab.isDisconnected && !identityWarning && <ReconnectBanner />}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_320px]">
         <div className="h-[480px] overflow-hidden rounded-lg border border-slate-700">

@@ -65,7 +65,8 @@ describe('WasmAnalyzerPage Component', () => {
       expect(screen.getByText(/Bytecode Digest \(SHA-256\)/i)).toBeInTheDocument();
       expect(screen.getByText(/Section headers/i)).toBeInTheDocument();
       expect(screen.getByText(/Exported functions & symbols/i)).toBeInTheDocument();
-      expect(screen.getByText(/test_fn/i)).toBeInTheDocument();
+      // Listed in the exports panel (and also drawn in the memory flamegraph).
+      expect(screen.getAllByText(/test_fn/i).length).toBeGreaterThan(0);
       expect(screen.getByText(/Linear memory limits/i)).toBeInTheDocument();
     });
   });

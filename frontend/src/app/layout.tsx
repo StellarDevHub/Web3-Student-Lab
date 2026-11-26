@@ -3,22 +3,29 @@ import { KeyboardShortcutsProvider } from '@/components/keyboard/KeyboardShortcu
 import Navbar from '@/components/layout/Navbar';
 import {
   DeferredCommandPalette,
+  DeferredCourseNotificationListener,
   DeferredOfflineNotification,
   DeferredRenderWarningModal,
 } from '@/components/layout/DeferredLayoutWidgets';
 import ResiliencyBanner from '@/components/layout/ResiliencyBanner';
 import WalletGate from '@/components/layout/WalletGate';
-import { CourseNotificationListener, ToastContainer } from '@/components/notifications';
+// Direct module import (not the notifications barrel) so unrelated exports
+// are not pulled into the root layout bundle (FE-076).
+import { ToastContainer } from '@/components/notifications/ToastContainer';
 import { OfflineSyncHandler } from '@/components/OfflineSyncHandler';
 import { SkipLink } from '@/components/ui/SkipLink';
+import { TelemetryContextBridge } from '@/components/telemetry/TelemetryContextBridge';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { CSPNonceProvider } from '@/contexts/CSPNonceContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { Providers as ThemeProvider } from '@/lib/theme/providers';
 import { TutorialProvider } from '@/contexts/TutorialContext';
 import { WalletProvider } from '@/contexts/WalletContext';
 import { Web3OnboardingProvider } from '@/contexts/Web3OnboardingContext';
 import { I18nProvider, type Locale, getDir } from '@/i18n';
+import { SocketWorkerProvider } from './providers';
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import { Inter, Outfit } from 'next/font/google';
 import { cookies, headers } from 'next/headers';
 import './globals.css';
@@ -91,12 +98,13 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   const { langTag, dir } = resolveServerLocale();
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
 
   return (
     <html
@@ -106,14 +114,24 @@ export default function RootLayout({
       data-scroll-behavior="smooth"
       className={`${inter.variable} ${outfit.variable} overflow-x-hidden`}
     >
+      {/* Render-blocking inline script: sets data-theme before paint to
+      eliminate FOUC. Runs before React hydration. */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(function(){try{var k='web3-lab-theme';var t=localStorage.getItem(k);var d='dark';if(t==='light'||t==='dark'||t==='oled'){d=t;}else if(t==='system'||!t){try{d=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}catch(e){}}document.documentElement.setAttribute('data-theme',d);document.documentElement.classList.add(d);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();`,
+        }}
+      />
       <body className="bg-background text-foreground min-h-screen antialiased overflow-x-hidden" suppressHydrationWarning>
+        <CSPNonceProvider nonce={nonce}>
         <QueryProvider>
-          <ThemeProvider>
+          <SocketWorkerProvider>
+            <ThemeProvider>
           <WalletProvider>
+            <TelemetryContextBridge />
             <AuthProvider>
               <I18nProvider>
                 <NotificationProvider>
-                  <CourseNotificationListener />
+                  <DeferredCourseNotificationListener />
                   <Web3OnboardingProvider>
                     <KeyboardShortcutsProvider>
                       <TutorialProvider>
@@ -140,10 +158,12 @@ export default function RootLayout({
               </I18nProvider>
             </AuthProvider>
           </WalletProvider>
-          </ThemeProvider>
+            </ThemeProvider>
+          </SocketWorkerProvider>
         </QueryProvider>
+        </CSPNonceProvider>
+
       </body>
     </html>
   );
 }
-export const dynamic = 'force-dynamic';

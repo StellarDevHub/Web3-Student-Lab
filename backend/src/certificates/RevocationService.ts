@@ -1,12 +1,13 @@
 import prisma from '../db/index.js';
 import {
-  Certificate,
-  RevokeCertificateRequest,
-  ReissueCertificateRequest,
+    Certificate,
+    ReissueCertificateRequest,
+    RevokeCertificateRequest,
 } from '../types/certificate.types.js';
-import { CertificateService } from './CertificateService.js';
-import logger from '../utils/logger.js';
 import { logAudit } from '../utils/audit.js';
+import logger from '../utils/logger.js';
+import { CertificateService } from './CertificateService.js';
+import { invalidateCertificateVerificationCache } from './VerificationService.js';
 
 /**
  * Raised when the actor performing a revoke/reissue action is not on
@@ -113,6 +114,7 @@ export class RevocationService {
           course: true,
         },
       });
+      await invalidateCertificateVerificationCache(certificate.id, certificate.tokenId);
 
       logger.info(`Certificate revoked successfully`, {
         certificateId,
@@ -196,6 +198,7 @@ export class RevocationService {
           updatedAt: new Date(),
         },
       });
+      await invalidateCertificateVerificationCache(original.id, original.tokenId);
 
       // Create new certificate with updated data
       const newCertificate = await this.certificateService.mintCertificate(
@@ -217,6 +220,7 @@ export class RevocationService {
           previousVersionId: certificateId,
         },
       });
+      await invalidateCertificateVerificationCache(newCertificate.id, newCertificate.tokenId);
 
       newCertificate.previousVersionId = certificateId;
 

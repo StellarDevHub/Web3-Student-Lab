@@ -15,14 +15,20 @@ import { authAPI, normalizeAuthResponse, User } from '@/lib/api';
 import { useWallet } from './WalletContext';
 import { getSessionBroadcastManager } from '@/services/session/broadcastSync';
 
-interface AuthContextType {
+export interface AuthContextType {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, turnstileToken?: string) => Promise<void>;
   loginWithWallet: (providerName: string) => Promise<void>;
-  register: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    firstName: string,
+    lastName: string,
+    turnstileToken?: string
+  ) => Promise<void>;
   refreshProfileStatus: () => Promise<void>;
   logout: () => void;
   error: string | null;

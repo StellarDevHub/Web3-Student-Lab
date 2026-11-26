@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import Dashboard from '@/components/analytics/Dashboard';
+import { LazyAnalyticsDashboard as Dashboard } from '@/components/charts/LazyCharts';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';

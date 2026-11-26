@@ -1,8 +1,16 @@
-use soroban_sdk::{contracttype, Address, Env, Symbol, Vec};
+use soroban_sdk::{contracttype, Address, Env, Vec};
 
+/// Minimum number of authorised oracles.  Three independent oracles are the
+/// smallest set that can tolerate a single faulty oracle at a 2-of-3 quorum.
 pub const MIN_ORACLES: u32 = 3;
+/// Minimum quorum.  A single oracle must never be able to move funds.
+pub const MIN_QUORUM: u32 = 2;
 pub const MAX_ORACLES: u32 = 21;
 pub const DEFAULT_STALENESS_SECS: u64 = 3_600;
+/// Reports that agree on a trigger must have been observed within this many
+/// ledgers of each other.  Older reports cannot be replayed into a new
+/// consensus round.
+pub const CONSENSUS_LEDGER_WINDOW: u32 = 10;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -42,6 +50,12 @@ pub fn median(values: &Vec<i128>) -> Option<i128> {
 pub fn is_fresh(env: &Env, report: &OracleReport, staleness_secs: u64) -> bool {
     let now = env.ledger().timestamp();
     report.timestamp <= now && now - report.timestamp <= staleness_secs
+}
+
+/// True when `report_ledger` falls inside the consensus window ending at
+/// `newest_ledger`.
+pub fn within_ledger_window(newest_ledger: u32, report_ledger: u32) -> bool {
+    newest_ledger.saturating_sub(report_ledger) <= CONSENSUS_LEDGER_WINDOW
 }
 
 pub fn contains_oracle(oracles: &Vec<Address>, oracle: &Address) -> bool {

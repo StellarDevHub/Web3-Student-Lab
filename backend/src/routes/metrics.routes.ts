@@ -25,10 +25,61 @@ import {
   renderPrometheus,
 } from '../metrics/MetricsExporter.js';
 import { renderTracingPrometheus } from '../metrics/prometheusExporter.js';
+import {
+  PROMETHEUS_CONTENT_TYPE as PROM_CLIENT_CONTENT_TYPE,
+  renderPrometheusMetrics,
+} from '../metrics/prometheusMetrics.js';
+import { refreshBullmqQueueMetrics } from '../metrics/queueDepthMetrics.js';
+import { requirePrometheusBasicAuth } from '../middleware/prometheusBasicAuth.js';
 import { requireMetricsAuth } from '../middleware/metricsAuth.js';
 import { slidingWindowRateLimiter } from '../middleware/rateLimiter.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/admin.js';
+
+/**
+ * Root scrape endpoint (BE-077). Mounted at `/metrics` by `src/index.ts`.
+ *
+ * Kept separate from the `/api/v1/metrics` router on purpose: Prometheus
+ * scrapers expect the conventional root path, and it uses the `prom-client`
+ * registry plus HTTP basic auth (the native `basic_auth` scrape configuration)
+ * rather than the shared metrics token used by the API router.
+ */
+export const prometheusBasicRouter: ReturnType<typeof Router> = Router();
+
+prometheusBasicRouter.use(requirePrometheusBasicAuth);
+
+/**
+ * @openapi
+ * /metrics:
+ *   get:
+ *     summary: Scrape application metrics in Prometheus format
+ *     description: >
+ *       Prometheus text exposition (version 0.0.4) of the custom metrics
+ *       defined in `src/metrics/prometheusMetrics.ts` — Soroban indexer lag,
+ *       BullMQ queue depth, WASM evaluation duration and HTTP latency — plus
+ *       Node.js process metrics. Protected by HTTP basic auth.
+ *     tags: [Metrics]
+ *     security:
+ *       - basicAuth: []
+ *     responses:
+ *       200:
+ *         description: Prometheus exposition payload
+ *         content:
+ *           text/plain:
+ *             schema:
+ *               type: string
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       503:
+ *         description: Metrics basic auth credentials are not configured (production only)
+ */
+prometheusBasicRouter.get('/', async (_req: Request, res: Response) => {
+  // Queue depth comes from BullMQ/Redis, so refresh it (TTL-cached) before
+  // rendering rather than exposing the last scrape's value indefinitely.
+  await refreshBullmqQueueMetrics();
+  res.setHeader('Content-Type', PROM_CLIENT_CONTENT_TYPE);
+  res.status(200).send(await renderPrometheusMetrics());
+});
 
 const router: ReturnType<typeof Router> = Router();
 
