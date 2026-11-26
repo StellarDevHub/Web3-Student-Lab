@@ -1,11 +1,5 @@
 'use client';
 
-import {
-  getAddress as getFreighterAddress,
-  isConnected as isFreighterConnected,
-  requestAccess as requestFreighterAccess,
-  signTransaction as signFreighterTransaction,
-} from '@stellar/freighter-api';
 import { useMachine } from '@xstate/react';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
@@ -132,13 +126,19 @@ const freighterAdapter: WalletProvider = {
   connect: async () => {
     let access;
     try {
-      access = await requestFreighterAccess();
+      const { requestAccess } = await import('@stellar/freighter-api');
+      access = await requestAccess();
     } catch (e) {
-      throw new Error('Failed to request access from Freighter. Make sure the extension is unlocked and enabled for this site.');
+      throw new Error(
+        'Failed to request access from Freighter. Make sure the extension is unlocked and enabled for this site.'
+      );
     }
-    
+
     if (!access || access.error || !access.address) {
-      throw new Error(access?.error || 'Freighter did not return an address. Please unlock your wallet and try again.');
+      throw new Error(
+        access?.error ||
+          'Freighter did not return an address. Please unlock your wallet and try again.'
+      );
     }
 
     return access.address;
@@ -154,7 +154,8 @@ const freighterAdapter: WalletProvider = {
       return injected.getPublicKey();
     }
 
-    const address = await getFreighterAddress();
+    const { getAddress } = await import('@stellar/freighter-api');
+    const address = await getAddress();
     if (address.error || !address.address) {
       return null;
     }
@@ -199,7 +200,8 @@ const freighterAdapter: WalletProvider = {
       return result.signedTxXdr;
     }
 
-    const result = await signFreighterTransaction(xdr, opts);
+    const { signTransaction } = await import('@stellar/freighter-api');
+    const result = await signTransaction(xdr, opts);
     if (result.error || !result.signedTxXdr) {
       throw new Error(result.error || 'Freighter could not sign the transaction');
     }
@@ -500,7 +502,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const restoreSession = async () => {
       const sessionPk = loadSessionKey();
-      const storage = typeof window !== 'undefined' && typeof localStorage !== 'undefined' ? localStorage : null;
+      const storage =
+        typeof window !== 'undefined' && typeof localStorage !== 'undefined' ? localStorage : null;
       const saved = storage ? storage.getItem('stellar_wallet') : null;
 
       if (!saved) return;
@@ -647,21 +650,24 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       sendTransaction({ type: 'DISCONNECT_WALLET' });
     });
 
-    const unsubConnect = manager.on('WALLET_CONNECTED', (payload: { wallet: string; publicKey: string; network?: StellarNetwork }) => {
-      if (payload?.publicKey && payload.publicKey !== publicKeyRef.current) {
-        setActiveWallet(payload.wallet);
-        setPublicKey(payload.publicKey);
-        saveSessionKey(payload.publicKey);
-        if (payload.network) {
-          setActiveNetwork(payload.network as StellarNetwork);
+    const unsubConnect = manager.on(
+      'WALLET_CONNECTED',
+      (payload: { wallet: string; publicKey: string; network?: StellarNetwork }) => {
+        if (payload?.publicKey && payload.publicKey !== publicKeyRef.current) {
+          setActiveWallet(payload.wallet);
+          setPublicKey(payload.publicKey);
+          saveSessionKey(payload.publicKey);
+          if (payload.network) {
+            setActiveNetwork(payload.network as StellarNetwork);
+          }
+          sendTransaction({
+            type: 'WALLET_CONNECTED',
+            walletName: payload.wallet,
+            publicKey: payload.publicKey,
+          });
         }
-        sendTransaction({
-          type: 'WALLET_CONNECTED',
-          walletName: payload.wallet,
-          publicKey: payload.publicKey,
-        });
       }
-    });
+    );
 
     return () => {
       unsubDisconnect();
@@ -795,10 +801,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          localStorage.setItem(
-            'stellar_wallet',
-            JSON.stringify({ ...parsed, network })
-          );
+          localStorage.setItem('stellar_wallet', JSON.stringify({ ...parsed, network }));
         } catch {}
       }
     }
@@ -818,8 +821,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     [activeWallet, setAppNetwork]
   );
 
-  const isNetworkDivergent =
-    walletNetwork !== null && walletNetwork !== activeNetwork;
+  const isNetworkDivergent = walletNetwork !== null && walletNetwork !== activeNetwork;
 
   const signTransaction = useCallback(
     async (xdr: string, opts?: { networkPassphrase?: string }) => {
