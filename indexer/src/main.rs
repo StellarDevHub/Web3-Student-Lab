@@ -16,12 +16,13 @@
 //!   PORT             - HTTP/WS port (default 3001)
 //!   DATABASE_URL     - SQLite or Postgres URL (default: sqlite://indexer.db?mode=rwc)
 //!   SOROBAN_RPC_URL  - Soroban RPC endpoint (default: https://soroban-testnet.stellar.org)
-//!   POLL_INTERVAL_MS - Time between successful polls (default 5000)
+//!   POLL_INTERVAL_MS - Time between successful polls (default 500)
 //!   START_LEDGER     - Override starting ledger cursor (for back-fills / tests)
 //!   RUST_LOG         - tracing log filter
 
 mod config;
 mod db;
+mod grpc;
 mod reorg;
 mod rpc;
 mod server;
@@ -78,6 +79,17 @@ async fn main() -> Result<()> {
             warn!(error = %err, "poller terminated");
         }
     });
+
+    // Optional internal mTLS gRPC server (BE-093).
+    if cfg.grpc_port.is_some() {
+        let grpc_cfg = cfg.clone();
+        let grpc_state = state.clone();
+        tokio::spawn(async move {
+            if let Err(err) = grpc::serve_grpc_mtls(grpc_cfg, grpc_state).await {
+                warn!(error = %err, "mTLS gRPC server terminated");
+            }
+        });
+    }
 
     server::serve(cfg, state).await
 }

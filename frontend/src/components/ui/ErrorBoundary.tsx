@@ -1,16 +1,30 @@
 'use client';
 
 import React from 'react';
-import { AlertTriangle, RefreshCw, Home, ArrowLeft, Save, RotateCcw } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Home, ArrowLeft, Save, RotateCcw } from 'lucide-react';
+import { ErrorFallback } from '@/components/ui/ErrorFallback';
 import { useGlobalStore } from '@/stores/globalStore';
-import { logTelemetryError, recordRecoveryAction } from '@/lib/telemetry';
+import { recordRecoveryAction } from '@/lib/telemetry';
+import { installBreadcrumbTracking, recordBreadcrumb } from '@/lib/telemetry/breadcrumbs';
+import { reportCrash, submitCrashFeedback, type CrashReport } from '@/lib/telemetry/crashReporter';
+
+/** Extra handles passed to a custom `fallback` function. */
+export interface ErrorBoundaryFallbackHelpers {
+  telemetryEventId: string | null;
+  /** The crash report, once captured. Use it with `submitCrashFeedback`. */
+  report: CrashReport | null;
+  rescueSession: () => void;
+  exportSession: () => void;
+}
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
-  fallback?: React.ReactNode | ((error: Error, reset: () => void) => React.ReactNode);
+  fallback?:
+    | React.ReactNode
+    | ((error: Error, reset: () => void, helpers: ErrorBoundaryFallbackHelpers) => React.ReactNode);
   onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
   resetKeys?: unknown[];
+  /** Names this boundary in crash reports (a Sentry tag). Give each boundary a distinct one. */
   componentName?: string;
 }
 
@@ -19,8 +33,19 @@ interface ErrorBoundaryState {
   error: Error | null;
   errorInfo: React.ErrorInfo | null;
   telemetryEventId: string | null;
+  report: CrashReport | null;
 }
 
+/**
+ * Isolates a render crash to the subtree it wraps (FE-099).
+ *
+ * Everything outside the boundary keeps rendering and stays interactive; only
+ * this subtree is replaced by the recovery fallback. A crash is reported once,
+ * through `reportCrash`: it is logged to the session, sent to Sentry with React's
+ * component stack, the recent-actions breadcrumbs, an allowlisted state snapshot
+ * and the masked wallet address, and handed to the fallback so the student can
+ * add a brief report of their own.
+ */
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
@@ -29,27 +54,34 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       error: null,
       errorInfo: null,
       telemetryEventId: null,
+      report: null,
     };
   }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return { hasError: true, error };
+  }
+
+  componentDidMount() {
+    // Idempotent. Starts the recent-actions trail even if the app bootstrap did not.
+    installBreadcrumbTracking();
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('[ErrorBoundary] Caught error:', error, errorInfo);
     this.props.onError?.(error, errorInfo);
 
-    // Automated telemetry logging
-    const event = logTelemetryError({
-      error: error as Error & { componentStack?: string },
+    // `componentStack` lives on `errorInfo`, not on the error, so it is passed in explicitly.
+    const report = reportCrash({
+      error,
+      componentStack: errorInfo.componentStack,
       componentName: this.props.componentName,
-      isRecovered: false,
     });
 
     this.setState((prevState) => ({
       errorInfo,
-      telemetryEventId: prevState.telemetryEventId || event.id,
+      report,
+      telemetryEventId: prevState.telemetryEventId || report.id,
     }));
   }
 
@@ -64,11 +96,19 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     }
   }
 
+  private clearError() {
+    this.setState({ hasError: false, error: null, errorInfo: null, report: null });
+  }
+
   reset = () => {
     if (this.state.telemetryEventId) {
       recordRecoveryAction(this.state.telemetryEventId, 'reset');
     }
-    this.setState({ hasError: false, error: null, errorInfo: null });
+    recordBreadcrumb({
+      category: 'app',
+      message: `Reset ${this.props.componentName ?? 'component'} after a crash`,
+    });
+    this.clearError();
   };
 
   rescueSession = () => {
@@ -76,7 +116,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       recordRecoveryAction(this.state.telemetryEventId, 'reset');
     }
     useGlobalStore.getState().resetAllStores();
-    this.setState({ hasError: false, error: null, errorInfo: null });
+    this.clearError();
   };
 
   exportSession = () => {
@@ -98,6 +138,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         if (typeof this.props.fallback === 'function') {
           return this.props.fallback(this.state.error, this.reset, {
             telemetryEventId: this.state.telemetryEventId,
+            report: this.state.report,
             rescueSession: this.rescueSession,
             exportSession: this.exportSession,
           });
@@ -108,8 +149,9 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       return (
         <DefaultErrorFallback
           error={this.state.error}
+          componentStack={this.state.errorInfo?.componentStack ?? undefined}
+          report={this.state.report}
           reset={this.reset}
-          telemetryEventId={this.state.telemetryEventId}
           rescueSession={this.rescueSession}
           exportSession={this.exportSession}
         />
@@ -122,103 +164,70 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
 interface DefaultErrorFallbackProps {
   error: Error;
+  componentStack?: string;
+  report: CrashReport | null;
   reset: () => void;
-  telemetryEventId: string | null;
   rescueSession: () => void;
   exportSession: () => void;
 }
 
+const secondaryAction =
+  'inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors';
+
 function DefaultErrorFallback({
   error,
+  componentStack,
+  report,
   reset,
-  telemetryEventId,
   rescueSession,
   exportSession,
 }: DefaultErrorFallbackProps) {
   return (
-    <div className="flex min-h-[400px] w-full items-center justify-center p-8">
-      <div className="mx-auto max-w-md text-center">
-        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10">
-          <AlertTriangle className="h-8 w-8 text-red-500" />
-        </div>
-
-        <h2 className="mb-2 text-2xl font-semibold text-[var(--text-strong)]">
-          Something went wrong
-        </h2>
-
-        <p className="mb-6 text-sm leading-7 text-[var(--muted)]">
-          An unexpected error occurred. Your editor state is preserved — try resetting this section,
-          rescuing the full session, or going back to safety.
-        </p>
-
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mb-6 rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-left">
-            <div className="flex items-start gap-2 mb-2">
-              <p className="mb-1 text-xs font-semibold tracking-wider text-red-400 uppercase">
-                Error details
-              </p>
-              {error.stack && (
-                <button
-                  onClick={() => {
-                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                      navigator.clipboard.writeText(error.stack);
-                    }
-                  }}
-                  className="text-xs font-medium text-blue-400 underline underline-offset-2 hover:text-blue-300 ml-2"
-                  aria-label="Copy error stack"
-                >
-                  Copy stack
-                </button>
-              )}
-            </div>
-            <p className="font-mono text-xs text-[var(--muted)] break-all">
-              {error.message}
-            </p>
-          </div>
-        )}
-
-        <div className="flex flex-col items-center justify-center gap-3 sm:flex-row sm:items-center">
-          <button
-            onClick={reset}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--brand-strong)] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Reset section
-          </button>
-
-          <button
-            onClick={rescueSession}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-5 py-2.5 text-sm font-medium text-amber-400 transition-colors hover:bg-amber-500/10"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Rescue session
-          </button>
-
-          <button
-            onClick={exportSession}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/5 px-5 py-2.5 text-sm font-medium text-blue-400 transition-colors hover:bg-blue-500/10"
-          >
-            <Save className="h-4 w-4" />
-            Export state
-          </button>
-
-          <button
-            onClick={() => window.history.back()}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-medium text-[var(--text-strong)] transition-colors hover:bg-white/10"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Go back
-          </button>
-
-          <a
-            href="/"
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-medium text-[var(--text-strong)] transition-colors hover:bg-white/10"
-          >
-            <Home className="h-4 w-4" />
-            Home
-          </a>
-        </div>
-      </div>
+    <div className="flex min-h-[320px] w-full items-center justify-center p-4 sm:p-8">
+      <ErrorFallback
+        variant="recovery"
+        error={error}
+        componentStack={componentStack}
+        report={report ?? undefined}
+        message="Something unexpected happened here, so we stopped this section from rendering."
+        onRetry={reset}
+        onSubmitReport={report ? (comment) => submitCrashFeedback(report, comment) : undefined}
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={rescueSession}
+              className={`${secondaryAction} border-amber-500/20 bg-amber-500/5 text-amber-400 hover:bg-amber-500/10`}
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              Rescue session
+            </button>
+            <button
+              type="button"
+              onClick={exportSession}
+              className={`${secondaryAction} border-blue-500/20 bg-blue-500/5 text-blue-400 hover:bg-blue-500/10`}
+            >
+              <Save className="h-4 w-4" aria-hidden="true" />
+              Export state
+            </button>
+            <button
+              type="button"
+              onClick={() => window.history.back()}
+              className={`${secondaryAction} border-white/10 bg-white/5 text-[var(--text-strong)] hover:bg-white/10`}
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Go back
+            </button>
+            <a
+              href="/"
+              className={`${secondaryAction} border-white/10 bg-white/5 text-[var(--text-strong)] hover:bg-white/10`}
+            >
+              <Home className="h-4 w-4" aria-hidden="true" />
+              Home
+            </a>
+          </>
+        }
+      />
     </div>
   );
 }

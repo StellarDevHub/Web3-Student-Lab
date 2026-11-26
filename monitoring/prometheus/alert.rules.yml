@@ -83,3 +83,56 @@ groups:
           description: "Probe failure ratio is {{ $value | humanizePercentage }} over the last 5m."
           runbook_url: "https://github.com/StellarDevHub/Web3-Student-Lab/blob/main/monitoring/runbooks.md#rpcprobefailureratehigh"
           diagnostic_query: 'sum by (outcome) (rate(w3sl_external_probe_total{probe="horizon_ledger"}[5m]))'
+
+  # PostgreSQL deadlock, autovacuum bloat, and PgBouncer pool monitoring (BE-080).
+  - name: web3-student-lab-database
+    interval: 15s
+    rules:
+      - alert: PostgresDeadlockDetected
+        expr: increase(pg_stat_database_deadlocks[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: database
+          slo: db-deadlocks
+        annotations:
+          summary: "PostgreSQL deadlock detected on {{ $labels.datname }}"
+          description: "{{ $value }} deadlock(s) occurred in database {{ $labels.datname }} over the last 5m. Check PostgreSQL logs (log_lock_waits=on) for conflicting queries."
+          runbook_url: "https://github.com/StellarDevHub/Web3-Student-Lab/blob/main/monitoring/runbooks.md#postgresdeadlockdetected"
+          diagnostic_query: 'increase(pg_stat_database_deadlocks[5m])'
+
+      - alert: PostgresHighDeadTupleRatio
+        expr: |
+          (
+            pg_stat_user_tables_n_dead_tup{relname=~"audit_logs|auth_nonces|student_activities|webauthn_challenges|oauth_states|sessions"}
+            /
+            clamp_min(
+              pg_stat_user_tables_n_live_tup{relname=~"audit_logs|auth_nonces|student_activities|webauthn_challenges|oauth_states|sessions"}
+              + pg_stat_user_tables_n_dead_tup{relname=~"audit_logs|auth_nonces|student_activities|webauthn_challenges|oauth_states|sessions"},
+              1
+            )
+          ) > 0.2
+          and pg_stat_user_tables_n_dead_tup{relname=~"audit_logs|auth_nonces|student_activities|webauthn_challenges|oauth_states|sessions"} > 1000
+        for: 10m
+        labels:
+          severity: warning
+          service: database
+          slo: db-autovacuum-health
+        annotations:
+          summary: "High dead-tuple ratio on {{ $labels.relname }}"
+          description: "Table {{ $labels.relname }} has {{ $value | humanizePercentage }} dead tuples for 10m; verify autovacuum workers are not blocked."
+          runbook_url: "https://github.com/StellarDevHub/Web3-Student-Lab/blob/main/monitoring/runbooks.md#postgreshighdeadtupleratio"
+          diagnostic_query: 'pg_stat_user_tables_n_dead_tup{relname=~"audit_logs|auth_nonces|student_activities|webauthn_challenges|oauth_states|sessions"}'
+
+      - alert: PgBouncerClientWaiting
+        expr: pgbouncer_pools_client_waiting > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: pgbouncer
+          slo: pgbouncer-pool-saturation
+        annotations:
+          summary: "PgBouncer clients waiting for a backend connection"
+          description: "{{ $value }} client(s) have been waiting in PgBouncer pool {{ $labels.database }} for over 1m."
+          runbook_url: "https://github.com/StellarDevHub/Web3-Student-Lab/blob/main/monitoring/runbooks.md#pgbouncerclientwaiting"
+          diagnostic_query: 'pgbouncer_pools_client_waiting'

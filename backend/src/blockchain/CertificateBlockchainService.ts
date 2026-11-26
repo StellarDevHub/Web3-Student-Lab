@@ -269,6 +269,35 @@ export class CertificateBlockchainService {
   // Simulation methods
   // =====================
 
+  private async simulateAnchorMerkleRoot(
+    merkleRoot: string,
+    timestamp: Date
+  ): Promise<{
+    success: boolean;
+    merkleRoot: string;
+    transactionHash: string;
+    contractAddress: string;
+    ledgerSequence: number;
+    anchoredAt: Date;
+  }> {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Deterministic mock hash based on merkleRoot + timestamp for verification testing
+    const hex = Array.from(merkleRoot).reverse().join('').substring(0, 64);
+    const mockHash = `0x${hex}`;
+    const contractAddress = this.contractId || 'CDERTIFICATEMERKLEANCHORCONTRACTIDSTELLAR123';
+
+    logger.info(`Simulated Stellar Merkle root anchoring: root=${merkleRoot}, tx=${mockHash}`);
+
+    return {
+      success: true,
+      merkleRoot,
+      transactionHash: mockHash,
+      contractAddress,
+      ledgerSequence: Math.floor(1000000 + Math.random() * 500000),
+      anchoredAt: timestamp,
+    };
+  }
+
   private async simulateMint(metadata: any): Promise<{
     success: boolean;
     tokenId: string;

@@ -23,9 +23,25 @@
  *    account cannot monopolise a queue.
  */
 
-import { Queue, Worker, type Job, type JobsOptions, type Processor, type WorkerOptions } from 'bullmq';
-import { Redis } from 'ioredis';
+import {
+  Queue,
+  Worker,
+  type ConnectionOptions,
+  type Job,
+  type JobsOptions,
+  type Processor,
+  type WorkerOptions,
+} from 'bullmq';
+import { Cluster, Redis } from 'ioredis';
 import logger from '../utils/logger.js';
+import {
+  QUEUE_FAILOVER_BUDGET_MS,
+  QueueFailoverMonitor,
+  resolveQueueTopology,
+  type QueueFailoverStats,
+  type QueueTopology,
+  type QueueTopologyDescription,
+} from '../config/redis.js';
 import { DlqProcessor, DEAD_LETTER_QUEUE_NAME, type DeadLetterJobData } from '../workers/dlqProcessor.js';
 
 export const QUEUE_NAMES = {
@@ -33,6 +49,7 @@ export const QUEUE_NAMES = {
   IPFS_PINNING: 'ipfs-pinning',
   EMAIL_NOTIFICATIONS: 'email-notifications',
   CONTRACT_EVALUATION: 'contract-evaluation',
+  VIDEO_TRANSCODING: 'video-transcoding',
 } as const;
 
 export type ManagedQueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -89,6 +106,12 @@ export function buildQueueDefinitions(): Record<ManagedQueueName, QueueDefinitio
       limiter: { max: envInt('EMAIL_MAX_SENDS_PER_SEC', 20), duration: 1_000 },
       userRateLimit: { max: envInt('EMAIL_USER_RATE_LIMIT_PER_MIN', 20), windowMs: 60_000 },
     },
+    [QUEUE_NAMES.VIDEO_TRANSCODING]: {
+      name: QUEUE_NAMES.VIDEO_TRANSCODING,
+      tier: 'standard',
+      concurrency: envInt('VIDEO_TRANSCODING_CONCURRENCY', 2),
+      userRateLimit: { max: envInt('VIDEO_TRANSCODING_USER_RATE_LIMIT_PER_MIN', 10), windowMs: 60_000 },
+    },
   };
 }
 
@@ -134,7 +157,10 @@ export interface RateLimitStore {
 }
 
 export interface QueueManagerOptions {
-  connection?: { host: string; port: number; password?: string; username?: string; db?: number };
+  /** Explicit connection override for tests/custom clients; otherwise derived from REDIS_MODE. */
+  connection?: ConnectionOptions;
+  /** Pre-resolved topology; takes precedence over `connection`. */
+  topology?: QueueTopology;
   rateLimitStore?: RateLimitStore;
   definitions?: Record<ManagedQueueName, QueueDefinition>;
   dlq?: DlqProcessor;
@@ -146,42 +172,60 @@ export interface QueueManagerOptions {
   queueFactory?: (name: string) => Queue;
 }
 
-function connectionFromEnv(): NonNullable<QueueManagerOptions['connection']> {
-  const url = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
+/** Topology wrapper for an explicitly supplied connection (tests, custom clients). */
+function fixedTopology(connection: ConnectionOptions): QueueTopology {
   return {
-    host: url.hostname,
-    port: Number(url.port) || 6379,
-    ...(url.password ? { password: decodeURIComponent(url.password) } : {}),
-    ...(url.username ? { username: decodeURIComponent(url.username) } : {}),
-    ...(url.pathname.length > 1 ? { db: Number(url.pathname.slice(1)) || 0 } : {}),
+    mode: 'standalone',
+    prefix: undefined,
+    describe: () => ({
+      mode: 'standalone',
+      tls: false,
+      failoverBudgetMs: QUEUE_FAILOVER_BUDGET_MS,
+    }),
+    createConnection: () => connection,
   };
 }
 
 export class QueueManager {
   readonly definitions: Record<ManagedQueueName, QueueDefinition>;
-  private readonly connection: NonNullable<QueueManagerOptions['connection']>;
+  private readonly topology: QueueTopology;
   private readonly prefix: string | undefined;
   private readonly backoffDelayMs: number;
   private readonly queueFactory: (name: string) => Queue;
   private readonly queues = new Map<string, Queue>();
   private readonly workers: Worker[] = [];
+  private readonly failoverMonitor = new QueueFailoverMonitor();
   private rateLimitStore: RateLimitStore | undefined;
   private dlqProcessor: DlqProcessor | undefined;
 
   constructor(options: QueueManagerOptions = {}) {
     this.definitions = options.definitions ?? buildQueueDefinitions();
-    this.connection = options.connection ?? connectionFromEnv();
+    this.topology =
+      options.topology ??
+      (options.connection ? fixedTopology(options.connection) : resolveQueueTopology());
     this.rateLimitStore = options.rateLimitStore;
     this.dlqProcessor = options.dlq;
-    this.prefix = options.prefix;
+    this.prefix = options.prefix ?? this.topology.prefix;
     this.backoffDelayMs = options.backoffDelayMs ?? BACKOFF_BASE_DELAY_MS;
     this.queueFactory =
       options.queueFactory ??
       ((name) =>
         new Queue(name, {
-          connection: { ...this.connection, maxRetriesPerRequest: null },
+          // A fresh connection per queue: Sentinel/Cluster clients reconnect
+          // independently and must not inherit another client's socket.
+          connection: this.topology.createConnection(),
           ...(this.prefix ? { prefix: this.prefix } : {}),
         }));
+  }
+
+  /** Redis topology the manager is connected to, safe to log. */
+  getRedisTopology(): QueueTopologyDescription {
+    return this.topology.describe();
+  }
+
+  /** Client-observed failover timings across this manager's workers. */
+  getQueueFailoverStats(): QueueFailoverStats {
+    return this.failoverMonitor.getStats();
   }
 
   /** Lazily creates queues so importing this module never opens a Redis connection. */
@@ -210,7 +254,16 @@ export class QueueManager {
 
   private getRateLimitStore(): RateLimitStore {
     if (!this.rateLimitStore) {
-      this.rateLimitStore = new Redis({ ...this.connection, maxRetriesPerRequest: 2, lazyConnect: true });
+      const connection = this.topology.createConnection();
+      if (connection instanceof Redis || connection instanceof Cluster) {
+        this.rateLimitStore = connection as RateLimitStore;
+      } else {
+        this.rateLimitStore = new Redis({
+          ...(connection as Record<string, unknown>),
+          maxRetriesPerRequest: 2,
+          lazyConnect: true,
+        } as any);
+      }
     }
     return this.rateLimitStore;
   }
@@ -262,7 +315,9 @@ export class QueueManager {
   ): Worker<T, R> {
     const definition = this.definitions[name];
     const worker = new Worker<T, R>(name, processor, {
-      connection: { ...this.connection, maxRetriesPerRequest: null },
+      // Workers own a blocking connection; create one per worker so a Sentinel
+      // promotion is re-resolved for each of them.
+      connection: this.topology.createConnection(),
       ...(this.prefix ? { prefix: this.prefix } : {}),
       concurrency: overrides.concurrency ?? definition.concurrency,
       ...(overrides.limiter ?? definition.limiter ? { limiter: overrides.limiter ?? definition.limiter } : {}),
@@ -279,7 +334,18 @@ export class QueueManager {
       });
     });
     worker.on('error', (err) => {
+      this.failoverMonitor.markDisconnected();
       logger.error('[QueueManager] Worker error', { queue: name, error: err.message });
+    });
+    worker.on('ready', () => {
+      const recovery = this.failoverMonitor.markReady();
+      if (!recovery) return;
+      const detail = { queue: name, recoveryMs: recovery.recoveryMs, budgetMs: QUEUE_FAILOVER_BUDGET_MS };
+      if (recovery.withinBudget) {
+        logger.info('[QueueManager] Worker reconnected after Redis failover', detail);
+      } else {
+        logger.warn('[QueueManager] Worker reconnect exceeded Redis failover budget', detail);
+      }
     });
 
     this.workers.push(worker as Worker);

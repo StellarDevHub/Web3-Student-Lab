@@ -1,17 +1,18 @@
-import prisma from '../../db/index.js';
-import cacheService, { CACHE_KEYS } from '../../cache/CacheService.js';
 import { invalidateUserProgressCache } from '../../cache/CacheInvalidation.js';
+import cacheService, { CACHE_KEYS } from '../../cache/CacheService.js';
 import { cacheTTL } from '../../config/redis.config.js';
-import { COURSES, getCurriculumForCourse } from './curriculum.data.js';
-import {
-  CurriculumCourse,
-  Module,
-  Progress,
-  ProgressStatus,
-  ProgressUpdateInput,
-} from './types.js';
+import prisma from '../../db/index.js';
+import { multiTierCache } from '../../lib/cache/multiTierCache.js';
 import { enqueueWebhookDeliveries } from '../../services/webhooks/index.js';
 import logger from '../../utils/logger.js';
+import { COURSES, getCurriculumForCourse } from './curriculum.data.js';
+import {
+    CurriculumCourse,
+    Module,
+    Progress,
+    ProgressStatus,
+    ProgressUpdateInput,
+} from './types.js';
 
 /**
  * Result wrapper distinguishing authoritative database-backed data from
@@ -140,26 +141,29 @@ export const listCourses = async (
   const cacheKey = normalizedDifficulty
     ? `${CACHE_KEYS.courses.list()}:difficulty:${normalizedDifficulty}`
     : CACHE_KEYS.courses.list();
-  const cached = await cacheService.get<CurriculumCourse[]>(cacheKey);
-  if (cached) return { data: cached, dataSource: 'live' };
 
   try {
-    const courses = await prisma.course.findMany({
-      orderBy: { createdAt: 'asc' },
-    });
+    const result = await multiTierCache.getOrLoad<CurriculumCourse[]>(
+      cacheKey,
+      async () => {
+        const courses = await prisma.course.findMany({
+          orderBy: { createdAt: 'asc' },
+        });
 
-    const result = courses.map((course) => ({
-      id: course.id,
-      title: course.title,
-      description: course.description,
-      instructor: course.instructor,
-      credits: course.credits,
-      createdAt: course.createdAt,
-      updatedAt: course.updatedAt,
-      modules: filterModulesByDifficulty(getCurriculumForCourse(course.id), normalizedDifficulty),
-    }));
+        return courses.map((course) => ({
+          id: course.id,
+          title: course.title,
+          description: course.description,
+          instructor: course.instructor,
+          credits: course.credits,
+          createdAt: course.createdAt,
+          updatedAt: course.updatedAt,
+          modules: filterModulesByDifficulty(getCurriculumForCourse(course.id), normalizedDifficulty),
+        }));
+      },
+      { ttlSeconds: cacheTTL.courses.list, staleSeconds: 60 }
+    );
 
-    await cacheService.set(cacheKey, result, cacheTTL.courses.list);
     return { data: result, dataSource: 'live' };
   } catch (error) {
     logger.error('Database unavailable in listCourses; returning demo data', { error });
@@ -193,30 +197,31 @@ export const getCourseCurriculum = async (
   const cacheKey = normalizedDifficulty
     ? `${CACHE_KEYS.courses.curriculum(courseId)}:difficulty:${normalizedDifficulty}`
     : CACHE_KEYS.courses.curriculum(courseId);
-  const cached = await cacheService.get<CurriculumCourse>(cacheKey);
-  if (cached) return { data: cached, dataSource: 'live' };
 
   try {
-    const course = await prisma.course.findUnique({
-      where: { id: courseId },
-    });
+    const result = await multiTierCache.getOrLoad<CurriculumCourse | null>(
+      cacheKey,
+      async () => {
+        const course = await prisma.course.findUnique({ where: { id: courseId } });
+        if (!course) return null;
 
-    if (!course) {
-      return { data: null, dataSource: 'live' };
-    }
-
-    const result = {
-      id: course.id,
-      title: course.title,
-      description: course.description,
-      instructor: course.instructor,
-      credits: course.credits,
-      createdAt: course.createdAt,
-      updatedAt: course.updatedAt,
-      modules: filterModulesByDifficulty(getCurriculumForCourse(course.id), normalizedDifficulty),
-    };
-
-    await cacheService.set(cacheKey, result, cacheTTL.courses.curriculum);
+        return {
+          id: course.id,
+          title: course.title,
+          description: course.description,
+          instructor: course.instructor,
+          credits: course.credits,
+          createdAt: course.createdAt,
+          updatedAt: course.updatedAt,
+          modules: filterModulesByDifficulty(getCurriculumForCourse(course.id), normalizedDifficulty),
+        };
+      },
+      {
+        ttlSeconds: cacheTTL.courses.curriculum,
+        staleSeconds: 60,
+        shouldCache: (course) => course !== null,
+      }
+    );
     return { data: result, dataSource: 'live' };
   } catch (error) {
     logger.error(`Database unavailable in getCourseCurriculum(${courseId}); returning demo data`, {

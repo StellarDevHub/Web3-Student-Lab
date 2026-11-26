@@ -1,26 +1,46 @@
 //! # Payment Streaming Contract
 //!
-//! EIP-1337-style recurring payment streams on Soroban.
+//! Per-second token streams on Soroban.
 //!
-//! A **sender** creates a stream authorising a **recipient** to pull a fixed
-//! `amount_per_period` every `period_length` ledgers.  The sender pre-funds
-//! the contract with a `total_amount`.  The recipient calls `pull_payment`
-//! once per period to claim their tokens.  The sender may cancel at any time
-//! and receive a prorated refund of the unstreamed balance.
+//! A **sender** creates a stream that moves `rate_per_second * (stop_time - start_time)`
+//! tokens of a Soroban token contract into this contract. The **recipient** accrues
+//! tokens linearly per second: `V = rate_per_second * (now - start_time)`, clamped to
+//! `[0, deposit]`, and withdraws accrued tokens at any time.
+//!
+//! The sender may cancel an active stream. In the same call the accrued but
+//! unwithdrawn amount is paid to the recipient (it vests on cancellation) and the
+//! unvested remainder is refunded to the sender.
+//!
+//! ## Invariant
+//! The contract's balance of each stream token equals the sum of `deposit - withdrawn`
+//! over all streams with status `Active`. Cancelled and exhausted streams hold no
+//! balance. `stream_count` and `get_stream` let callers verify this.
 //!
 //! ## Security
-//! - No external calls during state mutation → no reentrancy surface.
-//! - All arithmetic uses `checked_*` to prevent overflow/underflow.
-//! - `require_auth` enforces that only the authorised party can act.
-//! - Period-based pull model prevents the billing processor from double-billing.
+//! - State is written before any token transfer, and a reentrancy lock guards every
+//!   state-changing entry point.
+//! - All arithmetic is checked; an overflow aborts the call.
+//! - `require_auth` is called for the acting party, and cancel/withdraw also compare
+//!   the caller with the stored sender/recipient.
 
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, symbol_short, token::TokenClient, Address, Env, Symbol,
+};
 
-// ── Storage key ──────────────────────────────────────────────────────────────
-const STREAM_KEY: Symbol = symbol_short!("STREAM");
+// ── Storage ──────────────────────────────────────────────────────────────────
+
 const LOCK: Symbol = symbol_short!("ps_lock");
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DataKey {
+    /// Stream record, keyed by stream id.
+    Stream(u32),
+    /// Id that the next created stream will receive. Also the number of streams.
+    NextId,
+}
 
 // ── Data types ───────────────────────────────────────────────────────────────
 
@@ -33,28 +53,65 @@ pub enum StreamStatus {
     Exhausted,
 }
 
-/// A recurring payment stream.
+/// A per-second payment stream.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Stream {
-    /// Address funding the stream.
+    /// Address that funded the stream and may cancel it.
     pub sender: Address,
-    /// Address receiving periodic payments.
+    /// Address that accrues and withdraws the tokens.
     pub recipient: Address,
-    /// Tokens paid per period.
-    pub amount_per_period: i128,
-    /// Ledger duration of each period.
-    pub period_length: u32,
-    /// Total tokens deposited into the stream.
-    pub total_amount: i128,
-    /// Tokens already claimed by the recipient.
-    pub claimed: i128,
-    /// Ledger at which the stream started.
-    pub start_ledger: u32,
-    /// Ledger of the last successful pull.
-    pub last_pull_ledger: u32,
+    /// Token contract in which the stream is denominated.
+    pub token: Address,
+    /// Base units vested per second.
+    pub rate_per_second: i128,
+    /// Unix time (seconds) at which vesting begins.
+    pub start_time: u64,
+    /// Unix time (seconds) at which vesting ends.
+    pub stop_time: u64,
+    /// Total tokens escrowed for this stream: `rate_per_second * (stop_time - start_time)`.
+    pub deposit: i128,
+    /// Tokens already paid out to the recipient (by withdrawal or cancellation).
+    pub withdrawn: i128,
     /// Current stream status.
     pub status: StreamStatus,
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/// Unwraps a checked-arithmetic result, aborting the call on overflow or underflow.
+fn checked_or_abort(value: Option<i128>) -> i128 {
+    value.unwrap_or_else(|| panic!("overflow"))
+}
+
+/// Loads a stream record, aborting if the id is unknown.
+fn load_stream(env: &Env, stream_id: u32) -> Stream {
+    let stream: Option<Stream> = env
+        .storage()
+        .instance()
+        .get(&DataKey::Stream(stream_id));
+    stream.unwrap_or_else(|| panic!("no stream"))
+}
+
+/// Total amount vested at time `now`: `rate_per_second * elapsed`, where `elapsed`
+/// is `now - start_time` clamped to `[0, stop_time - start_time]`.
+///
+/// Rounding: none. The rate is an integer count of base units per second, so the
+/// product is exact and no division is performed. The clamp happens before the
+/// multiplication, so the result is at most `rate_per_second * duration`, which is
+/// the `deposit` fixed at creation. If fractional rates are ever introduced, floor
+/// division would round down, which favours the sender.
+fn vested_at(stream: &Stream, now: u64) -> i128 {
+    if now <= stream.start_time {
+        return 0;
+    }
+    let end = if now < stream.stop_time {
+        now
+    } else {
+        stream.stop_time
+    };
+    let elapsed = i128::from(end - stream.start_time);
+    checked_or_abort(stream.rate_per_second.checked_mul(elapsed))
 }
 
 // ── Contract ─────────────────────────────────────────────────────────────────
@@ -66,150 +123,148 @@ pub struct PaymentStreaming;
 impl PaymentStreaming {
     // ── Create ────────────────────────────────────────────────────────────────
 
-    /// Create a new payment stream.
+    /// Create a stream and escrow its full deposit from `sender` into this contract.
     ///
-    /// The sender pre-authorises `total_amount` tokens.  In a production
-    /// deployment the contract would call a token contract to transfer funds;
-    /// here we record the commitment on-chain.
+    /// Returns the new stream id.
     ///
     /// # Panics
-    /// - If a stream already exists.
-    /// - If `amount_per_period` or `total_amount` are not positive.
-    /// - If `period_length` is zero.
+    /// - If `rate_per_second` is not positive.
+    /// - If `stop_time` is not after `start_time`.
+    /// - If `rate_per_second * (stop_time - start_time)` overflows.
+    /// - If the token transfer from `sender` fails.
     pub fn create_stream(
         env: Env,
         sender: Address,
         recipient: Address,
-        amount_per_period: i128,
-        period_length: u32,
-        total_amount: i128,
-    ) {
+        token: Address,
+        rate_per_second: i128,
+        start_time: u64,
+        stop_time: u64,
+    ) -> u32 {
         sender.require_auth();
         Self::lock(&env);
-        assert!(amount_per_period > 0, "amount_per_period must be positive");
-        assert!(total_amount > 0, "total_amount must be positive");
-        assert!(period_length > 0, "period_length must be positive");
-        assert!(
-            !env.storage().instance().has(&STREAM_KEY),
-            "stream already exists"
+        assert!(rate_per_second > 0, "rate must be positive");
+        assert!(stop_time > start_time, "stop must be after start");
+
+        let duration = i128::from(stop_time - start_time);
+        let deposit = checked_or_abort(rate_per_second.checked_mul(duration));
+
+        let stream_id: u32 = env.storage().instance().get(&DataKey::NextId).unwrap_or(0);
+        let next_id = stream_id.checked_add(1).unwrap_or_else(|| panic!("overflow"));
+
+        TokenClient::new(&env, &token).transfer(
+            &sender,
+            &env.current_contract_address(),
+            &deposit,
         );
 
         let stream = Stream {
             sender,
             recipient,
-            amount_per_period,
-            period_length,
-            total_amount,
-            claimed: 0,
-            start_ledger: env.ledger().sequence(),
-            last_pull_ledger: env.ledger().sequence(),
+            token,
+            rate_per_second,
+            start_time,
+            stop_time,
+            deposit,
+            withdrawn: 0,
             status: StreamStatus::Active,
         };
-        env.storage().instance().set(&STREAM_KEY, &stream);
+        env.storage()
+            .instance()
+            .set(&DataKey::Stream(stream_id), &stream);
+        env.storage().instance().set(&DataKey::NextId, &next_id);
         env.events()
-            .publish((symbol_short!("created"),), total_amount);
+            .publish((symbol_short!("created"), stream_id), deposit);
 
         Self::unlock(&env);
+        stream_id
     }
 
-    // ── Pull payment ──────────────────────────────────────────────────────────
+    // ── Withdraw ──────────────────────────────────────────────────────────────
 
-    /// Recipient pulls payment for all elapsed periods since the last pull.
+    /// Recipient withdraws everything vested and not yet withdrawn.
     ///
     /// Returns the amount transferred.
     ///
     /// # Panics
     /// - If the stream is not active.
-    /// - If no full period has elapsed since the last pull.
-    pub fn pull_payment(env: Env, recipient: Address) -> i128 {
+    /// - If `recipient` is not the stream's recipient.
+    /// - If nothing is vested beyond what was already withdrawn (including before start).
+    pub fn withdraw(env: Env, recipient: Address, stream_id: u32) -> i128 {
         recipient.require_auth();
         Self::lock(&env);
 
-        let mut stream: Stream = env
-            .storage()
-            .instance()
-            .get(&STREAM_KEY)
-            .expect("no stream");
-
+        let mut stream = load_stream(&env, stream_id);
         assert!(stream.status == StreamStatus::Active, "stream not active");
         assert!(stream.recipient == recipient, "not the recipient");
 
-        let current = env.ledger().sequence();
-        let periods_elapsed = (current - stream.last_pull_ledger) / stream.period_length;
-        assert!(periods_elapsed > 0, "no full period elapsed");
+        let vested = vested_at(&stream, env.ledger().timestamp());
+        let amount = checked_or_abort(vested.checked_sub(stream.withdrawn));
+        assert!(amount > 0, "nothing to withdraw");
 
-        let remaining = stream
-            .total_amount
-            .checked_sub(stream.claimed)
-            .expect("underflow");
-        let owed = (periods_elapsed as i128)
-            .checked_mul(stream.amount_per_period)
-            .expect("overflow")
-            .min(remaining);
-
-        stream.claimed = stream.claimed.checked_add(owed).expect("overflow");
-        stream.last_pull_ledger = stream
-            .last_pull_ledger
-            .checked_add(periods_elapsed * stream.period_length)
-            .expect("overflow");
-
-        if stream.claimed >= stream.total_amount {
+        stream.withdrawn = checked_or_abort(stream.withdrawn.checked_add(amount));
+        if stream.withdrawn == stream.deposit {
             stream.status = StreamStatus::Exhausted;
         }
+        env.storage()
+            .instance()
+            .set(&DataKey::Stream(stream_id), &stream);
 
-        env.storage().instance().set(&STREAM_KEY, &stream);
+        TokenClient::new(&env, &stream.token).transfer(
+            &env.current_contract_address(),
+            &recipient,
+            &amount,
+        );
         env.events()
-            .publish((symbol_short!("pulled"), recipient), owed);
+            .publish((symbol_short!("withdrew"), stream_id), amount);
 
         Self::unlock(&env);
-        owed
+        amount
     }
 
     // ── Cancel ────────────────────────────────────────────────────────────────
 
-    /// Sender cancels the stream and receives a prorated refund of unstreamed
-    /// tokens.
+    /// Sender cancels an active stream.
     ///
-    /// Returns the refund amount.
+    /// The accrued, unwithdrawn amount is transferred to the recipient (it vests on
+    /// cancellation). The unvested remainder, `deposit - vested`, is refunded to the
+    /// sender. The stream holds no balance afterwards.
+    ///
+    /// Returns the refunded (unvested) amount.
     ///
     /// # Panics
-    /// - If the stream is not active.
-    pub fn cancel_stream(env: Env, sender: Address) -> i128 {
+    /// - If the stream is not active (including a second cancel).
+    /// - If `sender` is not the stream's sender.
+    pub fn cancel_stream(env: Env, sender: Address, stream_id: u32) -> i128 {
         sender.require_auth();
         Self::lock(&env);
 
-        let mut stream: Stream = env
-            .storage()
-            .instance()
-            .get(&STREAM_KEY)
-            .expect("no stream");
-
+        let mut stream = load_stream(&env, stream_id);
         assert!(stream.status == StreamStatus::Active, "stream not active");
         assert!(stream.sender == sender, "not the sender");
 
-        // Prorated: credit recipient for any partial period already elapsed.
-        let current = env.ledger().sequence();
-        let periods_elapsed = (current - stream.last_pull_ledger) / stream.period_length;
-        let accrued_unpulled = (periods_elapsed as i128)
-            .checked_mul(stream.amount_per_period)
-            .expect("overflow");
+        let vested = vested_at(&stream, env.ledger().timestamp());
+        let to_recipient = checked_or_abort(vested.checked_sub(stream.withdrawn));
+        let refund = checked_or_abort(stream.deposit.checked_sub(vested));
 
-        let total_owed = stream
-            .claimed
-            .checked_add(accrued_unpulled)
-            .expect("overflow")
-            .min(stream.total_amount);
-
-        let refund = stream
-            .total_amount
-            .checked_sub(total_owed)
-            .expect("underflow");
-
+        // Settle the stream before transferring: all vested tokens are now paid out.
+        stream.withdrawn = vested;
         stream.status = StreamStatus::Cancelled;
-        env.storage().instance().set(&STREAM_KEY, &stream);
+        env.storage()
+            .instance()
+            .set(&DataKey::Stream(stream_id), &stream);
+
+        let token = TokenClient::new(&env, &stream.token);
+        let contract = env.current_contract_address();
+        if to_recipient > 0 {
+            token.transfer(&contract, &stream.recipient, &to_recipient);
+        }
+        if refund > 0 {
+            token.transfer(&contract, &stream.sender, &refund);
+        }
 
         env.events()
-            .publish((symbol_short!("cancelled"), sender), refund);
+            .publish((symbol_short!("cancelled"), stream_id), refund);
 
         Self::unlock(&env);
         refund
@@ -217,28 +272,32 @@ impl PaymentStreaming {
 
     // ── View ──────────────────────────────────────────────────────────────────
 
-    /// Returns the current stream state.
-    pub fn get_stream(env: Env) -> Stream {
+    /// Returns the stream record, or `None` if the id is unknown.
+    pub fn get_stream(env: Env, stream_id: u32) -> Option<Stream> {
         env.storage()
             .instance()
-            .get(&STREAM_KEY)
-            .expect("no stream")
+            .get(&DataKey::Stream(stream_id))
     }
 
-    /// Returns the unclaimed balance available to the recipient right now.
-    pub fn claimable(env: Env) -> i128 {
-        let stream: Stream = env
-            .storage()
-            .instance()
-            .get(&STREAM_KEY)
-            .expect("no stream");
+    /// Returns the number of streams created so far. Valid ids are `0..stream_count()`.
+    pub fn stream_count(env: Env) -> u32 {
+        env.storage().instance().get(&DataKey::NextId).unwrap_or(0)
+    }
+
+    /// Returns the total amount vested at the current ledger time.
+    pub fn vested(env: Env, stream_id: u32) -> i128 {
+        let stream = load_stream(&env, stream_id);
+        vested_at(&stream, env.ledger().timestamp())
+    }
+
+    /// Returns the amount the recipient could withdraw right now (0 if not active).
+    pub fn claimable(env: Env, stream_id: u32) -> i128 {
+        let stream = load_stream(&env, stream_id);
         if stream.status != StreamStatus::Active {
             return 0;
         }
-        let current = env.ledger().sequence();
-        let periods = (current - stream.last_pull_ledger) / stream.period_length;
-        let remaining = stream.total_amount - stream.claimed;
-        ((periods as i128) * stream.amount_per_period).min(remaining)
+        let vested = vested_at(&stream, env.ledger().timestamp());
+        checked_or_abort(vested.checked_sub(stream.withdrawn))
     }
 
     // ── Reentrancy guards ─────────────────────────────────────────────────
@@ -256,131 +315,5 @@ impl PaymentStreaming {
     }
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use soroban_sdk::testutils::{Address as _, Ledger};
-    use soroban_sdk::Env;
-
-    fn setup() -> (Env, Address, Address, Address) {
-        let env = Env::default();
-        env.mock_all_auths();
-        let contract_id = env.register(PaymentStreaming, ());
-        let sender = Address::generate(&env);
-        let recipient = Address::generate(&env);
-        (env, contract_id, sender, recipient)
-    }
-
-    fn create_default_stream(
-        env: &Env,
-        client: &PaymentStreamingClient,
-        sender: &Address,
-        recipient: &Address,
-    ) {
-        // 100 tokens/period, 10 ledgers/period, 1000 total
-        client.create_stream(sender, recipient, &100, &10, &1000);
-        let _ = env;
-    }
-
-    #[test]
-    fn test_create_stream() {
-        let (env, contract_id, sender, recipient) = setup();
-        let client = PaymentStreamingClient::new(&env, &contract_id);
-        create_default_stream(&env, &client, &sender, &recipient);
-        let stream = client.get_stream();
-        assert_eq!(stream.total_amount, 1000);
-        assert_eq!(stream.claimed, 0);
-        assert_eq!(stream.status, StreamStatus::Active);
-    }
-
-    #[test]
-    fn test_pull_payment_after_one_period() {
-        let (env, contract_id, sender, recipient) = setup();
-        let client = PaymentStreamingClient::new(&env, &contract_id);
-        create_default_stream(&env, &client, &sender, &recipient);
-
-        env.ledger().with_mut(|l| l.sequence_number += 10);
-        let pulled = client.pull_payment(&recipient);
-        assert_eq!(pulled, 100);
-        assert_eq!(client.get_stream().claimed, 100);
-    }
-
-    #[test]
-    fn test_pull_multiple_periods() {
-        let (env, contract_id, sender, recipient) = setup();
-        let client = PaymentStreamingClient::new(&env, &contract_id);
-        create_default_stream(&env, &client, &sender, &recipient);
-
-        env.ledger().with_mut(|l| l.sequence_number += 30); // 3 periods
-        let pulled = client.pull_payment(&recipient);
-        assert_eq!(pulled, 300);
-    }
-
-    #[test]
-    #[should_panic(expected = "no full period elapsed")]
-    fn test_pull_before_period_panics() {
-        let (env, contract_id, sender, recipient) = setup();
-        let client = PaymentStreamingClient::new(&env, &contract_id);
-        create_default_stream(&env, &client, &sender, &recipient);
-        env.ledger().with_mut(|l| l.sequence_number += 5); // half period
-        client.pull_payment(&recipient);
-    }
-
-    #[test]
-    fn test_cancel_returns_refund() {
-        let (env, contract_id, sender, recipient) = setup();
-        let client = PaymentStreamingClient::new(&env, &contract_id);
-        create_default_stream(&env, &client, &sender, &recipient);
-
-        // Advance 1 period so recipient has accrued 100
-        env.ledger().with_mut(|l| l.sequence_number += 10);
-        let refund = client.cancel_stream(&sender);
-        // 1000 total - 100 accrued = 900 refund
-        assert_eq!(refund, 900);
-        assert_eq!(client.get_stream().status, StreamStatus::Cancelled);
-    }
-
-    #[test]
-    #[should_panic(expected = "stream not active")]
-    fn test_pull_on_cancelled_stream_panics() {
-        let (env, contract_id, sender, recipient) = setup();
-        let client = PaymentStreamingClient::new(&env, &contract_id);
-        create_default_stream(&env, &client, &sender, &recipient);
-        client.cancel_stream(&sender);
-        env.ledger().with_mut(|l| l.sequence_number += 10);
-        client.pull_payment(&recipient);
-    }
-
-    #[test]
-    fn test_stream_exhausted_when_fully_claimed() {
-        let (env, contract_id, sender, recipient) = setup();
-        let client = PaymentStreamingClient::new(&env, &contract_id);
-        create_default_stream(&env, &client, &sender, &recipient);
-
-        // Advance 10 periods (1000 tokens = full amount)
-        env.ledger().with_mut(|l| l.sequence_number += 100);
-        client.pull_payment(&recipient);
-        assert_eq!(client.get_stream().status, StreamStatus::Exhausted);
-    }
-
-    #[test]
-    fn test_claimable_view() {
-        let (env, contract_id, sender, recipient) = setup();
-        let client = PaymentStreamingClient::new(&env, &contract_id);
-        create_default_stream(&env, &client, &sender, &recipient);
-
-        env.ledger().with_mut(|l| l.sequence_number += 20);
-        assert_eq!(client.claimable(), 200);
-    }
-
-    #[test]
-    #[should_panic(expected = "stream already exists")]
-    fn test_duplicate_stream_panics() {
-        let (env, contract_id, sender, recipient) = setup();
-        let client = PaymentStreamingClient::new(&env, &contract_id);
-        create_default_stream(&env, &client, &sender, &recipient);
-        create_default_stream(&env, &client, &sender, &recipient);
-    }
-}
+mod test;

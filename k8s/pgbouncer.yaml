@@ -1,0 +1,273 @@
+# =============================================================================
+# BE-080: PgBouncer Connection Pooler Kubernetes Manifest
+# Supports 2,000+ concurrent clients in transaction pooling mode with HA,
+# PodDisruptionBudget, HPA, and Prometheus metrics export.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgbouncer-config
+  labels:
+    app: pgbouncer
+    component: database-pooler
+    part-of: web3-student-lab
+data:
+  pgbouncer.ini: |
+    [databases]
+    web3-student-lab = host=postgres-primary.default.svc.cluster.local port=5432 dbname=web3-student-lab
+
+    [pgbouncer]
+    listen_addr = 0.0.0.0
+    listen_port = 6432
+    unix_socket_dir = /tmp
+    auth_type = scram-sha-256
+    auth_file = /etc/pgbouncer/userlist.txt
+
+    # Transaction pooling for high-concurrency Prisma workloads (2,000+ clients)
+    pool_mode = transaction
+    max_client_conn = 2500
+    default_pool_size = 50
+    min_pool_size = 10
+    reserve_pool_size = 20
+    reserve_pool_timeout = 3
+    max_db_connections = 100
+
+    # Connection lifecycle & safety timeouts
+    server_idle_timeout = 300
+    server_lifetime = 3600
+    query_wait_timeout = 120
+    client_idle_timeout = 300
+    server_reset_query = DISCARD ALL
+    ignore_startup_parameters = extra_float_digits,options
+
+    # Observability
+    log_connections = 0
+    log_disconnections = 0
+    log_pooler_errors = 1
+    stats_period = 60
+    admin_users = postgres
+    stats_users = postgres
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgbouncer
+  labels:
+    app: pgbouncer
+    component: database-pooler
+    part-of: web3-student-lab
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pgbouncer
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: pgbouncer
+        component: database-pooler
+        part-of: web3-student-lab
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9127"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - pgbouncer
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: pgbouncer
+          image: edoburu/pgbouncer:v1.23.1-p0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: pgbouncer
+              containerPort: 6432
+              protocol: TCP
+          env:
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: host
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: password
+            - name: DB_NAME
+              value: "web3-student-lab"
+            - name: POOL_MODE
+              value: "transaction"
+            - name: MAX_CLIENT_CONN
+              value: "2500"
+            - name: DEFAULT_POOL_SIZE
+              value: "50"
+            - name: MIN_POOL_SIZE
+              value: "10"
+            - name: RESERVE_POOL_SIZE
+              value: "20"
+            - name: RESERVE_POOL_TIMEOUT
+              value: "3"
+            - name: MAX_DB_CONNECTIONS
+              value: "100"
+            - name: AUTH_TYPE
+              value: "scram-sha-256"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          livenessProbe:
+            tcpSocket:
+              port: 6432
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 6432
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
+          volumeMounts:
+            - name: pgbouncer-config
+              mountPath: /etc/pgbouncer/pgbouncer.ini
+              subPath: pgbouncer.ini
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+        - name: pgbouncer-exporter
+          image: prometheuscommunity/pgbouncer-exporter:v0.7.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: metrics
+              containerPort: 9127
+              protocol: TCP
+          env:
+            - name: PGBOUNCER_EXPORTER_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: pgbouncer-exporter-credentials
+                  key: connection-string
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: pgbouncer-config
+          configMap:
+            name: pgbouncer-config
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgbouncer
+  labels:
+    app: pgbouncer
+    component: database-pooler
+    part-of: web3-student-lab
+spec:
+  type: ClusterIP
+  ports:
+    - name: pgbouncer
+      port: 6432
+      targetPort: 6432
+      protocol: TCP
+    - name: metrics
+      port: 9127
+      targetPort: 9127
+      protocol: TCP
+  selector:
+    app: pgbouncer
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pgbouncer-pdb
+  labels:
+    app: pgbouncer
+    component: database-pooler
+    part-of: web3-student-lab
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: pgbouncer
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pgbouncer-hpa
+  labels:
+    app: pgbouncer
+    component: database-pooler
+    part-of: web3-student-lab
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pgbouncer
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

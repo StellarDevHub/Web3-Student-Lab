@@ -1,3 +1,5 @@
+import { Keypair, StrKey } from '@stellar/stellar-sdk';
+
 export type P2PCryptoCurve = 'P-256';
 
 export interface P2PPublicIdentity {
@@ -419,4 +421,451 @@ export async function decryptP2PMessage(
 
 export function estimateEncryptedPayloadSize(payload: EncryptedP2PMessage): number {
   return payload.iv.length + payload.ciphertext.length + payload.aad.length + 128;
+}
+
+// ---------------------------------------------------------------------------
+// Authenticated Ephemeral ECDH + Stellar Ed25519 Key Agreement (FE-074)
+// ---------------------------------------------------------------------------
+
+export interface StellarEd25519Signer {
+  /** Stellar Ed25519 G... public key */
+  publicKey: string;
+  /** Signs arbitrary bytes with the participant's Stellar Ed25519 wallet key */
+  sign: (message: Uint8Array) => Promise<Uint8Array> | Uint8Array;
+}
+
+export interface SignedEphemeralKeyBundle {
+  version: 1;
+  roomId: string;
+  stellarPublicKey: string;
+  ephemeralPublicKeyJwk: JsonWebKey;
+  ephemeralKeyId: string;
+  nonce: string;
+  issuedAt: number;
+  expiresAt: number;
+  signature: string;
+}
+
+export interface EphemeralKeyAgreementSession {
+  roomId: string;
+  localStellarPublicKey: string;
+  localBundle: SignedEphemeralKeyBundle;
+  localPrivateKey: CryptoKey;
+}
+
+export interface VerifiedPeerKeyAgreement {
+  roomId: string;
+  localStellarPublicKey: string;
+  peerStellarPublicKey: string;
+  peerEphemeralKeyId: string;
+  sessionId: string;
+  /** AES-256-GCM key for encrypting WebRTC data channel payloads */
+  dataChannelKey: CryptoKey;
+  /** AES-256-GCM key for encrypting WebRTC audio/video media frames */
+  mediaFrameKey: CryptoKey;
+  /** Derived secret string for end-to-end encrypted collaborative editor sync */
+  editorSyncSecret: string;
+  verifiedAt: number;
+}
+
+export type PeerIdentityFailureCode =
+  | 'INVALID_PUBLIC_KEY'
+  | 'ROOM_MISMATCH'
+  | 'EXPIRED_BUNDLE'
+  | 'KEY_ID_MISMATCH'
+  | 'INVALID_SIGNATURE'
+  | 'IDENTITY_MISMATCH';
+
+export type PeerIdentityVerificationResult =
+  | { valid: true; peerStellarPublicKey: string; ephemeralKeyId: string }
+  | { valid: false; reason: string; code: PeerIdentityFailureCode };
+
+export class PeerIdentityMismatchError extends Error {
+  readonly code: PeerIdentityFailureCode;
+
+  constructor(code: PeerIdentityFailureCode, message: string) {
+    super(message);
+    this.name = 'PeerIdentityMismatchError';
+    this.code = code;
+  }
+}
+
+export interface EncryptedDataChannelEnvelope {
+  v: 1;
+  iv: string;
+  ct: string;
+}
+
+const WEBRTC_KEY_AGREEMENT_DOMAIN = 'web3-student-lab:webrtc-ed25519-ecdh:v1:';
+const DEFAULT_BUNDLE_TTL_MS = 5 * 60 * 1000;
+
+function getSubtleCrypto(): SubtleCrypto {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) {
+    throw new Error('Web Crypto API (crypto.subtle) is required for WebRTC key agreement.');
+  }
+  return subtle;
+}
+
+function getRandomBytes(length: number): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(new ArrayBuffer(length));
+  globalThis.crypto.getRandomValues(bytes);
+  return bytes;
+}
+
+async function sha256Base64UrlAny(data: string): Promise<string> {
+  const digest = await getSubtleCrypto().digest('SHA-256', TEXT_ENCODER.encode(data));
+  return base64UrlEncode(digest);
+}
+
+/**
+ * Creates a Stellar Ed25519 signer backed by a local Keypair (random if no secret is supplied).
+ */
+export function createLocalStellarEd25519Signer(secret?: string): StellarEd25519Signer {
+  const keypair = secret ? Keypair.fromSecret(secret) : Keypair.random();
+  return {
+    publicKey: keypair.publicKey(),
+    sign: (message: Uint8Array) => Uint8Array.from(keypair.sign(Buffer.from(message))),
+  };
+}
+
+/**
+ * Produces the canonical domain-separated byte payload signed by a participant's Stellar Ed25519 key.
+ */
+export function buildCanonicalKeyBundlePayload(
+  bundle: Omit<SignedEphemeralKeyBundle, 'signature'>
+): Uint8Array {
+  const canonical = JSON.stringify({
+    version: bundle.version,
+    roomId: bundle.roomId,
+    stellarPublicKey: bundle.stellarPublicKey,
+    ephemeralPublicKeyJwk: canonicalPublicKey(bundle.ephemeralPublicKeyJwk),
+    ephemeralKeyId: bundle.ephemeralKeyId,
+    nonce: bundle.nonce,
+    issuedAt: bundle.issuedAt,
+    expiresAt: bundle.expiresAt,
+  });
+
+  return TEXT_ENCODER.encode(`${WEBRTC_KEY_AGREEMENT_DOMAIN}${canonical}`);
+}
+
+/**
+ * Generates an ephemeral ECDH P-256 keypair and signs its public key bundle with the
+ * participant's Stellar Ed25519 wallet key prior to WebRTC connection establishment.
+ */
+export async function createSignedEphemeralKeySession(
+  roomId: string,
+  signer: StellarEd25519Signer,
+  ttlMs: number = DEFAULT_BUNDLE_TTL_MS
+): Promise<EphemeralKeyAgreementSession> {
+  if (!roomId.trim()) {
+    throw new Error('A non-empty roomId is required for WebRTC key agreement.');
+  }
+  if (!StrKey.isValidEd25519PublicKey(signer.publicKey)) {
+    throw new PeerIdentityMismatchError(
+      'INVALID_PUBLIC_KEY',
+      'Local Stellar signer public key is not a valid Ed25519 key.'
+    );
+  }
+
+  const subtle = getSubtleCrypto();
+  const pair = await subtle.generateKey({ name: 'ECDH', namedCurve: CURVE }, false, ['deriveBits']);
+  const ephemeralPublicKeyJwk = await subtle.exportKey('jwk', pair.publicKey);
+  const ephemeralKeyId = await sha256Base64UrlAny(canonicalPublicKey(ephemeralPublicKeyJwk));
+  const issuedAt = Date.now();
+  const expiresAt = issuedAt + ttlMs;
+  const nonce = base64UrlEncode(getRandomBytes(16));
+
+  const unsignedBundle: Omit<SignedEphemeralKeyBundle, 'signature'> = {
+    version: 1,
+    roomId,
+    stellarPublicKey: signer.publicKey,
+    ephemeralPublicKeyJwk,
+    ephemeralKeyId,
+    nonce,
+    issuedAt,
+    expiresAt,
+  };
+
+  const payload = buildCanonicalKeyBundlePayload(unsignedBundle);
+  const signatureBytes = await signer.sign(payload);
+
+  const localBundle: SignedEphemeralKeyBundle = {
+    ...unsignedBundle,
+    signature: base64UrlEncode(signatureBytes),
+  };
+
+  return {
+    roomId,
+    localStellarPublicKey: signer.publicKey,
+    localBundle,
+    localPrivateKey: pair.privateKey,
+  };
+}
+
+/**
+ * Verifies a peer's signed ephemeral ECDH key bundle against its Stellar Ed25519 public key.
+ */
+export async function verifySignedEphemeralKeyBundle(
+  bundle: SignedEphemeralKeyBundle,
+  options: {
+    expectedRoomId: string;
+    expectedStellarPublicKey?: string;
+    now?: number;
+  }
+): Promise<PeerIdentityVerificationResult> {
+  if (!bundle || !StrKey.isValidEd25519PublicKey(bundle.stellarPublicKey)) {
+    return {
+      valid: false,
+      code: 'INVALID_PUBLIC_KEY',
+      reason: 'Peer presented an invalid Stellar Ed25519 public key.',
+    };
+  }
+
+  if (
+    options.expectedStellarPublicKey &&
+    bundle.stellarPublicKey !== options.expectedStellarPublicKey
+  ) {
+    return {
+      valid: false,
+      code: 'IDENTITY_MISMATCH',
+      reason: `Peer identity mismatch: expected ${options.expectedStellarPublicKey}, received ${bundle.stellarPublicKey}.`,
+    };
+  }
+
+  if (bundle.roomId !== options.expectedRoomId) {
+    return {
+      valid: false,
+      code: 'ROOM_MISMATCH',
+      reason: `Peer key bundle was issued for room "${bundle.roomId}", expected "${options.expectedRoomId}".`,
+    };
+  }
+
+  const now = options.now ?? Date.now();
+  if (now > bundle.expiresAt) {
+    return {
+      valid: false,
+      code: 'EXPIRED_BUNDLE',
+      reason: 'Peer signed ephemeral key bundle has expired.',
+    };
+  }
+
+  const computedKeyId = await sha256Base64UrlAny(canonicalPublicKey(bundle.ephemeralPublicKeyJwk));
+  if (computedKeyId !== bundle.ephemeralKeyId) {
+    return {
+      valid: false,
+      code: 'KEY_ID_MISMATCH',
+      reason: 'Peer ephemeral public key fingerprint does not match the advertised key identifier.',
+    };
+  }
+
+  try {
+    const { signature, ...unsigned } = bundle;
+    const payload = buildCanonicalKeyBundlePayload(unsigned);
+    const sigBytes = base64UrlDecode(signature);
+    const keypair = Keypair.fromPublicKey(bundle.stellarPublicKey);
+    const verified = keypair.verify(Buffer.from(payload), Buffer.from(sigBytes));
+
+    if (!verified) {
+      return {
+        valid: false,
+        code: 'INVALID_SIGNATURE',
+        reason: 'Ed25519 signature verification failed for peer ephemeral public key.',
+      };
+    }
+  } catch {
+    return {
+      valid: false,
+      code: 'INVALID_SIGNATURE',
+      reason: 'Malformed Ed25519 signature on peer ephemeral public key.',
+    };
+  }
+
+  return {
+    valid: true,
+    peerStellarPublicKey: bundle.stellarPublicKey,
+    ephemeralKeyId: bundle.ephemeralKeyId,
+  };
+}
+
+/**
+ * Verifies the peer's Ed25519-signed ephemeral ECDH public key and derives shared
+ * AES-256-GCM keys for WebRTC data channels, audio/video media frames, and editor sync.
+ */
+export async function completeAuthenticatedKeyAgreement(
+  session: EphemeralKeyAgreementSession,
+  peerBundle: SignedEphemeralKeyBundle,
+  expectedPeerStellarPublicKey?: string
+): Promise<VerifiedPeerKeyAgreement> {
+  const verification = await verifySignedEphemeralKeyBundle(peerBundle, {
+    expectedRoomId: session.roomId,
+    expectedStellarPublicKey: expectedPeerStellarPublicKey,
+  });
+
+  if (!verification.valid) {
+    throw new PeerIdentityMismatchError(verification.code, verification.reason);
+  }
+
+  const subtle = getSubtleCrypto();
+  const peerPublicKey = await subtle.importKey(
+    'jwk',
+    peerBundle.ephemeralPublicKeyJwk,
+    { name: 'ECDH', namedCurve: CURVE },
+    false,
+    []
+  );
+
+  const sharedSecret = await subtle.deriveBits(
+    { name: 'ECDH', public: peerPublicKey },
+    session.localPrivateKey,
+    256
+  );
+
+  try {
+    const hkdfKey = await subtle.importKey('raw', sharedSecret, 'HKDF', false, [
+      'deriveKey',
+      'deriveBits',
+    ]);
+    const sortedPeers = [session.localStellarPublicKey, peerBundle.stellarPublicKey].sort();
+    const sessionTranscript = `${session.roomId}:${sortedPeers[0]}:${sortedPeers[1]}`;
+    const salt = await subtle.digest('SHA-256', TEXT_ENCODER.encode(sessionTranscript));
+    const sessionId = base64UrlEncode(salt);
+
+    const [dataChannelKey, mediaFrameKey, editorSyncBits] = await Promise.all([
+      subtle.deriveKey(
+        {
+          name: 'HKDF',
+          hash: 'SHA-256',
+          salt,
+          info: TEXT_ENCODER.encode('web3-student-lab:webrtc-data-channel:v1'),
+        },
+        hkdfKey,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+      ),
+      subtle.deriveKey(
+        {
+          name: 'HKDF',
+          hash: 'SHA-256',
+          salt,
+          info: TEXT_ENCODER.encode('web3-student-lab:webrtc-media-frame:v1'),
+        },
+        hkdfKey,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+      ),
+      subtle.deriveBits(
+        {
+          name: 'HKDF',
+          hash: 'SHA-256',
+          salt,
+          info: TEXT_ENCODER.encode('web3-student-lab:webrtc-editor-sync:v1'),
+        },
+        hkdfKey,
+        256
+      ),
+    ]);
+
+    return {
+      roomId: session.roomId,
+      localStellarPublicKey: session.localStellarPublicKey,
+      peerStellarPublicKey: peerBundle.stellarPublicKey,
+      peerEphemeralKeyId: peerBundle.ephemeralKeyId,
+      sessionId,
+      dataChannelKey,
+      mediaFrameKey,
+      editorSyncSecret: base64UrlEncode(editorSyncBits),
+      verifiedAt: Date.now(),
+    };
+  } finally {
+    new Uint8Array(sharedSecret).fill(0);
+  }
+}
+
+/**
+ * Encrypts a WebRTC data channel payload using the agreed AES-256-GCM dataChannelKey.
+ */
+export async function encryptDataChannelPayload(
+  key: CryptoKey,
+  plaintext: string | Uint8Array
+): Promise<string> {
+  const subtle = getSubtleCrypto();
+  const iv = getRandomBytes(12);
+  const data = typeof plaintext === 'string' ? TEXT_ENCODER.encode(plaintext) : toCryptoBytes(plaintext);
+  const ciphertext = await subtle.encrypt({ name: 'AES-GCM', iv, tagLength: 128 }, key, data);
+
+  const envelope: EncryptedDataChannelEnvelope = {
+    v: 1,
+    iv: base64UrlEncode(iv),
+    ct: base64UrlEncode(ciphertext),
+  };
+
+  return JSON.stringify(envelope);
+}
+
+/**
+ * Decrypts a WebRTC data channel payload using the agreed AES-256-GCM dataChannelKey.
+ */
+export async function decryptDataChannelPayload(
+  key: CryptoKey,
+  encoded: string
+): Promise<Uint8Array> {
+  const envelope = JSON.parse(encoded) as EncryptedDataChannelEnvelope;
+  if (envelope.v !== 1 || !envelope.iv || !envelope.ct) {
+    throw new Error('Invalid encrypted WebRTC data channel envelope.');
+  }
+
+  const subtle = getSubtleCrypto();
+  const plaintext = await subtle.decrypt(
+    {
+      name: 'AES-GCM',
+      iv: toCryptoBytes(base64UrlDecode(envelope.iv)),
+      tagLength: 128,
+    },
+    key,
+    toCryptoBytes(base64UrlDecode(envelope.ct))
+  );
+
+  return new Uint8Array(plaintext);
+}
+
+/**
+ * Encrypts a WebRTC audio/video encoded media frame (AES-256-GCM with 12-byte IV prefix).
+ */
+export async function encryptMediaFrame(
+  key: CryptoKey,
+  frameData: ArrayBuffer
+): Promise<ArrayBuffer> {
+  const subtle = getSubtleCrypto();
+  const iv = getRandomBytes(12);
+  const ciphertext = await subtle.encrypt(
+    { name: 'AES-GCM', iv, tagLength: 128 },
+    key,
+    frameData
+  );
+  const combined = new Uint8Array(iv.byteLength + ciphertext.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(ciphertext), iv.byteLength);
+  return combined.buffer;
+}
+
+/**
+ * Decrypts a WebRTC audio/video encoded media frame (AES-256-GCM with 12-byte IV prefix).
+ */
+export async function decryptMediaFrame(
+  key: CryptoKey,
+  encryptedFrame: ArrayBuffer
+): Promise<ArrayBuffer> {
+  const bytes = new Uint8Array(encryptedFrame);
+  if (bytes.byteLength <= 12) {
+    throw new Error('Encrypted media frame is too short.');
+  }
+
+  const iv = toCryptoBytes(bytes.subarray(0, 12));
+  const ciphertext = toCryptoBytes(bytes.subarray(12));
+  const subtle = getSubtleCrypto();
+
+  return subtle.decrypt({ name: 'AES-GCM', iv, tagLength: 128 }, key, ciphertext);
 }
