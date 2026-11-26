@@ -212,7 +212,6 @@ impl AMMContract {
         Self::lock(&env);
         access_control::require_not_paused!(&env, AmmError::ContractPaused);
         if amount_a <= 0 || amount_b <= 0 {
-            Self::unlock(&env);
             panic_with_error!(&env, AmmError::InvalidAmount);
         }
 
@@ -246,7 +245,6 @@ impl AMMContract {
             match lp_token::initial_shares(amount_a, amount_b) {
                 Some(s) => s,
                 None => {
-                    Self::unlock(&env);
                     panic_with_error!(&env, AmmError::InvalidAmount);
                 }
             }
@@ -257,7 +255,6 @@ impl AMMContract {
         };
 
         if shares < min_shares {
-            Self::unlock(&env);
             panic_with_error!(&env, AmmError::SlippageExceeded);
         }
 
@@ -281,7 +278,6 @@ impl AMMContract {
 
         pool_share_client.mint(&provider, &shares);
         invariants::assert_balance_reserve_invariant(&env);
-        Self::unlock(&env);
 
         events::liquidity_added(
             &env,
@@ -311,7 +307,6 @@ impl AMMContract {
         // able to exit during an incident. The rolling outflow budget below
         // still rate-limits the exit.
         if shares <= 0 {
-            Self::unlock(&env);
             panic_with_error!(&env, AmmError::InvalidAmount);
         }
 
@@ -331,14 +326,12 @@ impl AMMContract {
             match lp_token::withdrawal_amounts(shares, balance_a, balance_b, total_shares) {
                 Some(amounts) => amounts,
                 None => {
-                    Self::unlock(&env);
                     panic_with_error!(&env, AmmError::InvalidAmount);
                 }
             };
         circuit_breaker::record_outflow(&env, balance_a, balance_b, amount_a, amount_b);
 
         if amount_a < min_amount_a || amount_b < min_amount_b {
-            Self::unlock(&env);
             panic_with_error!(&env, AmmError::SlippageExceeded);
         }
 
@@ -366,7 +359,6 @@ impl AMMContract {
         token_a_client.transfer(&contract_addr, &provider, &amount_a);
         token_b_client.transfer(&contract_addr, &provider, &amount_b);
         invariants::assert_balance_reserve_invariant(&env);
-        Self::unlock(&env);
 
         events::liquidity_removed(
             &env,
@@ -426,7 +418,6 @@ impl AMMContract {
         circuit_breaker::record_outflow(&env, balance_a, balance_b, 0, amount_out_before_fee);
 
         if amount_out < min_amount_out {
-            Self::unlock(&env);
             panic_with_error!(&env, AmmError::SlippageExceeded);
         }
 
@@ -445,7 +436,6 @@ impl AMMContract {
         token_b_client.transfer(&contract_addr, &user, &amount_out);
         token_b_client.transfer(&contract_addr, &fee_collector, &fee);
         invariants::assert_balance_reserve_invariant(&env);
-        Self::unlock(&env);
 
         events::swap_a_for_b(
             &env,
@@ -517,7 +507,6 @@ impl AMMContract {
         circuit_breaker::record_outflow(&env, balance_a, balance_b, amount_out_before_fee, 0);
 
         if amount_out < min_amount_out {
-            Self::unlock(&env);
             panic_with_error!(&env, AmmError::SlippageExceeded);
         }
 
@@ -536,7 +525,6 @@ impl AMMContract {
         token_a_client.transfer(&contract_addr, &user, &amount_out);
         token_a_client.transfer(&contract_addr, &fee_collector, &fee);
         invariants::assert_balance_reserve_invariant(&env);
-        Self::unlock(&env);
 
         events::swap_b_for_a(
             &env,
