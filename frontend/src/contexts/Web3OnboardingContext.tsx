@@ -1,7 +1,8 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { Joyride, CallBackProps, STATUS, Step, ACTIONS, EVENTS } from 'react-joyride';
+import dynamic from 'next/dynamic';
+import type { CallBackProps, Step } from 'react-joyride';
 import { useWallet } from './WalletContext';
 import { api } from '@/lib/api';
 
@@ -23,6 +24,16 @@ interface Web3OnboardingContextType {
 }
 
 const Web3OnboardingContext = createContext<Web3OnboardingContextType | null>(null);
+
+// react-joyride (+ floating-ui) is only fetched once a tour actually runs
+// (FE-076); it used to ship in every route's first-load JS via the root layout.
+const Joyride = dynamic(() => import('react-joyride').then((m) => m.Joyride), { ssr: false });
+
+// Values of react-joyride's STATUS / EVENTS / ACTIONS constants, inlined so the
+// library is not needed until the tour renders.
+const STATUS = { FINISHED: 'finished', SKIPPED: 'skipped' } as const;
+const EVENTS = { STEP_AFTER: 'step:after', TARGET_NOT_FOUND: 'error:target_not_found' } as const;
+const ACTIONS = { NEXT: 'next', PREV: 'prev' } as const;
 
 const ONBOARDING_STEPS: Step[] = [
   {
@@ -182,6 +193,7 @@ export const Web3OnboardingProvider = ({ children }: { children: ReactNode }) =>
         nextStep,
       }}
     >
+      {run && (
       <Joyride
         steps={steps}
         run={run}
@@ -204,6 +216,7 @@ export const Web3OnboardingProvider = ({ children }: { children: ReactNode }) =>
         disableOverlayClose={true}
         hideCloseButton={false}
       />
+      )}
       {children}
     </Web3OnboardingContext.Provider>
   );
