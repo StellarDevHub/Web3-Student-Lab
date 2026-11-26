@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '@/lib/api-config';
+import { getStoredSessionToken } from '@/lib/credentialStorage';
 
 /**
  * Shape of a course-notification event pushed over the SSE stream.
@@ -21,11 +22,7 @@ export interface NotificationStreamEvent {
 }
 
 export type NotificationStreamState =
-  | 'idle'
-  | 'connecting'
-  | 'connected'
-  | 'reconnecting'
-  | 'disconnected';
+  'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
 
 export interface UseNotificationStreamOptions {
   /** Backend base URL (defaults to the shared API_BASE_URL). */
@@ -62,7 +59,7 @@ export interface UseNotificationStreamReturn {
  *   server instead of being lost forever.
  */
 export function useNotificationStream(
-  options: UseNotificationStreamOptions = {},
+  options: UseNotificationStreamOptions = {}
 ): UseNotificationStreamReturn {
   const {
     url = API_BASE_URL,
@@ -73,8 +70,7 @@ export function useNotificationStream(
     onEvent,
   } = options;
 
-  const [connectionState, setConnectionState] =
-    useState<NotificationStreamState>('idle');
+  const [connectionState, setConnectionState] = useState<NotificationStreamState>('idle');
   const [lastEventId, setLastEventId] = useState<string | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
@@ -99,102 +95,107 @@ export function useNotificationStream(
   }, []);
 
   useEffect(() => {
-    const token =
-      localStorage.getItem('token') ?? localStorage.getItem('auth_token');
-
-    if (!token) {
-      setConnectionState('idle');
-      return undefined;
-    }
-
-    closedRef.current = false;
-
-    // Read the persisted last-event id (localStorage survives reloads so
-    // reconnection recovery works across page refreshes, #1122).
-    const lastEventIdRef = {
-      current: localStorage.getItem('notif_last_event_id'),
-    };
-    setLastEventId(lastEventIdRef.current);
-
-    const connect = (): void => {
-      if (closedRef.current) {
+    let active = true;
+    let lastEventIdRef: { current: string | null } | null = null;
+    const start = async () => {
+      const token = await getStoredSessionToken();
+      if (!active) return;
+      if (!token) {
+        setConnectionState('idle');
         return;
       }
 
-      const streamUrl = new URL(`${url}/notifications/stream`);
-      streamUrl.searchParams.set('access_token', token);
-      // Last-Event-ID recovery (#1122): only send when we have seen events.
-      if (lastEventIdRef.current) {
-        streamUrl.searchParams.set('lastEventId', lastEventIdRef.current);
-      }
+      closedRef.current = false;
 
-      setConnectionState(
-        attemptsRef.current === 0 ? 'connecting' : 'reconnecting',
-      );
-
-      const source = new EventSource(streamUrl.toString());
-      sourceRef.current = source;
-
-      source.addEventListener('open', () => {
-        if (closedRef.current) {
-          source.close();
-          return;
-        }
-        attemptsRef.current = 0;
-        setReconnectAttempt(0);
-        setLastError(null);
-        setConnectionState('connected');
-      });
-
-      // Named `notification` event from the backend bridge.
-      source.addEventListener('notification', (raw) => {
-        const event = raw as MessageEvent<string>;
-        try {
-          const parsed = JSON.parse(event.data) as NotificationStreamEvent;
-          if (event.lastEventId) {
-            lastEventIdRef.current = event.lastEventId;
-            setLastEventId(event.lastEventId);
-          } else if (parsed.id) {
-            lastEventIdRef.current = parsed.id;
-            setLastEventId(parsed.id);
-          }
-          onEventRef.current?.(parsed);
-        } catch {
-          // Ignore malformed payloads.
-        }
-      });
-
-      source.onerror = () => {
-        source.close();
-        sourceRef.current = null;
-
-        if (closedRef.current || !autoReconnect) {
-          setConnectionState('disconnected');
-          return;
-        }
-
-        attemptsRef.current += 1;
-        setReconnectAttempt(attemptsRef.current);
-
-        if (attemptsRef.current > maxAttempts) {
-          setLastError('Reconnect attempts exhausted');
-          setConnectionState('disconnected');
-          return;
-        }
-
-        // Bounded exponential backoff with jitter (full jitter).
-        const cap = Math.min(
-          maxDelayMs,
-          initialDelayMs * 2 ** (attemptsRef.current - 1),
-        );
-        const delay = Math.floor(cap * (0.5 + Math.random() * 0.5));
-        timerRef.current = setTimeout(connect, delay);
+      // Read the persisted last-event id (localStorage survives reloads so
+      // reconnection recovery works across page refreshes, #1122).
+      const eventIdState = {
+        current: localStorage.getItem('notif_last_event_id'),
       };
-    };
+      lastEventIdRef = eventIdState;
+      setLastEventId(eventIdState.current);
 
-    connect();
+      const connect = (): void => {
+        if (closedRef.current) {
+          return;
+        }
+
+        const streamUrl = new URL(`${url}/notifications/stream`);
+        streamUrl.searchParams.set('access_token', token);
+        // Last-Event-ID recovery (#1122): only send when we have seen events.
+        if (eventIdState.current) {
+          streamUrl.searchParams.set('lastEventId', eventIdState.current);
+        }
+
+        setConnectionState(attemptsRef.current === 0 ? 'connecting' : 'reconnecting');
+
+        const source = new EventSource(streamUrl.toString());
+        sourceRef.current = source;
+
+        source.addEventListener('open', () => {
+          if (closedRef.current) {
+            source.close();
+            return;
+          }
+          attemptsRef.current = 0;
+          setReconnectAttempt(0);
+          setLastError(null);
+          setConnectionState('connected');
+        });
+
+        // Named `notification` event from the backend bridge.
+        source.addEventListener('notification', (raw) => {
+          const event = raw as MessageEvent<string>;
+          try {
+            const parsed = JSON.parse(event.data) as NotificationStreamEvent;
+            if (event.lastEventId) {
+              eventIdState.current = event.lastEventId;
+              setLastEventId(event.lastEventId);
+            } else if (parsed.id) {
+              eventIdState.current = parsed.id;
+              setLastEventId(parsed.id);
+            }
+            onEventRef.current?.(parsed);
+          } catch {
+            // Ignore malformed payloads.
+          }
+        });
+
+        source.onerror = () => {
+          source.close();
+          sourceRef.current = null;
+
+          if (closedRef.current || !autoReconnect) {
+            setConnectionState('disconnected');
+            return;
+          }
+
+          attemptsRef.current += 1;
+          setReconnectAttempt(attemptsRef.current);
+
+          if (attemptsRef.current > maxAttempts) {
+            setLastError('Reconnect attempts exhausted');
+            setConnectionState('disconnected');
+            return;
+          }
+
+          // Bounded exponential backoff with jitter (full jitter).
+          const cap = Math.min(maxDelayMs, initialDelayMs * 2 ** (attemptsRef.current - 1));
+          const delay = Math.floor(cap * (0.5 + Math.random() * 0.5));
+          timerRef.current = setTimeout(connect, delay);
+        };
+      };
+
+      connect();
+    };
+    start().catch((error) => {
+      console.error('Failed to initialize notification stream session:', error);
+      setLastError(error instanceof Error ? error.message : 'Failed to read session');
+      setConnectionState('disconnected');
+    });
 
     return () => {
+      active = false;
       closedRef.current = true;
       if (timerRef.current) {
         clearTimeout(timerRef.current);
@@ -204,7 +205,7 @@ export function useNotificationStream(
       sourceRef.current = null;
       // Persist for the next mount so reconnection recovery works across
       // reloads (#1122).
-      if (lastEventIdRef.current) {
+      if (lastEventIdRef?.current) {
         localStorage.setItem('notif_last_event_id', lastEventIdRef.current);
       }
     };

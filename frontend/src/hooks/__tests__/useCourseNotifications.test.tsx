@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { NotificationProvider, useNotifications } from '../../contexts/NotificationContext';
 import {
   useCourseNotifications,
@@ -10,13 +10,14 @@ import {
   COURSE_WS_CONNECTION_TIMEOUT_MS,
 } from '../useCourseNotifications';
 import type { ReactNode } from 'react';
+import { clearSessionStorage, storeEncryptedSession } from '../../lib/credentialStorage';
 
 const { mockIo, mockOn, mockDisconnect, mockConnect, mockRemoveAllListeners } = vi.hoisted(() => {
   const mockOn = vi.fn();
   const mockDisconnect = vi.fn();
   const mockConnect = vi.fn();
   const mockRemoveAllListeners = vi.fn();
-  const mockIo = vi.fn(() => ({
+  const mockIo = vi.fn((_url: string, _options: Record<string, unknown>) => ({
     on: mockOn,
     disconnect: mockDisconnect,
     connect: mockConnect,
@@ -31,8 +32,8 @@ vi.mock('socket.io-client', () => ({
 
 let registeredHandlers: Map<string, (...args: unknown[]) => void> = new Map();
 
-beforeEach(() => {
-  localStorage.setItem('token', 'test-token');
+beforeEach(async () => {
+  await storeEncryptedSession({ token: 'test-token' });
   registeredHandlers = new Map();
 
   mockOn.mockImplementation((event: string, handler: (...args: unknown[]) => void) => {
@@ -42,10 +43,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  localStorage.removeItem('token');
-  localStorage.removeItem('auth_token');
+  clearSessionStorage();
   vi.clearAllMocks();
 });
+
+const waitForConnection = () => waitFor(() => expect(mockIo).toHaveBeenCalled());
 
 function emitEvent(event: string, data: unknown) {
   const handler = registeredHandlers.get(event);
@@ -60,7 +62,7 @@ function wrapper({ children }: { children: ReactNode }) {
 
 describe('useCourseNotifications', () => {
   it('should not connect without an auth token', () => {
-    localStorage.removeItem('token');
+    clearSessionStorage();
 
     const { result } = renderHook(() => useCourseNotifications(), { wrapper });
 
@@ -68,19 +70,20 @@ describe('useCourseNotifications', () => {
     expect(result.current.connectionState).toBe('idle');
   });
 
-  it('should connect with auth token', () => {
+  it('should connect with auth token', async () => {
     renderHook(() => useCourseNotifications(), { wrapper });
 
-    expect(mockIo).toHaveBeenCalledTimes(1);
-    const [url, opts] = mockIo.mock.calls[0] as [string, { auth: { token: string } }];
+    await waitFor(() => expect(mockIo).toHaveBeenCalledTimes(1));
+    const [url, opts] = mockIo.mock.calls[0];
     expect(url).toBe('ws://localhost:8080');
-    expect(opts.auth.token).toBe('test-token');
+    expect((opts.auth as { token: string }).token).toBe('test-token');
   });
 
-  it('should configure bounded exponential backoff with jitter', () => {
+  it('should configure bounded exponential backoff with jitter', async () => {
     renderHook(() => useCourseNotifications(), { wrapper });
 
-    const [, opts] = mockIo.mock.calls[0] as [string, Record<string, unknown>];
+    await waitForConnection();
+    const [, opts] = mockIo.mock.calls[0];
     expect(opts.reconnection).toBe(true);
     expect(opts.reconnectionAttempts).toBe(COURSE_WS_MAX_RECONNECT_ATTEMPTS);
     expect(opts.reconnectionDelay).toBe(COURSE_WS_INITIAL_DELAY_MS);
@@ -89,12 +92,13 @@ describe('useCourseNotifications', () => {
     expect(opts.timeout).toBe(COURSE_WS_CONNECTION_TIMEOUT_MS);
   });
 
-  it('should push course_created events as course_update notifications', () => {
+  it('should push course_created events as course_update notifications', async () => {
     const { result: notifResult } = renderHook(
       () => ({ notifs: useNotifications(), _hook: useCourseNotifications() }),
       { wrapper },
     );
 
+    await waitForConnection();
     emitEvent('course_notification', {
       id: 'n-1',
       type: 'course_created',
@@ -111,12 +115,13 @@ describe('useCourseNotifications', () => {
     expect(notifResult.current.notifs.notifications[0].title).toBe('New Course Available');
   });
 
-  it('should push announcement events as announcement notifications', () => {
+  it('should push announcement events as announcement notifications', async () => {
     const { result: notifResult } = renderHook(
       () => ({ notifs: useNotifications(), _hook: useCourseNotifications() }),
       { wrapper },
     );
 
+    await waitForConnection();
     emitEvent('course_notification', {
       id: 'n-3',
       type: 'announcement',
@@ -129,11 +134,12 @@ describe('useCourseNotifications', () => {
     expect(notifResult.current.notifs.notifications[0].type).toBe('announcement');
   });
 
-  it('should track connection state as connected', () => {
+  it('should track connection state as connected', async () => {
     const { result } = renderHook(() => useCourseNotifications(), { wrapper });
 
     expect(result.current.connectionState).toBe('idle');
 
+    await waitForConnection();
     emitEvent('connect', undefined);
 
     expect(result.current.connectionState).toBe('connected');
@@ -141,18 +147,20 @@ describe('useCourseNotifications', () => {
     expect(result.current.retryExhausted).toBe(false);
   });
 
-  it('should enter reconnecting state on unexpected disconnect', () => {
+  it('should enter reconnecting state on unexpected disconnect', async () => {
     const { result } = renderHook(() => useCourseNotifications(), { wrapper });
 
+    await waitForConnection();
     emitEvent('connect', undefined);
     emitEvent('disconnect', 'transport close');
 
     expect(result.current.connectionState).toBe('reconnecting');
   });
 
-  it('should track reconnect attempts and recover', () => {
+  it('should track reconnect attempts and recover', async () => {
     const { result } = renderHook(() => useCourseNotifications(), { wrapper });
 
+    await waitForConnection();
     emitEvent('connect', undefined);
     emitEvent('disconnect', 'transport close');
     emitEvent('reconnect_attempt', 1);
@@ -167,48 +175,47 @@ describe('useCourseNotifications', () => {
     expect(result.current.retryExhausted).toBe(false);
   });
 
-  it('should mark retries exhausted when reconnection fails', () => {
+  it('should mark retries exhausted when reconnection fails', async () => {
     const { result } = renderHook(() => useCourseNotifications(), { wrapper });
 
+    await waitForConnection();
     emitEvent('connect_error', { message: 'xhr poll error' });
     emitEvent('reconnect_attempt', 1);
-    emitEvent('reconnect_failed');
+    emitEvent('reconnect_failed', undefined);
 
     expect(result.current.connectionState).toBe('disconnected');
     expect(result.current.retryExhausted).toBe(true);
   });
 
-  it('should clean up socket on unmount and prevent reconnect attempts', () => {
+  it('should clean up socket on unmount and prevent reconnect attempts', async () => {
     const { unmount } = renderHook(() => useCourseNotifications(), { wrapper });
 
+    await waitForConnection();
     unmount();
 
     expect(mockRemoveAllListeners).toHaveBeenCalled();
     expect(mockDisconnect).toHaveBeenCalled();
   });
 
-  it('should not reconnect after manual logout (token removed)', () => {
+  it('should not reconnect after manual logout (token removed)', async () => {
     renderHook(() => useCourseNotifications(), { wrapper });
 
-    expect(mockIo).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockIo).toHaveBeenCalledTimes(1));
 
-    act(() => {
-      localStorage.removeItem('token');
-      window.dispatchEvent(new Event('storage'));
-    });
+    act(() => clearSessionStorage());
 
     // The stale socket is torn down and no new socket is created.
-    expect(mockDisconnect).toHaveBeenCalled();
+    await waitFor(() => expect(mockDisconnect).toHaveBeenCalled());
     expect(mockIo).toHaveBeenCalledTimes(1);
   });
 
-  it('should remove listeners and disconnect when the url changes (route change)', () => {
+  it('should remove listeners and disconnect when the url changes (route change)', async () => {
     const { rerender } = renderHook(
       ({ url }: { url: string }) => useCourseNotifications(url),
       { wrapper, initialProps: { url: 'ws://localhost:8080' } },
     );
 
-    expect(mockIo).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockIo).toHaveBeenCalledTimes(1));
 
     act(() => {
       rerender({ url: 'ws://localhost:8081' });
@@ -216,6 +223,6 @@ describe('useCourseNotifications', () => {
 
     expect(mockRemoveAllListeners).toHaveBeenCalled();
     expect(mockDisconnect).toHaveBeenCalled();
-    expect(mockIo).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(mockIo).toHaveBeenCalledTimes(2));
   });
 });

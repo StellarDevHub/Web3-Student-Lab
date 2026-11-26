@@ -1,5 +1,10 @@
 import { ethers } from 'ethers';
 import detectEthereumProvider from '@metamask/detect-provider';
+import {
+  clearSessionStorage,
+  getStoredSession,
+  storeEncryptedSession,
+} from '@/lib/credentialStorage';
 
 export interface Web3AuthResponse {
   user: {
@@ -26,11 +31,6 @@ export class Web3AuthService {
    */
   async initialize(): Promise<boolean> {
     try {
-      // Clean up legacy refresh token from localStorage if present
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('refreshToken');
-      }
-
       const ethereumProvider = await detectEthereumProvider();
 
       if (!ethereumProvider) {
@@ -154,10 +154,12 @@ export class Web3AuthService {
 
       const authResponse = await response.json();
 
-      // Store access token and user in localStorage; refresh token is in HttpOnly cookie
-      localStorage.setItem('accessToken', authResponse.accessToken);
-      localStorage.removeItem('refreshToken');
-      localStorage.setItem('user', JSON.stringify(authResponse.user));
+      await storeEncryptedSession({
+        token: authResponse.accessToken,
+        accessToken: authResponse.accessToken,
+        refreshToken: authResponse.refreshToken ?? null,
+        user: authResponse.user,
+      });
 
       return authResponse;
     } catch (error) {
@@ -173,10 +175,7 @@ export class Web3AuthService {
     this.provider = null;
     this.signer = null;
 
-    // Clear stored tokens
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+    clearSessionStorage();
   }
 
   /**
@@ -189,16 +188,17 @@ export class Web3AuthService {
   /**
    * Get stored user data
    */
-  getStoredUser(): any {
-    const userStr = localStorage.getItem('user');
-    return userStr ? JSON.parse(userStr) : null;
+  async getStoredUser(): Promise<Web3AuthResponse['user'] | null> {
+    const session = await getStoredSession();
+    return session?.user as Web3AuthResponse['user'] | null;
   }
 
   /**
    * Get stored access token
    */
-  getStoredAccessToken(): string | null {
-    return localStorage.getItem('accessToken');
+  async getStoredAccessToken(): Promise<string | null> {
+    const session = await getStoredSession();
+    return session?.accessToken ?? session?.token ?? null;
   }
 
   /**

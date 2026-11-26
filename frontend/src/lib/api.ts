@@ -2,6 +2,7 @@ import { apiRequestCache } from './api-cache';
 import apiClient from './api-client';
 import { API_BASE_URL } from './api-config';
 import { getPublicEnv } from './env';
+import { getStoredSessionToken } from './credentialStorage';
 
 export interface User {
   id: string;
@@ -722,8 +723,8 @@ export const analyticsAPI = {
     return response.data;
   },
 
-  subscribeToUpdates: (callback: (data: unknown) => void): WebSocket | null => {
-    const token = localStorage.getItem('token');
+  subscribeToUpdates: async (callback: (data: unknown) => void): Promise<WebSocket | null> => {
+    const token = await getStoredSessionToken();
     if (!token) return null;
 
     const wsUrl = getPublicEnv().wsUrl || 'ws://localhost:8080';
@@ -814,8 +815,8 @@ export const exportAPI = {
     return response.data;
   },
 
-  openStatusStream: (): EventSource => {
-    const token = localStorage.getItem('token');
+  openStatusStream: async (): Promise<EventSource> => {
+    const token = await getStoredSessionToken();
 
     if (!token) {
       throw new Error('Missing auth token for SSE connection');
