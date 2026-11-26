@@ -16,7 +16,7 @@
 //!   PORT             - HTTP/WS port (default 3001)
 //!   DATABASE_URL     - SQLite or Postgres URL (default: sqlite://indexer.db?mode=rwc)
 //!   SOROBAN_RPC_URL  - Soroban RPC endpoint (default: https://soroban-testnet.stellar.org)
-//!   POLL_INTERVAL_MS - Time between successful polls (default 5000)
+//!   POLL_INTERVAL_MS - Time between successful polls (default 500)
 //!   START_LEDGER     - Override starting ledger cursor (for back-fills / tests)
 //!   RUST_LOG         - tracing log filter
 

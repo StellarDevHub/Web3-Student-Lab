@@ -32,7 +32,7 @@ impl Config {
             env::var("POLL_INTERVAL_MS")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(5_000),
+                .unwrap_or(500),
         );
 
         let batch_size: u32 = env::var("BATCH_SIZE")
