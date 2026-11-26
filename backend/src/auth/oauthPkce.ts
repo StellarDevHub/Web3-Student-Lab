@@ -15,6 +15,37 @@ const SESSION_TTL_SECONDS = 600;
 const SESSION_PREFIX = 'oauth:pkce:';
 const LOGIN_TICKET_TTL_SECONDS = 60;
 
+export function assertValidPkceVerifier(verifier: unknown): asserts verifier is string {
+  if (typeof verifier !== 'string' || !/^[A-Za-z0-9._~-]{43,128}$/.test(verifier)) {
+    throw new Error('A valid PKCE code_verifier is required');
+  }
+}
+
+export function assertValidPkceChallenge(challenge: unknown): asserts challenge is string {
+  if (typeof challenge !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(challenge)) {
+    throw new Error('A valid S256 PKCE code_challenge is required');
+  }
+}
+
+export function assertExactRedirectUri(candidate: string, registered: string): string {
+  if (!candidate || !registered || candidate.includes('*') || registered.includes('*')) {
+    throw new Error('OAuth redirect URI must be an exact, wildcard-free URI');
+  }
+
+  try {
+    new URL(candidate);
+    new URL(registered);
+  } catch {
+    throw new Error('OAuth redirect URI must be an absolute URI');
+  }
+
+  if (candidate !== registered) {
+    throw new Error('OAuth redirect URI does not exactly match the registered URI');
+  }
+
+  return registered;
+}
+
 export function createPkcePair(): { verifier: string; challenge: string } {
   const verifier = crypto.randomBytes(32).toString('base64url');
   const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');

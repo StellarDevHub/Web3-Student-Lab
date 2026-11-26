@@ -1,14 +1,17 @@
 import express from 'express';
 import request from 'supertest';
+import {
+    buildAuthorizationUrl,
+    buildPkceAuthorizationUrl,
+    createOAuthState,
+    exchangeCodeForToken,
+    findOrCreateStudentByGitHub,
+    generateState,
+    validateOAuthState,
+} from '../src/auth/github.service.js';
+import { createPkcePair } from '../src/auth/oauthPkce.js';
 import prisma from '../src/db/index.js';
 import oauthRouter from '../src/routes/oauth.routes.js';
-import {
-  generateState,
-  createOAuthState,
-  validateOAuthState,
-  buildAuthorizationUrl,
-  findOrCreateStudentByGitHub,
-} from '../src/auth/github.service.js';
 
 // Check if database is available before running tests
 let dbAvailable = false;
@@ -32,6 +35,36 @@ const createApp = () => {
 };
 
 describe('GitHub OAuth - Unit Tests', () => {
+  describe('PKCE enforcement', () => {
+    it('rejects token exchange without a valid code verifier', async () => {
+      await expect(
+        exchangeCodeForToken('authorization-code', undefined as unknown as string)
+      ).rejects.toThrow(/code_verifier/);
+    });
+
+    it('rejects redirect URIs that do not exactly match the configured URI', () => {
+      const { challenge } = createPkcePair();
+      expect(() =>
+        buildPkceAuthorizationUrl(
+          generateState(),
+          challenge,
+          'https://attacker.example/callback'
+        )
+      ).toThrow(/exactly match/);
+    });
+
+    it('rejects wildcard redirect URIs', () => {
+      const { challenge } = createPkcePair();
+      expect(() =>
+        buildPkceAuthorizationUrl(
+          generateState(),
+          challenge,
+          'https://*.example.com/callback'
+        )
+      ).toThrow(/wildcard-free/);
+    });
+  });
+
   describe('generateState', () => {
     it('should generate a 64-character hex string', () => {
       const state = generateState();
@@ -49,12 +82,15 @@ describe('GitHub OAuth - Unit Tests', () => {
   describe('buildAuthorizationUrl', () => {
     it('should return a valid GitHub OAuth URL with state', () => {
       const state = generateState();
-      const url = buildAuthorizationUrl(state);
+      const { challenge } = createPkcePair();
+      const url = buildAuthorizationUrl(state, challenge);
 
       expect(url).toContain('https://github.com/login/oauth/authorize');
       expect(url).toContain(`state=${state}`);
       expect(url).toContain('client_id=');
       expect(url).toContain('redirect_uri=');
+      expect(url).toContain('code_challenge=');
+      expect(url).toContain('code_challenge_method=S256');
       expect(url).toContain('scope=');
       expect(url).toContain('read:user');
       expect(url).toContain('user:email');
