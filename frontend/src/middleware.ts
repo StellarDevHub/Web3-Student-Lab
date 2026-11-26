@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { evaluateBotPolicy, isReadOnlyMethod } from './lib/security/botDetection';
 
 const NONCE_HEADER = 'x-nonce';
 const ADMIN_ROUTE_PREFIX = '/admin';
@@ -13,9 +14,10 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev';
 // Rate Limiting (In-memory simple rate limit for edge, resets per worker)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const MAX_REQUESTS = 100;
+const STRICT_MAX_REQUESTS = 20;
 const WINDOW_MS = 60 * 1000;
 
-function checkRateLimit(ip: string): boolean {
+function checkRateLimit(ip: string, maxRequests = MAX_REQUESTS): boolean {
   if (
     process.env.CI ||
     process.env.NODE_ENV === 'test' ||
@@ -31,18 +33,11 @@ function checkRateLimit(ip: string): boolean {
     rateLimitMap.set(ip, { count: 1, resetTime: now + WINDOW_MS });
     return true;
   }
-  if (record.count >= MAX_REQUESTS) {
+  if (record.count >= maxRequests) {
     return false;
   }
   record.count += 1;
   return true;
-}
-
-// Bot Detection
-const BOT_USER_AGENTS = ['bot', 'crawler', 'spider', 'headless', 'scraper'];
-function isBot(userAgent: string): boolean {
-  const ua = userAgent.toLowerCase();
-  return BOT_USER_AGENTS.some((bot) => ua.includes(bot));
 }
 
 // Web Crypto JWT Validation
@@ -114,13 +109,29 @@ export async function middleware(request: NextRequest) {
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
   const userAgent = request.headers.get('user-agent') || '';
 
-  // 1. Bot detection
-  if (isBot(userAgent)) {
-    return new NextResponse('Bot detected', { status: 403 });
+  // 1. SEO-safe crawler classification & anti-scraper enforcement (FE-062)
+  const botDecision = evaluateBotPolicy({
+    userAgent,
+    pathname: request.nextUrl.pathname,
+    method: request.method,
+  });
+
+  if (botDecision.action !== 'allow') {
+    return new NextResponse(botDecision.reason, {
+      status: botDecision.status ?? 403,
+      headers: {
+        'X-Bot-Category': botDecision.classification.category,
+      },
+    });
   }
 
-  // 2. Rate limiting
-  if (!checkRateLimit(ip)) {
+  // 2. Rate limiting (stricter limit on mutating endpoints or flagged traffic)
+  const rateLimitMax =
+    botDecision.strictRateLimit || !isReadOnlyMethod(request.method)
+      ? STRICT_MAX_REQUESTS
+      : MAX_REQUESTS;
+
+  if (!checkRateLimit(ip, rateLimitMax)) {
     return new NextResponse('Too many requests', { status: 429 });
   }
 
