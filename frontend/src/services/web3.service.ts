@@ -1,4 +1,6 @@
-import { ethers } from 'ethers';
+// ethers is ~100 KB gzipped: types only at module load, the runtime is
+// fetched on demand when a wallet actually connects (FE-076).
+import type { BrowserProvider, JsonRpcSigner } from 'ethers';
 import detectEthereumProvider from '@metamask/detect-provider';
 
 export interface Web3AuthResponse {
@@ -18,8 +20,8 @@ export interface NonceResponse {
 }
 
 export class Web3AuthService {
-  private provider: ethers.BrowserProvider | null = null;
-  private signer: ethers.JsonRpcSigner | null = null;
+  private provider: BrowserProvider | null = null;
+  private signer: JsonRpcSigner | null = null;
 
   /**
    * Initialize Web3 provider and signer
@@ -37,7 +39,8 @@ export class Web3AuthService {
         throw new Error('MetaMask is not installed');
       }
 
-      this.provider = new ethers.BrowserProvider(ethereumProvider as any);
+      const { BrowserProvider: Provider } = await import('ethers');
+      this.provider = new Provider(ethereumProvider as any);
 
       // Request account access
       await this.provider.send('eth_requestAccounts', []);

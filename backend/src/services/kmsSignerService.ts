@@ -330,117 +330,81 @@ export class KmsSignerService {
       }
 
       await this.audit('success', purpose, payload, publicKey, result, startedAt, null);
+
       return { ...result, publicKey, provider: this.signer.provider };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await this.audit('failure', purpose, payload, publicKey, result, startedAt, extractRequestId(error, message));
-      logger.error(`HSM signing failed via ${this.signer.provider}: ${message}`);
-      throw new Error(`HSM transaction signing failed (${this.signer.provider}): ${message}`);
+      await this.audit('failure', purpose, payload, publicKey, result, startedAt, message);
+      throw error;
     }
   }
 
-  /** Sign a Stellar transaction or fee-bump envelope in place. */
-  public async signTransaction<T extends HsmSignableTransaction>(
-    transaction: T,
-    context: SignContext = {},
-  ): Promise<T> {
-    const { signature, publicKey } = await this.signHash(transaction.hash(), context);
-    transaction.addSignature(publicKey, signature.toString('base64'));
-    return transaction;
+  /** Sign a Stellar transaction's hash in the HSM and attach the signature. */
+  public async signTransaction(tx: HsmSignableTransaction, context: SignContext = {}): Promise<SignedHashResult> {
+    const signed = await this.signHash(tx.hash(), context);
+    tx.addSignature(signed.publicKey, signed.signature.toString('base64'));
+    return signed;
   }
 
   private async audit(
-    outcome: SignatureAuditRecord['outcome'],
+    outcome: 'success' | 'failure',
     purpose: string,
     payload: Buffer,
     publicKey: string | null,
     result: HsmSignResult | null,
     startedAt: number,
-    failure: { message: string; requestId: string | null } | null,
+    error: string | null,
   ): Promise<void> {
-    const body: Omit<SignatureAuditRecord, 'hash'> = {
-      event: 'hsm.sign',
+    const base = {
+      event: 'hsm.sign' as const,
       outcome,
       provider: this.signer.provider,
       keyRef: result?.keyRef ?? null,
       publicKey,
-      iamRequestId: result?.requestId ?? failure?.requestId ?? null,
+      iamRequestId: result?.requestId ?? null,
       purpose,
       payloadSha256: sha256(payload),
       signatureSha256: result ? sha256(result.signature) : null,
       durationMs: Date.now() - startedAt,
       traceId: getTraceId() ?? null,
-      error: failure?.message ?? null,
+      error,
       timestamp: new Date().toISOString(),
       prevHash: this.lastAuditHash,
     };
-    const record: SignatureAuditRecord = { ...body, hash: sha256(JSON.stringify(body)) };
-    this.lastAuditHash = record.hash;
+    const hash = sha256(JSON.stringify(base));
+    const record: SignatureAuditRecord = { ...base, hash };
+    this.lastAuditHash = hash;
 
-    auditLogger.info('HSM signature operation', record);
-
+    auditLogger.info('hsm.sign', record);
     for (const sink of this.auditSinks) {
       try {
         await sink(record);
-      } catch (error) {
-        // An audit sink outage must not mask the signing outcome; the file log above already holds it.
-        logger.error(`HSM audit sink failed: ${(error as Error).message}`);
+      } catch (sinkError) {
+        logger.error('HSM audit sink failed', { error: String(sinkError) });
       }
     }
   }
 }
 
-/** Pull the AWS request id off an SDK error (`$metadata.requestId`) if present. */
-function extractRequestId(error: unknown, message: string): { message: string; requestId: string | null } {
-  const metadata = (error as { $metadata?: { requestId?: string } } | null)?.$metadata;
-  return { message, requestId: metadata?.requestId ?? null };
-}
-
-// ─── Factory ─────────────────────────────────────────────────────────────────
-
-/**
- * Select the HSM backend from `HSM_SIGNER_PROVIDER` (`aws-kms` | `vault-transit`
- * | `software-dev`). When unset, AWS KMS is used if `AWS_KMS_KEY_ID` is set,
- * then Vault if `VAULT_ADDR` is set, and the software signer only in
- * development/test. Production without a configured HSM fails closed.
- */
+/** Select the HSM backend from env: AWS KMS, Vault Transit, or dev-only software signer. */
 export function createHsmSignerFromEnv(env: NodeJS.ProcessEnv = process.env): HsmSigner {
-  const requested = env.HSM_SIGNER_PROVIDER as HsmProviderName | undefined;
-
-  if (requested === 'aws-kms' || (!requested && env.AWS_KMS_KEY_ID)) {
+  const provider = (env.HSM_PROVIDER ?? '').toLowerCase();
+  if (provider === 'aws-kms') {
     return new AwsKmsHsmSigner({
-      keyId: env.AWS_KMS_KEY_ID || '',
+      keyId: env.AWS_KMS_KEY_ID ?? '',
       region: env.AWS_REGION,
-      publicKey: env.PLATFORM_MASTER_PUBLIC_KEY || undefined,
+      publicKey: env.AWS_KMS_PUBLIC_KEY || undefined,
     });
   }
-
-  if (requested === 'vault-transit' || (!requested && env.VAULT_ADDR)) {
-    return new VaultTransitHsmSigner(loadVaultConfig(env));
+  if (provider === 'vault-transit') {
+    return new VaultTransitHsmSigner();
   }
-
-  if (requested === 'software-dev' || !requested) {
-    if (!isSoftwareSignerPermitted(env)) {
-      throw new Error(
-        'No HSM signer configured. Set HSM_SIGNER_PROVIDER=aws-kms (AWS_KMS_KEY_ID) or ' +
-          'HSM_SIGNER_PROVIDER=vault-transit (VAULT_ADDR, VAULT_TRANSIT_KEY); the software signer is ' +
-          'only available when NODE_ENV is development or test.',
-      );
-    }
+  if (provider === 'software-dev' || (!provider && isSoftwareSignerPermitted(env))) {
     return new SoftwareDevSigner();
   }
-
-  throw new Error(`Unknown HSM_SIGNER_PROVIDER "${requested}"`);
+  throw new Error(
+    'No HSM provider configured: set HSM_PROVIDER=aws-kms|vault-transit (software-dev only outside production)',
+  );
 }
 
-let instance: KmsSignerService | null = null;
-
-/** Application-wide signer, constructed lazily so imports never force HSM configuration. */
-export function getKmsSignerService(options?: KmsSignerServiceOptions): KmsSignerService {
-  if (!instance) instance = new KmsSignerService(options);
-  return instance;
-}
-
-export function resetKmsSignerService(): void {
-  instance = null;
-}
+export const kmsSignerService = new KmsSignerService();

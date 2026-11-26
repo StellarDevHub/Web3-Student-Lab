@@ -4,6 +4,7 @@ import { gasStationController } from '../controllers/gasStationController.js';
 import { gasQuotaMiddleware } from '../middleware/gasQuotaMiddleware.js';
 import { GasStationError, gasStationService } from '../services/gasStationService.js';
 import { ApiResponse } from '../utils/response.js';
+import { requireTurnstile } from '../middleware/turnstile.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -70,6 +71,7 @@ router.get('/quota', authenticate, gasStationController.getQuota);
 router.post(
   '/sponsor',
   authenticate,
+  requireTurnstile(),
   gasStationPolicyGuard,
   gasQuotaMiddleware,
   gasStationController.sponsor

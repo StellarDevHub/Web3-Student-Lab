@@ -80,6 +80,18 @@ const USER_CREDENTIALS_PREFIX = 'passkey_user:';
 const RP_NAME = 'Web3 Student Lab';
 const RP_ID = 'web3-student-lab.com';
 
+/**
+ * Canonical challenge encoding: base64url without padding.
+ *
+ * Browsers report the challenge in clientDataJSON as unpadded base64url
+ * (WebAuthn §5.8.1), so every challenge the server stores, sends and compares
+ * uses that form. Accepts standard base64 and padded input too, so a client
+ * that echoes the challenge back in another base64 flavour still matches.
+ */
+export function normalizeChallenge(value: string): string {
+  return value.trim().replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -188,7 +200,7 @@ export class PasskeyService {
     }
   ): Promise<PasskeyRegistrationResult> {
     // 1. Verify challenge exists and hasn't expired
-    const key = `${REGISTRATION_PREFIX}${userId}:${challenge}`;
+    const key = `${REGISTRATION_PREFIX}${userId}:${normalizeChallenge(challenge)}`;
     const challengeData = await this.redis.get(key);
 
     if (!challengeData) {
@@ -211,7 +223,7 @@ export class PasskeyService {
     }
 
     // 3. Verify challenge matches
-    if (clientData.challenge !== challenge) {
+    if (!this.challengeMatches(clientData.challenge, parsed.challenge)) {
       throw new Error('Challenge mismatch');
     }
 
@@ -327,7 +339,7 @@ export class PasskeyService {
     }
   ): Promise<PasskeyAuthenticationResult> {
     // 1. Verify challenge exists
-    const key = `${AUTHENTICATION_PREFIX}${challenge}`;
+    const key = `${AUTHENTICATION_PREFIX}${normalizeChallenge(challenge)}`;
     const challengeData = await this.redis.get(key);
 
     if (!challengeData) {
@@ -350,7 +362,7 @@ export class PasskeyService {
     }
 
     // 3. Verify challenge matches
-    if (clientData.challenge !== challenge) {
+    if (!this.challengeMatches(clientData.challenge, parsed.challenge)) {
       throw new Error('Challenge mismatch');
     }
 
@@ -566,17 +578,28 @@ export class PasskeyService {
     await this.redis.sadd(userKey, credential.credentialId);
   }
 
+  /** 32 random bytes as unpadded base64url — see normalizeChallenge(). */
   private generateChallenge(): string {
-    return randomBytes(32)
-      .toString('base64url')
-      .replace(/-/g, '+')
-      .replace(/_/g, '/');
+    return randomBytes(32).toString('base64url');
+  }
+
+  /**
+   * Compare the challenge echoed in clientDataJSON with the one the server
+   * issued (from Redis), independent of base64 flavour / padding.
+   */
+  private challengeMatches(fromClientData: unknown, issued: string): boolean {
+    return (
+      typeof fromClientData === 'string' &&
+      fromClientData.length > 0 &&
+      normalizeChallenge(fromClientData) === normalizeChallenge(issued)
+    );
   }
 
   private generateId(): string {
     return randomBytes(16).toString('hex');
   }
 
+  /** Decodes standard base64 and base64url alike (Node accepts both alphabets). */
   private base64ToBuffer(base64: string): Buffer {
     return Buffer.from(base64, 'base64');
   }

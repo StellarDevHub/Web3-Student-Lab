@@ -2,6 +2,7 @@
 
 import Image, { ImageProps } from 'next/image';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { resolveIpfsImageSrc } from '@/lib/storage/ipfs';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,12 +30,12 @@ interface SmartImageProps extends Omit<
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Tiny transparent 1×1 GIF – used as placeholder when no LQIP is provided.
- * Prevents layout shift while keeping the image slot reserved.
- */
-const TRANSPARENT_PLACEHOLDER =
-  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+/** Small, dependency-free blurred SVG used when an image has no supplied LQIP. */
+const DEFAULT_BLUR_PLACEHOLDER =
+  'data:image/svg+xml;charset=utf-8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><filter id="b"><feGaussianBlur stdDeviation="5"/></filter><rect width="16" height="16" fill="#d1d5db" filter="url(#b)"/></svg>'
+  );
 
 /**
  * Converts an ordinary image URL to its WebP/AVIF equivalent when served by a
@@ -92,7 +93,8 @@ export function SmartImage({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<ImageStatus>('idle');
   const [isVisible, setIsVisible] = useState<boolean>(eager || !!priority);
-  const [activeSrc, setActiveSrc] = useState<ImageProps['src']>(src);
+  const resolvedSrc = typeof src === 'string' ? resolveIpfsImageSrc(src) : src;
+  const [activeSrc, setActiveSrc] = useState<ImageProps['src']>(resolvedSrc);
 
   // ── IntersectionObserver ──────────────────────────────────────────────────
 
@@ -122,9 +124,9 @@ export function SmartImage({
   // ── Src sync ─────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    setActiveSrc(src);
+    setActiveSrc(resolvedSrc);
     setStatus('idle');
-  }, [src]);
+  }, [resolvedSrc]);
 
   // ── Event handlers ────────────────────────────────────────────────────────
 
@@ -133,8 +135,9 @@ export function SmartImage({
   const handleLoad = useCallback(() => setStatus('loaded'), []);
 
   const handleError = useCallback(() => {
-    if (fallbackSrc && activeSrc !== fallbackSrc) {
-      setActiveSrc(fallbackSrc);
+    const resolvedFallback = fallbackSrc ? resolveIpfsImageSrc(fallbackSrc) : undefined;
+    if (resolvedFallback && activeSrc !== resolvedFallback) {
+      setActiveSrc(resolvedFallback);
     } else {
       setStatus('error');
     }
@@ -142,7 +145,7 @@ export function SmartImage({
 
   // ── Derived values ────────────────────────────────────────────────────────
 
-  const lqip = blurDataURL ?? TRANSPARENT_PLACEHOLDER;
+  const lqip = blurDataURL ?? DEFAULT_BLUR_PLACEHOLDER;
   const showBlur = status !== 'loaded' && status !== 'error';
   const showFallback = status === 'error';
 
@@ -241,8 +244,8 @@ export function SmartImage({
           quality={quality}
           priority={priority}
           // Use blur placeholder when we have an LQIP; otherwise empty.
-          placeholder={blurDataURL ? 'blur' : 'empty'}
-          blurDataURL={blurDataURL}
+          placeholder="blur"
+          blurDataURL={blurDataURL ?? DEFAULT_BLUR_PLACEHOLDER}
           onLoadStart={handleLoadStart}
           onLoad={handleLoad}
           onError={handleError}
