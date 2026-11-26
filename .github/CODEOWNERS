@@ -1,0 +1,6 @@
+# Require explicit maintainer review for CI/CD workflows, security rules, scripts, and build configs
+/.github/                   @ayomideadeniran
+/.vscode/                   @ayomideadeniran
+/scripts/                   @ayomideadeniran
+**/package.json             @ayomideadeniran
+**/*.config.*               @ayomideadeniran
