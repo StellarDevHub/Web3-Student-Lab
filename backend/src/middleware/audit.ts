@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { logRequestAudit } from '../utils/audit.js';
+// Audit entries are archived to the immutable S3 Object Lock bucket by immutableAuditArchiver.ts (hourly batches, anchored to Stellar).
 
 /**
  * Middleware to audit log an action

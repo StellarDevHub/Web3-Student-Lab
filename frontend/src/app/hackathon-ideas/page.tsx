@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import IdeaGeneratorPanel from '@/components/idea-generator/IdeaGeneratorPanel';
+import StudentLeaderboardPanel from '@/components/leaderboard/StudentLeaderboardPanel';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -83,6 +84,10 @@ export default function HackathonIdeasPage() {
             </Link>
           </div>
           <IdeaGeneratorPanel />
+
+          <div className="mt-12">
+            <StudentLeaderboardPanel />
+          </div>
         </motion.div>
       </main>
     </div>

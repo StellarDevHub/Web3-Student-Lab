@@ -1,7 +1,7 @@
 'use client';
 
 import { RoleGuard } from '@/components/auth/RoleGuard';
-import { NetworkGraph } from '@/components/simulator/NetworkGraph';
+import { LazyNetworkGraph as NetworkGraph } from '@/components/charts/LazyCharts';
 import { WithSkeleton } from '@/components/ui/WithSkeleton';
 import { GraphSkeleton } from '@/components/ui/skeletons/GraphSkeleton';
 import { useTutorial } from '@/contexts/TutorialContext';

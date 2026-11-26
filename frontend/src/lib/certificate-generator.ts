@@ -368,3 +368,86 @@ export async function downloadEngineCertificatePdf(
   pdf.addImage(imgData, 'PNG', 0, 0, INCH_W, INCH_H);
   pdf.save(`${filename}.pdf`);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cryptographically-signed PDF export
+//
+// Embeds an Ed25519 signature, the signer's raw public key, and a SHA-256
+// content hash into the PDF's Keywords metadata field so the VerifyPage can
+// authenticate the diploma entirely client-side without a server round-trip.
+//
+// Usage
+// -----
+//   const { privateKeyB64, publicKeyB64 } = await generateEd25519KeyPair();
+//   await downloadSignedCertificatePdf(data, 'diploma', privateKeyB64, publicKeyB64);
+//
+// The private key is generated ephemerally in the browser and never persisted
+// unless the caller chooses to do so.  For production use, inject a long-lived
+// issuer key from a secure environment variable or HSM.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Export a cryptographically-signed diploma PDF.
+ *
+ * The function renders the certificate to a canvas, encodes it as an image,
+ * writes it into a PDF via jsPDF, then:
+ *   1. Computes SHA-256 of the PDF bytes as a canonical content hash.
+ *   2. Signs that hash with the caller-supplied Ed25519 private key.
+ *   3. Embeds the public key, signature, and hash into the PDF Keywords field.
+ *   4. Triggers a download of the resulting signed PDF.
+ *
+ * The embedded metadata format is consumed by `verifyDiplomaPdf()` in
+ * `src/lib/crypto/pdfVerifier.ts`.
+ */
+export async function downloadSignedCertificatePdf(
+  data: CertificateData,
+  filename: string,
+  privateKeyB64: string,
+  publicKeyB64: string
+): Promise<void> {
+  const { sha256Hex, signContentHash, buildMetadataKeywords } = await import(
+    '@/lib/crypto/pdfVerifier'
+  );
+
+  // 1. Render canvas and produce a base64 PNG.
+  const canvas = await generateCertificateCanvas(data);
+  const imgData = canvas.toDataURL('image/png');
+
+  // 2. Build the initial PDF (without signature).
+  const { jsPDF } = await import('jspdf');
+  const pdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [INCH_W, INCH_H] });
+  pdf.addImage(imgData, 'PNG', 0, 0, INCH_W, INCH_H);
+
+  // Set human-readable metadata.
+  pdf.setProperties({
+    title: `${data.courseName} — ${data.recipientName}`,
+    subject: 'Web3 Student Lab Diploma',
+    author: data.instructorName || 'Web3 Student Lab',
+    creator: 'Web3 Student Lab Certificate Generator',
+  });
+
+  // 3. Get the unsigned PDF bytes.
+  const unsignedBytes = new Uint8Array(pdf.output('arraybuffer') as ArrayBuffer);
+
+  // 4. Compute content hash.
+  const contentHash = await sha256Hex(unsignedBytes);
+
+  // 5. Sign the hash.
+  const signature = await signContentHash(contentHash, privateKeyB64);
+
+  // 6. Embed metadata keywords and re-export.
+  const keywords = buildMetadataKeywords(publicKeyB64, signature, contentHash);
+
+  // Re-instantiate with the same content and add the signed keywords.
+  const signedPdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [INCH_W, INCH_H] });
+  signedPdf.addImage(imgData, 'PNG', 0, 0, INCH_W, INCH_H);
+  signedPdf.setProperties({
+    title: `${data.courseName} — ${data.recipientName}`,
+    subject: 'Web3 Student Lab Diploma',
+    author: data.instructorName || 'Web3 Student Lab',
+    creator: 'Web3 Student Lab Certificate Generator',
+    keywords,
+  });
+
+  signedPdf.save(`${filename}.pdf`);
+}

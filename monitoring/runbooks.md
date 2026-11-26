@@ -86,3 +86,26 @@ Prometheus reports `up{job="web3-student-lab-backend"} == 0` for 5 minutes.
 3. A `503` means the credentials are unset in production; set them and restart.
 4. If `curl` succeeds from outside the cluster but Prometheus fails, check the
    ServiceMonitor/scrape target and network policy.
+## PostgresDeadlockDetected
+
+One or more PostgreSQL deadlocks occurred in the last 5 minutes.
+
+1. Inspect PostgreSQL logs (`log_lock_waits = on`, `deadlock_timeout = 1s`) for the exact conflicting SQL statements and lock graph.
+2. Check currently blocked queries: `SELECT pid, pg_blocking_pids(pid) AS blocked_by, query FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid)) > 0;`
+3. Ensure transactions update rows in a consistent lock acquisition order and keep transactions short.
+
+## PostgresHighDeadTupleRatio
+
+Dead tuples exceed 20% (and > 1,000 rows) on a high-churn table (`audit_logs`, `auth_nonces`, `student_activities`, `webauthn_challenges`, `oauth_states`, `sessions`) for 10 minutes.
+
+1. Check active autovacuum workers: `SELECT pid, relid::regclass, phase, heap_blks_scanned, heap_blks_total FROM pg_stat_progress_vacuum;`
+2. Check for long-running idle-in-transaction sessions holding back the vacuum horizon: `SELECT pid, state, now() - xact_start AS age, query FROM pg_stat_activity WHERE state <> 'idle' ORDER BY age DESC;`
+3. Verify per-table autovacuum settings from migration `20261123000000_be080_autovacuum_tuning` are applied.
+
+## PgBouncerClientWaiting
+
+Clients are queued waiting for an available PgBouncer backend connection for over 1 minute.
+
+1. Connect to the PgBouncer admin console (`psql -p 6432 -U postgres pgbouncer`) and run `SHOW POOLS;` and `SHOW STATS;`.
+2. Check for slow queries (> 250ms) in PostgreSQL logs that hold transaction-pool connections open longer than expected.
+3. Scale PgBouncer replicas (`k8s/pgbouncer.yaml`) or increase `default_pool_size` if PostgreSQL CPU/memory headroom permits.

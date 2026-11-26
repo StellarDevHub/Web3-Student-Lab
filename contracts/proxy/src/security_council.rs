@@ -1,13 +1,16 @@
-//! # Security Council Upgrade Verification & Timelock Barrier — SC-046
+//! # Security Council Upgrade Verification & Timelock Barrier — SC-046 / SC-057
 //!
 //! Enforces a 3-of-5 Security Council threshold signature requirement and a
-//! mandatory 24-hour announcement timelock before contract bytecode upgrades.
+//! mandatory 48-hour announcement timelock before contract bytecode upgrades.
+//! This is the single governance path for bytecode upgrades across the proxy
+//! and all implementation versions (V1 / V2). Implementations must not expose
+//! any unilateral upgrade entrypoint.
 
 use soroban_sdk::{contracterror, contracttype, symbol_short, Address, BytesN, Env, Vec};
 
 pub const COUNCIL_SIZE: u32 = 5;
 pub const COUNCIL_THRESHOLD: u32 = 3;
-pub const ANNOUNCEMENT_TIMELOCK: u64 = 86_400; // 24 hours in seconds
+pub const ANNOUNCEMENT_TIMELOCK: u64 = 172_800; // 48 hours in seconds
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -77,7 +80,7 @@ pub fn get_security_council(env: &Env) -> Option<Vec<Address>> {
         .get(&CouncilDataKey::CouncilMembers)
 }
 
-/// Announce a bytecode upgrade, initiating the mandatory 24-hour timelock.
+/// Announce a bytecode upgrade, initiating the mandatory 48-hour timelock.
 pub fn announce_upgrade(env: &Env, wasm_hash: &BytesN<32>) -> Result<u64, SecurityCouncilError> {
     let now = env.ledger().timestamp();
     let unlock_at = now + ANNOUNCEMENT_TIMELOCK;
@@ -109,7 +112,8 @@ pub fn get_announcement(env: &Env, wasm_hash: &BytesN<32>) -> Option<UpgradeAnno
         .get(&CouncilDataKey::Announcement(wasm_hash.clone()))
 }
 
-/// Verify that 3-of-5 Security Council signatures are valid and timelock has elapsed.
+/// Verify that 3-of-5 Security Council signatures are valid and the 48-hour
+/// timelock has elapsed. Marks the announcement executed on success.
 pub fn verify_security_council_signatures(
     env: &Env,
     wasm_hash: &BytesN<32>,
@@ -117,12 +121,11 @@ pub fn verify_security_council_signatures(
 ) -> Result<(), SecurityCouncilError> {
     let members = get_security_council(env).ok_or(SecurityCouncilError::CouncilNotConfigured)?;
 
-    // Acceptance criterion 1: Rejects if less than 3 valid signatures submitted
+    // Rejects if less than 3 signatures submitted
     if signatures.len() < COUNCIL_THRESHOLD {
         return Err(SecurityCouncilError::ThresholdNotMet);
     }
 
-    // Retrieve announcement and verify 24-hour timelock
     let mut announcement =
         get_announcement(env, wasm_hash).ok_or(SecurityCouncilError::UpgradeNotAnnounced)?;
 
@@ -130,7 +133,7 @@ pub fn verify_security_council_signatures(
         return Err(SecurityCouncilError::AlreadyExecuted);
     }
 
-    // Acceptance criterion 3: Enforces mandatory 24-hour announcement timelock
+    // Enforces mandatory 48-hour announcement timelock
     if env.ledger().timestamp() < announcement.unlock_at {
         return Err(SecurityCouncilError::TimelockNotExpired);
     }
@@ -139,7 +142,7 @@ pub fn verify_security_council_signatures(
     let mut verified_signers: Vec<Address> = Vec::new(env);
 
     for sig in signatures.iter() {
-        // Acceptance criterion 2: Validates signed digest matches target WASM bytecode
+        // Validates signed digest matches target WASM bytecode
         if sig.digest != *wasm_hash {
             return Err(SecurityCouncilError::DigestMismatch);
         }
@@ -175,7 +178,6 @@ pub fn verify_security_council_signatures(
         return Err(SecurityCouncilError::ThresholdNotMet);
     }
 
-    // Mark announcement as executed
     announcement.executed = true;
     env.storage().instance().set(
         &CouncilDataKey::Announcement(wasm_hash.clone()),

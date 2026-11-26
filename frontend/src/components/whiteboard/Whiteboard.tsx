@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Tldraw, Editor } from 'tldraw';
 import 'tldraw/tldraw.css';
 import { CollaborationProvider } from '../../lib/collaboration/YjsProvider';
@@ -11,27 +11,27 @@ interface WhiteboardProps {
 }
 
 export const Whiteboard: React.FC<WhiteboardProps> = ({ roomId }) => {
-  const [editor, setEditor] = useState<Editor | null>(null);
   const [canvasManager, setCanvasManager] = useState<CanvasManager | null>(null);
-  const [syncManager, setSyncManager] = useState<SyncManager | null>(null);
+  const syncManagerRef = useRef<SyncManager | null>(null);
   const [provider] = useState(() => new CollaborationProvider(`whiteboard-${roomId}`));
 
   useEffect(() => {
     return () => {
+      syncManagerRef.current?.destroy();
       provider.destroy();
     };
   }, [provider]);
 
   const handleMount = useCallback(
     (editor: Editor) => {
-      setEditor(editor);
       const cm = new CanvasManager(editor);
-      const sm = new SyncManager(provider.doc, editor);
+      const sm = new SyncManager(provider.doc, editor, provider.awareness);
       setCanvasManager(cm);
-      setSyncManager(sm);
+      syncManagerRef.current?.destroy();
+      syncManagerRef.current = sm;
       sm.syncWithYjs();
     },
-    [provider.doc]
+    [provider.doc, provider.awareness]
   );
 
   const handleAddShape = (type: string) => {
@@ -43,11 +43,29 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ roomId }) => {
     else if (type === 'anchor') canvasManager.addAnchor(400, 300);
     else if (type === 'multisig') canvasManager.addMultisig(400, 300);
     else if (type === 'oracle') canvasManager.addOracle(400, 300);
+    else if (type === 'sticky') canvasManager.addStickyNote(400, 300);
   };
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-[#09090b]">
-      <Toolbar onAddShape={handleAddShape} onExport={() => canvasManager?.exportAsPNG()} />
+      <Toolbar
+        onAddShape={handleAddShape}
+        onExport={() => {
+          void canvasManager?.exportAsPNG({ filename: `whiteboard-${roomId}.png`, scale: 2 });
+        }}
+        onExportSVG={() => {
+          void canvasManager?.exportAsSVG(
+            { filename: `whiteboard-${roomId}.svg` },
+            syncManagerRef.current?.getAllShapes() ?? []
+          );
+        }}
+        onExportJSON={() => {
+          canvasManager?.exportAsJSON(
+            { filename: `whiteboard-${roomId}.json` },
+            syncManagerRef.current?.getAllShapes() ?? []
+          );
+        }}
+      />
 
       <div className="tldraw-dark h-full w-full flex-grow">
         <Tldraw

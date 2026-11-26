@@ -457,3 +457,21 @@ export async function runWasmEvaluation(
     releaseSlot();
   }
 }
+
+export interface RemoteWasmExecutor {
+  executeWasm(request: SandboxRunRequest, timeoutMs?: number): Promise<SandboxRunResult>;
+}
+
+/**
+ * Dispatch WASM evaluation over an mTLS-authenticated gRPC channel when a remote
+ * worker client is supplied, or fall back to local in-process sandbox execution.
+ */
+export async function executeWasmWithTransport(
+  request: SandboxRunRequest,
+  remoteClient?: RemoteWasmExecutor,
+): Promise<SandboxRunResult> {
+  if (remoteClient) {
+    return remoteClient.executeWasm(request);
+  }
+  return runWasmEvaluation(request);
+}

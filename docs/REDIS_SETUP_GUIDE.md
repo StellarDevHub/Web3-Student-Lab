@@ -116,7 +116,8 @@ cd backend && npm run dev
 # Stop primary Redis
 docker stop web3-student-lab-redis
 
-# Sentinel automatically promotes a replica (after 30s)
+# Sentinel promotes the replica using redis-sentinel.conf's budget
+# (down-after-milliseconds 1000, failover-timeout 3000)
 # Backend continues working with the new primary
 
 # Restart Redis
@@ -166,6 +167,54 @@ redis-cli -p 6381 cluster info
 
 # Check node status
 redis-cli -p 6381 cluster nodes
+```
+
+## 📬 BullMQ on HA Topology (BE-062)
+
+BullMQ queues and workers follow `REDIS_MODE`; no separate queue URL is needed.
+
+| `REDIS_MODE` | Queue connection |
+| --- | --- |
+| `standalone` | `REDIS_URL` (or `REDIS_HOST`/`REDIS_PORT`) |
+| `sentinel` | `REDIS_SENTINELS` + `REDIS_SENTINEL_NAME`, master discovery and `+switch-master` failover detection |
+| `cluster` | `REDIS_CLUSTER_NODES`, with a hash-tag queue prefix so each queue maps to one slot |
+
+Configuration (`backend/src/config/redis.ts`):
+
+```bash
+REDIS_MODE=sentinel
+REDIS_SENTINELS=redis-sentinel-1:26379,redis-sentinel-2:26379,redis-sentinel-3:26379
+REDIS_SENTINEL_NAME=mymaster
+# Workers must reattach to the promoted master within 5s
+REDIS_QUEUE_FAILOVER_BUDGET_MS=5000
+```
+
+In cluster mode the prefix must contain a hash tag (default `{bull}`), and each
+queue should ideally use its own prefix so keys spread across slots:
+
+```bash
+REDIS_QUEUE_PREFIX={certificates}
+```
+
+TLS applies to data, Sentinel and Cluster traffic. A `rediss://` URL enables it
+for standalone mode; otherwise set `REDIS_TLS=true` and point
+`REDIS_TLS_CA`/`REDIS_TLS_CERT`/`REDIS_TLS_KEY` at mounted PEM files (or paste
+inline PEM). `REDIS_SENTINEL_TLS` and `REDIS_CLUSTER_TLS` override the data-path
+setting independently.
+
+### Verify a failover
+
+```bash
+# Start the worker process; it logs the resolved topology at startup
+cd backend && npm run workers:queues
+
+# Kill the current master; Sentinel promotes the replica
+docker stop web3-student-lab-redis
+
+# The worker logs 'Worker reconnected after Redis failover' with recoveryMs.
+# It is a warning if recoveryMs exceeds REDIS_QUEUE_FAILOVER_BUDGET_MS.
+# No jobs are lost: jobs being processed at the time are retried once the
+# blocking connection is re-armed against the new master.
 ```
 
 ## 📦 Production Deployment
