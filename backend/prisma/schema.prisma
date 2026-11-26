@@ -238,6 +238,62 @@ model Enrollment {
   @@map("enrollments")
 }
 
+model PeerReviewAssignment {
+  id              String    @id @default(cuid())
+  workspaceId     String    @default("default")
+  courseId        String
+  assignmentId    String
+  reviewerId      String
+  revieweeId      String
+  reviewerAlias   String
+  revieweeAlias   String
+  reviewerSubnet  String?
+  revieweeSubnet  String?
+  teamId          String?
+  status          String    @default("assigned") // assigned, submitted, disputed, escalated, closed
+  grade           Float?
+  submittedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  reviewer PeerReviewGrade[] @relation("ReviewerGrades")
+
+  @@unique([assignmentId, reviewerId, revieweeId])
+  @@index([courseId, assignmentId])
+  @@index([reviewerId])
+  @@index([revieweeId])
+  @@index([status])
+  @@map("peer_review_assignments")
+}
+
+model PeerReviewGrade {
+  id           String   @id @default(cuid())
+  assignmentId String
+  reviewerId   String
+  revieweeId   String
+  score        Float
+  createdAt    DateTime @default(now())
+  assignment PeerReviewAssignment @relation("ReviewerGrades", fields: [assignmentId], references: [id], onDelete: Cascade)
+  @@index([assignmentId])
+  @@index([revieweeId])
+  @@map("peer_review_grades")
+}
+
+model PeerReviewDispute {
+  id           String    @id @default(cuid())
+  assignmentId String
+  varianceBps  Int
+  status       String    @default("open") // open, resolved
+  arbiterId    String?
+  resolution   Float?
+  createdAt    DateTime  @default(now())
+  resolvedAt   DateTime?
+
+  @@index([assignmentId])
+  @@index([status])
+  @@map("peer_review_disputes")
+}
+
 model Feedback {
   id          String   @id @default(cuid())
   workspaceId String   @default("default")
