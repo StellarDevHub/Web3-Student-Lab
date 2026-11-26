@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 /**
  * Centralized, Type-Safe Runtime Environment Validation & Health Matrix
  *
@@ -19,13 +17,13 @@ import { z } from 'zod';
  * app when absent.
  *
  * Features:
- * - Runtime Zod validation for all public environment variables
+ * - Runtime validation for all public environment variables (dependency-free:
+ *   this module is in every route's first-load JS, so it does not pull in a
+ *   schema library — FE-076)
  * - Strict URL & path normalization eliminating duplicated `/api/v1` prefixes
  * - Automatic fallback detection matrix tracking which services use defaults
  * - Connection health probes & matrix computing latency and connectivity status
  */
-
-const emptyToUndefined = (value: unknown) => (value === '' ? undefined : value);
 
 export const DEFAULT_DEV_API_URL = 'http://localhost:8080/api/v1';
 export const DEFAULT_DEV_WS_URL = 'ws://localhost:8080';
@@ -41,27 +39,81 @@ export const DEV_WS_URL = DEFAULT_DEV_WS_URL;
 // Soroban contract StrKey: 'C' followed by 55 base32 characters (RFC 4648, no padding).
 export const CONTRACT_ID_PATTERN = /^C[A-Z2-7]{55}$/;
 
-export const rawEnvSchema = z.object({
-  NEXT_PUBLIC_API_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
-  NEXT_PUBLIC_WS_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
-  NEXT_PUBLIC_SOROBAN_RPC_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
-  NEXT_PUBLIC_HORIZON_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
-  NEXT_PUBLIC_CERTIFICATE_CONTRACT_ID: z.preprocess(
-    emptyToUndefined,
-    z.string().regex(CONTRACT_ID_PATTERN, 'must be a valid Soroban contract id (e.g. C...)').optional(),
-  ),
-  NEXT_PUBLIC_WEBRTC_ICE_SERVERS: z.preprocess(emptyToUndefined, z.string().optional()),
-  NEXT_PUBLIC_APP_VERSION: z.preprocess(emptyToUndefined, z.string().optional()),
-  NEXT_PUBLIC_BUILD_NUMBER: z.preprocess(emptyToUndefined, z.string().optional()),
-  NEXT_PUBLIC_FRONTEND_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
-  NEXT_PUBLIC_CSP_REPORT_URI: z.preprocess(emptyToUndefined, z.string().optional()),
-  NEXT_PUBLIC_CSP_REPORT_ONLY: z.preprocess(emptyToUndefined, z.string().optional()),
-  NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
-  NEXT_PUBLIC_BRIDGE_ENDPOINTS: z.preprocess(emptyToUndefined, z.string().optional()),
-  NODE_ENV: z.enum(['development', 'production', 'test']).optional(),
-});
+type FieldRule = 'string' | 'url' | 'contractId' | 'nodeEnv';
 
-export type RawEnv = z.infer<typeof rawEnvSchema>;
+const RAW_ENV_RULES = {
+  NEXT_PUBLIC_API_URL: 'url',
+  NEXT_PUBLIC_WS_URL: 'url',
+  NEXT_PUBLIC_SOROBAN_RPC_URL: 'url',
+  NEXT_PUBLIC_HORIZON_URL: 'url',
+  NEXT_PUBLIC_CERTIFICATE_CONTRACT_ID: 'contractId',
+  NEXT_PUBLIC_WEBRTC_ICE_SERVERS: 'string',
+  NEXT_PUBLIC_APP_VERSION: 'string',
+  NEXT_PUBLIC_BUILD_NUMBER: 'string',
+  NEXT_PUBLIC_FRONTEND_URL: 'url',
+  NEXT_PUBLIC_CSP_REPORT_URI: 'string',
+  NEXT_PUBLIC_CSP_REPORT_ONLY: 'string',
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY: 'string',
+  NEXT_PUBLIC_BRIDGE_ENDPOINTS: 'string',
+  NODE_ENV: 'nodeEnv',
+} as const satisfies Record<string, FieldRule>;
+
+const NODE_ENVS = ['development', 'production', 'test'] as const;
+
+export type RawEnv = {
+  -readonly [K in keyof typeof RAW_ENV_RULES]?: K extends 'NODE_ENV' ? (typeof NODE_ENVS)[number] : string;
+};
+
+export interface RawEnvIssue {
+  path: string[];
+  message: string;
+}
+
+export type RawEnvParseResult =
+  | { success: true; data: RawEnv }
+  | { success: false; error: { issues: RawEnvIssue[] } };
+
+function isValidUrl(value: string): boolean {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validate the raw public environment. Empty strings count as unset. Any
+ * invalid field fails the whole parse (callers then fall back to defaults),
+ * matching the previous schema-library behaviour.
+ */
+export function parseRawEnv(source: Record<string, string | undefined>): RawEnvParseResult {
+  const data: Record<string, string> = {};
+  const issues: RawEnvIssue[] = [];
+
+  for (const [key, rule] of Object.entries(RAW_ENV_RULES) as Array<[keyof RawEnv, FieldRule]>) {
+    const raw = source[key];
+    if (raw === undefined || raw === '') continue;
+    if (typeof raw !== 'string') {
+      issues.push({ path: [key], message: 'Invalid input: expected string' });
+      continue;
+    }
+    if (rule === 'url' && !isValidUrl(raw)) {
+      issues.push({ path: [key], message: 'Invalid URL' });
+    } else if (rule === 'contractId' && !CONTRACT_ID_PATTERN.test(raw)) {
+      issues.push({ path: [key], message: 'must be a valid Soroban contract id (e.g. C...)' });
+    } else if (rule === 'nodeEnv' && !(NODE_ENVS as readonly string[]).includes(raw)) {
+      issues.push({
+        path: [key],
+        message: `Invalid option: expected one of ${NODE_ENVS.map((v) => `"${v}"`).join('|')}`,
+      });
+    } else {
+      data[key] = raw;
+    }
+  }
+
+  return issues.length ? { success: false, error: { issues } } : { success: true, data: data as RawEnv };
+}
 
 export type ServiceName = 'api' | 'ws' | 'sorobanRpc' | 'horizon';
 export type HealthStatus = 'healthy' | 'degraded' | 'offline' | 'checking' | 'unknown';
@@ -212,7 +264,7 @@ export function normalizeApiUrl(baseUrl: string, endpoint: string = ''): string 
  * callers decide whether to escalate (see {@link getPublicEnv}).
  */
 export function validatePublicEnv(source: NodeJS.ProcessEnv = process.env): EnvValidationResult {
-  const parsed = rawEnvSchema.safeParse(source);
+  const parsed = parseRawEnv(source);
   const errors: string[] = [];
 
   // Malformed values (present but fail schema, e.g. not a URL) are always
@@ -225,7 +277,7 @@ export function validatePublicEnv(source: NodeJS.ProcessEnv = process.env): EnvV
     }
   }
 
-  const data = parsed.success ? parsed.data : rawEnvSchema.partial().parse({});
+  const data: RawEnv = parsed.success ? parsed.data : {};
   const production = isProduction(source);
 
   const isFallbackApiUrl = !data.NEXT_PUBLIC_API_URL;
@@ -241,8 +293,10 @@ export function validatePublicEnv(source: NodeJS.ProcessEnv = process.env): EnvV
     errors.push('NEXT_PUBLIC_WS_URL: required in production but not set');
   }
 
-  const rawApiUrl = data.NEXT_PUBLIC_API_URL ?? (production ? FALLBACK_RENDER_API_URL : DEFAULT_DEV_API_URL);
-  const rawWsUrl = data.NEXT_PUBLIC_WS_URL ?? (production ? FALLBACK_RENDER_WS_URL : DEFAULT_DEV_WS_URL);
+  const defaultApiUrl = production ? '' : DEFAULT_DEV_API_URL;
+  const defaultWsUrl = production ? '' : DEFAULT_DEV_WS_URL;
+  const rawApiUrl = data.NEXT_PUBLIC_API_URL ?? defaultApiUrl;
+  const rawWsUrl = data.NEXT_PUBLIC_WS_URL ?? defaultWsUrl;
 
   const apiUrl = rawApiUrl ? rawApiUrl.replace(/\/+$/, '') : '';
   const wsUrl = rawWsUrl ? rawWsUrl.replace(/\/+$/, '') : '';
@@ -274,15 +328,15 @@ export function validatePublicEnv(source: NodeJS.ProcessEnv = process.env): EnvV
       api: {
         isFallback: isFallbackApiUrl,
         service: 'api',
-        url: apiUrl || (production ? FALLBACK_RENDER_API_URL : DEFAULT_DEV_API_URL),
-        defaultUrl: production ? FALLBACK_RENDER_API_URL : DEFAULT_DEV_API_URL,
+        url: apiUrl || defaultApiUrl,
+        defaultUrl: defaultApiUrl,
         envVarName: 'NEXT_PUBLIC_API_URL',
       },
       ws: {
         isFallback: isFallbackWsUrl,
         service: 'ws',
-        url: wsUrl || (production ? FALLBACK_RENDER_WS_URL : DEFAULT_DEV_WS_URL),
-        defaultUrl: production ? FALLBACK_RENDER_WS_URL : DEFAULT_DEV_WS_URL,
+        url: wsUrl || defaultWsUrl,
+        defaultUrl: defaultWsUrl,
         envVarName: 'NEXT_PUBLIC_WS_URL',
       },
       sorobanRpc: {
@@ -397,9 +451,9 @@ export async function checkServiceHealth(
   const url =
     customUrl ||
     (service === 'api'
-      ? env.apiUrl || (isProduction() ? FALLBACK_RENDER_API_URL : DEFAULT_DEV_API_URL)
+      ? env.apiUrl || (isProduction() ? '' : DEFAULT_DEV_API_URL)
       : service === 'ws'
-        ? env.wsUrl || (isProduction() ? FALLBACK_RENDER_WS_URL : DEFAULT_DEV_WS_URL)
+        ? env.wsUrl || (isProduction() ? '' : DEFAULT_DEV_WS_URL)
         : service === 'sorobanRpc'
           ? env.sorobanRpcUrl
           : env.horizonUrl);

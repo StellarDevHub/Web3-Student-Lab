@@ -13,6 +13,10 @@ pub struct Config {
     pub poll_interval: Duration,
     pub batch_size: u32,
     pub start_ledger_override: Option<u32>,
+    pub grpc_port: Option<u16>,
+    pub grpc_ca_cert_path: Option<String>,
+    pub grpc_cert_path: Option<String>,
+    pub grpc_key_path: Option<String>,
 }
 
 impl Config {
@@ -32,7 +36,7 @@ impl Config {
             env::var("POLL_INTERVAL_MS")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(5_000),
+                .unwrap_or(500),
         );
 
         let batch_size: u32 = env::var("BATCH_SIZE")
@@ -48,6 +52,16 @@ impl Config {
             Err(_) => None,
         };
 
+        let grpc_port = match env::var("GRPC_PORT") {
+            Ok(v) if !v.trim().is_empty() => {
+                Some(v.parse().map_err(|e| anyhow!("invalid GRPC_PORT: {e}"))?)
+            }
+            _ => None,
+        };
+        let grpc_ca_cert_path = env::var("GRPC_MTLS_CA_CERT_PATH").ok().filter(|v| !v.is_empty());
+        let grpc_cert_path = env::var("GRPC_MTLS_CERT_PATH").ok().filter(|v| !v.is_empty());
+        let grpc_key_path = env::var("GRPC_MTLS_KEY_PATH").ok().filter(|v| !v.is_empty());
+
         Ok(Self {
             port,
             database_url,
@@ -55,6 +69,10 @@ impl Config {
             poll_interval,
             batch_size,
             start_ledger_override,
+            grpc_port,
+            grpc_ca_cert_path,
+            grpc_cert_path,
+            grpc_key_path,
         })
     }
 

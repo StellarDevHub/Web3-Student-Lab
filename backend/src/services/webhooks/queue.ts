@@ -16,9 +16,9 @@ export const WEBHOOK_BACKOFF_DELAY_MS = Number(process.env.WEBHOOK_BACKOFF_DELAY
 export const WEBHOOK_BACKOFF_JITTER = 0.5;
 
 /**
- * Exponential retry schedule spread across a 48 hour window (Issue BE-015).
+ * Exponential retry schedule spread across a 72 hour window (Issue BE-075).
  * Entry `n` is the delay before retry `n + 1`; the cumulative schedule is
- * ~45.7h so the final retry still lands inside the 48h delivery window.
+ * ~69.7h so the final retry still lands inside the 72h delivery window.
  */
 export const WEBHOOK_RETRY_SCHEDULE_MS: readonly number[] = [
   30 * 1000,
@@ -31,12 +31,15 @@ export const WEBHOOK_RETRY_SCHEDULE_MS: readonly number[] = [
   8 * 60 * 60 * 1000,
   12 * 60 * 60 * 1000,
   18 * 60 * 60 * 1000,
+  24 * 60 * 60 * 1000,
 ];
 
-export const WEBHOOK_RETRY_WINDOW_MS = 48 * 60 * 60 * 1000;
+export const WEBHOOK_RETRY_WINDOW_MS = 72 * 60 * 60 * 1000;
 
 /** Custom BullMQ backoff type resolved by the worker's `backoffStrategy`. */
-export const WEBHOOK_BACKOFF_STRATEGY = 'webhook-48h';
+export const WEBHOOK_BACKOFF_STRATEGY = 'webhook-72h';
+
+export const WEBHOOK_REQUEST_TIMEOUT_MS = Number(process.env.WEBHOOK_REQUEST_TIMEOUT_MS || '5000');
 
 export const WEBHOOK_MAX_ATTEMPTS = Number(
   process.env.WEBHOOK_MAX_ATTEMPTS || String(WEBHOOK_RETRY_SCHEDULE_MS.length + 1)
@@ -55,7 +58,7 @@ const createDefaultJobOptions = () => ({
     age: 7 * 24 * 60 * 60,
     count: 5000,
   },
-  timeout: Number(process.env.WEBHOOK_REQUEST_TIMEOUT_MS || '10000'),
+  timeout: WEBHOOK_REQUEST_TIMEOUT_MS,
 });
 
 const createQueue = (name: string, defaultJobOptions?: JobsOptions) => {

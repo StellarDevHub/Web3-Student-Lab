@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+package internal.v1;
+
+// ============================================================================
+// Indexer Service — Internal mTLS gRPC API for Soroban Event Indexer
+// ============================================================================
+service IndexerService {
+  rpc GetEvents(GetEventsRequest) returns (GetEventsResponse);
+  rpc GetCursor(GetCursorRequest) returns (GetCursorResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+message GetEventsRequest {
+  string contract_id = 1;
+  uint32 from_ledger = 2;
+  uint32 limit = 3;
+}
+
+message IndexedEvent {
+  string id = 1;
+  uint32 ledger = 2;
+  string ledger_closed_at = 3;
+  string contract_id = 4;
+  string topic_json = 5;
+  string value_json = 6;
+  string tx_hash = 7;
+}
+
+message GetEventsResponse {
+  repeated IndexedEvent events = 1;
+  uint32 latest_ledger = 2;
+}
+
+message GetCursorRequest {}
+
+message GetCursorResponse {
+  uint32 last_ledger = 1;
+  string updated_at = 2;
+}
+
+// ============================================================================
+// WASM Evaluator Service — Internal mTLS gRPC API for Sandboxed WASM Workers
+// ============================================================================
+service WasmEvaluatorService {
+  rpc ExecuteWasm(ExecuteWasmRequest) returns (ExecuteWasmResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+message WasmTestCaseProto {
+  string name = 1;
+  string function_name = 2;
+  repeated string args = 3;
+  bool has_expected = 4;
+  string expected = 5;
+}
+
+message ExecuteWasmRequest {
+  bytes wasm_bytecode = 1;
+  repeated WasmTestCaseProto tests = 2;
+  uint32 gas_limit = 3;
+  uint32 memory_limit_bytes = 4;
+  uint32 timeout_ms = 5;
+}
+
+message WasmTestOutcomeProto {
+  string name = 1;
+  string function_name = 2;
+  string status = 3;
+  bool has_expected = 4;
+  string expected = 5;
+  bool has_actual = 6;
+  string actual = 7;
+  uint64 gas_used = 8;
+  uint64 duration_ms = 9;
+  string termination_reason = 10;
+  string error = 11;
+}
+
+message WasmSummaryProto {
+  uint32 total = 1;
+  uint32 passed = 2;
+  uint32 failed = 3;
+  uint32 errored = 4;
+  uint32 skipped = 5;
+}
+
+message ExecuteWasmResponse {
+  string execution_id = 1;
+  string status = 2;
+  string termination_reason = 3;
+  uint64 gas_used = 4;
+  uint64 gas_limit = 5;
+  uint64 memory_peak_bytes = 6;
+  uint64 memory_limit_bytes = 7;
+  uint64 duration_ms = 8;
+  repeated WasmTestOutcomeProto tests = 9;
+  WasmSummaryProto summary = 10;
+  string validation_code = 11;
+  string error = 12;
+}
+
+// ============================================================================
+// Shared Health Check
+// ============================================================================
+message HealthCheckRequest {
+  string service = 1;
+}
+
+message HealthCheckResponse {
+  string status = 1;
+  string service = 2;
+  int64 timestamp_ms = 3;
+}

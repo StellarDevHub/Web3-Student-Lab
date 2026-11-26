@@ -1,9 +1,24 @@
 'use client';
 
 import React from 'react';
-import Joyride, { CallBackProps, STATUS, ACTIONS, EVENTS, TooltipRenderProps } from 'react-joyride';
+import * as JoyrideModule from 'react-joyride';
+import type { CallBackProps, TooltipRenderProps } from 'react-joyride';
 import { CODE_TOUR_STEPS, CodeTourStep } from '@/constants/tourSteps';
 import { useTourProgress } from '@/hooks/useTourProgress';
+
+// Normalize CJS/ESM interop: react-joyride may expose its component either as a
+// default export or as a named export depending on the bundler / test transform.
+// Under React 19 an object-as-element is rejected, so resolve the real component.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mod: any = JoyrideModule;
+const Joyride: React.ComponentType<any> =
+  (mod && mod.default && (mod.default.default ?? mod.default)) ?? mod.Joyride ?? mod;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const JoyrideConstants: any = (mod && mod.STATUS ? mod : mod.default ?? mod);
+const STATUS = JoyrideConstants.STATUS;
+const ACTIONS = JoyrideConstants.ACTIONS;
+const EVENTS = JoyrideConstants.EVENTS;
 
 function GlassmorphismTooltip({
   continuous,
