@@ -7,6 +7,9 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Production runtime connects via PgBouncer in transaction pooling mode
+// (DATABASE_URL with ?pgbouncer=true), while Prisma migrations use DIRECT_URL
+// (configured in backend/prisma.config.ts) to bypass PgBouncer (BE-080).
 datasource db {
   provider = "postgresql"
 }
