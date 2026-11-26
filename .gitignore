@@ -128,6 +128,10 @@ ISSUE_582_RESOLUTION_CHECKLIST.md
 grafana/
 observability/
 
+# Version-controlled Grafana dashboards live under monitoring/grafana
+!monitoring/grafana/
+!monitoring/grafana/**
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Logs — backend
 # ──────────────────────────────────────────────────────────────────────────────

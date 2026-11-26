@@ -33,6 +33,7 @@
 import { randomUUID } from 'crypto';
 import os from 'os';
 import { Worker } from 'worker_threads';
+import { recordWasmEvaluation } from '../metrics/prometheusMetrics.js';
 import logger from '../utils/logger.js';
 import { validateWasmModule, type WasmValidationCode } from '../utils/wasmValidator.js';
 
@@ -321,6 +322,7 @@ export async function runWasmEvaluation(
       : summary.total > 0 && summary.passed === summary.total
         ? 'passed'
         : 'failed';
+    recordWasmEvaluation(status, terminationReason, elapsedMs() / 1000);
     return {
       executionId,
       status,

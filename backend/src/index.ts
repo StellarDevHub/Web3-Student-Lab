@@ -8,6 +8,8 @@ import { jsonBodySizeLimit, jsonBodyParsingErrorHandler } from './middleware/bod
 import { dbRoutingMiddleware } from './middleware/dbRouting.js';
 import { dynamicRateLimiter } from './middleware/dynamicRateLimiter.js';
 import { tracingMiddleware } from './middleware/tracingMiddleware.js';
+import { prometheusHttpMetrics } from './middleware/prometheusHttpMetrics.js';
+import { prometheusBasicRouter } from './routes/metrics.routes.js';
 import apiRouter from './routes/api.js';
 import { livenessHandler, readinessHandler } from './routes/health.routes.js';
 import routes from './routes/index.js';
@@ -29,6 +31,10 @@ initializeSentry(app);
 
 // OpenTelemetry SERVER span per request; downstream work becomes child spans
 app.use(tracingMiddleware());
+
+// Prometheus `http_request_duration_seconds` (BE-077). Records on response
+// finish; labels use the matched route pattern, never the raw URL.
+app.use(prometheusHttpMetrics());
 
 // Mount Sentry Request Handler middleware
 app.use(getSentryRequestHandler());
@@ -96,6 +102,10 @@ app.use('/api/v1', routes);
 
 // Mount versioned API routes (e.g. /api/v1/lottery, /api/v2/lottery)
 app.use('/api', apiRouter);
+
+// Conventional Prometheus scrape endpoint, protected by HTTP basic auth
+// (BE-077). Mounted at the root so standard scrape configs work unchanged.
+app.use('/metrics', prometheusBasicRouter);
 
 // Mount Sentry Error Handler middleware
 app.use(getSentryErrorHandler());
