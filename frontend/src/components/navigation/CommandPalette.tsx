@@ -24,6 +24,7 @@ import {
   filterCommands,
 } from '@/constants/searchIndex';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 export type { CommandCategory, CommandItem, RouteDef };
 export { NAV_ROUTES, CONTRACT_NAMES, placeholderAddress, titleize, buildCommandIndex, filterCommands };
@@ -69,6 +70,7 @@ export function CommandPalette({
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
   const inputId = useId();
 
@@ -107,6 +109,12 @@ export function CommandPalette({
     if (typeof el?.scrollIntoView === 'function') el.scrollIntoView({ block: 'nearest' });
   }, [selectedIndex, isOpen]);
 
+  useFocusTrap(dialogRef, {
+    enabled: isOpen,
+    initialFocus: false,
+    onEscape: () => setIsOpen(false),
+  });
+
   if (!isOpen) return null;
 
   const activeId = results[selectedIndex]
@@ -115,6 +123,7 @@ export function CommandPalette({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label="Command Palette"

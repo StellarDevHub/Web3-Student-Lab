@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { usePerformanceMetrics } from '@/hooks/usePerformanceMetrics';
-import PerformanceMetricsDashboard from '@/components/performance-metrics/PerformanceMetricsDashboard';
+import { LazyPerformanceMetricsDashboard as PerformanceMetricsDashboard } from '@/components/charts/LazyCharts';
 import ContributionPerformanceProfiler from '@/components/performance-metrics/ContributionPerformanceProfiler';
 import CoreWebVitalsMonitor from '@/components/performance-metrics/CoreWebVitalsMonitor';
 import Link from 'next/link';

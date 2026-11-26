@@ -3,14 +3,18 @@ import { KeyboardShortcutsProvider } from '@/components/keyboard/KeyboardShortcu
 import Navbar from '@/components/layout/Navbar';
 import {
   DeferredCommandPalette,
+  DeferredCourseNotificationListener,
   DeferredOfflineNotification,
   DeferredRenderWarningModal,
 } from '@/components/layout/DeferredLayoutWidgets';
 import ResiliencyBanner from '@/components/layout/ResiliencyBanner';
 import WalletGate from '@/components/layout/WalletGate';
-import { CourseNotificationListener, ToastContainer } from '@/components/notifications';
+// Direct module import (not the notifications barrel) so unrelated exports
+// are not pulled into the root layout bundle (FE-076).
+import { ToastContainer } from '@/components/notifications/ToastContainer';
 import { OfflineSyncHandler } from '@/components/OfflineSyncHandler';
 import { SkipLink } from '@/components/ui/SkipLink';
+import { TelemetryContextBridge } from '@/components/telemetry/TelemetryContextBridge';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { Providers as ThemeProvider } from '@/lib/theme/providers';
@@ -18,6 +22,7 @@ import { TutorialProvider } from '@/contexts/TutorialContext';
 import { WalletProvider } from '@/contexts/WalletContext';
 import { Web3OnboardingProvider } from '@/contexts/Web3OnboardingContext';
 import { I18nProvider } from '@/i18n';
+import { SocketWorkerProvider } from './providers';
 import type { Metadata, Viewport } from 'next';
 import { Inter, Outfit } from 'next/font/google';
 import './globals.css';
@@ -63,12 +68,14 @@ export default function RootLayout({
     >
       <body className="bg-background text-foreground min-h-screen antialiased overflow-x-hidden" suppressHydrationWarning>
         <QueryProvider>
-          <ThemeProvider>
+          <SocketWorkerProvider>
+            <ThemeProvider>
           <WalletProvider>
+            <TelemetryContextBridge />
             <AuthProvider>
               <I18nProvider>
                 <NotificationProvider>
-                  <CourseNotificationListener />
+                  <DeferredCourseNotificationListener />
                   <Web3OnboardingProvider>
                     <KeyboardShortcutsProvider>
                       <TutorialProvider>
@@ -95,7 +102,8 @@ export default function RootLayout({
               </I18nProvider>
             </AuthProvider>
           </WalletProvider>
-          </ThemeProvider>
+            </ThemeProvider>
+          </SocketWorkerProvider>
         </QueryProvider>
       </body>
     </html>

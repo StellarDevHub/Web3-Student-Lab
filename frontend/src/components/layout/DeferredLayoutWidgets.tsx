@@ -23,3 +23,16 @@ export const DeferredOfflineNotification = dynamic(
   () => import('@/components/notifications/OfflineNotification').then((mod) => mod.OfflineNotification),
   { ssr: false },
 );
+
+/**
+ * Course notification socket bridge. Renders nothing until the socket drops,
+ * so connecting after hydration is invisible — and keeps socket.io-client out
+ * of every route's first-load JS (FE-076).
+ */
+export const DeferredCourseNotificationListener = dynamic(
+  () =>
+    import('@/components/notifications/CourseNotificationListener').then(
+      (mod) => mod.CourseNotificationListener,
+    ),
+  { ssr: false },
+);
