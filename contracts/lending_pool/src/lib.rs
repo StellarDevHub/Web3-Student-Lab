@@ -27,10 +27,12 @@
 //! `checked_div`. Overflow / underflow / division-by-zero produce typed
 //! `LPError` variants instead of panicking.
 //!
-//! ## Pause (SC-HARD-19)
+//! ## Pause (SC-HARD-19, SC-074)
 //! State-mutating entry points call `check_not_paused()` and revert with
-//! `LPError::ContractPaused` when the circuit-breaker is active.
-//! `emergency_withdraw` is exempt.
+//! `LPError::ContractPaused` when the circuit-breaker is active. The breaker is
+//! the shared `access_control::circuit_breaker`: a guardian or the admin pauses
+//! instantly, while unpausing is admin-only and timelocked. `emergency_withdraw`
+//! and unstaking are exempt so users can exit during an incident.
 
 #![no_std]
 
@@ -55,8 +57,6 @@ const SCALE: i128 = 1_000_000_000_000; // 1e12
 const SECS_PER_YEAR: i128 = 31_536_000;
 /// Temporary-storage key for the reentrancy guard mutex.
 const RG_KEY: Symbol = symbol_short!("lp_rg");
-/// Instance-storage key for the circuit-breaker pause flag.
-const PAUSED_KEY: Symbol = symbol_short!("lp_pause");
 
 // ── Storage keys ─────────────────────────────────────────────────────────────
 
@@ -121,6 +121,8 @@ pub enum LPError {
     DivisionByZero = 13,
     /// `14` — Contract is paused by the circuit breaker.
     ContractPaused = 14,
+    /// `15` — Emergency withdrawal blocked by an outstanding borrow.
+    DebtOutstanding = 15,
 }
 
 // ── Fixed-point math helpers (SC-HARD-18) ─────────────────────────────────────
@@ -177,7 +179,8 @@ impl LendingPool {
             .instance()
             .set(&Key::MinCollRatio, &min_coll_ratio);
         env.storage().instance().set(&Key::LiqBonus, &liq_bonus);
-        env.storage().instance().set(&PAUSED_KEY, &false);
+        // Admin is the initial guardian; unpausing is admin-only and timelocked.
+        access_control::circuit_breaker::initialize(&env, &admin, &admin);
     }
 
     /// Register a token as an accepted collateral / borrow asset.
@@ -424,14 +427,28 @@ impl LendingPool {
         );
     }
 
-    /// Emergency collateral withdrawal — available even when the circuit
-    /// breaker is active, so admin can recover funds during a pause.
+    /// Emergency collateral withdrawal for a depositor, available even when
+    /// the circuit breaker is active so users can exit during an incident.
+    ///
+    /// Collateral cannot be withdrawn while it backs an outstanding borrow in
+    /// that token: this stops a paused pool from being drained by underwater
+    /// positions while still giving unencumbered depositors an exit.
     pub fn emergency_withdraw(env: Env, user: Address, collateral_token: Address, amount: i128) {
         user.require_auth();
         // NOTE: intentionally does NOT call check_not_paused — this is the
         // exempted emergency path (SC-HARD-19).
-        Self::only_admin(&env);
+        Self::check_nonzero(&env, amount);
         Self::lock(&env);
+
+        let debt: i128 = env
+            .storage()
+            .persistent()
+            .get(&Key::Debt(user.clone(), collateral_token.clone()))
+            .unwrap_or(0);
+        if debt != 0 {
+            Self::unlock(&env);
+            panic_with_error!(&env, LPError::DebtOutstanding);
+        }
 
         let coll_key = Key::Collateral(user.clone(), collateral_token.clone());
         let bal: i128 = env.storage().persistent().get(&coll_key).unwrap_or(0);
@@ -457,12 +474,42 @@ impl LendingPool {
         );
     }
 
-    /// Pause the contract (admin only).
-    pub fn set_paused(env: Env, admin: Address, paused: bool) {
-        admin.require_auth();
-        Self::only_admin(&env);
-        env.storage().instance().set(&PAUSED_KEY, &paused);
-        env.events().publish((symbol_short!("lp_pause"),), paused);
+    /// Pause deposits, borrows, withdrawals, liquidations and flash loans
+    /// immediately. The admin or the designated guardian may call this.
+    /// Unstaking, reward claims, and `emergency_withdraw` remain available.
+    pub fn pause(env: Env, caller: Address) {
+        access_control::circuit_breaker::pause(&env, &caller);
+        env.events().publish((symbol_short!("lp_pause"),), true);
+    }
+
+    /// Set the guardian allowed to pause the pool. Admin only; the guardian can
+    /// never unpause.
+    pub fn set_guardian(env: Env, admin: Address, guardian: Address) {
+        // The breaker authenticates `admin` and checks it against the stored
+        // breaker admin (set to the pool admin during initialize).
+        access_control::circuit_breaker::set_guardian(&env, &admin, &guardian);
+    }
+
+    /// Propose resuming the pool. Admin only; executable after the unpause
+    /// timelock.
+    pub fn propose_unpause(env: Env, admin: Address) -> u64 {
+        access_control::circuit_breaker::propose_unpause(&env, &admin)
+    }
+
+    /// Cancel a pending unpause while staying paused. Admin only.
+    pub fn cancel_unpause(env: Env, admin: Address) {
+        access_control::circuit_breaker::cancel_unpause(&env, &admin);
+    }
+
+    /// Resume operations after the unpause timelock. Admin only.
+    pub fn unpause(env: Env, admin: Address) {
+        access_control::circuit_breaker::unpause(&env, &admin);
+        env.events().publish((symbol_short!("lp_pause"),), false);
+    }
+
+    /// Timestamp at which a pending unpause becomes executable, if any.
+    pub fn unpause_unlock_at(env: Env) -> Option<u64> {
+        access_control::circuit_breaker::unpause_unlock_at(&env)
     }
 
     // ── Flash Loan (SC-031) ───────────────────────────────────────────────────
@@ -545,10 +592,7 @@ impl LendingPool {
     }
 
     pub fn paused(env: Env) -> bool {
-        env.storage()
-            .instance()
-            .get::<Symbol, bool>(&PAUSED_KEY)
-            .unwrap_or(false)
+        access_control::circuit_breaker::is_paused(&env)
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────
@@ -720,16 +764,9 @@ impl LendingPool {
         }
     }
 
-    /// Check circuit-breaker pause state.
+    /// Check circuit-breaker pause state, surfacing the pool's own error code.
     fn check_not_paused(env: &Env) {
-        let paused: bool = env
-            .storage()
-            .instance()
-            .get::<Symbol, bool>(&PAUSED_KEY)
-            .unwrap_or(false);
-        if paused {
-            panic_with_error!(env, LPError::ContractPaused);
-        }
+        access_control::require_not_paused!(env, LPError::ContractPaused);
     }
 
     /// Acquire the reentrancy guard using temporary storage (SC-HARD-17).
@@ -899,8 +936,68 @@ mod tests {
         let token = add_token(&env, &client);
         let user = Address::generate(&env);
 
-        client.set_paused(&admin, &true);
+        client.pause(&admin);
         client.deposit_collateral(&user, &token, &1_000);
+    }
+
+    #[test]
+    fn guardian_pause_blocks_lending_but_allows_emergency_exit() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, _) = setup(&env);
+        let token = add_token(&env, &client);
+        let user = Address::generate(&env);
+
+        client.deposit_collateral(&user, &token, &1_000);
+        let guardian = Address::generate(&env);
+        client.set_guardian(&admin, &guardian);
+        client.pause(&guardian);
+        assert!(client.paused());
+
+        assert!(client
+            .try_deposit_collateral(&user, &token, &1_000)
+            .is_err());
+        assert!(client
+            .try_withdraw_collateral(&user, &token, &token, &100)
+            .is_err());
+
+        // Emergency exit stays open while paused.
+        client.emergency_withdraw(&user, &token, &400);
+        assert_eq!(client.collateral_of(&user, &token), 600);
+
+        // A guardian can never resume the pool; the admin must wait out the
+        // unpause timelock.
+        assert!(client.try_unpause(&guardian).is_err());
+        let unlock_at = client.propose_unpause(&admin);
+        assert_eq!(
+            unlock_at,
+            env.ledger().timestamp() + access_control::circuit_breaker::UNPAUSE_TIMELOCK_SECONDS
+        );
+        assert_eq!(client.unpause_unlock_at(), Some(unlock_at));
+        assert!(client.try_unpause(&admin).is_err());
+
+        env.ledger().with_mut(|ledger| ledger.timestamp = unlock_at);
+        client.unpause(&admin);
+
+        assert!(!client.paused());
+        client.deposit_collateral(&user, &token, &100);
+        assert_eq!(client.collateral_of(&user, &token), 700);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #15)")]
+    fn emergency_withdraw_rejected_with_outstanding_debt() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, _) = setup(&env);
+        let token = add_token(&env, &client);
+        let user = Address::generate(&env);
+
+        client.deposit_collateral(&user, &token, &1_000);
+        client.borrow(&user, &token, &token, &100);
+        client.pause(&admin);
+
+        client.emergency_withdraw(&user, &token, &100);
     }
 
     // ── SC-007 acceptance-criteria tests ──────────────────────────────────────
