@@ -34,6 +34,62 @@ const handleValidationErrors = (req: Request, res: Response, next: NextFunction)
 // Router factory
 // ---------------------------------------------------------------------------
 
+/**
+ * POST /api/passkey/register/challenge
+ *
+ * Generate a registration challenge for creating a new passkey.
+ *
+ * Request body:
+ *   - userId: string (required) - The user's unique identifier
+ *   - userName: string (required) - The user's email or username
+ *   - userDisplayName: string (required) - The user's display name
+ *
+ * Response:
+ *   - challenge: PublicKeyCredentialCreationOptions - For client-side WebAuthn API
+ */
+router.post(
+  '/register/challenge',
+  [
+    body('userId').isString().notEmpty().withMessage('userId is required'),
+    body('userName').isEmail().withMessage('userName must be a valid email'),
+    body('userDisplayName').isString().notEmpty().withMessage('userDisplayName is required'),
+  ],
+  handleValidationErrors,
+  async (req: Request, res: Response) => {
+    try {
+      const { userId, userName, userDisplayName } = req.body;
+
+      const challenge = await passkeyService.generateRegistrationChallenge(
+        userId,
+        userName,
+        userDisplayName
+      );
+
+      // Buffers → unpadded base64url, the encoding WebAuthn JSON and
+      // clientDataJSON use, so the challenge round-trips unchanged.
+      const serializableChallenge = {
+        ...challenge,
+        challenge: challenge.challenge.toString('base64url'),
+        user: {
+          ...challenge.user,
+          id: challenge.user.id.toString('base64url'),
+        },
+        excludeCredentials: challenge.excludeCredentials.map((cred) => ({
+          ...cred,
+          id: cred.id.toString('base64url'),
+        })),
+      };
+
+      res.json({
+        success: true,
+        data: serializableChallenge,
+      });
+    } catch (error) {
+      console.error('Registration challenge error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to generate registration challenge',
+      });
 export function createPasskeyRouter(service?: PasskeyService): Router {
   const router = Router();
   const getService = () => service ?? getPasskeyService();
@@ -132,6 +188,57 @@ export function createPasskeyRouter(service?: PasskeyService): Router {
         });
       }
     }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Authentication routes
+// ---------------------------------------------------------------------------
+
+/**
+ * POST /api/passkey/authenticate/challenge
+ *
+ * Generate an authentication challenge for signing in.
+ *
+ * Request body:
+ *   - userId: string (optional) - The user's ID to narrow credential list
+ *
+ * Response:
+ *   - challenge: PublicKeyCredentialRequestOptions - For client-side WebAuthn API
+ */
+router.post(
+  '/authenticate/challenge',
+  [
+    body('userId').optional().isString(),
+  ],
+  handleValidationErrors,
+  async (req: Request, res: Response) => {
+    try {
+      const { userId } = req.body;
+
+      const challenge = await passkeyService.generateAuthenticationChallenge(userId);
+
+      // Buffers → unpadded base64url, the encoding WebAuthn JSON and
+      // clientDataJSON use, so the challenge round-trips unchanged.
+      const serializableChallenge = {
+        ...challenge,
+        challenge: challenge.challenge.toString('base64url'),
+        allowCredentials: challenge.allowCredentials.map((cred) => ({
+          ...cred,
+          id: cred.id.toString('base64url'),
+        })),
+      };
+
+      res.json({
+        success: true,
+        data: serializableChallenge,
+      });
+    } catch (error) {
+      console.error('Authentication challenge error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to generate authentication challenge',
+      });
   );
 
   // -------------------------------------------------------------------------
