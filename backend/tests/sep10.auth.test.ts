@@ -148,9 +148,11 @@ describe('SEP-0010 Stellar Web Authentication Gateway Tests', () => {
       expect(authResponse.refreshToken).toBeDefined();
       expect(authResponse.signers).toContain(clientPublicKey);
 
-      // Verify issued JWT tokens
+      // Verify issued JWT tokens contain student wallet claims
       const accessPayload = verifyAccessToken(authResponse.accessToken);
       expect(accessPayload.userId).toBe(authResponse.user.id);
+      expect(accessPayload.walletAddress).toBe(clientPublicKey);
+      expect(accessPayload.sep10Nonce).toBe(challenge.nonce);
 
       const refreshPayload = await verifyRefreshToken(authResponse.refreshToken);
       expect(refreshPayload.userId).toBe(authResponse.user.id);
@@ -308,6 +310,43 @@ describe('SEP-0010 Stellar Web Authentication Gateway Tests', () => {
 
       await expect(verifySep10Challenge(signedXdr, clientPublicKey)).rejects.toThrow();
     });
+
+    it('should reject challenge transactions with mismatched home domains', async () => {
+      const foreignChallengeXdr = WebAuth.buildChallengeTx(
+        serverKeypair,
+        clientPublicKey,
+        'evil.example.com',
+        300,
+        networkPassphrase,
+        webAuthDomain
+      );
+
+      const tx = TransactionBuilder.fromXDR(foreignChallengeXdr, networkPassphrase);
+      tx.sign(clientKeypair);
+      const signedXdr = tx.toXDR();
+
+      await expect(verifySep10Challenge(signedXdr, clientPublicKey)).rejects.toThrow();
+      await expect(
+        verifySep10Challenge(signedXdr, clientPublicKey, 'evil.example.com')
+      ).rejects.toThrow('Home domain mismatch');
+    });
+
+    it('should reject challenge transactions submitted before minTime', async () => {
+      const challenge = await buildSep10Challenge(clientPublicKey);
+      const tx = TransactionBuilder.fromXDR(challenge.transaction, networkPassphrase);
+      tx.sign(clientKeypair);
+      const signedXdr = tx.toXDR();
+
+      // Simulate server clock 60s before minTime
+      const pastTime = Date.now() - 60 * 1000;
+      jest.spyOn(Date, 'now').mockReturnValue(pastTime);
+
+      await expect(verifySep10Challenge(signedXdr, clientPublicKey)).rejects.toThrow(
+        'Challenge transaction has expired'
+      );
+
+      jest.restoreAllMocks();
+    });
   });
 
   describe('Wallet User Password Security', () => {
@@ -382,6 +421,35 @@ describe('SEP-0010 Stellar Web Authentication Gateway Tests', () => {
         .post('/api/v1/auth/sep10/token')
         .send({ transaction: 'invalid-xdr' })
         .expect(401);
+    });
+
+    it('should reject replayed signed challenge XDR with 401 Unauthorized on /api/v1/auth/sep10/token', async () => {
+      const challengeRes = await request(app)
+        .get(`/api/v1/auth/sep10/challenge?account=${clientPublicKey}`)
+        .expect(200);
+
+      const tx = TransactionBuilder.fromXDR(challengeRes.body.transaction, networkPassphrase);
+      tx.sign(clientKeypair);
+      const signedXdr = tx.toXDR();
+
+      await request(app)
+        .post('/api/v1/auth/sep10/token')
+        .send({ transaction: signedXdr })
+        .expect(200);
+
+      // Replayed signed challenge must fail immediately with 401
+      const replayRes = await request(app)
+        .post('/api/v1/auth/sep10/token')
+        .send({ transaction: signedXdr })
+        .expect(401);
+
+      expect(replayRes.body.error).toContain('already been used');
+    });
+
+    it('should reject mismatched home_domain on /api/v1/auth/sep10/challenge with 400', async () => {
+      await request(app)
+        .get(`/api/v1/auth/sep10/challenge?account=${clientPublicKey}&home_domain=evil.example.com`)
+        .expect(400);
     });
   });
 });

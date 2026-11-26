@@ -1,15 +1,36 @@
 'use client';
 
 import React, { useCallback } from 'react';
-let JoyrideModule: any;
-try {
-  JoyrideModule = require('react-joyride');
-} catch (e) {}
-const Joyride = (JoyrideModule?.default || JoyrideModule) as any;
+import * as JoyrideNamespace from 'react-joyride';
+import { getTutorialStyles, type TutorialId } from './tutorialConfig';
+
+/**
+ * React 19 compatibility: react-joyride ships CJS with a `default` export that
+ * may be wrapped as `{ default: Component }` depending on the bundler/interop.
+ * Normalize to the actual component so it is never passed as an object element.
+ */
+const resolveInterop = <T,>(mod: any, key?: string): T => {
+  let current = mod;
+  // Unwrap nested default exports (CJS/ESM interop)
+  for (let i = 0; i < 3 && current && typeof current === 'object' && 'default' in current; i++) {
+    current = current.default;
+  }
+  if (key && current && typeof current === 'object' && key in current) {
+    return current[key] as T;
+  }
+  return current as T;
+};
+
+const Joyride = resolveInterop<any>(JoyrideNamespace, undefined);
+const JOYRIDE_CONSTANTS: any = (JoyrideNamespace as any).STATUS
+  ? JoyrideNamespace
+  : (JoyrideNamespace as any).default ?? {};
+const STATUS: Record<string, string> = JOYRIDE_CONSTANTS.STATUS ?? {};
+const EVENTS: Record<string, string> = JOYRIDE_CONSTANTS.EVENTS ?? {};
+const ACTIONS: Record<string, string> = JOYRIDE_CONSTANTS.ACTIONS ?? {};
+
 type CallBackProps = any;
 type Step = any;
-const { STATUS = {}, EVENTS = {}, ACTIONS = {} } = JoyrideModule || {};
-import { getTutorialStyles, type TutorialId } from './tutorialConfig';
 
 export interface TutorialWalkthroughProps {
   tutorialId: TutorialId;
@@ -73,6 +94,10 @@ export function TutorialWalkthrough({
   );
 
   const styles = getTutorialStyles();
+
+  if (!Joyride || (typeof Joyride !== 'function' && typeof Joyride !== 'object')) {
+    return null;
+  }
 
   return (
     <Joyride

@@ -18,6 +18,7 @@
 
 import { UnrecoverableError, Worker, type Job } from 'bullmq';
 import { BlockchainNotConfiguredError, CertificateBlockchainService } from '../blockchain/CertificateBlockchainService.js';
+import { traceEnqueue, traceJob } from '../instrumentation.js';
 import { getQueueManager, QUEUE_NAMES, type QueueManager } from '../queues/queueManager.js';
 import logger from '../utils/logger.js';
 
@@ -136,7 +137,10 @@ export function startMintingWorker(
 ): Worker<MintJobData, MintJobResult> {
   if (mintingWorker) return mintingWorker;
   const processor = createMintProcessor(minter, () => mintingWorker ?? undefined);
-  mintingWorker = manager.createWorker<MintJobData, MintJobResult>(QUEUE_NAMES.TX_MINTING, processor);
+  mintingWorker = manager.createWorker<MintJobData, MintJobResult>(
+    QUEUE_NAMES.TX_MINTING,
+    (job) => traceJob(QUEUE_NAMES.TX_MINTING, job, () => processor(job)),
+  );
   return mintingWorker;
 }
 
@@ -149,8 +153,10 @@ export async function stopMintingWorker(): Promise<void> {
 /** Convenience producer used by certificate issuance flows. */
 export function enqueueMint(data: MintJobData, manager: QueueManager = getQueueManager()) {
   const jobId = data.certificateId ? `mint-${data.certificateId}` : undefined;
-  return manager.enqueue(QUEUE_NAMES.TX_MINTING, 'mint-certificate', data, {
-    ...(data.userId ? { userId: data.userId } : {}),
-    ...(jobId ? { jobId } : {}),
-  });
+  return traceEnqueue(QUEUE_NAMES.TX_MINTING, data, (tracedData) =>
+    manager.enqueue(QUEUE_NAMES.TX_MINTING, 'mint-certificate', tracedData, {
+      ...(data.userId ? { userId: data.userId } : {}),
+      ...(jobId ? { jobId } : {}),
+    }),
+  );
 }

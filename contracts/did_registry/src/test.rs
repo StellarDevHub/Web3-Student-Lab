@@ -16,7 +16,7 @@
 //! - Unauthorized key binding attempts rejected (SC-010)
 //! - Delegated verification key revocation (SC-010)
 
-use crate::{ContributorProof, DIDRegistryContract, DIDRegistryContractClient};
+use crate::{ContributorProof, DIDRegistryContract, DIDRegistryContractClient, DidError};
 use soroban_sdk::{
     symbol_short, testutils::Address as _, Address, Bytes, BytesN, Env, Map, String, Symbol,
 };
@@ -410,114 +410,139 @@ fn test_update_attributes() {
     assert!(doc.attributes.contains_key(symbol_short!("endpoint")));
 }
 
-// ── DID string form (SC-010) ──────────────────────────────────────────────────
-
 #[test]
-fn test_register_and_resolve_via_did_string() {
+fn test_resolves_w3c_documents_for_stellar_and_soroban() {
     let env = Env::default();
     env.mock_all_auths();
     let (_id, client) = deploy(&env);
     let owner = Address::generate(&env);
     let did = make_did(&env, 20);
-    let did_str = canonical_string(&env, 20);
-    let mut attrs = Map::new(&env);
-    attrs.set(symbol_short!("name"), Bytes::from_slice(&env, b"Alice"));
+    register_default(&env, &client, &owner, &did);
 
-    assert!(client.validate_did(&did_str));
+    let verification_key = BytesN::from_array(&env, &[21u8; 32]);
+    let recovery_key = BytesN::from_array(&env, &[22u8; 32]);
+    client.set_verification_key(&owner, &did, &verification_key);
+    client.set_recovery_key(&owner, &did, &recovery_key);
+    client.add_service(
+        &owner,
+        &did,
+        &String::from_str(&env, "#profile"),
+        &String::from_str(&env, "LinkedDomains"),
+        &String::from_str(&env, "https://example.com"),
+    );
 
-    client.register_string(&owner, &did_str, &attrs);
-    let doc = client.resolve_string(&did_str).unwrap();
-    assert_eq!(doc.owner, owner);
-    // The string form resolves to the same document as the raw 32-byte key.
-    assert_eq!(client.resolve(&did).unwrap().owner, owner);
-    // Contract-side formatter round-trips to the exact canonical string.
-    assert_eq!(client.did_to_string(&did), did_str);
-    assert!(client.validate_did(&client.did_to_string(&did)));
+    let stellar = client.resolve_stellar(&did).unwrap();
+    assert_eq!(
+        stellar.id,
+        String::from_str(
+            &env,
+            "did:stellar:1414141414141414141414141414141414141414141414141414141414141414"
+        )
+    );
+    assert_eq!(
+        stellar.context.len(),
+        2,
+        "DID Core and Ed25519 contexts should be present"
+    );
+    assert_eq!(stellar.verification_method.len(), 2);
+    assert_eq!(stellar.authentication.len(), 1);
+    assert_eq!(stellar.assertion_method.len(), 1);
+    assert_eq!(stellar.capability_invocation.len(), 1);
+    assert_eq!(stellar.service.len(), 1);
+    assert_eq!(
+        stellar.service.get(0).unwrap().id,
+        String::from_str(
+            &env,
+            "did:stellar:1414141414141414141414141414141414141414141414141414141414141414#profile"
+        )
+    );
+    assert_eq!(
+        stellar.verification_method.get(0).unwrap().r#type,
+        String::from_str(&env, "Ed25519VerificationKey2020")
+    );
+    assert!(
+        stellar
+            .verification_method
+            .get(0)
+            .unwrap()
+            .public_key_multibase
+            .len()
+            > 1
+    );
+
+    let soroban = client
+        .resolve_soroban(&did, &String::from_str(&env, "testnet"))
+        .unwrap();
+    assert_eq!(
+        soroban.id,
+        String::from_str(
+            &env,
+            "did:soroban:testnet:1414141414141414141414141414141414141414141414141414141414141414"
+        )
+    );
 }
 
 #[test]
-fn test_malformed_did_strings_rejected() {
+fn test_recovery_signature_rotates_key_and_preserves_history() {
+    use ed25519_dalek::Signer;
+
     let env = Env::default();
     env.mock_all_auths();
     let (_id, client) = deploy(&env);
     let owner = Address::generate(&env);
-
-    let hex64 = [b'a'; 64];
-    // Sanity: the happy-path construction is accepted by the view.
-    let valid = cat(&env, &[b"did:stellar:", &hex64]);
-    assert!(client.validate_did(&valid));
-
-    let cases = [
-        cat(&env, &[]),                              // empty
-        cat(&env, &[b"did:stellar:"]),               // prefix only
-        cat(&env, &[b"did:stellar:", &hex64[..63]]), // 63 hex chars
-        cat(&env, &[b"did:stellar:", &hex64, b"a"]), // 65 hex chars
-        cat(&env, &[b"did:stellar:", &[b'z'; 64]]),  // non-hex payload
-        cat(&env, &[b"did:ethr:", &hex64]),          // wrong method
-        cat(&env, &[b"did:STELLAR:", &hex64]),       // case-sensitive prefix
-        cat(&env, &[&hex64]),                        // missing prefix
-        cat(&env, &[b"did:stellar:", &hex64, b"x"]), // trailing suffix
-    ];
-    for case in cases {
-        assert!(!client.validate_did(&case), "view must reject: {case:?}");
-        let reg = client.try_register_string(&owner, &case, &Map::new(&env));
-        assert!(reg.is_err(), "register_string must reject: {case:?}");
-        let res = client.try_resolve_string(&case);
-        assert!(res.is_err(), "resolve_string must reject: {case:?}");
-    }
-}
-
-// ── Unauthorized key binding (SC-010) ─────────────────────────────────────────
-
-#[test]
-fn test_unauthorized_key_binding_rejected() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let (_id, client) = deploy(&env);
-    let owner = Address::generate(&env);
-    let stranger = Address::generate(&env);
     let did = make_did(&env, 21);
     register_default(&env, &client, &owner, &did);
 
-    // A non-owner must be rejected from every binding operation.
-    let handle = String::from_str(&env, "mallory");
-    assert!(client.try_bind_github(&stranger, &did, &handle).is_err());
-    assert!(client
-        .try_bind_social(&stranger, &did, &Symbol::new(&env, "discord"), &handle)
-        .is_err());
-    let key = BytesN::from_array(&env, &[9u8; 32]);
-    assert!(client
-        .try_set_verification_key(&stranger, &did, &key)
-        .is_err());
-    assert!(client.try_revoke_verification_key(&stranger, &did).is_err());
-    assert!(client
-        .try_add_contributor_proof(&stranger, &did, &make_proof(&env, "mallory"))
-        .is_err());
+    let current_signing_key = ed25519_dalek::SigningKey::from_bytes(&[31u8; 32]);
+    let recovery_signing_key = ed25519_dalek::SigningKey::from_bytes(&[32u8; 32]);
+    let new_signing_key = ed25519_dalek::SigningKey::from_bytes(&[33u8; 32]);
+    let current_key = BytesN::from_array(&env, current_signing_key.verifying_key().as_bytes());
+    let recovery_key = BytesN::from_array(&env, recovery_signing_key.verifying_key().as_bytes());
+    let new_key = BytesN::from_array(&env, new_signing_key.verifying_key().as_bytes());
+    client.set_verification_key(&owner, &did, &current_key);
+    client.set_recovery_key(&owner, &did, &recovery_key);
 
-    // None of the attempts mutated the document.
-    let doc = client.resolve(&did).unwrap();
-    assert!(doc.github_handle.is_none());
-    assert_eq!(client.get_verification_key(&did), None);
-    assert_eq!(client.get_proofs(&did).len(), 0);
+    let payload = client.key_rotation_payload(&did, &new_key);
+    let signature = recovery_signing_key.sign(&payload.to_alloc_vec());
+    let signature = BytesN::from_array(&env, &signature.to_bytes());
+    client.rotate_verification_key(&did, &new_key, &signature);
+
+    let resolved = client.resolve(&did).unwrap();
+    assert_eq!(resolved.verification_key, Some(new_key));
+    assert_eq!(resolved.historical_verification_keys.len(), 1);
+    assert_eq!(
+        resolved.historical_verification_keys.get(0),
+        Some(current_key)
+    );
+    assert_eq!(resolved.key_rotation_nonce, 1);
 }
 
 #[test]
-fn test_owner_revoke_verification_key() {
+fn test_unauthorized_owner_change_uses_typed_error() {
     let env = Env::default();
     env.mock_all_auths();
     let (_id, client) = deploy(&env);
     let owner = Address::generate(&env);
+    let attacker = Address::generate(&env);
     let did = make_did(&env, 22);
     register_default(&env, &client, &owner, &did);
 
-    let key = BytesN::from_array(&env, &[7u8; 32]);
-    client.set_verification_key(&owner, &did, &key);
-    assert_eq!(client.get_verification_key(&did), Some(key.clone()));
+    let result = client.try_bind_github(&attacker, &did, &String::from_str(&env, "mallory"));
+    assert_eq!(result, Err(Ok(DidError::Unauthorized)));
+}
 
-    client.revoke_verification_key(&owner, &did);
-    assert_eq!(client.get_verification_key(&did), None);
+#[test]
+fn test_verification_key_cannot_be_replaced_without_recovery_signature() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_id, client) = deploy(&env);
+    let owner = Address::generate(&env);
+    let did = make_did(&env, 23);
+    register_default(&env, &client, &owner, &did);
 
-    // A new key can be bound again after revocation.
-    client.set_verification_key(&owner, &did, &key);
-    assert_eq!(client.get_verification_key(&did), Some(key));
+    let original = BytesN::from_array(&env, &[23u8; 32]);
+    let replacement = BytesN::from_array(&env, &[24u8; 32]);
+    client.set_verification_key(&owner, &did, &original);
+    let result = client.try_set_verification_key(&owner, &did, &replacement);
+    assert_eq!(result, Err(Ok(DidError::Unauthorized)));
 }

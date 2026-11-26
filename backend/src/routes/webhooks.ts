@@ -6,10 +6,13 @@ import type {
 } from '../services/webhooks/index.js';
 import {
     canonicalizeWebhookPayload,
-    enqueueWebhookDeliveries,
     getDeliveryHistory,
     verifyWebhookSignature,
 } from '../services/webhooks/index.js';
+import {
+    dispatchWebhookEvent,
+    verifyWebhookPayloadSignature,
+} from '../services/webhookDispatcher.js';
 import logger from '../utils/logger.js';
 import { idempotency } from '../middleware/idempotency.js';
 
@@ -131,16 +134,24 @@ router.post(['/ingest', '/dispatch'], idempotency(), async (req: Request, res: R
   try {
     const timestamp = req.header('x-webhook-timestamp') || '';
     const signature = req.header('x-webhook-signature') || '';
+    const sha256Signature = req.header('x-signature-sha256') || '';
     const canonicalBody = canonicalizeWebhookPayload(req.body);
     const secret = getIngestSecret();
 
-    if (!verifyWebhookSignature(canonicalBody, signature, secret, timestamp)) {
+    const validTimestamped = signature
+      ? verifyWebhookSignature(canonicalBody, signature, secret, timestamp)
+      : false;
+    const validSha256 = sha256Signature
+      ? verifyWebhookPayloadSignature(canonicalBody, sha256Signature, secret)
+      : false;
+
+    if (!validTimestamped && !validSha256) {
       logger.warn('Rejected webhook dispatch request with invalid signature');
       return res.status(401).json({ error: 'Invalid webhook signature' });
     }
 
     const { event, destinations, metadata } = extractBody(req.body);
-    const results = await enqueueWebhookDeliveries(event, destinations, metadata);
+    const results = await dispatchWebhookEvent(event, destinations, metadata);
 
     return res.status(202).json({
       status: 'accepted',

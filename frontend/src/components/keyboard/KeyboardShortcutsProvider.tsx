@@ -21,7 +21,8 @@ export interface KeyboardContextType {
 const KeyboardContext = createContext<KeyboardContextType | undefined>(undefined);
 
 const SHORTCUTS: ShortcutDef[] = [
-  { keys: ['mod+k'], desc: 'Open shortcut help panel' },
+  { keys: ['mod+k'], desc: 'Open command palette' },
+  { keys: ['mod+shift+h'], desc: 'Open shortcut help panel' },
   { keys: ['g', 'c'], desc: 'Navigate to the course catalog' },
   { keys: ['g', 'r'], desc: 'Navigate to the roadmap' },
   { keys: ['g', 'v'], desc: 'Navigate to the verification center' },
@@ -37,6 +38,34 @@ export const KeyboardShortcutsProvider = ({ children }: { children: ReactNode })
   const toggleHelp = () => setIsHelpOpen((prev) => !prev);
   const openShortcutHelp = () => setIsHelpOpen(true);
   const closeShortcutHelp = () => setIsHelpOpen(false);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (event: KeyboardEvent) => {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        // CommandPalette also supports standalone use; prevent its fallback
+        // listener from toggling the palette after this global open event.
+        event.stopImmediatePropagation();
+        window.dispatchEvent(new CustomEvent('w3sl:open-command-palette'));
+        return;
+      }
+
+      if (event.key !== 'Escape' || !target?.closest('.monaco-editor')) return;
+
+      // Monaco consumes Escape internally. Move focus to the application
+      // landmark so the next Tab resumes the normal page tab order.
+      event.preventDefault();
+      event.stopPropagation();
+      target.blur();
+      const pageLandmark = document.querySelector<HTMLElement>('#main-content, main');
+      pageLandmark?.focus({ preventScroll: true });
+    };
+
+    document.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => document.removeEventListener('keydown', handleGlobalKeyDown, true);
+  }, []);
 
   useEffect(() => {
     // Accessibility: Disable shortcuts when typing in form fields or content editable regions
@@ -63,7 +92,7 @@ export const KeyboardShortcutsProvider = ({ children }: { children: ReactNode })
     };
 
     // General Actions
-    bindShortcut('ctrl+k, cmd+k, ctrl+shift+h, cmd+shift+h', () => toggleHelp());
+    bindShortcut('ctrl+shift+h, cmd+shift+h', () => toggleHelp());
 
     // Theme Toggle (Dispatching custom event)
     bindShortcut('ctrl+shift+t, cmd+shift+t', () => {
@@ -83,7 +112,7 @@ export const KeyboardShortcutsProvider = ({ children }: { children: ReactNode })
 
     return () => {
       // Cleanup bindings on unmount to prevent memory leaks
-      hotkeys.unbind('ctrl+k, cmd+k, ctrl+shift+h, cmd+shift+h');
+      hotkeys.unbind('ctrl+shift+h, cmd+shift+h');
       hotkeys.unbind('ctrl+shift+t, cmd+shift+t');
       hotkeys.unbind('g+c');
       hotkeys.unbind('g+r');
