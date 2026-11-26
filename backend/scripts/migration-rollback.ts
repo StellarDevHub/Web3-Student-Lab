@@ -21,6 +21,15 @@
 import { execSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
+import { lintLockingStatements, type LockingOp } from '../src/db/migrationSafety.js';
+
+export { lintLockingStatements } from '../src/db/migrationSafety.js';
+export {
+  MIGRATION_LOCK_TIMEOUT_MS,
+  MIGRATION_STATEMENT_TIMEOUT_MS,
+  ONLINE_MIGRATION_SESSION_OPTIONS,
+} from '../src/db/migrationSafety.js';
+export type { LockingKind, LockingOp } from '../src/db/migrationSafety.js';
 
 const MIGRATIONS_DIR = join(process.cwd(), 'prisma', 'migrations');
 
@@ -91,116 +100,20 @@ export function lintMigration(name: string, sql: string): DestructiveOp[] {
 
 // ── Zero-downtime (locking) statement detection (#1426 / BE-HARD-35) ─────────
 
-export type LockingKind =
-  | 'create_index_without_concurrently'
-  | 'add_column_not_null'
-  | 'set_not_null'
-  | 'add_foreign_key_without_not_valid'
-  | 'alter_column_type'
-  | 'lock_table'
-  | 'drop_cascade';
-
-export interface LockingOp {
-  migration: string;
-  kind: LockingKind;
-  subject: string;
-}
-
-/** Return the statement containing `index` (up to the next `;`). */
-function statementAt(flat: string, index: number): string {
-  const end = flat.indexOf(';', index);
-  return flat.slice(index, end === -1 ? undefined : end);
-}
-
-/**
- * Detect DDL that takes an ACCESS EXCLUSIVE (or long-held) lock and therefore
- * blocks concurrent reads/writes. These are the statements that make a
- * migration unsafe to run against live traffic.
- */
-export function lintLockingStatements(name: string, sql: string): LockingOp[] {
-  const ops: LockingOp[] = [];
-  const flat = sql.replace(/\n/g, ' ').replace(/\/\*.*?\*\//g, ' ');
-  let m: RegExpExecArray | null;
-
-  // CREATE [UNIQUE] INDEX without CONCURRENTLY.
-  const createIndex = /\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+(?!CONCURRENTLY\b)"?([\w."]+)"?/gi;
-  while ((m = createIndex.exec(flat)) !== null) {
-    ops.push({
-      migration: name,
-      kind: 'create_index_without_concurrently',
-      subject: m[1].replace(/"/g, ''),
-    });
-  }
-
-  // ALTER TABLE ... ADD COLUMN <col> ... NOT NULL [without DEFAULT].
-  const addNotNull =
-    /\bALTER\s+TABLE\s+"?([\w."]+)"?\s+ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?"?(\w+)"?[^;]*?NOT\s+NULL/gi;
-  while ((m = addNotNull.exec(flat)) !== null) {
-    if (!/\bDEFAULT\b/i.test(statementAt(flat, m.index))) {
-      ops.push({
-        migration: name,
-        kind: 'add_column_not_null',
-        subject: `${m[1].replace(/"/g, '')}.${m[2]}`,
-      });
-    }
-  }
-
-  // ALTER TABLE ... ALTER COLUMN <col> SET NOT NULL.
-  const setNotNull =
-    /\bALTER\s+TABLE\s+"?([\w."]+)"?\s+ALTER\s+COLUMN\s+"?(\w+)"?\s+SET\s+NOT\s+NULL/gi;
-  while ((m = setNotNull.exec(flat)) !== null) {
-    ops.push({
-      migration: name,
-      kind: 'set_not_null',
-      subject: `${m[1].replace(/"/g, '')}.${m[2]}`,
-    });
-  }
-
-  // ADD CONSTRAINT ... FOREIGN KEY ... without NOT VALID.
-  const addFk =
-    /\bALTER\s+TABLE\s+"?([\w."]+)"?\s+ADD\s+CONSTRAINT\s+"?(\w+)"?\s+FOREIGN\s+KEY/gi;
-  while ((m = addFk.exec(flat)) !== null) {
-    if (!/\bNOT\s+VALID\b/i.test(statementAt(flat, m.index))) {
-      ops.push({ migration: name, kind: 'add_foreign_key_without_not_valid', subject: m[2] });
-    }
-  }
-
-  // ALTER TABLE ... ALTER COLUMN <col> TYPE / SET DATA TYPE.
-  const alterType =
-    /\bALTER\s+TABLE\s+"?([\w."]+)"?\s+ALTER\s+COLUMN\s+"?(\w+)"?\s+(?:TYPE|SET\s+DATA\s+TYPE)\b/gi;
-  while ((m = alterType.exec(flat)) !== null) {
-    ops.push({
-      migration: name,
-      kind: 'alter_column_type',
-      subject: `${m[1].replace(/"/g, '')}.${m[2]}`,
-    });
-  }
-
-  // Explicit LOCK TABLE.
-  const lockTable = /\bLOCK\s+TABLE\s+"?([\w."]+)"?/gi;
-  while ((m = lockTable.exec(flat)) !== null) {
-    ops.push({ migration: name, kind: 'lock_table', subject: m[1].replace(/"/g, '') });
-  }
-
-  // DROP ... CASCADE (destructive and may cascade-lock dependents).
-  const dropCascade = /\bDROP\s+(?:TABLE|VIEW|COLUMN|CONSTRAINT|INDEX)\b[^;]*?\bCASCADE\b/gi;
-  while ((m = dropCascade.exec(flat)) !== null) {
-    ops.push({ migration: name, kind: 'drop_cascade', subject: m[0].trim().slice(0, 60) });
-  }
-
-  return ops;
-}
-
 /** Scan all migrations and return locking (non-zero-downtime) operations. */
-export function scanLockingOps(): LockingOp[] {
-  if (!existsSync(MIGRATIONS_DIR)) return [];
-  const dirs = readdirSync(MIGRATIONS_DIR, { withFileTypes: true })
+export function scanLockingOps(
+  migrationsDir: string = MIGRATIONS_DIR,
+  migrationNames?: ReadonlySet<string>,
+): LockingOp[] {
+  if (!existsSync(migrationsDir)) return [];
+  const dirs = readdirSync(migrationsDir, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => d.name);
 
   const ops: LockingOp[] = [];
   for (const dir of dirs) {
-    const file = join(MIGRATIONS_DIR, dir, 'migration.sql');
+    if (migrationNames && !migrationNames.has(dir)) continue;
+    const file = join(migrationsDir, dir, 'migration.sql');
     if (existsSync(file)) {
       ops.push(...lintLockingStatements(dir, readFileSync(file, 'utf8')));
     }
