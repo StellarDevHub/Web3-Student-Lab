@@ -32,7 +32,7 @@ import { execute, subscribe, validate, type ExecutionArgs, type GraphQLSchema } 
 import { useServer } from 'graphql-ws/use/ws';
 import http from 'http';
 import type { AddressInfo } from 'net';
-import { WebSocketServer } from 'ws';
+import { WebSocket, WebSocketServer } from 'ws';
 import config from './config/env.config.js';
 import { resolveUserFromToken, type GraphQLUser } from './graphql/context.js';
 import { resolvers } from './graphql/resolvers.js';
@@ -43,6 +43,7 @@ import logger from './utils/logger.js';
 
 const MAX_DEPTH = config.graphql?.maxDepth ?? 6;
 const MAX_COMPLEXITY = config.graphql?.maxComplexity ?? 500;
+const HEARTBEAT_TIMEOUT_MS = 5_000;
 
 /** Close codes (4400-4499 are reserved by graphql-ws for application use). */
 export const WS_CLOSE_UNAUTHORIZED = 4403;
@@ -88,8 +89,29 @@ export async function createGraphqlWsServer(options: GraphqlWsServerOptions = {}
   const app = express();
   const httpServer = http.createServer(app);
   const wsServer = new WebSocketServer({ server: httpServer, path: '/graphql', maxPayload: 64 * 1024 });
+  const keepAliveMs = options.keepAliveMs ?? 30_000;
 
   let connections = 0;
+  const heartbeat = setInterval(() => {
+    for (const socket of wsServer.clients) {
+      if (socket.readyState !== WebSocket.OPEN) continue;
+
+      const cleanup = () => {
+        clearTimeout(pongTimeout);
+        socket.off('pong', onPong);
+        socket.off('close', cleanup);
+      };
+      const onPong = () => cleanup();
+      const pongTimeout = setTimeout(() => {
+        cleanup();
+        socket.terminate();
+      }, HEARTBEAT_TIMEOUT_MS);
+
+      socket.once('pong', onPong);
+      socket.once('close', cleanup);
+      socket.ping();
+    }
+  }, keepAliveMs);
 
   const serverCleanup = useServer<Record<string, unknown>, ConnectionExtra>(
     {
@@ -128,7 +150,7 @@ export async function createGraphqlWsServer(options: GraphqlWsServerOptions = {}
       },
     },
     wsServer,
-    options.keepAliveMs ?? 12_000
+    keepAliveMs
   );
 
   const graphqlHandlers = await graphQLMiddleware({
@@ -169,6 +191,7 @@ export async function createGraphqlWsServer(options: GraphqlWsServerOptions = {}
     port,
     stats: () => ({ connections, sockets: openSockets() }),
     close: async () => {
+      clearInterval(heartbeat);
       await serverCleanup.dispose();
       for (const client of wsServer.clients) client.terminate();
       await new Promise<void>((resolve) => wsServer.close(() => resolve()));

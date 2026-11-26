@@ -173,6 +173,13 @@ export const NAV_ROUTES: RouteDef[] = [
     keywords: ['merkle', 'tree', 'proofs', 'hash', 'simulator', 'studio', 'inclusion'],
   },
   {
+    title: 'Airdrop Merkle Proof Explorer',
+    href: '/merkle-simulator',
+    description: 'Verify an airdrop claim step by step and get the claim_airdrop call',
+    category: 'simulators',
+    keywords: ['merkle', 'airdrop', 'claim', 'proof', 'soroban', 'inclusion', 'verify'],
+  },
+  {
     title: 'Chain Reorg Visualizer',
     href: '/chain-reorg',
     description: 'Visualize forks and chain reorganizations',

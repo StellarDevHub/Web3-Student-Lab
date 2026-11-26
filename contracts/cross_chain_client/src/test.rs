@@ -8,8 +8,9 @@
 //!   * gating which headers are accepted.
 
 use super::*;
-use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
-use soroban_sdk::{symbol_short, xdr, Env, Symbol, TryFromVal, Val};
+use ed25519_dalek::{Signer, SigningKey};
+use soroban_sdk::testutils::{Address as _, Ledger as _};
+use soroban_sdk::Env;
 
 extern crate std;
 
@@ -96,48 +97,43 @@ fn validator_registration_and_threshold() {
 }
 
 #[test]
-fn validator_events_keep_legacy_topics_and_scalar_payload() {
+fn validator_quorum_tracks_distinct_active_validators() {
     let env = Env::default();
     env.mock_all_auths();
     let (client, admin) = setup(&env);
 
+    for key in [[1u8; 32], [2u8; 32], [3u8; 32], [4u8; 32]] {
+        client.register_validator(&admin, &BytesN::from_array(&env, &key));
+    }
+    assert_eq!(client.get_threshold(), 3);
+
+    client.set_threshold(&admin, &1u32);
+    assert_eq!(client.get_threshold(), 3);
+
+    client.unregister_validator(&admin, &BytesN::from_array(&env, &[4u8; 32]));
+    assert_eq!(client.get_threshold(), 3);
+    client.unregister_validator(&admin, &BytesN::from_array(&env, &[3u8; 32]));
+    assert_eq!(client.get_threshold(), 2);
+}
+
+#[test]
+fn verify_block_header_rejects_duplicate_signers() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
     let validator = BytesN::from_array(&env, &[9u8; 32]);
-
     client.register_validator(&admin, &validator);
-    let mut registration_event = false;
-    for event in env.events().all().events() {
-        let xdr::ContractEventBody::V0(v0) = &event.body;
-        let topics: Vec<Val> = Vec::try_from_val(&env, &v0.topics).unwrap();
-        if topics.len() == 1
-            && Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap()
-                == symbol_short!("validator")
-        {
-            assert_eq!(
-                BytesN::<32>::try_from_val(&env, &v0.data).unwrap(),
-                validator
-            );
-            registration_event = true;
-        }
-    }
-    assert!(registration_event);
 
-    client.unregister_validator(&admin, &validator);
-    let mut removal_event = false;
-    for event in env.events().all().events() {
-        let xdr::ContractEventBody::V0(v0) = &event.body;
-        let topics: Vec<Val> = Vec::try_from_val(&env, &v0.topics).unwrap();
-        if topics.len() == 1
-            && Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap()
-                == symbol_short!("val_rm")
-        {
-            assert_eq!(
-                BytesN::<32>::try_from_val(&env, &v0.data).unwrap(),
-                validator
-            );
-            removal_event = true;
-        }
-    }
-    assert!(removal_event);
+    let hash = BytesN::from_array(&env, &[1u8; 32]);
+    let signers: Vec<BytesN<32>> = Vec::from_array(&env, [validator.clone(), validator]);
+    let signatures: Vec<BytesN<64>> = Vec::from_array(
+        &env,
+        [
+            BytesN::from_array(&env, &[0u8; 64]),
+            BytesN::from_array(&env, &[0u8; 64]),
+        ],
+    );
+    assert!(!client.verify_block_header(&hash, &signers, &signatures));
 }
 
 #[test]
@@ -231,47 +227,107 @@ fn ledger_timestamp_advances_for_header_accept_time() {
 }
 
 #[test]
-fn rlp_receipt_parser_accepts_valid_receipt_and_rejects_malformed_data() {
-    let receipt = valid_empty_receipt();
-    let receipt = Bytes::from_slice(&Env::default(), &receipt);
-    assert!(rlp::is_receipt(&receipt));
-    assert!(!rlp::is_receipt(&Bytes::from_array(
-        &Env::default(),
-        &[0xf8, 0x01, 0xc0]
-    )));
-
+fn mpt_leaf_inclusion_verifies_exact_transaction_value() {
     let env = Env::default();
-    assert_eq!(rlp::encode_index(&env, 0), Bytes::from_array(&env, &[0x80]));
-    assert_eq!(rlp::encode_index(&env, 1), Bytes::from_array(&env, &[0x01]));
-    assert_eq!(
-        rlp::encode_index(&env, 128),
-        Bytes::from_array(&env, &[0x81, 0x80])
-    );
-}
+    let node = Bytes::from_array(&env, &[0xc6, 0x82, 0x20, 0x80, 0x82, 0xaa, 0xbb]);
+    let root: BytesN<32> = env.crypto().keccak256(&node).into();
+    let key = Bytes::from_array(&env, &[0x80]);
+    let transaction = Bytes::from_array(&env, &[0xaa, 0xbb]);
+    let proof = Vec::from_array(&env, [node]);
 
-#[test]
-fn mpt_receipt_proof_validates_leaf_against_keccak_root() {
-    let env = Env::default();
-    let receipt = valid_empty_receipt();
-    let key = rlp::encode_index(&env, 0);
-    let compact_path = [0x20, 0x80];
-    let encoded_path = rlp_string(&compact_path);
-    let encoded_receipt = rlp_string(&receipt);
-    let mut leaf_contents = encoded_path;
-    leaf_contents.extend_from_slice(&encoded_receipt);
-    let leaf_node = rlp_list(&leaf_contents);
-    let leaf_node_bytes = Bytes::from_slice(&env, &leaf_node);
-    let root: BytesN<32> = env.crypto().keccak256(&leaf_node_bytes).into();
-    let proof = Vec::from_array(&env, [leaf_node_bytes]);
-
-    assert!(mpt::verify_proof(
+    assert!(verify_mpt_inclusion(
         &env,
         &root,
         &key,
-        &Bytes::from_slice(&env, &receipt),
+        &transaction,
         &proof
     ));
+}
 
-    let wrong_value = Bytes::from_array(&env, &[0xc0]);
-    assert!(!mpt::verify_proof(&env, &root, &key, &wrong_value, &proof));
+#[test]
+fn mpt_leaf_inclusion_rejects_wrong_key_and_value() {
+    let env = Env::default();
+    let node = Bytes::from_array(&env, &[0xc6, 0x82, 0x20, 0x80, 0x82, 0xaa, 0xbb]);
+    let root: BytesN<32> = env.crypto().keccak256(&node).into();
+    let proof = Vec::from_array(&env, [node]);
+
+    assert!(!verify_mpt_inclusion(
+        &env,
+        &root,
+        &Bytes::from_array(&env, &[0x81]),
+        &Bytes::from_array(&env, &[0xaa, 0xbb]),
+        &proof
+    ));
+    assert!(!verify_mpt_inclusion(
+        &env,
+        &root,
+        &Bytes::from_array(&env, &[0x80]),
+        &Bytes::from_array(&env, &[0xaa, 0xbc]),
+        &proof
+    ));
+}
+
+#[test]
+fn accepted_header_mpt_proof_unlocks_once() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    env.ledger().with_mut(|li| li.timestamp = 1_000);
+
+    let signing_key = SigningKey::from_bytes(&[42u8; 32]);
+    let validator = BytesN::from_array(&env, &signing_key.verifying_key().to_bytes());
+    client.register_validator(&admin, &validator);
+
+    let transaction = Bytes::from_array(&env, &[0xaa, 0xbb]);
+    let trie_key = Bytes::from_array(&env, &[0x80]);
+    let node = Bytes::from_array(&env, &[0xc6, 0x82, 0x20, 0x80, 0x82, 0xaa, 0xbb]);
+    let tx_root: BytesN<32> = env.crypto().keccak256(&node).into();
+    let block_hash = BytesN::from_array(&env, &[3u8; 32]);
+    let parent_hash = BytesN::from_array(&env, &[0u8; 32]);
+    let state_root = BytesN::from_array(&env, &[4u8; 32]);
+    let signing_hash = client.block_header_signing_hash(
+        &7u32,
+        &1u64,
+        &block_hash,
+        &parent_hash,
+        &state_root,
+        &tx_root,
+        &1_000u64,
+    );
+    let signature = signing_key.sign(&signing_hash.to_array()).to_bytes();
+    let signers = Vec::from_array(&env, [validator]);
+    let signatures = Vec::from_array(&env, [BytesN::from_array(&env, &signature)]);
+    client.submit_block_header(
+        &admin,
+        &7u32,
+        &1u64,
+        &block_hash,
+        &parent_hash,
+        &state_root,
+        &tx_root,
+        &1_000u64,
+        &signers,
+        &signatures,
+    );
+
+    let tx_hash: BytesN<32> = env.crypto().keccak256(&transaction).into();
+    let proof_nodes = Vec::from_array(&env, [node]);
+    let asset_id = BytesN::from_array(&env, &[5u8; 32]);
+    let recipient = Bytes::from_array(&env, &[6u8; 32]);
+    assert!(client.unlock_asset_from_header(
+        &admin,
+        &7u32,
+        &1u64,
+        &tx_hash,
+        &trie_key,
+        &transaction,
+        &proof_nodes,
+        &asset_id,
+        &recipient,
+        &25i128,
+    ));
+    assert!(client.is_source_tx_processed(&7u32, &tx_hash));
+    assert!(client.get_processed_tx(&tx_hash));
+    assert_eq!(client.get_source_unlock(&7u32, &tx_hash).block_number, 1);
+    assert!(!client.is_source_tx_processed(&8u32, &tx_hash));
 }

@@ -49,16 +49,6 @@ pub struct StudentRecordV2;
 impl StudentRecordV2 {
     // -----------------------------------------------------------------------
     // UUPS Proxy Admin Logic (Preserved from V1)
-    pub fn upgrade_to(env: Env, caller: Address, new_implementation: BytesN<32>) {
-        caller.require_auth();
-        Self::require_admin(&env, &caller);
-        env.storage()
-            .instance()
-            .set(&ProxyDataKey::ImplementationWasm, &new_implementation);
-        env.deployer()
-            .update_current_contract_wasm(new_implementation);
-    }
-
     pub fn get_implementation(env: Env) -> BytesN<32> {
         env.storage()
             .instance()

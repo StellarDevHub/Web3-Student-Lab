@@ -159,26 +159,11 @@ impl ProxyContract {
     /// Upgrades the running contract to a previously-registered WASM hash with 48h timelock.
     pub fn upgrade_to(env: Env, caller: Address, new_implementation: BytesN<32>) {
         caller.require_auth();
-        Self::require_admin(&env, &caller);
-        Self::require_registered_wasm(&env, &new_implementation);
-
-        let proposal_opt: Option<UpgradeProposal> = env
-            .storage()
-            .instance()
-            .get(&ProxyDataKey::UpgradeProposal(new_implementation.clone()));
-
-        match proposal_opt {
-            None => {
-                Self::propose_upgrade_impl(&env, &caller, &new_implementation);
-                panic_with_error!(&env, ProxyError::TimelockNotExpired);
-            }
-            Some(proposal) => {
-                if env.ledger().timestamp() < proposal.eta {
-                    panic_with_error!(&env, ProxyError::TimelockNotExpired);
-                }
-                Self::execute_upgrade_impl(&env, &caller, &new_implementation);
-            }
-        }
+        // Direct upgrades are disabled: bytecode changes must go through
+        // announce_upgrade + execute_security_council_upgrade (24h council
+        // timelock with 3-of-5 signatures) or the propose/approve/execute
+        // 48h timelock flow.
+        panic_with_error!(&env, ProxyError::Unauthorized);
     }
 
     pub fn upgrade(env: Env, caller: Address, new_implementation: BytesN<32>) {

@@ -101,7 +101,7 @@ export function getProductionCSP(nonce?: string): CSPConfig {
     "'self'",
     "'strict-dynamic'",
     'https://cdn.jsdelivr.net',
-    ...(nonce ? [`'nonce-${nonce}'`] : ["'nonce-{nonce}'"]),
+    ...(nonce ? [`'nonce-${nonce}'`] : []),
   ];
 
   return {
@@ -162,7 +162,7 @@ export function getProductionCSP(nonce?: string): CSPConfig {
       'manifest-src': ["'self'"],
     },
     reportOnly: false,
-    reportUri: process.env.NEXT_PUBLIC_CSP_REPORT_URI,
+    reportUri: process.env.NEXT_PUBLIC_CSP_REPORT_URI || '/api/security/csp-report',
   };
 }
 

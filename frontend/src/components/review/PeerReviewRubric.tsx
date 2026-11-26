@@ -340,61 +340,6 @@ export function PeerReviewRubric({
           </div>
         </div>
       </div>
-
-      {/* Error Banner */}
-      {errorMessage && (
-        <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-950/40 p-3 text-xs text-red-200">
-          <AlertCircle className="h-4 w-4 text-red-400 shrink-0" aria-hidden="true" />
-          <span>{errorMessage}</span>
-        </div>
-      )}
-
-      {/* Success Banner with Cryptographic Proof */}
-      {status === 'success' && signedSubmission && (
-        <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-4 text-xs text-emerald-200">
-          <div className="flex items-center gap-2 font-semibold text-emerald-300 mb-2">
-            <Check className="h-4 w-4" aria-hidden="true" />
-            <span>Assessment Successfully Signed and Submitted!</span>
-          </div>
-          <div className="space-y-1 font-mono text-[11px] text-zinc-400">
-            <div>Review Hash: <span className="text-zinc-200">{signedSubmission.reviewHash}</span></div>
-            <div>Signature: <span className="text-zinc-200 truncate inline-block max-w-[320px]">{signedSubmission.signature}</span></div>
-          </div>
-        </div>
-      )}
-
-      {/* Action Footer */}
-      <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
-        <button
-          type="button"
-          onClick={reset}
-          className="text-xs text-zinc-400 hover:text-white transition"
-        >
-          Reset Rubric
-        </button>
-
-        <button
-          type="button"
-          onClick={submitReview}
-          disabled={!isValid || status === 'signing' || status === 'submitting'}
-          className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-red-600/20 transition hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          data-testid="sign-and-submit-review-btn"
-        >
-          {status === 'signing' || status === 'submitting' ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              <span>Prompting Wallet Signature...</span>
-            </>
-          ) : (
-            <>
-              <KeyRound className="h-4 w-4" aria-hidden="true" />
-              <span>Sign Assessment & Submit</span>
-            </>
-          )}
-        </button>
-      </div>
     </div>
   );
 }
-
-export default PeerReviewRubric;
