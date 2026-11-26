@@ -1,231 +1,165 @@
-/**
- * idempotency.ts — Issue #985
- *
- * Express middleware that provides idempotency guarantees for POST/PATCH
- * endpoints by storing the first response in Redis (TTL: 24 h) and replaying
- * it for any duplicate request carrying the same Idempotency-Key header.
- *
- * Behaviour:
- *  • If no Idempotency-Key header is present the request is forwarded as-is.
- *  • First time a key is seen: the response is captured, serialised, and stored
- *    in Redis.  The key is locked for the duration of the in-flight request so
- *    concurrent duplicates receive a 409 rather than triggering two executions.
- *  • Subsequent requests with the same key within the TTL window receive the
- *    cached response with an X-Idempotency-Replay: true header.
- *  • After the TTL a new operation is allowed (key expired).
- *
- * Usage:
- *   import { idempotency } from '../middleware/idempotency.js';
- *   router.post('/certificates', idempotency(), async (req, res) => { ... });
- *
- *   // Custom TTL (seconds):
- *   router.post('/payments', idempotency({ ttlSeconds: 3600 }), handler);
- *
- * API consumer documentation:
- *   Clients MUST send a globally unique `Idempotency-Key` header (UUID v4
- *   recommended) on every POST or PATCH request they want to be idempotent.
- *
- *   Example:
- *     POST /api/v1/certificates
- *     Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
- *
- *   Responses:
- *     202 / 201 / 200 — first execution, result stored.
- *     2xx with X-Idempotency-Replay: true — duplicate, cached result returned.
- *     409 — a concurrent request with the same key is still in flight.
- *     400 — Idempotency-Key value is malformed (longer than 256 chars).
- */
-
+import { createHash, randomUUID } from 'node:crypto';
 import { NextFunction, Request, Response } from 'express';
 import logger from '../utils/logger.js';
 import redisClient from '../utils/redis.js';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+const DEFAULT_TTL_SECONDS = 24 * 60 * 60;
+const LOCK_TTL_SECONDS = 30;
 
 interface CachedResponse {
   statusCode: number;
   headers: Record<string, string>;
   body: string;
+  fingerprint: string;
 }
 
 export interface IdempotencyOptions {
-  /** Redis TTL in seconds.  Defaults to 86 400 (24 hours). */
   ttlSeconds?: number;
-  /**
-   * Optional function that extracts a scope prefix from the request (e.g. the
-   * authenticated user's id) to prevent key collisions across users.
-   */
   scopeFn?: (req: Request) => string | undefined;
 }
 
-// ─── Key helpers ─────────────────────────────────────────────────────────────
-
-const LOCK_TTL_SECONDS = 30; // max in-flight time before lock expires
-
-function cacheKey(scope: string, idempotencyKey: string): string {
-  return `idempotency:result:${scope}:${idempotencyKey}`;
+function digest(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
 }
 
-function lockKey(scope: string, idempotencyKey: string): string {
-  return `idempotency:lock:${scope}:${idempotencyKey}`;
+function requestScope(req: Request, scopeFn?: IdempotencyOptions['scopeFn']): string {
+  const customScope = scopeFn?.(req);
+  if (customScope) return customScope;
+
+  const userId = req.user?.id ?? 'anonymous';
+  return `${userId}:${req.method}:${req.baseUrl}${req.path}`;
 }
 
-// ─── Middleware factory ───────────────────────────────────────────────────────
+function requestFingerprint(req: Request, scope: string, key: string): string {
+  return digest(JSON.stringify({ scope, key, body: req.body ?? null }));
+}
 
-/**
- * Returns an Express middleware that enforces idempotency for the route it is
- * applied to.
- */
+function resultKey(scope: string, key: string): string {
+  return `idempotency:result:${digest(`${scope}:${key}`)}`;
+}
+
+function lockKey(scope: string, key: string): string {
+  return `idempotency:lock:${digest(`${scope}:${key}`)}`;
+}
+
+async function releaseLock(key: string, owner: string): Promise<void> {
+  await (redisClient as any).eval(
+    'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end',
+    1,
+    key,
+    owner
+  );
+}
+
 export function idempotency(opts: IdempotencyOptions = {}) {
-  const ttl = opts.ttlSeconds ?? 86_400; // 24 hours
+  const ttl = opts.ttlSeconds ?? DEFAULT_TTL_SECONDS;
 
   return async function idempotencyMiddleware(
     req: Request,
     res: Response,
     next: NextFunction
   ): Promise<void> {
-    const rawKey = req.headers['idempotency-key'] as string | undefined;
+    const rawHeader = req.headers['idempotency-key'];
+    const rawKey = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
 
-    // No key supplied — skip idempotency check and continue normally.
+    // Callers opt into protection by sending the header on the mutating route.
     if (!rawKey) {
       next();
       return;
     }
 
-    // Basic validation.
-    if (rawKey.length > 256) {
-      res.status(400).json({
-        error: 'Idempotency-Key must not exceed 256 characters.',
-      });
+    const key = rawKey.trim();
+    if (!key || key.length > 256) {
+      res.status(400).json({ error: 'Idempotency-Key must be between 1 and 256 characters.' });
       return;
     }
 
-    // Build a scoped cache key so different users can reuse the same key value
-    // without colliding.
-    const scope = opts.scopeFn?.(req) ?? 'global';
-    const resultKey = cacheKey(scope, rawKey);
-    const inflightKey = lockKey(scope, rawKey);
+    const scope = requestScope(req, opts.scopeFn);
+    const fingerprint = requestFingerprint(req, scope, key);
+    const completedKey = resultKey(scope, key);
+    const inFlightKey = lockKey(scope, key);
+    const owner = randomUUID();
 
     try {
-      // ── Check for a previously completed response ────────────────────────
-      const cached = await redisClient.get(resultKey);
-      if (cached) {
-        let parsed: CachedResponse;
-        try {
-          parsed = JSON.parse(cached) as CachedResponse;
-        } catch {
-          // Corrupt cache entry — remove it and proceed as a fresh request.
-          await redisClient.del(resultKey);
-          next();
+      const cachedRaw = await redisClient.get(completedKey);
+      if (cachedRaw) {
+        const cached = JSON.parse(cachedRaw) as CachedResponse;
+        if (cached.fingerprint !== fingerprint) {
+          res.status(409).json({ error: 'Idempotency-Key was already used for a different request.' });
           return;
         }
 
-        logger.info('Idempotency cache hit — replaying stored response', {
-          idempotencyKey: rawKey,
-          scope,
-          statusCode: parsed.statusCode,
-        });
-
-        // Restore headers
-        for (const [header, value] of Object.entries(parsed.headers)) {
+        for (const [header, value] of Object.entries(cached.headers)) {
           res.setHeader(header, value);
         }
         res.setHeader('X-Idempotency-Replay', 'true');
-        res.status(parsed.statusCode).send(parsed.body);
+        res.status(cached.statusCode).send(cached.body);
         return;
       }
 
-      // ── Acquire an in-flight lock (SET NX EX) ────────────────────────────
-      // Using SET with NX (only set if not exists) and EX (expire after N s)
-      // is atomic and works correctly across multiple backend instances sharing
-      // the same Redis.
       const acquired = await (redisClient as any).set(
-        inflightKey,
-        '1',
+        inFlightKey,
+        owner,
         'EX',
         LOCK_TTL_SECONDS,
         'NX'
       );
-
       if (!acquired) {
-        // Another request with the same key is currently being processed.
         res.status(409).json({
-          error:
-            'A request with this Idempotency-Key is already in progress. ' +
-            'Retry after the original request completes.',
+          error: 'A request with this Idempotency-Key is already in progress. Retry later.',
         });
         return;
       }
 
-      // ── Intercept the response so we can cache it ─────────────────────────
-      let responseBody = '';
-      const originalJson = res.json.bind(res);
-      const originalSend = res.send.bind(res);
+      let capturedBody: string | undefined;
+      let finalized = false;
+      const capture = (body: unknown): void => {
+        if (capturedBody !== undefined) return;
+        capturedBody = typeof body === 'string' ? body : JSON.stringify(body ?? null);
+      };
 
-      const captureAndStore = async (body: unknown): Promise<void> => {
-        responseBody = typeof body === 'string' ? body : JSON.stringify(body);
-
-        // Only cache successful (2xx) responses.
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          const headers: Record<string, string> = {};
-          const contentType = res.getHeader('content-type');
-          if (contentType) headers['content-type'] = String(contentType);
-
-          const payload: CachedResponse = {
-            statusCode: res.statusCode,
-            headers,
-            body: responseBody,
-          };
-
-          try {
-            await redisClient.setex(resultKey, ttl, JSON.stringify(payload));
-            logger.info('Idempotency response cached', {
-              idempotencyKey: rawKey,
-              scope,
-              statusCode: res.statusCode,
+      const finalize = async (): Promise<void> => {
+        if (finalized) return;
+        finalized = true;
+        try {
+          if (capturedBody !== undefined && res.statusCode >= 200 && res.statusCode < 300) {
+            const headers: Record<string, string> = {};
+            const contentType = res.getHeader('content-type');
+            if (contentType) headers['content-type'] = String(contentType);
+            await redisClient.setex(
+              completedKey,
               ttl,
-            });
-          } catch (redisErr) {
-            logger.warn('Failed to cache idempotency response', {
-              idempotencyKey: rawKey,
-              error: redisErr,
-            });
+              JSON.stringify({ statusCode: res.statusCode, headers, body: capturedBody, fingerprint })
+            );
+          }
+        } catch (error) {
+          logger.error('Failed to store idempotency response', { error });
+        } finally {
+          try {
+            await releaseLock(inFlightKey, owner);
+          } catch (error) {
+            logger.error('Failed to release idempotency lock', { error });
           }
         }
-
-        // Release the lock regardless of success/failure.
-        try {
-          await redisClient.del(inflightKey);
-        } catch (lockErr) {
-          logger.warn('Failed to release idempotency lock', {
-            idempotencyKey: rawKey,
-            error: lockErr,
-          });
-        }
       };
 
-      // Wrap res.json
-      res.json = function (body: unknown) {
-        captureAndStore(body).catch((err) =>
-          logger.error('Idempotency capture error', { error: err })
-        );
+      const originalJson = res.json.bind(res);
+      const originalSend = res.send.bind(res);
+      res.json = ((body: unknown) => {
+        capture(body);
         return originalJson(body);
-      };
-
-      // Wrap res.send for non-JSON responses
-      res.send = function (body: unknown) {
-        captureAndStore(body).catch((err) =>
-          logger.error('Idempotency capture error', { error: err })
-        );
+      }) as Response['json'];
+      res.send = ((body: unknown) => {
+        capture(body);
         return originalSend(body);
-      };
-
+      }) as Response['send'];
+      res.once('finish', () => void finalize());
+      res.once('close', () => void finalize());
       next();
-    } catch (err) {
-      logger.error('Idempotency middleware error', { error: err, idempotencyKey: rawKey });
-      // On unexpected Redis errors, fail open — let the request proceed without
-      // idempotency protection rather than taking the API offline.
-      next();
+    } catch (error) {
+      logger.error('Idempotency Redis operation failed', { error });
+      // Do not execute payment/certificate business logic without protection.
+      res.status(503).json({ error: 'Idempotency service unavailable. Please retry later.' });
     }
   };
 }

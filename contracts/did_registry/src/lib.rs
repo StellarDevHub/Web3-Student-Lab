@@ -1,8 +1,8 @@
 // Decentralized Identity (DID) Registry Contract — `did:stellar` method
 // Language: Rust (Soroban)
 //
-// This contract is the on-chain anchor for the `did:stellar` DID method. It
-// implements the W3C DID Core 1.0 write/control model:
+// This contract is the on-chain anchor for the `did:stellar` and `did:soroban`
+// DID method identifiers and returns DID Core-compatible resolution records:
 //
 //   * The DID identifier is the 32-byte Stellar Ed25519 account id
 //     (`did:stellar:<hex>`).
@@ -16,24 +16,110 @@
 // Cryptographic verification of contributor-proof signatures remains in the
 // off-chain resolver. Quadratic-voting identity nullifiers are verified
 // on-chain against the DID's registered Ed25519 verification key.
+// Contributor proof signatures are verified by the off-chain resolver. Key
+// rotation signatures are verified on-chain against the separately configured
+// recovery key.
 
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, Address, Bytes, BytesN, Env, Map, String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, Address, Bytes, BytesN,
+    Env, Map, String, Symbol, Vec,
 };
 use soroban_sdk::xdr::ToXdr;
 
-pub mod types;
-pub mod verification;
-
-pub use types::*;
-
-/// Contract-level errors.
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum DIDError {
-    /// `1` — input was not a canonical `did:stellar:<64 hex>` string.
-    MalformedDID = 1,
+#[repr(u32)]
+pub enum DidError {
+    Unauthorized = 1,
+    NotFound = 2,
+    AlreadyRegistered = 3,
+    Revoked = 4,
+    InvalidInput = 5,
+    Overflow = 6,
+    RecoveryKeyNotSet = 7,
+}
+
+/// A single signed contributor proof claim (PR or issue milestone).
+#[derive(Clone)]
+#[contracttype]
+pub struct ContributorProof {
+    /// Kind of contribution: "pr" or "issue".
+    pub claim_type: String,
+    /// GitHub repository, e.g. "StellarDevHub/Web3-Student-Lab".
+    pub repo: String,
+    /// Identifier of the PR/issue (number or node id).
+    pub item_id: String,
+    /// GitHub handle of the contributor (must match the bound handle).
+    pub github_handle: String,
+    /// Unix timestamp (seconds) the claim was issued.
+    pub issued_at: u64,
+    /// Raw Ed25519 signature bytes over the canonical claim payload.
+    pub signature: Bytes,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct DIDDocument {
+    pub owner: Address,
+    /// Off-chain GitHub handle bound to this DID.
+    pub github_handle: Option<String>,
+    /// Social handles keyed by provider symbol (github or discord).
+    pub social_identities: Map<Symbol, String>,
+    /// Ed25519 verification key (32 bytes) used to sign contributor proofs.
+    pub verification_key: Option<BytesN<32>>,
+    /// Recovery key used to authorize verification-key rotations.
+    pub recovery_key: Option<BytesN<32>>,
+    /// Previously active Ed25519 verification keys, in rotation order.
+    pub historical_verification_keys: Vec<BytesN<32>>,
+    /// Monotonic nonce included in signed key-rotation payloads.
+    pub key_rotation_nonce: u32,
+    pub attributes: Map<Symbol, Bytes>,
+    pub services: Vec<ServiceEndpoint>,
+    pub controllers: Vec<Address>,
+    pub revoked: bool,
+    /// Stored contributor proofs (mirror of on-chain claims).
+    pub proofs: Vec<ContributorProof>,
+}
+
+/// W3C DID Core verification method using the Ed25519 2020 multibase encoding.
+#[derive(Clone)]
+#[contracttype]
+pub struct VerificationMethod {
+    pub id: String,
+    pub r#type: String,
+    pub controller: String,
+    pub public_key_multibase: String,
+}
+
+/// W3C DID Core service entry.
+#[derive(Clone)]
+#[contracttype]
+pub struct ServiceEndpoint {
+    pub id: String,
+    pub r#type: String,
+    pub service_endpoint: String,
+}
+
+/// DID Core representation returned by the method-specific resolution calls.
+#[derive(Clone)]
+#[contracttype]
+pub struct W3CDIDDocument {
+    /// Serialized by resolvers as the DID Core `@context` property.
+    pub context: Vec<String>,
+    pub id: String,
+    pub verification_method: Vec<VerificationMethod>,
+    pub authentication: Vec<String>,
+    pub assertion_method: Vec<String>,
+    pub capability_invocation: Vec<String>,
+    pub service: Vec<ServiceEndpoint>,
+}
+
+#[contracttype]
+pub enum DataKey {
+    DIDs,
+    /// Map<BytesN<32>, Vec<ContributorProof>> — claims per DID.
+    Proofs,
 }
 
 #[contract]
@@ -50,13 +136,19 @@ impl DIDRegistryContract {
             .persistent()
             .get(&DataKey::DIDs)
             .unwrap_or_else(|| Map::new(&env));
-        assert!(!dids.contains_key(did.clone()), "DID already registered");
+        if dids.contains_key(did.clone()) {
+            panic_with_error!(&env, DidError::AlreadyRegistered);
+        }
         let doc = DIDDocument {
             owner: owner.clone(),
             github_handle: None,
             social_identities: Map::new(&env),
             verification_key: None,
+            recovery_key: None,
+            historical_verification_keys: Vec::new(&env),
+            key_rotation_nonce: 0,
             attributes,
+            services: Vec::new(&env),
             controllers: Vec::new(&env),
             revoked: false,
             proofs: Vec::new(&env),
@@ -75,11 +167,12 @@ impl DIDRegistryContract {
     /// Bind an off-chain GitHub handle to the DID. Only the owner may bind.
     pub fn bind_github(env: Env, sender: Address, did: BytesN<32>, handle: String) {
         sender.require_auth();
-        let mut dids: Map<BytesN<32>, DIDDocument> =
-            env.storage().persistent().get(&DataKey::DIDs).unwrap();
-        let mut doc = dids.get(did.clone()).unwrap();
-        assert!(!doc.revoked, "DID revoked");
-        assert!(doc.owner == sender, "Only owner can bind github handle");
+        let mut dids = read_dids(&env);
+        let mut doc = read_doc(&env, &dids, &did);
+        ensure_active(&env, &doc);
+        if doc.owner != sender {
+            panic_with_error!(&env, DidError::Unauthorized);
+        }
         doc.github_handle = Some(handle);
         doc.social_identities.set(
             Symbol::new(&env, "github"),
@@ -99,15 +192,15 @@ impl DIDRegistryContract {
         handle: String,
     ) {
         sender.require_auth();
-        assert!(
-            provider == Symbol::new(&env, "github") || provider == Symbol::new(&env, "discord"),
-            "Unsupported social provider"
-        );
-        let mut dids: Map<BytesN<32>, DIDDocument> =
-            env.storage().persistent().get(&DataKey::DIDs).unwrap();
-        let mut doc = dids.get(did.clone()).unwrap();
-        assert!(!doc.revoked, "DID revoked");
-        assert!(doc.owner == sender, "Only owner can bind social identity");
+        if provider != Symbol::new(&env, "github") && provider != Symbol::new(&env, "discord") {
+            panic_with_error!(&env, DidError::InvalidInput);
+        }
+        let mut dids = read_dids(&env);
+        let mut doc = read_doc(&env, &dids, &did);
+        ensure_active(&env, &doc);
+        if doc.owner != sender {
+            panic_with_error!(&env, DidError::Unauthorized);
+        }
         if provider == Symbol::new(&env, "github") {
             doc.github_handle = Some(handle.clone());
         }
@@ -119,29 +212,114 @@ impl DIDRegistryContract {
     /// Set the Ed25519 verification key used to sign contributor proofs.
     pub fn set_verification_key(env: Env, sender: Address, did: BytesN<32>, key: BytesN<32>) {
         sender.require_auth();
-        let mut dids: Map<BytesN<32>, DIDDocument> =
-            env.storage().persistent().get(&DataKey::DIDs).unwrap();
-        let mut doc = dids.get(did.clone()).unwrap();
-        assert!(!doc.revoked, "DID revoked");
-        assert!(doc.owner == sender, "Only owner can set verification key");
+        let mut dids = read_dids(&env);
+        let mut doc = read_doc(&env, &dids, &did);
+        ensure_active(&env, &doc);
+        if doc.owner != sender || doc.verification_key.is_some() {
+            panic_with_error!(&env, DidError::Unauthorized);
+        }
         doc.verification_key = Some(key);
         dids.set(did.clone(), doc);
         env.storage().persistent().set(&DataKey::DIDs, &dids);
     }
 
-    /// Revoke the delegated Ed25519 verification (signing) key. Only the
-    /// owner may revoke it; a new key can be set afterwards.
-    pub fn revoke_verification_key(env: Env, sender: Address, did: BytesN<32>) {
+    /// Set or replace the recovery key. Replacing it requires owner auth.
+    pub fn set_recovery_key(env: Env, sender: Address, did: BytesN<32>, key: BytesN<32>) {
         sender.require_auth();
-        let mut dids: Map<BytesN<32>, DIDDocument> =
-            env.storage().persistent().get(&DataKey::DIDs).unwrap();
-        let mut doc = dids.get(did.clone()).unwrap();
-        assert!(!doc.revoked, "DID revoked");
-        assert!(
-            doc.owner == sender,
-            "Only owner can revoke verification key"
-        );
-        doc.verification_key = None;
+        let mut dids = read_dids(&env);
+        let mut doc = read_doc(&env, &dids, &did);
+        ensure_active(&env, &doc);
+        if doc.owner != sender {
+            panic_with_error!(&env, DidError::Unauthorized);
+        }
+        doc.recovery_key = Some(key);
+        dids.set(did, doc);
+        env.storage().persistent().set(&DataKey::DIDs, &dids);
+    }
+
+    /// Return the exact domain-separated payload that a recovery key must sign.
+    pub fn key_rotation_payload(env: Env, did: BytesN<32>, new_key: BytesN<32>) -> Bytes {
+        let dids = read_dids(&env);
+        let doc = read_doc(&env, &dids, &did);
+        ensure_active(&env, &doc);
+        rotation_payload(&env, &did, &doc, &new_key)
+            .unwrap_or_else(|| panic_with_error!(&env, DidError::RecoveryKeyNotSet))
+    }
+
+    /// Rotate the signing key with an Ed25519 signature from the recovery key.
+    pub fn rotate_verification_key(
+        env: Env,
+        did: BytesN<32>,
+        new_key: BytesN<32>,
+        signature: BytesN<64>,
+    ) {
+        let mut dids = read_dids(&env);
+        let mut doc = read_doc(&env, &dids, &did);
+        ensure_active(&env, &doc);
+        let recovery_key = doc
+            .recovery_key
+            .clone()
+            .unwrap_or_else(|| panic_with_error!(&env, DidError::RecoveryKeyNotSet));
+        if doc.verification_key.as_ref() == Some(&new_key) {
+            panic_with_error!(&env, DidError::InvalidInput);
+        }
+        let payload = rotation_payload(&env, &did, &doc, &new_key)
+            .unwrap_or_else(|| panic_with_error!(&env, DidError::RecoveryKeyNotSet));
+        env.crypto()
+            .ed25519_verify(&recovery_key, &payload, &signature);
+
+        if let Some(current_key) = doc.verification_key.replace(new_key) {
+            doc.historical_verification_keys.push_back(current_key);
+        }
+        doc.key_rotation_nonce = doc
+            .key_rotation_nonce
+            .checked_add(1)
+            .unwrap_or_else(|| panic_with_error!(&env, DidError::Overflow));
+        dids.set(did, doc);
+        env.storage().persistent().set(&DataKey::DIDs, &dids);
+    }
+
+    /// Add a service endpoint to the DID document (DID controller only).
+    pub fn add_service(
+        env: Env,
+        sender: Address,
+        did: BytesN<32>,
+        service_id: String,
+        service_type: String,
+        endpoint: String,
+    ) {
+        sender.require_auth();
+        let mut dids = read_dids(&env);
+        let mut doc = read_doc(&env, &dids, &did);
+        ensure_active(&env, &doc);
+        if doc.owner != sender {
+            panic_with_error!(&env, DidError::Unauthorized);
+        }
+        if service_id.len() < 2
+            || service_id.len() > 64
+            || service_type.len() == 0
+            || endpoint.len() == 0
+        {
+            panic_with_error!(&env, DidError::InvalidInput);
+        }
+        let service_id_bytes = service_id.to_bytes();
+        if service_id_bytes.get(0) != Some(b'#') {
+            panic_with_error!(&env, DidError::InvalidInput);
+        }
+        for index in 1..service_id.len() {
+            let byte = service_id_bytes.get(index).unwrap_or(0);
+            if !byte.is_ascii_alphanumeric() && !matches!(byte, b'-' | b'.' | b'_' | b'~') {
+                panic_with_error!(&env, DidError::InvalidInput);
+            }
+        }
+        if doc.services.iter().any(|entry| entry.id == service_id) {
+            panic_with_error!(&env, DidError::InvalidInput);
+        }
+        doc.services.push_back(ServiceEndpoint {
+            id: service_id,
+            r#type: service_type,
+            service_endpoint: endpoint,
+        });
         dids.set(did, doc);
         env.storage().persistent().set(&DataKey::DIDs, &dids);
     }
@@ -155,14 +333,12 @@ impl DIDRegistryContract {
         proof: ContributorProof,
     ) {
         sender.require_auth();
-        let dids: Map<BytesN<32>, DIDDocument> =
-            env.storage().persistent().get(&DataKey::DIDs).unwrap();
-        let doc = dids.get(did.clone()).unwrap();
-        assert!(!doc.revoked, "DID revoked");
-        assert!(
-            verification::is_owner_or_controller(&doc, &sender),
-            "Not authorized"
-        );
+        let dids = read_dids(&env);
+        let doc = read_doc(&env, &dids, &did);
+        ensure_active(&env, &doc);
+        if doc.owner != sender && !doc.controllers.contains(&sender) {
+            panic_with_error!(&env, DidError::Unauthorized);
+        }
         if let Some(handle) = doc.github_handle.clone() {
             assert!(
                 handle == proof.github_handle,
@@ -182,14 +358,12 @@ impl DIDRegistryContract {
 
     pub fn update(env: Env, sender: Address, did: BytesN<32>, attributes: Map<Symbol, Bytes>) {
         sender.require_auth();
-        let mut dids: Map<BytesN<32>, DIDDocument> =
-            env.storage().persistent().get(&DataKey::DIDs).unwrap();
-        let mut doc = dids.get(did.clone()).unwrap();
-        assert!(!doc.revoked, "DID revoked");
-        assert!(
-            verification::is_owner_or_controller(&doc, &sender),
-            "Not authorized"
-        );
+        let mut dids = read_dids(&env);
+        let mut doc = read_doc(&env, &dids, &did);
+        ensure_active(&env, &doc);
+        if doc.owner != sender && !doc.controllers.contains(&sender) {
+            panic_with_error!(&env, DidError::Unauthorized);
+        }
         doc.attributes = attributes;
         dids.set(did, doc);
         env.storage().persistent().set(&DataKey::DIDs, &dids);
@@ -197,11 +371,12 @@ impl DIDRegistryContract {
 
     pub fn rotate_key(env: Env, sender: Address, did: BytesN<32>, new_owner: Address) {
         sender.require_auth();
-        let mut dids: Map<BytesN<32>, DIDDocument> =
-            env.storage().persistent().get(&DataKey::DIDs).unwrap();
-        let mut doc = dids.get(did.clone()).unwrap();
-        assert!(!doc.revoked, "DID revoked");
-        assert!(doc.owner == sender, "Only owner can rotate key");
+        let mut dids = read_dids(&env);
+        let mut doc = read_doc(&env, &dids, &did);
+        ensure_active(&env, &doc);
+        if doc.owner != sender {
+            panic_with_error!(&env, DidError::Unauthorized);
+        }
         doc.owner = new_owner;
         dids.set(did, doc);
         env.storage().persistent().set(&DataKey::DIDs, &dids);
@@ -209,10 +384,11 @@ impl DIDRegistryContract {
 
     pub fn revoke(env: Env, sender: Address, did: BytesN<32>) {
         sender.require_auth();
-        let mut dids: Map<BytesN<32>, DIDDocument> =
-            env.storage().persistent().get(&DataKey::DIDs).unwrap();
-        let mut doc = dids.get(did.clone()).unwrap();
-        assert!(doc.owner == sender, "Only owner can revoke");
+        let mut dids = read_dids(&env);
+        let mut doc = read_doc(&env, &dids, &did);
+        if doc.owner != sender {
+            panic_with_error!(&env, DidError::Unauthorized);
+        }
         doc.revoked = true;
         dids.set(did, doc);
         env.storage().persistent().set(&DataKey::DIDs, &dids);
@@ -220,10 +396,12 @@ impl DIDRegistryContract {
 
     pub fn add_controller(env: Env, sender: Address, did: BytesN<32>, controller: Address) {
         sender.require_auth();
-        let mut dids: Map<BytesN<32>, DIDDocument> =
-            env.storage().persistent().get(&DataKey::DIDs).unwrap();
-        let mut doc = dids.get(did.clone()).unwrap();
-        assert!(doc.owner == sender, "Only owner can add controller");
+        let mut dids = read_dids(&env);
+        let mut doc = read_doc(&env, &dids, &did);
+        ensure_active(&env, &doc);
+        if doc.owner != sender {
+            panic_with_error!(&env, DidError::Unauthorized);
+        }
         if !doc.controllers.contains(&controller) {
             doc.controllers.push_back(controller);
         }
@@ -233,10 +411,12 @@ impl DIDRegistryContract {
 
     pub fn remove_controller(env: Env, sender: Address, did: BytesN<32>, controller: Address) {
         sender.require_auth();
-        let mut dids: Map<BytesN<32>, DIDDocument> =
-            env.storage().persistent().get(&DataKey::DIDs).unwrap();
-        let mut doc = dids.get(did.clone()).unwrap();
-        assert!(doc.owner == sender, "Only owner can remove controller");
+        let mut dids = read_dids(&env);
+        let mut doc = read_doc(&env, &dids, &did);
+        ensure_active(&env, &doc);
+        if doc.owner != sender {
+            panic_with_error!(&env, DidError::Unauthorized);
+        }
         let idx = doc.controllers.iter().position(|c| c == controller);
         if let Some(i) = idx {
             doc.controllers.remove(i as u32);
@@ -246,11 +426,7 @@ impl DIDRegistryContract {
     }
 
     pub fn resolve(env: Env, did: BytesN<32>) -> Option<DIDDocument> {
-        let dids: Map<BytesN<32>, DIDDocument> = env
-            .storage()
-            .persistent()
-            .get(&DataKey::DIDs)
-            .unwrap_or_else(|| Map::new(&env));
+        let dids = read_dids(&env);
         let mut doc = dids.get(did.clone())?;
         let proofs: Map<BytesN<32>, Vec<ContributorProof>> = env
             .storage()
@@ -261,39 +437,26 @@ impl DIDRegistryContract {
         Some(doc)
     }
 
-    /// Pure structural check: is this a canonical `did:stellar:<64 hex>`
-    /// string? Never panics — safe to call on untrusted resolver input.
-    pub fn validate_did(_env: Env, did: String) -> bool {
-        verification::is_valid_did_string(&did)
+    /// Resolve a DID Core document using the `did:stellar` method identifier.
+    pub fn resolve_stellar(env: Env, did: BytesN<32>) -> Option<W3CDIDDocument> {
+        let dids = read_dids(&env);
+        let doc = dids.get(did.clone())?;
+        Some(w3c_document(&env, &did, &doc, stellar_did(&env, &did)))
     }
 
-    /// Register a DID from its canonical string form. Malformed DID strings
-    /// are rejected with `DIDError::MalformedDID`.
-    pub fn register_string(env: Env, owner: Address, did: String, attributes: Map<Symbol, Bytes>) {
-        // Parsing runs first so malformed input is rejected before anything
-        // else; `register` performs the `owner.require_auth()` itself (a
-        // second `require_auth` on the same frame is an auth error).
-        let key = match verification::parse_did_string(&env, &did) {
-            Some(key) => key,
-            None => soroban_sdk::panic_with_error!(&env, DIDError::MalformedDID),
-        };
-        Self::register(env, owner, key, attributes);
-    }
-
-    /// Resolve a DID document from its canonical string form. Malformed DID
-    /// strings are rejected with `DIDError::MalformedDID`.
-    pub fn resolve_string(env: Env, did: String) -> Option<DIDDocument> {
-        let key = match verification::parse_did_string(&env, &did) {
-            Some(key) => key,
-            None => soroban_sdk::panic_with_error!(&env, DIDError::MalformedDID),
-        };
-        Self::resolve(env, key)
-    }
-
-    /// Canonical `did:stellar:<hex>` string for a raw DID key — exact inverse
-    /// of the parser backing the string entry points.
-    pub fn did_to_string(env: Env, did: BytesN<32>) -> String {
-        verification::did_to_string(&env, &did)
+    /// Resolve a DID Core document using `did:soroban:<network>:<identifier>`.
+    pub fn resolve_soroban(env: Env, did: BytesN<32>, network: String) -> Option<W3CDIDDocument> {
+        if !valid_network(&network) {
+            panic_with_error!(&env, DidError::InvalidInput);
+        }
+        let dids = read_dids(&env);
+        let doc = dids.get(did.clone())?;
+        Some(w3c_document(
+            &env,
+            &did,
+            &doc,
+            soroban_did(&env, &did, &network),
+        ))
     }
 
     /// Returns the bound GitHub handle for a DID, if any.
@@ -319,11 +482,7 @@ impl DIDRegistryContract {
 
     /// Returns the Ed25519 verification key for a DID, if set.
     pub fn get_verification_key(env: Env, did: BytesN<32>) -> Option<BytesN<32>> {
-        let dids: Map<BytesN<32>, DIDDocument> = env
-            .storage()
-            .persistent()
-            .get(&DataKey::DIDs)
-            .unwrap_or_else(|| Map::new(&env));
+        let dids = read_dids(&env);
         dids.get(did).and_then(|d| d.verification_key)
     }
 
@@ -390,6 +549,249 @@ impl DIDRegistryContract {
         proofs.get(did).unwrap_or_else(|| Vec::new(&env))
     }
 }
+
+fn read_dids(env: &Env) -> Map<BytesN<32>, DIDDocument> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::DIDs)
+        .unwrap_or_else(|| Map::new(env))
+}
+
+fn read_doc(env: &Env, dids: &Map<BytesN<32>, DIDDocument>, did: &BytesN<32>) -> DIDDocument {
+    dids.get(did.clone())
+        .unwrap_or_else(|| panic_with_error!(env, DidError::NotFound))
+}
+
+fn ensure_active(env: &Env, doc: &DIDDocument) {
+    if doc.revoked {
+        panic_with_error!(env, DidError::Revoked);
+    }
+}
+
+fn rotation_payload(
+    env: &Env,
+    did: &BytesN<32>,
+    doc: &DIDDocument,
+    new_key: &BytesN<32>,
+) -> Option<Bytes> {
+    let current_key = doc.verification_key.as_ref()?;
+    let network_id = env.ledger().network_id();
+    let mut payload = Bytes::from_slice(env, b"did-registry:key-rotation:v1:");
+    payload.append(&env.current_contract_address().to_string().to_bytes());
+    payload.append(&Bytes::from_slice(env, b":"));
+    payload.append(&Bytes::from_slice(env, &network_id.to_array()));
+    payload.append(&Bytes::from_slice(env, &did.to_array()));
+    payload.append(&Bytes::from_slice(env, &current_key.to_array()));
+    payload.append(&Bytes::from_slice(env, &new_key.to_array()));
+    payload.append(&Bytes::from_slice(
+        env,
+        &doc.key_rotation_nonce.to_be_bytes(),
+    ));
+    Some(payload)
+}
+
+fn stellar_did(env: &Env, did: &BytesN<32>) -> String {
+    make_did_string(env, b"did:stellar:", None, did)
+}
+
+fn soroban_did(env: &Env, did: &BytesN<32>, network: &String) -> String {
+    make_did_string(env, b"did:soroban:", Some(network), did)
+}
+
+fn make_did_string(env: &Env, prefix: &[u8], network: Option<&String>, did: &BytesN<32>) -> String {
+    let mut result = [0u8; 128];
+    let mut len = prefix.len();
+    result[..len].copy_from_slice(prefix);
+    if let Some(network) = network {
+        let network_len = network.len() as usize;
+        network.copy_into_slice(&mut result[len..len + network_len]);
+        len += network_len;
+        result[len] = b':';
+        len += 1;
+    }
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    for byte in did.to_array() {
+        result[len] = HEX[(byte >> 4) as usize];
+        result[len + 1] = HEX[(byte & 0x0f) as usize];
+        len += 2;
+    }
+    String::from_bytes(env, &result[..len])
+}
+
+fn w3c_document(
+    env: &Env,
+    did: &BytesN<32>,
+    doc: &DIDDocument,
+    identifier: String,
+) -> W3CDIDDocument {
+    let mut context = Vec::new(env);
+    context.push_back(String::from_str(env, "https://www.w3.org/ns/did/v1"));
+    context.push_back(String::from_str(
+        env,
+        "https://w3id.org/security/suites/ed25519-2020/v1",
+    ));
+
+    let mut verification_method = Vec::new(env);
+    let mut authentication = Vec::new(env);
+    let mut assertion_method = Vec::new(env);
+    for (index, key) in doc.historical_verification_keys.iter().enumerate() {
+        let method_id = key_method_id(env, &identifier, index as u32 + 1);
+        verification_method.push_back(verification_method_entry(env, &identifier, &method_id, key));
+    }
+    if let Some(current_key) = doc.verification_key.as_ref() {
+        let current_method_id =
+            key_method_id(env, &identifier, doc.historical_verification_keys.len() + 1);
+        verification_method.push_back(verification_method_entry(
+            env,
+            &identifier,
+            &current_method_id,
+            current_key,
+        ));
+        authentication.push_back(current_method_id.clone());
+        assertion_method.push_back(current_method_id);
+    }
+
+    let mut capability_invocation = Vec::new(env);
+    if let Some(recovery_key) = doc.recovery_key.as_ref() {
+        let recovery_method_id = recovery_method_id(env, &identifier);
+        verification_method.push_back(verification_method_entry(
+            env,
+            &identifier,
+            &recovery_method_id,
+            recovery_key,
+        ));
+        capability_invocation.push_back(recovery_method_id);
+    }
+
+    W3CDIDDocument {
+        context,
+        id: identifier,
+        verification_method,
+        authentication,
+        assertion_method,
+        capability_invocation,
+        service: absolute_services(env, &identifier, &doc.services),
+    }
+}
+
+fn absolute_services(
+    env: &Env,
+    did: &String,
+    services: &Vec<ServiceEndpoint>,
+) -> Vec<ServiceEndpoint> {
+    let mut resolved = Vec::new(env);
+    for service in services.iter() {
+        let mut id = [0u8; 192];
+        let did_len = did.len() as usize;
+        did.copy_into_slice(&mut id[..did_len]);
+        let fragment_len = service.id.len() as usize;
+        service
+            .id
+            .copy_into_slice(&mut id[did_len..did_len + fragment_len]);
+        resolved.push_back(ServiceEndpoint {
+            id: String::from_bytes(env, &id[..did_len + fragment_len]),
+            r#type: service.r#type,
+            service_endpoint: service.service_endpoint,
+        });
+    }
+    resolved
+}
+
+fn verification_method_entry(
+    env: &Env,
+    controller: &String,
+    method_id: &String,
+    key: &BytesN<32>,
+) -> VerificationMethod {
+    VerificationMethod {
+        id: method_id.clone(),
+        r#type: String::from_str(env, "Ed25519VerificationKey2020"),
+        controller: controller.clone(),
+        public_key_multibase: ed25519_multibase(env, key),
+    }
+}
+
+fn key_method_id(env: &Env, did: &String, index: u32) -> String {
+    let mut output = [0u8; 160];
+    let did_len = did.len() as usize;
+    did.copy_into_slice(&mut output[..did_len]);
+    let mut digits = [0u8; 10];
+    let mut value = index;
+    let mut digit_len = 0usize;
+    while value > 0 {
+        digits[digit_len] = b'0' + (value % 10) as u8;
+        digit_len += 1;
+        value /= 10;
+    }
+    let mut len = did_len;
+    output[len..len + 5].copy_from_slice(b"#key-");
+    len += 5;
+    for digit in digits[..digit_len].iter().rev() {
+        output[len] = *digit;
+        len += 1;
+    }
+    String::from_bytes(env, &output[..len])
+}
+
+fn recovery_method_id(env: &Env, did: &String) -> String {
+    let mut output = [0u8; 160];
+    let did_len = did.len() as usize;
+    did.copy_into_slice(&mut output[..did_len]);
+    output[did_len..did_len + 13].copy_from_slice(b"#recovery-key");
+    String::from_bytes(env, &output[..did_len + 13])
+}
+
+fn ed25519_multibase(env: &Env, key: &BytesN<32>) -> String {
+    const ALPHABET: &[u8; 58] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    let mut input = [0u8; 34];
+    input[0] = 0xed;
+    input[1] = 0x01;
+    input[2..].copy_from_slice(&key.to_array());
+
+    let mut digits = [0u8; 47];
+    let mut digit_len = 0usize;
+    for byte in input {
+        let mut carry = byte as u32;
+        for digit in digits[..digit_len].iter_mut() {
+            carry += (*digit as u32) << 8;
+            *digit = (carry % 58) as u8;
+            carry /= 58;
+        }
+        while carry > 0 {
+            digits[digit_len] = (carry % 58) as u8;
+            digit_len += 1;
+            carry /= 58;
+        }
+    }
+
+    let mut encoded = [0u8; 48];
+    encoded[0] = b'z';
+    let mut len = 1usize;
+    for digit in digits[..digit_len].iter().rev() {
+        encoded[len] = ALPHABET[*digit as usize];
+        len += 1;
+    }
+    String::from_bytes(env, &encoded[..len])
+}
+
+fn valid_network(network: &String) -> bool {
+    let len = network.len() as usize;
+    if len == 0 || len > 32 {
+        return false;
+    }
+    let mut bytes = [0u8; 32];
+    network.copy_into_slice(&mut bytes[..len]);
+    bytes[..len].iter().all(|byte| {
+        byte.is_ascii_lowercase()
+            || byte.is_ascii_uppercase()
+            || byte.is_ascii_digit()
+            || *byte == b'-'
+    })
+}
+
+#[cfg(test)]
+#[path = "test.rs"]
+mod integration_tests;
 
 #[cfg(test)]
 mod tests {

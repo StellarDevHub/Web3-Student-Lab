@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Script from "next/script";
 import { useMemo } from "react";
+import { useCSPNonce } from "@/contexts/CSPNonceContext";
 
 /**
  * Dynamic Breadcrumb Navigation with Schema.org JSON-LD Metadata (#1147).
@@ -46,6 +48,7 @@ function formatLabel(segment: string): string {
 
 export default function Breadcrumbs() {
   const pathname = usePathname();
+  const nonce = useCSPNonce();
 
   const breadcrumbs = useMemo((): BreadcrumbItem[] => {
     if (!pathname || pathname === "/") return [];
@@ -78,13 +81,16 @@ export default function Breadcrumbs() {
       item: `${typeof window !== "undefined" ? window.location.origin : ""}${item.href}`,
     })),
   };
+  const jsonLdScript = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
 
   return (
     <nav aria-label="Breadcrumb" className="py-2">
       {/* Schema.org JSON-LD */}
-      <script
+      <Script
+        id="breadcrumb-jsonld"
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        nonce={nonce}
+        dangerouslySetInnerHTML={{ __html: jsonLdScript }}
       />
 
       <ol className="flex items-center space-x-2 text-sm text-gray-600">

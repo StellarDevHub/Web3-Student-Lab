@@ -1,6 +1,6 @@
 /**
  * CLI entry: `npm run migrate:locked` or `npm run migration:deploy:locked`
- * Distributed lock the API uses on startup, for operators and CI.
+ * Distributed lock, pending-DDL safety scan, and online timeouts for operators and CI.
  */
 import { runStartupMigrations } from '../src/db/startupMigrations.js';
 

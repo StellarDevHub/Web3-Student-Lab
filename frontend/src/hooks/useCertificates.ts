@@ -18,6 +18,8 @@ export interface Certificate {
   studentId?: string;
   issuedAt?: string;
   txHash?: string;
+  contractAddress?: string;
+  network?: string;
   status?: 'pending' | 'issued' | 'revoked';
   [key: string]: unknown;
 }

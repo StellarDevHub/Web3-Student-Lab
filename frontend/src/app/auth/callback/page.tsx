@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { authAPI } from '@/lib/api';
+import { storeEncryptedSession } from '@/lib/credentialStorage';
 
 function GitHubCallbackContent() {
   const router = useRouter();
@@ -13,9 +14,6 @@ function GitHubCallbackContent() {
   useEffect(() => {
     const error = searchParams.get('error');
     const ticket = searchParams.get('ticket');
-
-    // Clean up legacy refreshToken from localStorage
-    localStorage.removeItem('refreshToken');
 
     if (error) {
       setStatus('error');
@@ -30,12 +28,14 @@ function GitHubCallbackContent() {
     }
 
     let active = true;
-    authAPI.completeOAuthTicket(ticket).then((response) => {
+    authAPI.completeOAuthTicket(ticket).then(async (response) => {
       if (!active) return;
-      localStorage.setItem('token', response.accessToken || response.token);
-      localStorage.setItem('userId', response.user.id);
-      localStorage.setItem('userName', response.user.name);
-      localStorage.setItem('user', JSON.stringify(response.user));
+      await storeEncryptedSession({
+        token: response.accessToken || response.token,
+        accessToken: response.accessToken || response.token,
+        refreshToken: response.refreshToken ?? null,
+        user: response.user,
+      });
       setStatus('success');
       setMessage('Login successful! Redirecting...');
       window.setTimeout(() => {

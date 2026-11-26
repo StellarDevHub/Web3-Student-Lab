@@ -7,8 +7,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Production runtime connects via PgBouncer in transaction pooling mode
+// (DATABASE_URL with ?pgbouncer=true), while Prisma migrations use DIRECT_URL
+// (configured in backend/prisma.config.ts) to bypass PgBouncer (BE-080).
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Student {
@@ -42,6 +46,8 @@ model Student {
   webauthnCredentials WebAuthnCredential[]
   hashSimulations  HashSimulation[]
   subscriptions    Subscription[]
+  submissions      ExerciseSubmission[]
+  similarityFlagsAsSubject ExerciseSimilarityFlag[] @relation("SimilaritySubject")
 
   @@index([workspaceId, email])
   @@index([firstName, lastName])
@@ -232,6 +238,62 @@ model Enrollment {
   @@map("enrollments")
 }
 
+model PeerReviewAssignment {
+  id              String    @id @default(cuid())
+  workspaceId     String    @default("default")
+  courseId        String
+  assignmentId    String
+  reviewerId      String
+  revieweeId      String
+  reviewerAlias   String
+  revieweeAlias   String
+  reviewerSubnet  String?
+  revieweeSubnet  String?
+  teamId          String?
+  status          String    @default("assigned") // assigned, submitted, disputed, escalated, closed
+  grade           Float?
+  submittedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  reviewer PeerReviewGrade[] @relation("ReviewerGrades")
+
+  @@unique([assignmentId, reviewerId, revieweeId])
+  @@index([courseId, assignmentId])
+  @@index([reviewerId])
+  @@index([revieweeId])
+  @@index([status])
+  @@map("peer_review_assignments")
+}
+
+model PeerReviewGrade {
+  id           String   @id @default(cuid())
+  assignmentId String
+  reviewerId   String
+  revieweeId   String
+  score        Float
+  createdAt    DateTime @default(now())
+  assignment PeerReviewAssignment @relation("ReviewerGrades", fields: [assignmentId], references: [id], onDelete: Cascade)
+  @@index([assignmentId])
+  @@index([revieweeId])
+  @@map("peer_review_grades")
+}
+
+model PeerReviewDispute {
+  id           String    @id @default(cuid())
+  assignmentId String
+  varianceBps  Int
+  status       String    @default("open") // open, resolved
+  arbiterId    String?
+  resolution   Float?
+  createdAt    DateTime  @default(now())
+  resolvedAt   DateTime?
+
+  @@index([assignmentId])
+  @@index([status])
+  @@map("peer_review_disputes")
+}
+
 model Feedback {
   id          String   @id @default(cuid())
   workspaceId String   @default("default")
@@ -290,6 +352,27 @@ model AuditLog {
 
   @@index([createdAt])
   @@map("audit_logs")
+  @@index([createdAt])
+  @@index([hash])
+}
+
+model MerkleAnchor {
+  id              String   @id @default(cuid())
+  merkleRoot      String   @unique
+  prevMerkleRoot  String?
+  periodStart     DateTime
+  periodEnd       DateTime
+  logCount        Int
+  transactionHash String
+  contractAddress String?
+  network         String?
+  status          String   @default("ANCHORED") // ANCHORED, FAILED, PENDING
+  anchoredAt      DateTime @default(now())
+  metadata        Json?
+
+  @@map("merkle_anchors")
+  @@index([periodStart, periodEnd])
+  @@index([transactionHash])
 }
 
 model AuthNonce {
@@ -646,18 +729,73 @@ model Subscription {
 }
 
 model PaymentRecord {
-  id             String       @id @default(cuid())
-  subscriptionId String
-  amountXLM      Float
-  txHash         String?
-  status         String       @default("completed")
-  paidAt         DateTime     @default(now())
-  createdAt      DateTime     @default(now())
+  id                   String       @id @default(cuid())
+  subscriptionId       String
+  amountXLM            Float
+  currency             String       @default("XLM") // XLM, USDC, EURC
+  expectedAmount       Float?
+  settledAmount        Float?
+  slippageBps          Int?
+  txHash               String?
+  ledgerSequence       BigInt?
+  status               String       @default("completed")
+  reconciliationStatus String       @default("pending") // pending, reconciled, partial_payment, slippage_exceeded, discrepancy, flagged, unmatched
+  reconciledAt         DateTime?
+  alertTriggered       Boolean      @default(false)
+  reviewNotes          String?
+  paidAt               DateTime     @default(now())
+  createdAt            DateTime     @default(now())
 
-  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  subscription         Subscription          @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  alerts               ReconciliationAlert[]
 
   @@index([subscriptionId])
+  @@index([reconciliationStatus])
+  @@index([txHash])
   @@map("payment_records")
+}
+
+// Automated accounting alerts for payment reconciliation discrepancies (BE-092)
+model ReconciliationAlert {
+  id              String        @id @default(cuid())
+  paymentRecordId String
+  txHash          String?
+  currency        String
+  alertType       String // partial_payment, slippage_exceeded, amount_mismatch, currency_mismatch, missing_on_chain, tx_failed
+  severity        String        @default("high") // low, medium, high, critical
+  expectedAmount  Float
+  settledAmount   Float?
+  slippageBps     Int?
+  message         String
+  resolved        Boolean       @default(false)
+  resolvedAt      DateTime?
+  resolvedBy      String?
+  createdAt       DateTime      @default(now())
+
+  paymentRecord   PaymentRecord @relation(fields: [paymentRecordId], references: [id], onDelete: Cascade)
+
+  @@index([paymentRecordId])
+  @@index([resolved, createdAt])
+  @@map("reconciliation_alerts")
+}
+
+// Daily financial reconciliation audit reports (BE-092)
+model ReconciliationReport {
+  id                       String   @id @default(cuid())
+  reportDate               DateTime
+  totalPayments            Int
+  reconciledCount          Int
+  flaggedCount             Int
+  discrepancyCount         Int
+  totalExpectedByCurrency  Json
+  totalSettledByCurrency   Json
+  averageSlippageBps       Float    @default(0)
+  maxSlippageBps           Int      @default(0)
+  summary                  Json
+  createdAt                DateTime @default(now())
+
+  @@index([reportDate])
+  @@map("reconciliation_reports")
 }
 
 // Immutable IPFS/Filecoin pins for certificates and course media (BE-011)
@@ -863,4 +1001,55 @@ model TransactionFeeRecord {
   @@index([recordedAt], map: "idx_tx_records_recorded_at")
   @@ignore
   @@map("transaction_fee_records")
+}
+
+// Student exercise submission used for plagiarism / structural similarity analysis (BE-098)
+model ExerciseSubmission {
+  id              String   @id @default(cuid())
+  workspaceId     String   @default("default")
+  studentId       String
+  courseId        String
+  exerciseId      String
+  sourceCode      String
+  normalizedAst   Json?
+  tokenFingerprint String?
+  astNodeCount    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  similarityFlagsAsSource ExerciseSimilarityFlag[] @relation("SimilaritySource")
+  similarityFlagsAsMatch  ExerciseSimilarityFlag[] @relation("SimilarityMatch")
+
+  @@index([workspaceId, exerciseId])
+  @@index([studentId])
+  @@index([courseId, exerciseId])
+  @@index([tokenFingerprint])
+  @@map("exercise_submissions")
+}
+
+// Pairwise similarity result flagged for instructor review (BE-098)
+model ExerciseSimilarityFlag {
+  id                String   @id @default(cuid())
+  workspaceId       String   @default("default")
+  exerciseId        String
+  sourceSubmissionId String
+  matchSubmissionId  String
+  subjectStudentId   String?
+  astSimilarity     Float    @db.Real
+  levenshteinSimilarity Float @db.Real
+  combinedScore     Float    @db.Real
+  status            String   @default("pending_review") // pending_review, cleared, confirmed
+  reviewedBy        String?
+  reviewedAt        DateTime?
+  createdAt         DateTime @default(now())
+
+  sourceSubmission ExerciseSubmission @relation("SimilaritySource", fields: [sourceSubmissionId], references: [id], onDelete: Cascade)
+  matchSubmission  ExerciseSubmission @relation("SimilarityMatch", fields: [matchSubmissionId], references: [id], onDelete: Cascade)
+  subjectStudent   Student?           @relation("SimilaritySubject", fields: [subjectStudentId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceSubmissionId, matchSubmissionId])
+  @@index([workspaceId, exerciseId, status])
+  @@index([combinedScore])
+  @@map("exercise_similarity_flags")
 }

@@ -61,7 +61,7 @@ docker compose up -d indexer
 | `PORT`            | `3001`                                               | HTTP / WS port                                                       |
 | `DATABASE_URL`    | `sqlite:///data/indexer.db?mode=rwc`                 | sqlx connection string; auto-detects SQLite vs Postgres from scheme |
 | `SOROBAN_RPC_URL` | `https://soroban-testnet.stellar.org`                | Soroban RPC endpoint used by the poller                              |
-| `POLL_INTERVAL_MS`| `5000`                                               | Sleep between successful polls                                       |
+| `POLL_INTERVAL_MS`| `500`                                                | Sleep between successful polls                                       |
 | `BATCH_SIZE`      | `100`                                                | Ledger window per request to `getEvents`                             |
 | `START_LEDGER`    | unset                                                | Override the cursor (back-fills / tests)                             |
 | `RUST_LOG`        | `info,indexer=debug,sqlx=warn,...`                   | `tracing-subscriber` env-filter                                      |
@@ -98,10 +98,20 @@ ws.onmessage = (e) => console.log("new event", JSON.parse(e.data));
 
 ## Schema
 
-`events` rows are written once and upserted by `id` (the deterministic
-`{ledger}-{txHash}-{eventIndex}` key returned by Soroban RPC). `indexer_cursor`
-is a single-row table holding `last_ledger` so restarts resume from where the
-service left off.
+`events` rows are written once and deduplicated by `id` (the deterministic
+`{ledger}-{txHash}-{eventIndex}` key returned by Soroban RPC). This deduplicates
+each event while preserving multiple events emitted by the same transaction.
+Each batch commits events, ledger hashes, and the `indexer_cursor` watermark in
+one database transaction; only newly inserted events are sent to WebSocket/SSE
+subscribers. `indexer_cursor` holds the last fully processed ledger, so
+restarts resume from the next ledger without replaying successful batches.
+
+Before ingestion, the poller compares a rolling four-ledger overlap against
+stored ledger hashes. A mismatch rolls back events and seals from the earliest
+changed ledger and rewinds the watermark to its predecessor for canonical
+re-indexing. RPC hash lookup failures stop that poll attempt rather than
+advancing the cursor without reorg protection. Event and ledger RPC responses
+are paginated, with ledger windows chunked to the RPC limit.
 
 The full DDL lives in [`migrations/`](./migrations) and is applied on every
 startup (`IF NOT EXISTS`-style — safe to re-run).

@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from 'react';
+import { getStoredSessionToken } from '@/lib/credentialStorage';
 
 const API_BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:8080/api/v1';
 
@@ -27,8 +28,8 @@ type EndpointCircuit = {
   lastStatusCode?: number;
 };
 
-function authHeaders(): Record<string, string> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = typeof window !== 'undefined' ? await getStoredSessionToken() : null;
   return {
     'content-type': 'application/json',
     ...(token ? { authorization: `Bearer ${token}` } : {}),
@@ -45,9 +46,10 @@ export default function WebhookDeliveriesPage() {
     try {
       setError(null);
       const query = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : '';
+      const headers = await authHeaders();
       const [deliveriesRes, endpointsRes] = await Promise.all([
-        fetch(`${API_BASE}/admin/webhooks/deliveries${query}`, { headers: authHeaders() }),
-        fetch(`${API_BASE}/admin/webhooks/endpoints`, { headers: authHeaders() }),
+        fetch(`${API_BASE}/admin/webhooks/deliveries${query}`, { headers }),
+        fetch(`${API_BASE}/admin/webhooks/endpoints`, { headers }),
       ]);
       if (!deliveriesRes.ok || !endpointsRes.ok) {
         throw new Error(`Request failed (${deliveriesRes.status}/${endpointsRes.status})`);
@@ -70,7 +72,7 @@ export default function WebhookDeliveriesPage() {
       : false;
     const res = await fetch(`${API_BASE}/admin/webhooks/deliveries/${encodeURIComponent(delivery.deliveryId)}/retrigger`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: await authHeaders(),
       body: JSON.stringify({ resumeEndpoint }),
     });
     const body = await res.json();
@@ -82,7 +84,7 @@ export default function WebhookDeliveriesPage() {
     if (!confirm('Re-trigger every failed webhook delivery?')) return;
     const res = await fetch(`${API_BASE}/admin/webhooks/deliveries/retrigger-failed`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: await authHeaders(),
       body: JSON.stringify({}),
     });
     const body = await res.json();
@@ -93,7 +95,7 @@ export default function WebhookDeliveriesPage() {
   async function resume(endpoint: EndpointCircuit) {
     await fetch(`${API_BASE}/admin/webhooks/endpoints/resume`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: await authHeaders(),
       body: JSON.stringify({ endpoint: endpoint.endpointKey }),
     });
     await load();

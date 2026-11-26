@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/Progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { useWebSocket } from '@/hooks/useWebSocket';
+import { useStellarTokens, type TokenAllowance } from '@/hooks/useStellarTokens';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { formatCurrency, formatDate } from '@/utils/format';
 import {
@@ -22,6 +23,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 
 interface SubscriptionPlan {
   id: string;
@@ -68,6 +70,13 @@ export const SubscriptionManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
+  const [tokenState, setTokenState] = useState<TokenAllowance | null>(null);
+  const [checkingToken, setCheckingToken] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [paymentResult, setPaymentResult] = useState<{ hash: string; expiresAt: Date } | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const { inspect, enroll, publicKey } = useStellarTokens();
 
   const {
     subscriptions,
@@ -76,7 +85,6 @@ export const SubscriptionManager: React.FC = () => {
     fetchUserSubscriptions,
     fetchPlans,
     fetchAnalytics,
-    createSubscription,
     cancelSubscription,
     renewSubscription,
   } = useSubscriptionStore();
@@ -132,17 +140,64 @@ export const SubscriptionManager: React.FC = () => {
     }
   };
 
-  const handleCreateSubscription = async (planId: string, billingPeriod: string) => {
+  const openPaywall = async (plan: SubscriptionPlan) => {
+    setSelectedPlan(plan);
+    setTokenState(null);
+    setPaymentResult(null);
+    setPaymentError(null);
+    const tokenId = process.env.NEXT_PUBLIC_SUBSCRIPTION_TOKEN_ID;
+    const contractId = process.env.NEXT_PUBLIC_SUBSCRIPTION_CONTRACT_ID;
+    if (!tokenId || !contractId) {
+      setPaymentError('Subscription token and contract are not configured for this network.');
+      return;
+    }
+    if (!publicKey) {
+      setPaymentError('Connect a Stellar wallet before enrolling.');
+      return;
+    }
+    setCheckingToken(true);
     try {
-      await createSubscription({
-        planId,
-        billingPeriod,
-        paymentMethod: 'stellar',
-        autoRenew: true,
+      setTokenState(await inspect(tokenId, contractId));
+    } catch (cause) {
+      setPaymentError(cause instanceof Error ? cause.message : 'Could not read token balance and allowance.');
+    } finally {
+      setCheckingToken(false);
+    }
+  };
+
+  const confirmEnrollment = async () => {
+    if (!selectedPlan || !tokenState) return;
+    const tokenId = process.env.NEXT_PUBLIC_SUBSCRIPTION_TOKEN_ID;
+    const contractId = process.env.NEXT_PUBLIC_SUBSCRIPTION_CONTRACT_ID;
+    if (!tokenId || !contractId) return;
+    const amount = BigInt(Math.round(selectedPlan.price * 10 ** 7));
+    if (tokenState.balance < amount) {
+      setPaymentError('Your SEP-41 token balance is too low for this plan.');
+      return;
+    }
+    setPaying(true);
+    setPaymentError(null);
+    try {
+      const durationSeconds =
+        selectedPlan.billingPeriod === 'YEARLY'
+          ? 31_536_000
+          : selectedPlan.billingPeriod === 'QUARTERLY'
+            ? 7_776_000
+            : 2_592_000;
+      const result = await enroll({
+        tokenId,
+        subscriptionContractId: contractId,
+        planId: selectedPlan.id,
+        amount,
+        durationSeconds,
+        currentAllowance: tokenState.allowance,
       });
-    } catch (err) {
-      setError('Failed to create subscription');
-      console.error('Error creating subscription:', err);
+      setPaymentResult(result);
+      await fetchUserSubscriptions();
+    } catch (cause) {
+      setPaymentError(cause instanceof Error ? cause.message : 'Enrollment failed.');
+    } finally {
+      setPaying(false);
     }
   };
 
@@ -441,7 +496,7 @@ export const SubscriptionManager: React.FC = () => {
                   <Button
                     className="w-full"
                     disabled={!plan.isActive}
-                    onClick={() => handleCreateSubscription(plan.id, plan.billingPeriod)}
+                    onClick={() => void openPaywall(plan)}
                   >
                     {plan.isActive ? 'Subscribe Now' : 'Plan Unavailable'}
                   </Button>
@@ -542,6 +597,31 @@ export const SubscriptionManager: React.FC = () => {
           </div>
         </TabsContent>
       </Tabs>
+
+      <AnimatePresence>
+        {selectedPlan && (
+          <motion.div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.section role="dialog" aria-modal="true" aria-labelledby="subscription-paywall-title" className="w-full max-w-lg rounded-2xl border bg-background p-6 shadow-2xl" initial={{ y: 18, scale: 0.97 }} animate={{ y: 0, scale: 1 }} exit={{ y: 18, scale: 0.97 }}>
+              {paymentResult ? (
+                <div className="space-y-4 text-center">
+                  <motion.div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-500/15 text-3xl text-green-600" initial={{ scale: 0 }} animate={{ scale: 1 }}>✓</motion.div>
+                  <h2 className="text-2xl font-bold">You’re enrolled</h2>
+                  <p>Your {selectedPlan.name} access is active through {paymentResult.expiresAt.toLocaleDateString()}.</p>
+                  <a className="block break-all text-sm text-primary underline" href={`https://stellar.expert/explorer/testnet/tx/${paymentResult.hash}`} target="_blank" rel="noreferrer">View transaction · {paymentResult.hash}</a>
+                  <Button onClick={() => setSelectedPlan(null)}>Done</Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div><h2 id="subscription-paywall-title" className="text-2xl font-bold">Enroll in {selectedPlan.name}</h2><p className="text-muted-foreground">SEP-41 token payment · {selectedPlan.billingPeriod.toLowerCase()}</p></div>
+                  <div className="rounded-lg border p-4 text-sm"><div className="flex justify-between"><span>Enrollment fee</span><strong>{formatCurrency(selectedPlan.price)} {selectedPlan.currency}</strong></div>{tokenState && <><div className="mt-2 flex justify-between"><span>Token balance</span><span>{tokenState.balance.toString()} base units</span></div><div className="mt-1 flex justify-between"><span>Current allowance</span><span>{tokenState.allowance.toString()} base units</span></div><div className="mt-2 text-muted-foreground">{tokenState.allowance >= BigInt(Math.round(selectedPlan.price * 10 ** 7)) ? 'Existing allowance covers enrollment.' : 'Allowance increase and enrollment are handled by one atomic contract call.'}</div></>}</div>
+                  {paymentError && <Alert variant="destructive"><AlertTriangle className="h-4 w-4"/><AlertDescription>{paymentError}</AlertDescription></Alert>}
+                  <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setSelectedPlan(null)}>Cancel</Button><Button disabled={checkingToken || paying || !tokenState} onClick={() => void confirmEnrollment()}>{checkingToken ? 'Checking token…' : paying ? 'Waiting for confirmation…' : 'Approve & enroll'}</Button></div>
+                </div>
+              )}
+            </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

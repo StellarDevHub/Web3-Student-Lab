@@ -1,13 +1,16 @@
-import { describe, expect, it } from 'vitest';
+export const dynamic = 'force-dynamic';import { describe, expect, it } from 'vitest';
 import en from '@/i18n/locales/en.json';
 import es from '@/i18n/locales/es.json';
 import zh from '@/i18n/locales/zh.json';
+import ar from '@/i18n/locales/ar.json';
+import he from '@/i18n/locales/he.json';
+import fa from '@/i18n/locales/fa.json';
 
 type LocaleDictionary = Record<string, unknown>;
-type ComparableLocale = 'es' | 'zh';
+type ComparableLocale = 'es' | 'zh' | 'ar' | 'he' | 'fa';
 
 const referenceLocale = 'en';
-const translatedLocales: Record<ComparableLocale, LocaleDictionary> = { es, zh };
+const translatedLocales: Record<ComparableLocale, LocaleDictionary> = { es, zh, ar, he, fa };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -60,11 +63,17 @@ function diffLocaleKeys(localeName: ComparableLocale, dictionary: LocaleDictiona
 }
 
 describe('locale dictionary key parity', () => {
-  it(`keeps Spanish and Chinese keys aligned with ${referenceLocale}.json`, () => {
+  it(`keeps all translated locales aligned with ${referenceLocale}.json`, () => {
     const issues = Object.entries(translatedLocales).flatMap(([localeName, dictionary]) =>
       diffLocaleKeys(localeName as ComparableLocale, dictionary)
     );
 
     expect(issues, issues.join('\n')).toEqual([]);
+  });
+
+  it('RTL locales (ar, he, fa) are present and non-empty', () => {
+    for (const [name, dict] of Object.entries({ ar, he, fa })) {
+      expect(Object.keys(dict).length, `${name}.json should have top-level keys`).toBeGreaterThan(0);
+    }
   });
 });
