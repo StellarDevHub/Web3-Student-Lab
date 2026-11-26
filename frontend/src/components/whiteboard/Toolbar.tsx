@@ -14,15 +14,23 @@ import {
   Landmark,
   Lock,
   Zap,
+  StickyNote,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface ToolbarProps {
   onAddShape: (type: string) => void;
   onExport: () => void;
+  onExportSVG?: () => void;
+  onExportJSON?: () => void;
 }
 
-export const Toolbar: React.FC<ToolbarProps> = ({ onAddShape, onExport }) => {
+export const Toolbar: React.FC<ToolbarProps> = ({
+  onAddShape,
+  onExport,
+  onExportSVG,
+  onExportJSON,
+}) => {
   return (
     <>
       {/* Top Center Main Tools */}
@@ -83,17 +91,39 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onAddShape, onExport }) => {
           label="Oracle"
           onClick={() => onAddShape('oracle')}
         />
+        <TemplateButton
+          icon={StickyNote}
+          color="text-yellow-300"
+          label="Sticky Note"
+          onClick={() => onAddShape('sticky')}
+        />
       </div>
 
       {/* Top Right Actions */}
       <div className="absolute top-6 right-6 z-10 flex gap-3">
         <button
           onClick={onExport}
-          className="group flex items-center gap-2.5 rounded-2xl border border-white/10 bg-white/5 px-5 py-2.5 text-[11px] font-black tracking-widest text-white uppercase shadow-xl backdrop-blur-xl transition-all hover:border-white/30 hover:bg-white/10 active:scale-95"
+          className="group flex items-center gap-2.5 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-black tracking-widest text-white uppercase shadow-xl backdrop-blur-xl transition-all hover:border-white/30 hover:bg-white/10 active:scale-95"
         >
           <Download className="h-4 w-4 text-gray-400 transition-colors group-hover:text-white" />
-          Export
+          PNG
         </button>
+        {onExportSVG && (
+          <button
+            onClick={onExportSVG}
+            className="group flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-black tracking-widest text-white uppercase shadow-xl backdrop-blur-xl transition-all hover:border-white/30 hover:bg-white/10 active:scale-95"
+          >
+            SVG
+          </button>
+        )}
+        {onExportJSON && (
+          <button
+            onClick={onExportJSON}
+            className="group flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-[11px] font-black tracking-widest text-white uppercase shadow-xl backdrop-blur-xl transition-all hover:border-white/30 hover:bg-white/10 active:scale-95"
+          >
+            JSON
+          </button>
+        )}
         <button className="flex items-center gap-2.5 rounded-2xl bg-gradient-to-br from-red-500 to-red-600 px-5 py-2.5 text-[11px] font-black tracking-widest text-white uppercase shadow-[0_15px_35px_rgba(239,68,68,0.3)] transition-all hover:from-red-400 hover:to-red-500 hover:shadow-[0_20px_45px_rgba(239,68,68,0.4)] active:scale-95">
           <Share2 className="h-4 w-4 fill-white" />
           Live Session

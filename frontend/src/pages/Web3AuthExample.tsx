@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Web3Login from '../components/Web3Login';
 import { Web3AuthResponse } from '../services/web3.service';
 import { User, LogOut, Shield, Key } from 'lucide-react';
+import { clearSessionStorage, getStoredSession } from '@/lib/credentialStorage';
 
 export default function Web3AuthExample() {
   const [user, setUser] = useState<Web3AuthResponse['user'] | null>(null);
@@ -23,34 +24,22 @@ export default function Web3AuthExample() {
   const handleLogout = () => {
     setUser(null);
     setTokens(null);
-    // Clear localStorage
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+    clearSessionStorage();
   };
 
   // Check for existing session on mount
   React.useEffect(() => {
-    // Migration: ensure legacy refreshToken is cleaned up from localStorage
-    localStorage.removeItem('refreshToken');
-
-    const storedUser = localStorage.getItem('user');
-    const storedAccessToken = localStorage.getItem('accessToken');
-
-    if (storedUser && storedAccessToken) {
-      try {
-        setUser(JSON.parse(storedUser));
-        setTokens({
-          accessToken: storedAccessToken,
-        });
-      } catch (error) {
-        console.error('Failed to parse stored user data:', error);
-        // Clear corrupted data
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
-      }
-    }
+    let active = true;
+    getStoredSession()
+      .then((session) => {
+        if (!active || !session?.user || !session.accessToken) return;
+        setUser(session.user as Web3AuthResponse['user']);
+        setTokens({ accessToken: session.accessToken });
+      })
+      .catch((error) => console.error('Failed to read encrypted user data:', error));
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (

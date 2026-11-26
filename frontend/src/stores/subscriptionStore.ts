@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { API_BASE_URL } from '@/lib/api-config';
+import { getStoredSessionToken } from '@/lib/credentialStorage';
 
 interface SubscriptionPlan {
   id: string;
@@ -97,7 +98,7 @@ export const useSubscriptionStore = create<SubscriptionStore>()(
         fetchUserSubscriptions: async () => {
           try {
             set({ loading: true, error: null });
-            const token = localStorage.getItem('auth_token');
+            const token = await getStoredSessionToken();
             if (!token) {
               throw new Error('Authentication required');
             }
@@ -154,7 +155,7 @@ export const useSubscriptionStore = create<SubscriptionStore>()(
         fetchAnalytics: async (period = '30d') => {
           try {
             set({ loading: true, error: null });
-            const token = localStorage.getItem('auth_token');
+            const token = await getStoredSessionToken();
             if (!token) {
               throw new Error('Authentication required');
             }
@@ -188,7 +189,7 @@ export const useSubscriptionStore = create<SubscriptionStore>()(
         createSubscription: async (data) => {
           try {
             set({ loading: true, error: null });
-            const token = localStorage.getItem('auth_token');
+            const token = await getStoredSessionToken();
             if (!token) {
               throw new Error('Authentication required');
             }
@@ -226,7 +227,7 @@ export const useSubscriptionStore = create<SubscriptionStore>()(
         cancelSubscription: async (subscriptionId) => {
           try {
             set({ loading: true, error: null });
-            const token = localStorage.getItem('auth_token');
+            const token = await getStoredSessionToken();
             if (!token) {
               throw new Error('Authentication required');
             }
@@ -258,7 +259,7 @@ export const useSubscriptionStore = create<SubscriptionStore>()(
         renewSubscription: async (subscriptionId) => {
           try {
             set({ loading: true, error: null });
-            const token = localStorage.getItem('auth_token');
+            const token = await getStoredSessionToken();
             if (!token) {
               throw new Error('Authentication required');
             }

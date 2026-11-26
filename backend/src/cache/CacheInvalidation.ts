@@ -1,3 +1,4 @@
+import { multiTierCache } from '../lib/cache/multiTierCache.js';
 import cacheService, { CACHE_KEYS } from './CacheService.js';
 
 export const invalidateUserCache = async (userId: string): Promise<void> => {
@@ -13,6 +14,11 @@ export const invalidateCourseCache = async (courseId: string): Promise<void> => 
     CACHE_KEYS.courses.detail(courseId),
     CACHE_KEYS.courses.curriculum(courseId),
     CACHE_KEYS.courses.list(),
+  ]);
+  await Promise.all([
+    multiTierCache.invalidate(`course:${courseId}`),
+    multiTierCache.invalidatePrefix(`course:curriculum:${courseId}`),
+    multiTierCache.invalidatePrefix(CACHE_KEYS.courses.list()),
   ]);
 };
 
@@ -31,4 +37,8 @@ export const invalidateLeaderboardCache = async (): Promise<void> => {
 export const invalidateAllCourses = async (): Promise<void> => {
   await cacheService.delPattern('course:*');
   await cacheService.del(CACHE_KEYS.courses.list());
+  await Promise.all([
+    multiTierCache.invalidatePrefix('course:'),
+    multiTierCache.invalidatePrefix('courses:list'),
+  ]);
 };

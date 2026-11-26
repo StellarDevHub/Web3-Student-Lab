@@ -1,8 +1,6 @@
 'use client';
 
 import { useThemeMode } from '@/hooks/useThemeMode';
-import { ANIMATION_TOKENS } from '@/lib/animations/animationTokens';
-import { motion } from 'framer-motion';
 import { Moon, Sun } from 'lucide-react';
 import React from 'react';
 
@@ -96,34 +94,32 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
   // Button variant: Shows icon + optional text label
   if (variant === 'button') {
     return (
-      <motion.button
-        // Add subtle scale animation on interaction
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
+      <button
         onClick={toggleTheme}
-        className={`flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-300 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-black focus:outline-none dark:bg-gray-100 dark:text-gray-600 dark:hover:bg-gray-200 dark:hover:text-gray-700 dark:focus:ring-offset-white ${className} `}
+        className={`flex items-center gap-2 rounded-lg bg-theme-primary px-3 py-2 text-theme-secondary transition-colors hover:bg-theme-tertiary hover:text-theme-primary focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-theme-primary focus:outline-none ${className} `}
         aria-label={`Switch theme`}
       >
         <AnimatedThemeIcon isDark={isDark} size={size} />
-        {showLabel && <span className="text-sm font-medium">{theme.charAt(0).toUpperCase() + theme.slice(1)}</span>}
-      </motion.button>
+        {showLabel && (
+          <span className="text-sm font-medium">
+            {theme.charAt(0).toUpperCase() + theme.slice(1)}
+          </span>
+        )}
+      </button>
     );
   }
 
   // Icon variant (default): Compact button with just the animated icon
   // This is ideal for navigation bars and headers
   return (
-    <motion.button
-      // Animation for hover/tap states
-      whileHover={{ scale: 1.1 }}
-      whileTap={{ scale: 0.9 }}
+    <button
       onClick={toggleTheme}
-      className={`relative flex items-center justify-center rounded-lg ${sizeMap[size]} bg-gray-900 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-300 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-black focus:outline-none dark:bg-gray-100 dark:text-gray-600 dark:hover:bg-gray-200 dark:hover:text-gray-700 dark:focus:ring-offset-white ${className} `}
+      className={`relative flex items-center justify-center rounded-lg ${sizeMap[size]} bg-theme-primary text-theme-secondary transition-colors hover:bg-theme-tertiary hover:text-theme-primary focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-theme-primary focus:outline-none ${className} `}
       aria-label={`Switch theme`}
       type="button"
     >
       <AnimatedThemeIcon isDark={isDark} size={size} />
-    </motion.button>
+    </button>
   );
 };
 
@@ -161,31 +157,7 @@ const AnimatedThemeIcon: React.FC<{ isDark: boolean; size: 'sm' | 'md' | 'lg' }>
   // Motion div with enter/exit animations
   // This creates the smooth icon transition effect
   return (
-    <motion.div
-      // Don't animate on initial render
-      initial={false}
-      // Animation while this icon is visible
-      animate={{
-        scale: [1, 0.8], // Shrink
-        opacity: [1, 0], // Fade out
-        rotate: isDark ? 0 : 180, // Rotate based on theme
-      }}
-      // Animation as this icon exits (when theme changes)
-      exit={{
-        scale: [0.8, 1], // Grow
-        opacity: [0, 1], // Fade in
-        rotate: isDark ? 180 : 0,
-      }}
-      // Use timing from animation tokens for consistency
-      transition={{
-        duration: ANIMATION_TOKENS.durations.short,
-        ease: ANIMATION_TOKENS.easing.easeInOut,
-      }}
-      // Use isDark as key so icon re-mounts on change
-      // This ensures exit animation plays before icon switches
-      key={isDark ? 'moon' : 'sun'}
-      className="absolute"
-    >
+    <div key={isDark ? 'moon' : 'sun'} className="absolute">
       {isDark ? (
         // Show moon icon in dark mode with amber color
         <Moon size={iconSize} className="text-amber-300" />
@@ -193,7 +165,7 @@ const AnimatedThemeIcon: React.FC<{ isDark: boolean; size: 'sm' | 'md' | 'lg' }>
         // Show sun icon in light mode with brighter amber
         <Sun size={iconSize} className="text-amber-400" />
       )}
-    </motion.div>
+    </div>
   );
 };
 
@@ -208,26 +180,18 @@ export const ThemeToggleCompact: React.FC<{ className?: string }> = ({ className
   }
 
   return (
-    <motion.button
-      whileHover={{ scale: 1.1 }}
-      whileTap={{ scale: 0.9 }}
+    <button
       onClick={toggleTheme}
-      className={`rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-900 hover:text-gray-300 focus:ring-2 focus:ring-purple-500 focus:outline-none dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white ${className} `}
+      className={`rounded-md p-1.5 text-theme-secondary transition-colors hover:bg-theme-tertiary hover:text-theme-primary focus:ring-2 focus:ring-purple-500 focus:outline-none ${className} `}
       aria-label={`Switch theme`}
     >
-      <motion.div
-        animate={{ rotate: isDark ? 180 : 0 }}
-        transition={{
-          duration: ANIMATION_TOKENS.durations.short,
-          ease: ANIMATION_TOKENS.easing.easeInOut,
-        }}
-      >
+      <div>
         {isDark ? (
           <Moon size={20} className="text-amber-300" />
         ) : (
           <Sun size={20} className="text-amber-400" />
         )}
-      </motion.div>
-    </motion.button>
+      </div>
+    </button>
   );
 };

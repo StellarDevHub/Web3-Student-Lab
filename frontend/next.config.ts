@@ -1,75 +1,56 @@
 import type { NextConfig } from 'next';
 import path from 'path';
-import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'zlib';
+import { validatePublicEnv } from './src/lib/env';
 
-const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
-const PUBLIC_SWR_CACHE_CONTROL = 'public, max-age=0, s-maxage=60, stale-while-revalidate=604800';
-
-const COMPRESSIBLE_ASSET = /\.(?:js|mjs|css|json|svg|txt|xml)$/i;
-
-const COMPRESSED_CONTENT_TYPES: Record<string, string> = {
-  js: 'application/javascript; charset=utf-8',
-  mjs: 'application/javascript; charset=utf-8',
-  css: 'text/css; charset=utf-8',
-  json: 'application/json; charset=utf-8',
-  svg: 'image/svg+xml',
-  txt: 'text/plain; charset=utf-8',
-  xml: 'application/xml; charset=utf-8',
-};
-
-// FE-100: emit .br/.gz siblings for every text asset so the CDN (or the
-// middleware content negotiation) can serve pre-compressed payloads instead of
-// compressing the same chunks again on every origin request.
-class PrecompressedAssetsPlugin {
-  apply(compiler: any): void {
-    const { Compilation, sources } = compiler.webpack;
-
-    compiler.hooks.thisCompilation.tap('PrecompressedAssetsPlugin', (compilation: any) => {
-      compilation.hooks.processAssets.tap(
-        {
-          name: 'PrecompressedAssetsPlugin',
-          stage: Compilation.PROCESS_ASSETS_STAGE_OPTIMIZE_TRANSFER,
-        },
-        (assets: Record<string, any>) => {
-          for (const [name, asset] of Object.entries(assets)) {
-            if (!COMPRESSIBLE_ASSET.test(name) || /\.(?:br|gz|map)$/i.test(name)) {
-              continue;
-            }
-
-            const source = asset.source();
-            const input = Buffer.isBuffer(source) ? source : Buffer.from(String(source ?? ''));
-            if (input.length === 0) continue;
-
-            const brotli = brotliCompressSync(input, {
-              params: {
-                [zlibConstants.BROTLI_PARAM_QUALITY]: 6,
-                [zlibConstants.BROTLI_PARAM_SIZE_HINT]: input.length,
-              },
-            });
-            const gzip = gzipSync(input, { level: 9 });
-
-            compilation.emitAsset(`${name}.br`, new sources.RawSource(brotli));
-            compilation.emitAsset(`${name}.gz`, new sources.RawSource(gzip));
-          }
-        },
-      );
-    });
+if (process.env.NODE_ENV === 'production') {
+  const { errors } = validatePublicEnv();
+  if (errors.length > 0) {
+    throw new Error(`Invalid frontend build configuration:\n- ${errors.join('\n- ')}`);
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { HEAVY_LIBRARIES, packagesRegExp } = require('./scripts/bundle/heavy-libraries');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { HeavyModulesManifestPlugin } = require('./scripts/bundle/heavy-modules-plugin');
+
 const withBundleAnalyzer = process.env.ANALYZE === 'true'
-  ? require('@next/bundle-analyzer')({
-      enabled: true,
-      analyzerMode: 'static',
-      openAnalyzer: false,
-      generateStatsFile: true,
-      statsFilename: 'client-stats.json',
-    })
+  ? require('@next/bundle-analyzer')({ enabled: true })
   : (config: NextConfig) => config;
+
+/** One enforced async cacheGroup per heavy library family. */
+function heavyLibraryCacheGroups() {
+  const groups: Record<string, object> = {};
+  for (const lib of HEAVY_LIBRARIES as Array<{ id: string; chunkName: string; packages: string[] }>) {
+    groups[`heavy-${lib.id}`] = {
+      test: packagesRegExp(lib.packages),
+      name: lib.chunkName,
+      chunks: 'async',
+      priority: 50,
+      enforce: true,
+      reuseExistingChunk: true,
+    };
+  }
+  return groups;
+}
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
   transpilePackages: ['recharts'],
+
+  // FE-066: Partial Prerendering (PPR). In Next.js 16 the standalone
+  // `experimental.ppr` flag and `experimental_ppr` route segment config have
+  // been removed; PPR is now the default App Router behaviour when Cache
+  // Components is enabled. `cacheComponents` unifies the ppr / useCache /
+  // dynamicIO flags. Data fetching is dynamic by default and the static shell
+  // (course curriculum, navigation, headers) is prerendered at build time and
+  // served from the edge CDN, while user-specific enrollment, progress, and
+  // completion state streams in behind <Suspense> boundaries.
+  cacheComponents: true,
+  // Pairs with cacheComponents: the first Cache Components release predates
+  // Partial Prefetching, so the flag must be set explicitly to silence the
+  // warning and enable per-link prefetching of cached URL-specific content.
+  partialPrefetching: true,
 
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
     config.resolve.modules = [
@@ -78,11 +59,6 @@ const nextConfig: NextConfig = {
     ];
 
     config.plugins = config.plugins || [];
-
-    // FE-100: pre-compress only client assets emitted by a production build.
-    if (!dev && !isServer) {
-      config.plugins.push(new PrecompressedAssetsPlugin());
-    }
 
     if (config.output) {
       config.output.environment = {
@@ -93,6 +69,10 @@ const nextConfig: NextConfig = {
 
     // Client-only: server bundles are not shipped to the browser (FE-050).
     if (!isServer) {
+      // Records which heavy libraries end up in initial vs async chunks so
+      // `npm run check:bundle` can fail the build on a regression (FE-076).
+      if (!dev) config.plugins.push(new HeavyModulesManifestPlugin());
+
       if (!config.optimization.splitChunks) {
         config.optimization.splitChunks = {};
       }
@@ -119,29 +99,27 @@ const nextConfig: NextConfig = {
             priority: 40,
             enforce: true,
           },
-          charts: {
-            test: /[\\/]node_modules[\\/](chart\.js|react-chartjs-2|recharts|d3-[\w-]+)[\\/]/,
-            name: 'async-charts',
-            chunks: 'async',
-            priority: 40,
-          },
+          // Charting & web3-math libraries (FE-076): one async chunk per family
+          // (async-d3, async-chartjs, async-recharts, async-web3-math), built
+          // from the same registry `check:bundle` enforces. `chunks: 'async'`
+          // means they can only be reached through next/dynamic / import().
+          ...heavyLibraryCacheGroups(),
           wasm: {
-            test: /[\\/]node_modules[\\/](wabt|ethers|@ethersproject)[\\/]/,
-            name: 'async-wasm-evm',
+            test: /[\\/]node_modules[\\/]wabt[\\/]/,
+            name: 'async-wasm',
             chunks: 'async',
             priority: 40,
             enforce: true,
           },
+          // The Stellar SDK (~250 KB gzipped) is shared by many tool routes but
+          // must not ride along on every page. A named `chunks: 'all'` group
+          // used to merge it with the tiny @stellar/freighter-api the root
+          // layout needs, putting the whole SDK into everyone's first load
+          // (FE-076). Async-only now; static users get it via normal splitting.
           stellar: {
-            test: /[\\/]node_modules[\\/]@stellar[\\/]/,
-            name: 'stellar',
-            chunks: 'all',
-            priority: 20,
-          },
-          d3: {
-            test: /[\\/]node_modules[\\/]d3[\\/]/,
-            name: 'd3',
-            chunks: 'all',
+            test: /[\\/]node_modules[\\/]@stellar[\\/]stellar-(sdk|base)[\\/]/,
+            name: 'async-stellar',
+            chunks: 'async',
             priority: 20,
           },
           // React runtime shared by every route — one long-lived cacheable chunk.
@@ -167,11 +145,14 @@ const nextConfig: NextConfig = {
             chunks: 'async',
             priority: 35,
           },
+          // Code shared by 2+ chunks. No fixed `name` (FE-076): a single global
+          // "common" chunk was part of every route's first load (~130 KB
+          // gzipped) regardless of whether the route used any of it.
           common: {
-            name: 'common',
             minChunks: 2,
             chunks: 'all',
             priority: 5,
+            reuseExistingChunk: true,
           },
         },
       };
@@ -180,88 +161,27 @@ const nextConfig: NextConfig = {
     return config;
   },
   compress: true,
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  // Optimize images
   images: {
-    formats: ['image/webp', 'image/avif'],
+    // Next's optimizer negotiates AVIF first and WebP for broader compatibility.
+    formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 60 * 60 * 24 * 30,
+    maximumRedirects: 2,
+    maximumResponseBody: 10_000_000,
   },
-  // FE-100: immutable hashed chunks, pre-compressed variants and SWR for
-  // dynamic public endpoints.
+  // Immutable CDN cache headers for static assets — FE-HARD-50
   async headers() {
-    const immutableHeaders = [
-      { key: 'Cache-Control', value: IMMUTABLE_CACHE_CONTROL },
-      { key: 'Vary', value: 'Accept-Encoding' },
-    ];
-
-    const precompressedHeaders = (encoding: 'br' | 'gzip') => [
-      ...immutableHeaders,
-      { key: 'Content-Encoding', value: encoding },
-    ];
-
-    // Middleware rewrites these URLs to the .br/.gz sibling emitted at build
-    // time. Next.js forbids middleware from setting Content-Encoding, so the
-    // encoding header is attached here using the same Accept-Encoding match.
-    const negotiatedEncodingHeaders = ['js', 'mjs', 'css', 'json', 'svg', 'txt', 'xml'].flatMap(
-      (extension) => [
-        {
-          source: `/_next/static/:path*.${extension}`,
-          has: [
-            {
-              type: 'header' as const,
-              key: 'Accept-Encoding',
-              value: '^(?!.*br).*gzip.*',
-            },
-          ],
-          headers: [{ key: 'Content-Encoding', value: 'gzip' }],
-        },
-        {
-          source: `/_next/static/:path*.${extension}`,
-          has: [{ type: 'header' as const, key: 'Accept-Encoding', value: '.*br.*' }],
-          headers: [{ key: 'Content-Encoding', value: 'br' }],
-        },
-      ],
-    );
-
-    const publicApiRoutes = [
-      '/api/courses/:path*',
-      '/api/public/:path*',
-      '/api/seo/:path*',
-      '/api/tokenomics/:path*',
-      '/api/certificates/explorer/:path*',
-      '/api/triage/leaderboard',
-      '/api/v1/courses/:path*',
-      '/api/v1/certificates/:path*',
-      '/api/v1/health/:path*',
-    ];
-
     return [
       {
         // Next.js hashed static chunks — safe to cache forever
         source: '/_next/static/:path*',
-        headers: immutableHeaders,
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
       },
-      ...negotiatedEncodingHeaders,
-      {
-        // Pre-compressed variants emitted by PrecompressedAssetsPlugin
-        source: '/_next/static/:path*.br',
-        headers: precompressedHeaders('br'),
-      },
-      {
-        source: '/_next/static/:path*.gz',
-        headers: precompressedHeaders('gzip'),
-      },
-      ...Object.entries(COMPRESSED_CONTENT_TYPES).flatMap(([extension, contentType]) => [
-        {
-          source: `/_next/static/:path*.${extension}.br`,
-          headers: [{ key: 'Content-Type', value: contentType }],
-        },
-        {
-          source: `/_next/static/:path*.${extension}.gz`,
-          headers: [{ key: 'Content-Type', value: contentType }],
-        },
-      ]),
       {
         // Public folder assets (images, fonts, manifest)
         source: '/static/:path*',
@@ -278,24 +198,15 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Cache-Control',
-            value: IMMUTABLE_CACHE_CONTROL,
+            value: 'public, max-age=31536000, immutable',
           },
         ],
       },
-      ...publicApiRoutes.map((source) => ({
-        source,
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: PUBLIC_SWR_CACHE_CONTROL,
-          },
-        ],
-      })),
     ];
   },
   experimental: {
     // Barrel-file tree shaking for icon/util/animation libraries (FE-050).
-    optimizePackageImports: ['d3', 'lucide-react', 'date-fns', 'framer-motion', 'recharts', 'react-chartjs-2'],
+    optimizePackageImports: ['d3', 'lucide-react', 'date-fns', 'framer-motion', 'recharts', 'react-chartjs-2', 'ethers'],
   },
 };
 

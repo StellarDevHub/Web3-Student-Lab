@@ -1,4 +1,9 @@
 import prisma from '../db/index.js';
+import {
+    assertExactRedirectUri,
+    assertValidPkceChallenge,
+    assertValidPkceVerifier,
+} from './oauthPkce.js';
 
 const DISCORD_AUTHORIZE_URL = 'https://discord.com/oauth2/authorize';
 const DISCORD_TOKEN_URL = 'https://discord.com/api/oauth2/token';
@@ -10,10 +15,12 @@ export function buildDiscordAuthorizationUrl(state: string, challenge: string): 
   if (!clientId || !redirectUri) {
     throw new Error('Discord OAuth is not configured');
   }
+  const exactRedirectUri = assertExactRedirectUri(redirectUri, redirectUri);
+  assertValidPkceChallenge(challenge);
 
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: redirectUri,
+    redirect_uri: exactRedirectUri,
     response_type: 'code',
     scope: 'identify',
     state,
@@ -34,6 +41,8 @@ export async function linkDiscordAccount(
   if (!clientId || !clientSecret || !redirectUri) {
     throw new Error('Discord OAuth is not configured');
   }
+  assertValidPkceVerifier(verifier);
+  const exactRedirectUri = assertExactRedirectUri(redirectUri, redirectUri);
 
   const tokenResponse = await fetch(DISCORD_TOKEN_URL, {
     method: 'POST',
@@ -43,7 +52,7 @@ export async function linkDiscordAccount(
       client_secret: clientSecret,
       grant_type: 'authorization_code',
       code,
-      redirect_uri: redirectUri,
+      redirect_uri: exactRedirectUri,
       code_verifier: verifier,
     }),
   });

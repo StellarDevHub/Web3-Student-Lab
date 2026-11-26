@@ -33,6 +33,7 @@
 import { randomUUID } from 'crypto';
 import os from 'os';
 import { Worker } from 'worker_threads';
+import { recordWasmEvaluation } from '../metrics/prometheusMetrics.js';
 import logger from '../utils/logger.js';
 import { validateWasmModule, type WasmValidationCode } from '../utils/wasmValidator.js';
 
@@ -321,6 +322,7 @@ export async function runWasmEvaluation(
       : summary.total > 0 && summary.passed === summary.total
         ? 'passed'
         : 'failed';
+    recordWasmEvaluation(status, terminationReason, elapsedMs() / 1000);
     return {
       executionId,
       status,
@@ -454,4 +456,22 @@ export async function runWasmEvaluation(
   } finally {
     releaseSlot();
   }
+}
+
+export interface RemoteWasmExecutor {
+  executeWasm(request: SandboxRunRequest, timeoutMs?: number): Promise<SandboxRunResult>;
+}
+
+/**
+ * Dispatch WASM evaluation over an mTLS-authenticated gRPC channel when a remote
+ * worker client is supplied, or fall back to local in-process sandbox execution.
+ */
+export async function executeWasmWithTransport(
+  request: SandboxRunRequest,
+  remoteClient?: RemoteWasmExecutor,
+): Promise<SandboxRunResult> {
+  if (remoteClient) {
+    return remoteClient.executeWasm(request);
+  }
+  return runWasmEvaluation(request);
 }

@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
 import { getApiEndpoint } from '@/lib/env';
 import { BrainstormSkeleton } from '@/components/ui/skeletons/PageSkeletons';
+import { getStoredSessionToken } from '@/lib/credentialStorage';
 
 // ReactFlow + html2canvas + jsPDF are only needed once a session is open.
 const CollaborativeCanvas = dynamic(
@@ -47,7 +48,11 @@ function BrainstormContent() {
 
     const syncCanvas = async () => {
       setIsLoading(true);
-      const token = localStorage.getItem('token');
+      const token = await getStoredSessionToken();
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
 
       try {
         const response = await fetch(getApiEndpoint(`/canvas/room/${roomId}`), {
@@ -66,7 +71,7 @@ function BrainstormContent() {
         }
 
         if (response.status === 404) {
-          const createResponse = await fetch(`${apiUrl}/canvas`, {
+          const createResponse = await fetch(getApiEndpoint('/canvas'), {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${token}`,
@@ -102,7 +107,11 @@ function BrainstormContent() {
 
   const handleDownloadJSON = async () => {
     setIsLoading(true);
-    const token = localStorage.getItem('token');
+    const token = await getStoredSessionToken();
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const response = await fetch(getApiEndpoint(`/canvas/room/${roomId}`), {

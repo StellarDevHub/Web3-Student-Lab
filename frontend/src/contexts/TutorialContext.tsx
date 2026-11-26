@@ -9,7 +9,13 @@ import React, {
   type ReactNode,
 } from 'react';
 import type { Step } from 'react-joyride';
-import { TutorialWalkthrough } from '@/components/tutorials/TutorialWalkthrough';
+import dynamic from 'next/dynamic';
+
+// The walkthrough pulls in react-joyride; load it only when a tutorial starts (FE-076).
+const TutorialWalkthrough = dynamic(
+  () => import('@/components/tutorials/TutorialWalkthrough').then((m) => m.TutorialWalkthrough),
+  { ssr: false }
+);
 import {
   getTutorial,
   type TutorialDefinition,

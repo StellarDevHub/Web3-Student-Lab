@@ -3,8 +3,12 @@ import jwt from 'jsonwebtoken';
 import { StrKey } from '@stellar/stellar-sdk';
 import prisma from '../db/index.js';
 import { LoginRequest, RegisterRequest, User } from './types.js';
+import { getValidatedJwtSecret } from '../config/env.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+// No fallback: JWT_SECRET must be provided and secure. index.ts calls
+// failFastOnInvalidEnvironment() before any request is served, which exits the
+// process if the secret is missing, shorter than 32 characters, or a placeholder.
+const JWT_SECRET = getValidatedJwtSecret();
 const JWT_EXPIRES_IN = '7d';
 const SALT_ROUNDS = 10;
 
@@ -411,26 +415,8 @@ export const getStudentById = async (studentId: string): Promise<User | null> =>
 export const getCurrentUser = async (token: string): Promise<User | null> => {
   try {
     const decoded = verifyToken(token);
-    return getStudentById(decoded.userId);
+    return await getStudentById(decoded.userId);
   } catch {
     return null;
   }
-};
-
-export const getProfileStatusByWallet = async (walletAddress: string) => {
-  const student = await prisma.student.findUnique({
-    where: { walletAddress },
-  });
-
-  if (!student) {
-    return {
-      completed: false,
-      user: null,
-    };
-  }
-
-  return {
-    completed: true,
-    user: formatUserResponse(student),
-  };
 };

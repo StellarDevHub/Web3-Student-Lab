@@ -61,15 +61,17 @@ jobs:
       - name: Execute Production Deploy
         id: deploy_step
         run: |
-          echo "Executing production container/service rollout..."
-          # Deploy step: e.g. AWS ECS / Kubernetes / CapRover / Docker Swarm rollout
-          echo "Production deployment rollout initiated successfully."
+          mkdir -p "$HOME/.kube"
+          printf '%s' '${{ secrets.KUBECONFIG_DATA }}' | base64 -d > "$HOME/.kube/config"
+          kubectl apply -f k8s/canary-ingress.yaml
+          kubectl set image deployment/backend-canary backend="${{ secrets.PRODUCTION_IMAGE }}" -n production
+          kubectl rollout status deployment/backend-canary -n production --timeout=5m
 
   canary_verification:
     name: Canary Post-Deploy Synthetic Verification
     needs: deploy_production
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 25
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -85,22 +87,35 @@ jobs:
         working-directory: ./backend
         run: npm ci || npm install
 
-      - name: Run Synthetic Canary Smoke Tests (< 60s)
-        id: canary_smoke
-        timeout-minutes: 2
-        env:
-          CANARY_TARGET_URL: ${{ secrets.PROD_API_URL }}
-          CANARY_TEST_USER_EMAIL: ${{ secrets.CANARY_TEST_USER_EMAIL || 'canary-synthetic@web3studentlab.com' }}
-          CANARY_TEST_USER_PASSWORD: ${{ secrets.CANARY_TEST_USER_PASSWORD || 'CanaryPass123!' }}
-          SOROBAN_RPC_URL: ${{ secrets.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org' }}
+      - name: Configure Kubernetes
         run: |
-          chmod +x ./scripts/canary-smoke-test.sh
-          # Run canary smoke test and unit smoke suite
-          (cd backend && npx jest tests/smoke.test.ts --runInBand) || {
-            echo "Smoke test suite failed!"
-            exit 1
-          }
-          ./scripts/canary-smoke-test.sh
+          mkdir -p "$HOME/.kube"
+          printf '%s' '${{ secrets.KUBECONFIG_DATA }}' | base64 -d > "$HOME/.kube/config"
+
+      - name: Run Canary Verification And Traffic Progression
+        id: canary_smoke
+        timeout-minutes: 25
+        env:
+          PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
+        run: |
+          chmod +x ./scripts/canary-verifier.sh
+          ./scripts/canary-verifier.sh
+
+      - name: Generate typed OpenAPI client
+        working-directory: ./backend
+        run: npm run openapi:generate-client
+
+      - name: Compile generated OpenAPI client
+        working-directory: ./backend
+        run: npx tsc --noEmit --strict --target ES2022 --lib ES2022,DOM generated/openapi-client.ts
+
+      - name: Publish typed OpenAPI client artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web3-student-lab-openapi-client
+          path: backend/generated/openapi-client.ts
+          if-no-files-found: error
+          retention-days: 90
 
   automated_rollback:
     name: Automated Rollback on Canary Failure
@@ -128,12 +143,19 @@ jobs:
       - name: Trigger Automated Production Rollback
         if: env.TRIGGER_ROLLBACK == 'true'
         id: rollback
+        env:
+          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG_DATA }}
         run: |
           echo "========================================================"
           echo "🚨 CRITICAL: Canary verification check failed!"
           echo "Initiating automated rollback to previous stable commit: ${{ needs.deploy_production.outputs.previous_sha }}"
           echo "========================================================"
-          # Rollback execution logic
+          mkdir -p "$HOME/.kube"
+          printf '%s' "$KUBECONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          kubectl annotate ingress backend-production -n production \
+            nginx.ingress.kubernetes.io/canary-weight="0" --overwrite
+          kubectl rollout undo deployment/backend-canary -n production || true
+          kubectl rollout status deployment/backend-blue -n production --timeout=5m
           echo "Rollback successfully executed."
 
       - name: Send Rollback Incident Alert to Discord / Slack

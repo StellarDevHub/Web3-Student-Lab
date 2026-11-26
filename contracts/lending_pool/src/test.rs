@@ -323,3 +323,139 @@ fn adding_asset_twice_does_not_reset_index() {
         "add_asset called twice must not reset the borrow index"
     );
 }
+
+// ── SC-062: Bonding Curve Liquidation & Bad Debt Socialization Tests ──────────
+
+#[test]
+fn dynamic_bonus_curve_scales_from_5_to_15_percent() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _, _) = setup(&env);
+    let token = add_token(&env, &client);
+    let borrower = Address::generate(&env);
+
+    client.deposit_collateral(&borrower, &token, &15_000);
+    client.borrow(&borrower, &token, &token, &10_000);
+
+    // HF == 1.0 -> 500 BPS (5%)
+    let bonus_at_1 = client.current_liquidation_bonus(&borrower, &token, &token);
+    assert_eq!(bonus_at_1, 500);
+
+    // Drop collateral to HF = 0.5:
+    // req_coll = 10_000 * 15_000 / 10_000 = 15_000
+    // To get HF = 0.5, adj_coll must be 7_500. With cf = 10_000, coll = 7_500
+    env.as_contract(&client.address, || {
+        env.storage().persistent().set(
+            &Key::Collateral(borrower.clone(), token.clone()),
+            &7_500i128,
+        );
+    });
+    let hf_half = client.health_factor(&borrower, &token, &token);
+    assert_eq!(hf_half, 5_000);
+    let bonus_half = client.current_liquidation_bonus(&borrower, &token, &token);
+    assert_eq!(bonus_half, 1_000); // exactly 10% (midpoint between 5% and 15%)
+
+    // Drop collateral to 0 -> HF = 0.0 -> bonus must be 1500 BPS (15%)
+    env.as_contract(&client.address, || {
+        env.storage()
+            .persistent()
+            .set(&Key::Collateral(borrower.clone(), token.clone()), &0i128);
+    });
+    let hf_zero = client.health_factor(&borrower, &token, &token);
+    assert_eq!(hf_zero, 0);
+    let bonus_zero = client.current_liquidation_bonus(&borrower, &token, &token);
+    assert_eq!(bonus_zero, 1_500); // 15% max bonus
+}
+
+#[test]
+fn bad_debt_socialized_across_protocol_reserves_on_collateral_exhaustion() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, _) = setup(&env);
+    let token = add_token(&env, &client);
+    let borrower = Address::generate(&env);
+    let liquidator = Address::generate(&env);
+
+    // Fund protocol reserves with 5_000
+    client.deposit_reserves(&admin, &token, &5_000);
+    assert_eq!(client.reserves_of(&token), 5_000);
+
+    // Borrower deposits 10_000 collateral and borrows 6_000 debt
+    client.deposit_collateral(&borrower, &token, &10_000);
+    client.borrow(&borrower, &token, &token, &6_000);
+
+    // Force underwater position where collateral is small (e.g. 500)
+    env.as_contract(&client.address, || {
+        env.storage()
+            .persistent()
+            .set(&Key::Collateral(borrower.clone(), token.clone()), &500i128);
+    });
+
+    // Liquidator repays 2_000 debt.
+    // Liquidator seizes all 500 collateral (new_coll becomes 0).
+    // Remaining debt is 6_000 - 2_000 = 4_000.
+    // Since new_coll == 0 and remaining_debt == 4_000, the remaining deficit
+    // is socialized from the 5_000 protocol reserves!
+    client.liquidate(&liquidator, &borrower, &token, &token, &2_000);
+
+    // Collateral is 0
+    assert_eq!(client.collateral_of(&borrower, &token), 0);
+    // Bad debt of 4_000 was fully covered by reserves
+    assert_eq!(client.debt_of(&borrower, &token), 0);
+    assert_eq!(client.total_bad_debt(&token), 4_000);
+    // Reserves reduced by 4_000: 5_000 - 4_000 = 1_000
+    assert_eq!(client.reserves_of(&token), 1_000);
+}
+
+#[test]
+fn manual_socialize_bad_debt_clears_zero_collateral_deficit() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, _) = setup(&env);
+    let token = add_token(&env, &client);
+    let borrower = Address::generate(&env);
+    let caller = Address::generate(&env);
+
+    // Deposit 10_000 in reserves
+    client.deposit_reserves(&admin, &token, &10_000);
+
+    // Set up borrower with 3_000 debt and 0 collateral
+    env.as_contract(&client.address, || {
+        env.storage()
+            .persistent()
+            .set(&Key::Debt(borrower.clone(), token.clone()), &3_000i128);
+        env.storage()
+            .persistent()
+            .set(&Key::Collateral(borrower.clone(), token.clone()), &0i128);
+    });
+
+    // Call socialize_bad_debt
+    let covered = client.socialize_bad_debt(&caller, &borrower, &token, &token);
+    assert_eq!(covered, 3_000);
+    assert_eq!(client.debt_of(&borrower, &token), 0);
+    assert_eq!(client.reserves_of(&token), 7_000);
+    assert_eq!(client.total_bad_debt(&token), 3_000);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #6)")]
+fn manual_socialize_bad_debt_fails_if_borrower_has_collateral() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, _) = setup(&env);
+    let token = add_token(&env, &client);
+    let borrower = Address::generate(&env);
+    let caller = Address::generate(&env);
+
+    client.deposit_reserves(&admin, &token, &10_000);
+    client.deposit_collateral(&borrower, &token, &1_000);
+
+    env.as_contract(&client.address, || {
+        env.storage()
+            .persistent()
+            .set(&Key::Debt(borrower.clone(), token.clone()), &3_000i128);
+    });
+
+    // Borrower still has 1_000 collateral, must liquidate before socializing
+    client.socialize_bad_debt(&caller, &borrower, &token, &token);
+}

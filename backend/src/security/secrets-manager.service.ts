@@ -25,6 +25,9 @@ export class SecretsManagerService {
 
     // Fetch from vault (Doppler or HashiCorp Vault)
     const secret = await this.fetchFromVault(secretName);
+    if (!secret) {
+      throw new Error(`Secret ${secretName} is empty or unavailable`);
+    }
 
     // Cache with TTL (5 minutes)
     this.secretCache.set(secretName, {
@@ -33,6 +36,32 @@ export class SecretsManagerService {
     });
 
     return secret;
+  }
+
+  /**
+   * Load explicitly configured versions of a secret, oldest first.
+   * The last entry is the active version; callers can retain earlier versions
+   * for verification or decryption until their rotation grace period expires.
+   */
+  async getSecretVersions(
+    secretName: string,
+    versions: number[],
+  ): Promise<Array<{ version: number; value: string }>> {
+    const uniqueVersions = [...new Set(versions)];
+    if (
+      uniqueVersions.length === 0 ||
+      uniqueVersions.some((version) => !Number.isSafeInteger(version) || version < 1)
+    ) {
+      throw new Error('At least one positive integer secret version is required');
+    }
+
+    const entries = await Promise.all(
+      uniqueVersions.map(async (version) => ({
+        version,
+        value: await this.getSecret(`${secretName}_v${version}`),
+      })),
+    );
+    return entries.sort((a, b) => a.version - b.version);
   }
 
   /**

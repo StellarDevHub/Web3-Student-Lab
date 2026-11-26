@@ -1,6 +1,8 @@
 // backend/src/services/audit.service.ts
 import { createHash } from 'node:crypto';
 
+export type AuditArchiveListener = (entry: AuditLogEntry) => void;
+
 export interface AuditLogEntry {
     id: string;
     sequenceNumber: number;
@@ -15,6 +17,7 @@ export interface AuditLogEntry {
 
 export class AuditService {
     private chain: AuditLogEntry[] = [];
+    private archiveListeners: AuditArchiveListener[] = [];
 
     constructor() {
         // Initialize genesis block if empty
@@ -64,6 +67,13 @@ export class AuditService {
         const entry: AuditLogEntry = { ...newEntryData, hash };
 
         this.chain.push(entry);
+        for (const listener of this.archiveListeners) {
+            try {
+                listener(entry);
+            } catch {
+                // Archival listeners must never break audit recording
+            }
+        }
         return entry;
     }
 
@@ -110,5 +120,9 @@ export class AuditService {
 
     public getChain(): AuditLogEntry[] {
         return [...this.chain];
+    }
+
+    public onEntryRecorded(listener: AuditArchiveListener): void {
+        this.archiveListeners.push(listener);
     }
 }
