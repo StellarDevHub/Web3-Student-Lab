@@ -8,6 +8,7 @@ edition = "2021"
 [workspace]
 members = [
     ".",
+    "access_control",
     "amm",
     "auth_checker",
     "certificate_nft",
@@ -44,8 +45,11 @@ members = [
     "certificate",
     "storage_ttl_manager",
     "peer_review",
+    "yield_farming",
     "contract_events",
     "automated_testing_suite",
+    "flash_loan_provider",
+    "yield_farming",
 ]
 # Incomplete or non-crate directories under contracts/ must not be listed as members.
 # All contract crates are now fully reconciled into the workspace.

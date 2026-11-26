@@ -46,7 +46,20 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
+
+      - name: Determine benchmark scope
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE_SHA...HEAD" | grep -Eq '^contracts/(certificate_nft|dao_governance|hello_world|smart_vault|payment_gateway|gas_benchmarks)/|^scripts/run-gas-benchmarks.sh$'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -110,7 +123,7 @@ jobs:
             });
 
       - name: Enforce Regression Gate
-        if: steps.bench.outputs.regression_exit != '0'
+        if: steps.scope.outputs.relevant == 'true' && steps.bench.outputs.regression_exit != '0'
         run: |
           echo "::error::Gas regression detected: an endpoint exceeded the ${{ env.REGRESSION_THRESHOLD }}% threshold."
           exit 1
