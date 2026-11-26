@@ -106,7 +106,7 @@ export const SOROBAN_HOST_MODULE = 'env';
  * Reader for LEB128, the variable-length integer encoding WebAssembly uses for
  * every length and index in the binary.
  */
-class Reader {
+export class WasmReader {
   constructor(
     private readonly bytes: Uint8Array,
     public offset = 0,
@@ -203,7 +203,7 @@ export function hasWasmMagic(bytes: Uint8Array): boolean {
 }
 
 function parseImports(payload: Uint8Array): { imports: WasmImport[]; memories: WasmMemoryLimits[] } {
-  const reader = new Reader(payload);
+  const reader = new WasmReader(payload);
   const count = reader.varuint();
   const imports: WasmImport[] = [];
   const memories: WasmMemoryLimits[] = [];
@@ -238,7 +238,7 @@ function parseImports(payload: Uint8Array): { imports: WasmImport[]; memories: W
 
 /** Memory section (id 5): `vec(limits)` — every memory the module declares itself. */
 function parseMemorySection(payload: Uint8Array): WasmMemoryLimits[] {
-  const reader = new Reader(payload);
+  const reader = new WasmReader(payload);
   const count = reader.varuint();
   const memories: WasmMemoryLimits[] = [];
 
@@ -259,7 +259,7 @@ function parseMemorySection(payload: Uint8Array): WasmMemoryLimits[] {
  * imported base-address global) but not statically resolvable here, so it
  * reports no fixed offset rather than guessing.
  */
-function parseConstOffsetExpr(reader: Reader): number | undefined {
+function parseConstOffsetExpr(reader: WasmReader): number | undefined {
   const opcode = reader.u8();
   let value: number | undefined;
 
@@ -285,7 +285,7 @@ function parseConstOffsetExpr(reader: Reader): number | undefined {
 
 /** Data section (id 11): the segments the module pre-loads into linear memory. */
 function parseDataSection(payload: Uint8Array): WasmDataSegment[] {
-  const reader = new Reader(payload);
+  const reader = new WasmReader(payload);
   const count = reader.varuint();
   const segments: WasmDataSegment[] = [];
 
@@ -311,7 +311,7 @@ function parseDataSection(payload: Uint8Array): WasmDataSegment[] {
 }
 
 function parseExports(payload: Uint8Array): WasmExport[] {
-  const reader = new Reader(payload);
+  const reader = new WasmReader(payload);
   const count = reader.varuint();
   const exports: WasmExport[] = [];
 
@@ -360,7 +360,7 @@ export function analyzeWasm(bytes: Uint8Array): WasmModuleInfo {
     return { ...info, error: `Unsupported WebAssembly version ${version}.` };
   }
 
-  const reader = new Reader(bytes, 8);
+  const reader = new WasmReader(bytes, 8);
 
   try {
     while (!reader.done) {
@@ -379,7 +379,7 @@ export function analyzeWasm(bytes: Uint8Array): WasmModuleInfo {
       if (id === 0) {
         // A custom section's payload starts with its own name.
         try {
-          section.customName = new Reader(payload).name();
+          section.customName = new WasmReader(payload).name();
         } catch {
           section.customName = '(unreadable)';
         }

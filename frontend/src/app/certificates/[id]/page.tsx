@@ -113,9 +113,16 @@ export default function CertificateNFTPage() {
   const txHash = certificate.certificateHash && certificate.certificateHash !== 'Pending confirmation'
     ? certificate.certificateHash
     : `0x${certificate.id.replace(/[^a-f0-9]/gi, 'a').slice(0, 32)}`;
-  const contractId = certificate.contractAddress && !certificate.contractAddress.includes('XXX')
-    ? certificate.contractAddress
-    : 'CA7X98F21B90382C89A7E11D328905F12C';
+  const contractId = certificate.contractAddress?.trim() || '';
+  const isSorobanContractId = /^C[A-Z2-7]{55}$/.test(contractId);
+  const explorerNetwork =
+    certificate.network?.toLowerCase().includes('public') ||
+    certificate.network?.toLowerCase().includes('mainnet')
+      ? 'public'
+      : 'testnet';
+  const contractExplorerUrl = isSorobanContractId
+    ? `https://stellar.expert/explorer/${explorerNetwork}/contract/${contractId}`
+    : null;
 
   const isRevoked = certificate.status === 'REVOKED';
   const isReissued = certificate.status === 'REISSUED';
@@ -270,9 +277,22 @@ export default function CertificateNFTPage() {
               </div>
               <div className="flex items-center justify-between rounded border border-white/5 bg-black p-3">
                 <span className="text-gray-500">Contract</span>
-                <span className="max-w-[200px] truncate text-gray-300">
-                  {contractId}
-                </span>
+                {contractExplorerUrl ? (
+                  <a
+                    href={contractExplorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="max-w-[240px] break-all text-right text-emerald-400 underline decoration-emerald-400/40 underline-offset-4 transition-colors hover:text-emerald-300"
+                    aria-label="View certificate contract on Stellar Expert"
+                  >
+                    {contractId}
+                    <span className="ml-2 inline-block" aria-hidden="true">↗</span>
+                  </a>
+                ) : (
+                  <span className="max-w-[240px] break-all text-right text-gray-500">
+                    {contractId || 'Not available — contract not configured'}
+                  </span>
+                )}
               </div>
               <div className="flex items-center justify-between rounded border border-white/5 bg-black p-3">
                 <span className="text-gray-500">Status</span>

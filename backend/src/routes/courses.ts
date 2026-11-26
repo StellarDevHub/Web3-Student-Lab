@@ -1,14 +1,15 @@
 import { Router } from 'express';
 
-import { cacheMiddleware } from '../cache/CacheMiddleware.js';
 import { invalidateAllCourses, invalidateCourseCache } from '../cache/CacheInvalidation.js';
 import { cacheTTL } from '../config/redis.config.js';
 import prisma from '../db/index.js';
+import { multiTierCache } from '../lib/cache/multiTierCache.js';
 import { auditAction } from '../middleware/audit.js';
 import { createNotification } from '../notifications/index.js';
 import { sanitizeMarkdownContent } from '../services/contentSanitizer.js';
 import { getQueryString } from '../utils/queryParams.js';
 import logger from '../utils/logger.js';
+import { getQueryString } from '../utils/queryParams.js';
 
 
 
@@ -134,9 +135,13 @@ async function loadLiveCourses() {
 }
 
 // GET /api/courses - Get all courses
-router.get('/', cacheMiddleware({ ttl: cacheTTL.courses.list }), async (_req, res) => {
+router.get('/', async (_req, res) => {
   try {
-    const courses = await loadLiveCourses();
+    const courses = await multiTierCache.getOrLoad(
+      'courses:list',
+      loadLiveCourses,
+      { ttlSeconds: cacheTTL.courses.list, staleSeconds: 60 }
+    );
     res.json({ courses, dataSource: 'live' });
   } catch (error) {
     logger.error('Database unavailable in GET /courses, serving demo data', { error });
@@ -152,11 +157,6 @@ router.get('/', cacheMiddleware({ ttl: cacheTTL.courses.list }), async (_req, re
 // GET /api/courses/:id - Get course by ID
 router.get(
   '/:id',
-  cacheMiddleware({
-    ttl: cacheTTL.courses.detail,
-    keyGenerator: (req) => `course:${getQueryString(req.params.id)}`,
-
-  }),
   async (req, res) => {
     const id = typeof req.params.id === 'string' ? req.params.id : undefined;
     if (!id) {
@@ -164,11 +164,18 @@ router.get(
     }
     try {
       const id = getQueryString(req.params.id);
-      const availableCourses = await ensureSeedCourses();
-      if (!availableCourses) {
-        return res.status(404).json({ error: 'Course not found', dataSource: 'live' });
-      }
-      const course = availableCourses.find((c) => c.id === id);
+      const course = await multiTierCache.getOrLoad<CourseView | null>(
+        `course:${id}`,
+        async () => {
+          const availableCourses = await ensureSeedCourses();
+          return availableCourses.find((item) => item.id === id) ?? null;
+        },
+        {
+          ttlSeconds: cacheTTL.courses.detail,
+          staleSeconds: 60,
+          shouldCache: (value) => value !== null,
+        }
+      );
       if (!course) {
         return res.status(404).json({ error: 'Course not found' });
       }

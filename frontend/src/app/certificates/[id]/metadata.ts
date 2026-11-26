@@ -1,7 +1,11 @@
 import { Metadata } from 'next';
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const id = params.id;
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 
   return {

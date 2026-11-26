@@ -83,8 +83,8 @@ const router: ReturnType<typeof Router> = Router();
  */
 router.post(
   '/register',
-  validateRequest(registerSchema),
   requireTurnstile(),
+  validateRequest(registerSchema),
   auditAction('USER_REGISTER', 'User'),
   async (req: Request, res: Response) => {
   try {
@@ -230,8 +230,8 @@ router.get('/profile-status', async (req: Request, res: Response) => {
  */
 router.post(
   '/login',
-  validateRequest(loginSchema),
   requireTurnstile(),
+  validateRequest(loginSchema),
   auditAction('USER_LOGIN', 'User'),
   async (req: Request, res: Response) => {
   const { email, password }: LoginRequest = req.body;
@@ -475,7 +475,10 @@ router.get(
         network_passphrase: challenge.networkPassphrase,
       });
     } catch (error: any) {
-      if (error.message?.includes('Invalid Stellar public key')) {
+      if (
+        error.message?.includes('Invalid Stellar public key') ||
+        error.message?.includes('Home domain mismatch')
+      ) {
         res.status(400).json({ error: error.message });
         return;
       }

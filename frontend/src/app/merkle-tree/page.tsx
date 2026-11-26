@@ -12,10 +12,16 @@
  * - inclusion-proof generation and step-by-step root reconstruction,
  * - proof verification (members and non-members) rendered on a
  *   ResizeObserver-driven D3 canvas.
+ *
+ * This studio is a teaching tool with its own domain-separated scheme. Proofs
+ * meant for the on-chain airdrop distributor come from `/merkle-simulator`
+ * instead, which follows the contract's exact leaf and pair hashing.
  */
 
-import * as d3 from 'd3';
+// d3 is fetched on demand inside the render effect (FE-076); types only here.
+import type * as D3 from 'd3';
 import { FlaskConical, Plus, ShieldCheck, TreeDeciduous } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildMerkleTree,
@@ -169,97 +175,106 @@ export default function MerkleTreePage() {
     const svgEl = svgRef.current;
     if (!svgEl || !tree) return;
 
-    const svg = d3.select(svgEl);
-    svg.selectAll('*').remove();
+    let cancelled = false;
+    void import('d3').then((d3) => {
+      if (cancelled) return;
 
-    const width = Math.max(320, canvasWidth);
-    const height = Math.max(300, tree.levels.length * 120);
-    const nodeRadius = 22;
+      const svg = d3.select(svgEl);
+      svg.selectAll('*').remove();
 
-    svg.attr('viewBox', `0 0 ${width} ${height}`);
+      const width = Math.max(320, canvasWidth);
+      const height = Math.max(300, tree.levels.length * 120);
+      const nodeRadius = 22;
 
-    const rootD3 = d3.hierarchy<MerkleNode>(tree.root, (node) =>
-      [node.left, node.right].filter((child): child is MerkleNode => Boolean(child))
-    );
-    d3.tree<MerkleNode>().size([width - 100, height - 100])(rootD3);
+      svg.attr('viewBox', `0 0 ${width} ${height}`);
 
-    const g = svg.append('g').attr('transform', 'translate(50, 50)');
+      const rootD3 = d3.hierarchy<MerkleNode>(tree.root, (node) =>
+        [node.left, node.right].filter((child): child is MerkleNode => Boolean(child))
+      );
+      d3.tree<MerkleNode>().size([width - 100, height - 100])(rootD3);
 
-    g.selectAll('.link')
-      .data(rootD3.links())
-      .enter()
-      .append('path')
-      .attr('class', 'link')
-      .attr(
-        'd',
-        (d) =>
-          d3.linkVertical<d3.HierarchyLink<MerkleNode>, d3.HierarchyPointNode<MerkleNode>>()(d) ??
-          ''
-      )
-      .attr('fill', 'none')
-      .attr('stroke', (d) =>
-        changedIds.has((d.target.data as MerkleNode).id)
-          ? '#f87171'
-          : pathIds.has((d.target.data as MerkleNode).id)
-            ? '#34d399'
-            : '#374151'
-      )
-      .attr('stroke-width', 2);
+      const g = svg.append('g').attr('transform', 'translate(50, 50)');
 
-    const nodes = g
-      .selectAll('.node')
-      .data(rootD3.descendants())
-      .enter()
-      .append('g')
-      .attr('class', 'node')
-      .attr('transform', (d) => `translate(${d.x},${d.y})`);
+      g.selectAll('.link')
+        .data(rootD3.links())
+        .enter()
+        .append('path')
+        .attr('class', 'link')
+        .attr(
+          'd',
+          (d) =>
+            d3.linkVertical<D3.HierarchyLink<MerkleNode>, D3.HierarchyPointNode<MerkleNode>>()(d) ??
+            ''
+        )
+        .attr('fill', 'none')
+        .attr('stroke', (d) =>
+          changedIds.has((d.target.data as MerkleNode).id)
+            ? '#f87171'
+            : pathIds.has((d.target.data as MerkleNode).id)
+              ? '#34d399'
+              : '#374151'
+        )
+        .attr('stroke-width', 2);
 
-    nodes
-      .append('circle')
-      .attr('r', nodeRadius)
-      .attr('fill', (d) => {
-        const node = d.data as MerkleNode;
-        if (node.isLeaf) {
-          if (tree.levels[0][node.index] && node.index === selectedLeaf) return '#22c55e';
-          return '#27272a';
-        }
-        return '#3b82f6';
-      })
-      .attr('stroke', (d) => {
-        const node = d.data as MerkleNode;
-        if (changedIds.has(node.id)) return '#f87171';
-        if (pathIds.has(node.id)) return '#34d399';
-        if (siblingIds.has(node.id)) return '#fbbf24';
-        return '#1f1f1f';
-      })
-      .attr('stroke-width', (d) => {
-        const node = d.data as MerkleNode;
-        return pathIds.has(node.id) || siblingIds.has(node.id) || changedIds.has(node.id) ? 3 : 2;
-      })
-      .style('cursor', (d) => ((d.data as MerkleNode).isLeaf ? 'pointer' : 'default'))
-      .on('click', (_event, d) => {
-        const node = d.data as MerkleNode;
-        if (node.isLeaf) void handleSelectLeaf(node.index);
-      });
+      const nodes = g
+        .selectAll('.node')
+        .data(rootD3.descendants())
+        .enter()
+        .append('g')
+        .attr('class', 'node')
+        .attr('transform', (d) => `translate(${d.x},${d.y})`);
 
-    nodes
-      .append('text')
-      .attr('dy', nodeRadius + 15)
-      .attr('text-anchor', 'middle')
-      .attr('fill', '#9ca3af')
-      .attr('font-size', '10px')
-      .attr('font-family', 'monospace')
-      .text((d) => short((d.data as MerkleNode).hash));
+      nodes
+        .append('circle')
+        .attr('r', nodeRadius)
+        .attr('fill', (d) => {
+          const node = d.data as MerkleNode;
+          if (node.isLeaf) {
+            if (tree.levels[0][node.index] && node.index === selectedLeaf) return '#22c55e';
+            return '#27272a';
+          }
+          return '#3b82f6';
+        })
+        .attr('stroke', (d) => {
+          const node = d.data as MerkleNode;
+          if (changedIds.has(node.id)) return '#f87171';
+          if (pathIds.has(node.id)) return '#34d399';
+          if (siblingIds.has(node.id)) return '#fbbf24';
+          return '#1f1f1f';
+        })
+        .attr('stroke-width', (d) => {
+          const node = d.data as MerkleNode;
+          return pathIds.has(node.id) || siblingIds.has(node.id) || changedIds.has(node.id) ? 3 : 2;
+        })
+        .style('cursor', (d) => ((d.data as MerkleNode).isLeaf ? 'pointer' : 'default'))
+        .on('click', (_event, d) => {
+          const node = d.data as MerkleNode;
+          if (node.isLeaf) void handleSelectLeaf(node.index);
+        });
 
-    nodes
-      .filter((d) => (d.data as MerkleNode).isLeaf)
-      .append('text')
-      .attr('dy', nodeRadius + 28)
-      .attr('text-anchor', 'middle')
-      .attr('fill', '#ffffff')
-      .attr('font-size', '9px')
-      .attr('font-family', 'monospace')
-      .text((d) => (d.data as MerkleNode).value ?? '');
+      nodes
+        .append('text')
+        .attr('dy', nodeRadius + 15)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#9ca3af')
+        .attr('font-size', '10px')
+        .attr('font-family', 'monospace')
+        .text((d) => short((d.data as MerkleNode).hash));
+
+      nodes
+        .filter((d) => (d.data as MerkleNode).isLeaf)
+        .append('text')
+        .attr('dy', nodeRadius + 28)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#ffffff')
+        .attr('font-size', '9px')
+        .attr('font-family', 'monospace')
+        .text((d) => (d.data as MerkleNode).value ?? '');
+    });
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tree, selectedLeaf, pathIds, siblingIds, changedIds, canvasWidth]);
 
@@ -274,6 +289,13 @@ export default function MerkleTreePage() {
           </h1>
           <p className="text-xs tracking-widest text-gray-500 uppercase">
             Interactive cryptographic tree visualizer — build leaves, hash, prove, verify
+          </p>
+          <p className="mt-2 text-[11px] text-zinc-500">
+            Proving an airdrop claim for the Soroban contract? Use the{' '}
+            <Link href="/merkle-simulator" className="text-emerald-400 underline">
+              Airdrop Merkle Proof Explorer
+            </Link>
+            , which matches the contract&apos;s hashing exactly.
           </p>
         </div>
 

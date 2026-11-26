@@ -31,7 +31,14 @@ export const validateWorkspaceMembership = async (
   const workspaceId = getWorkspaceId();
   const user = (req as Request & { user?: { id: string; role?: string } }).user;
 
-  if (!workspaceId || !user) {
+  if (!workspaceId) {
+    res.status(403).json({
+      error: 'Forbidden: workspace context is required',
+    });
+    return;
+  }
+
+  if (!user) {
     next();
     return;
   }

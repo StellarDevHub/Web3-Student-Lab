@@ -34,11 +34,20 @@ export const config = {
   db: {
     url: getEnvVar('DATABASE_URL'),
     readReplicaUrl: getEnvVar('DATABASE_READ_REPLICA_URL', ''),
+    readReplicaUrls: getEnvVar('DATABASE_READ_REPLICA_URLS', '')
+      .split(',')
+      .map((url) => url.trim())
+      .filter(Boolean),
+    regionalReplicaUrls: {
+      'us-east': getEnvVar('DATABASE_REPLICA_US_URL', ''),
+      'eu-west': getEnvVar('DATABASE_REPLICA_EU_URL', ''),
+      'apac-sg': getEnvVar('DATABASE_REPLICA_APAC_URL', ''),
+    },
     replica: {
       checkIntervalMs: parseInt(getEnvVar('DB_REPLICA_CHECK_INTERVAL_MS', '10000'), 10),
       failureThreshold: parseInt(getEnvVar('DB_REPLICA_FAILURE_THRESHOLD', '3'), 10),
       cooldownMs: parseInt(getEnvVar('DB_REPLICA_COOLDOWN_MS', '30000'), 10),
-      replicationLagWindowMs: parseInt(getEnvVar('DB_REPLICATION_LAG_WINDOW_MS', '1000'), 10),
+      replicationLagWindowMs: parseInt(getEnvVar('DB_REPLICATION_LAG_WINDOW_MS', '3000'), 10),
     },
   },
   redis: {

@@ -115,6 +115,46 @@
   --color-chart-text: #ffffff;
 }
 
+/* Theme CSS Variables for WCAG AAA High-Contrast Mode (>= 7:1 contrast) */
+[data-theme='high-contrast'],
+[data-high-contrast='true'],
+.high-contrast {
+  /* Background Colors */
+  --color-bg-primary: #000000;
+  --color-bg-secondary: #0a0a0a;
+  --color-bg-tertiary: #121212;
+  --color-bg-accent: #141414;
+
+  /* Text Colors (>= 7:1 against all high-contrast surfaces) */
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #f5f5f5;
+  --color-text-tertiary: #e0e0e0;
+  --color-text-muted: #b8b8b8;
+
+  /* Border Colors */
+  --color-border-light: #a3a3a3;
+  --color-border-medium: #d4d4d4;
+  --color-border-dark: #ffffff;
+
+  /* Interactive Colors */
+  --color-interactive-primary: #ffd400;
+  --color-interactive-primary-hover: #ffea70;
+  --color-interactive-secondary: #1f1f1f;
+  --color-interactive-secondary-hover: #333333;
+
+  /* Status Colors (>= 7:1 against dark surfaces) */
+  --color-status-success: #5cff8a;
+  --color-status-error: #ff9494;
+  --color-status-warning: #ffd400;
+  --color-status-info: #70d6ff;
+
+  /* Chart Colors */
+  --color-chart-primary: #ffd400;
+  --color-chart-accent: #70d6ff;
+  --color-chart-neutral: #b8b8b8;
+  --color-chart-text: #ffffff;
+}
+
 /* Ensure theme transitions are smooth */
 html {
   transition:
@@ -123,13 +163,14 @@ html {
 }
 
 html.dark,
-html.oled {
+html.oled,
+html.high-contrast {
   color-scheme: dark;
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
 }
 
-html:not(.dark):not(.oled) {
+html:not(.dark):not(.oled):not(.high-contrast) {
   color-scheme: light;
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);

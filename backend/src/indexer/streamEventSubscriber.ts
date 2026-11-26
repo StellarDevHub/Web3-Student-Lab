@@ -19,12 +19,16 @@
 
 import { scValToNative, type rpc } from '@stellar/stellar-sdk';
 import { getSorobanServer } from '../blockchain/sorobanContractReader.js';
+import { recordSorobanIndexerProgress } from '../metrics/prometheusMetrics.js';
 import {
   nowInSeconds,
   streamCalculatorService,
   type StreamCalculatorService,
 } from '../services/streamCalculatorService.js';
 import logger from '../utils/logger.js';
+
+/** Label used for this indexer in the Prometheus lag metric. */
+export const STREAM_INDEXER_METRIC_LABEL = 'soroban-events';
 
 export type NormalizedStreamEvent =
   | {
@@ -277,6 +281,19 @@ export class StreamEventSubscriber {
       const last = response.events[response.events.length - 1];
       const nextCursor = (response as { cursor?: string }).cursor ?? last?.id;
       if (nextCursor) this.cursor = nextCursor;
+
+      // Report how far behind the network head this indexer is. With no new
+      // events the poll reached the head; otherwise lag is measured from the
+      // newest event it applied.
+      const networkLedger = Number((response as { latestLedger?: number }).latestLedger);
+      if (Number.isFinite(networkLedger) && networkLedger > 0) {
+        const indexedLedger = Number(last?.ledger);
+        recordSorobanIndexerProgress(
+          STREAM_INDEXER_METRIC_LABEL,
+          Number.isFinite(indexedLedger) && indexedLedger > 0 ? indexedLedger : networkLedger,
+          networkLedger
+        );
+      }
       return applied;
     } catch (error) {
       logger.warn(`Stream indexer poll failed: ${(error as Error).message}`);
