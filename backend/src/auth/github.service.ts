@@ -1,15 +1,19 @@
 import crypto from 'crypto';
 import prisma from '../db/index.js';
-import logger from '../utils/logger.js';
-import { encryptToken, decryptToken } from '../utils/tokenEncryption.js';
 import { githubApiBreaker } from '../lib/circuit-breaker/externalServices.js';
+import logger from '../utils/logger.js';
+import { encryptToken } from '../utils/tokenEncryption.js';
+import { GitHubAccessTokenResponse, GitHubAuthResponse, GitHubEmail, GitHubUser } from './github.types.js';
 import {
-  generateAccessToken,
-  generateRefreshToken,
-  TokenPayload,
+    assertExactRedirectUri,
+    assertValidPkceChallenge,
+    assertValidPkceVerifier,
+} from './oauthPkce.js';
+import {
+    generateAccessToken,
+    generateRefreshToken,
+    TokenPayload,
 } from './token.service.js';
-import { GitHubUser, GitHubAccessTokenResponse, GitHubEmail, GitHubAuthResponse } from './github.types.js';
-import { formatUserResponse } from './auth.service.js';
 
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID || '';
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || '';
@@ -29,10 +33,11 @@ export const getGitHubConfig = () => {
       'GitHub OAuth is not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables.'
     );
   }
+  const redirectUri = assertExactRedirectUri(GITHUB_REDIRECT_URI, GITHUB_REDIRECT_URI);
   return {
     clientId: GITHUB_CLIENT_ID,
     clientSecret: GITHUB_CLIENT_SECRET,
-    redirectUri: GITHUB_REDIRECT_URI,
+    redirectUri,
   };
 };
 
@@ -104,25 +109,18 @@ export const validateOAuthState = async (state: string): Promise<boolean> => {
  * Build the GitHub OAuth authorization URL
  * Throws if GitHub OAuth is not configured
  */
-export const buildAuthorizationUrl = (state: string): string => {
-  // Validate configuration before building URL
-  getGitHubConfig();
-
-  const params = new URLSearchParams({
-    client_id: GITHUB_CLIENT_ID,
-    redirect_uri: GITHUB_REDIRECT_URI,
-    scope: 'read:user user:email',
-    state,
-  });
-
-  return `${GITHUB_AUTHORIZE_URL}?${params.toString()}`;
-};
-
-export const buildPkceAuthorizationUrl = (state: string, challenge: string): string => {
+export const buildPkceAuthorizationUrl = (
+  state: string,
+  challenge: string,
+  requestedRedirectUri = GITHUB_REDIRECT_URI
+): string => {
   const config = getGitHubConfig();
+  assertValidPkceChallenge(challenge);
+  const redirectUri = assertExactRedirectUri(requestedRedirectUri, config.redirectUri);
   const params = new URLSearchParams({
     client_id: config.clientId,
-    redirect_uri: config.redirectUri,
+    redirect_uri: redirectUri,
+    response_type: 'code',
     scope: 'read:user user:email',
     state,
     code_challenge: challenge,
@@ -131,13 +129,19 @@ export const buildPkceAuthorizationUrl = (state: string, challenge: string): str
   return `${GITHUB_AUTHORIZE_URL}?${params.toString()}`;
 };
 
+export const buildAuthorizationUrl = (state: string, challenge: string): string =>
+  buildPkceAuthorizationUrl(state, challenge);
+
 /**
  * Exchange an authorization code for an access token from GitHub
  */
 export const exchangeCodeForToken = async (
   code: string,
-  codeVerifier?: string
+  codeVerifier: string,
+  requestedRedirectUri = GITHUB_REDIRECT_URI
 ): Promise<GitHubAccessTokenResponse> => {
+  assertValidPkceVerifier(codeVerifier);
+  const redirectUri = assertExactRedirectUri(requestedRedirectUri, GITHUB_REDIRECT_URI);
   return githubApiBreaker.execute(async () => {
     const response = await fetch(GITHUB_TOKEN_URL, {
       method: 'POST',
@@ -149,8 +153,8 @@ export const exchangeCodeForToken = async (
         client_id: GITHUB_CLIENT_ID,
         client_secret: GITHUB_CLIENT_SECRET,
         code,
-        redirect_uri: GITHUB_REDIRECT_URI,
-        ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
+        redirect_uri: redirectUri,
+        code_verifier: codeVerifier,
       }),
     });
 
@@ -314,14 +318,9 @@ export const findOrCreateStudentByGitHub = async (
 export const handleGitHubCallback = async (
   code: string,
   state: string,
-  codeVerifier?: string
+  codeVerifier: string
 ): Promise<GitHubAuthResponse> => {
-  if (!codeVerifier) {
-    const isValidState = await validateOAuthState(state);
-    if (!isValidState) {
-      throw new Error('Invalid or expired OAuth state. Please try logging in again.');
-    }
-  }
+  assertValidPkceVerifier(codeVerifier);
 
   // Exchange authorization code for access token
   const tokenResponse = await exchangeCodeForToken(code, codeVerifier);

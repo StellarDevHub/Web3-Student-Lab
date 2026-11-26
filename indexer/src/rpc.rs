@@ -4,6 +4,7 @@
 //! public RPC data is needed). See the Soroban RPC spec at
 //! <https://soroban.stellar.org/docs/rpc>.
 
+use std::collections::HashSet;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
@@ -13,10 +14,8 @@ use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 
 use crate::config::Config;
-use crate::db::{
-    get_last_ledger, insert_events, update_last_ledger, IndexerPool,
-};
-use crate::reorg::{reconcile_fork, upsert_seals, LedgerSeal};
+use crate::db::{get_last_ledger, persist_batch, IndexerPool};
+use crate::reorg::{reconcile_fork, LedgerSeal};
 
 /// A row persisted in the events table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -70,18 +69,53 @@ impl RpcClient {
         end_ledger: Option<u32>,
         pagination_limit: u32,
     ) -> Result<Vec<RawEvent>> {
-        let mut params = serde_json::json!({
-            "startLedger": start_ledger,
-            "pagination": { "limit": pagination_limit },
-        });
-        if let Some(end) = end_ledger {
-            params["endLedger"] = serde_json::Value::from(end);
+        let request_limit = pagination_limit.clamp(1, 1_000);
+        let mut events = Vec::new();
+        let mut seen_ids = HashSet::new();
+        let mut seen_cursors = HashSet::new();
+        let mut cursor: Option<String> = None;
+
+        loop {
+            let mut params = serde_json::json!({
+                "startLedger": start_ledger,
+                "pagination": { "limit": request_limit },
+            });
+            if let Some(end) = end_ledger {
+                params["endLedger"] = serde_json::Value::from(end);
+            }
+            if let Some(cursor) = &cursor {
+                params["pagination"]["cursor"] = serde_json::Value::from(cursor.clone());
+            }
+
+            let resp: RpcResponse<GetEventsResult> = self
+                .post("getEvents", params)
+                .await
+                .context("getEvents")?;
+            let page = resp.result.events;
+            if page.is_empty() {
+                break;
+            }
+
+            let page_len = page.len();
+            let next_cursor = page
+                .last()
+                .map(|event| event.id.clone())
+                .ok_or_else(|| anyhow!("getEvents returned a non-empty page without an event id"))?;
+            if !seen_cursors.insert(next_cursor.clone()) {
+                return Err(anyhow!("getEvents pagination cursor did not advance"));
+            }
+            for event in page {
+                if seen_ids.insert(event.id.clone()) {
+                    events.push(event);
+                }
+            }
+            if page_len < request_limit as usize {
+                break;
+            }
+            cursor = Some(next_cursor);
         }
-        let resp: RpcResponse<GetEventsResult> = self
-            .post("getEvents", params)
-            .await
-            .context("getEvents")?;
-        Ok(resp.result.events)
+
+        Ok(events)
     }
 
     /// Ledger hashes for `[start, end]`. Used to detect forks before commit.
@@ -89,26 +123,56 @@ impl RpcClient {
         if end < start {
             return Ok(Vec::new());
         }
-        let resp: RpcResponse<GetLedgersResult> = self
-            .post(
-                "getLedgers",
-                serde_json::json!({
-                    "startLedger": start,
-                    "pagination": { "limit": end.saturating_sub(start).saturating_add(1).min(200) },
-                }),
-            )
-            .await
-            .context("getLedgers")?;
-        Ok(resp
-            .result
-            .ledgers
-            .into_iter()
-            .filter(|ledger| ledger.sequence >= start && ledger.sequence <= end)
-            .map(|ledger| LedgerSeal {
-                sequence: ledger.sequence,
-                hash: ledger.hash,
-            })
-            .collect())
+        const MAX_LEDGERS_PER_REQUEST: u32 = 200;
+        let mut seals = Vec::new();
+        let mut chunk_start = start;
+
+        while chunk_start <= end {
+            let chunk_end = chunk_start
+                .saturating_add(MAX_LEDGERS_PER_REQUEST - 1)
+                .min(end);
+            let limit = chunk_end - chunk_start + 1;
+            let resp: RpcResponse<GetLedgersResult> = self
+                .post(
+                    "getLedgers",
+                    serde_json::json!({
+                        "startLedger": chunk_start,
+                        "pagination": { "limit": limit },
+                    }),
+                )
+                .await
+                .context("getLedgers")?;
+            let mut ledgers = resp.result.ledgers;
+            ledgers.sort_by_key(|ledger| ledger.sequence);
+            if ledgers.len() != limit as usize {
+                return Err(anyhow!(
+                    "getLedgers returned {} records for requested range {}..={}",
+                    ledgers.len(),
+                    chunk_start,
+                    chunk_end
+                ));
+            }
+            for (offset, ledger) in ledgers.into_iter().enumerate() {
+                let expected_sequence = chunk_start + offset as u32;
+                if ledger.sequence != expected_sequence {
+                    return Err(anyhow!(
+                        "getLedgers returned ledger {}, expected {}",
+                        ledger.sequence,
+                        expected_sequence
+                    ));
+                }
+                seals.push(LedgerSeal {
+                    sequence: ledger.sequence,
+                    hash: ledger.hash,
+                });
+            }
+            if chunk_end == end {
+                break;
+            }
+            chunk_start = chunk_end + 1;
+        }
+
+        Ok(seals)
     }
 
     async fn post<P: Serialize, R: for<'de> Deserialize<'de>>(
@@ -226,9 +290,19 @@ impl Poller {
         let client = RpcClient::new(self.cfg.soroban_rpc_url.clone());
         let mut backoff = Duration::from_secs(2);
         let max_backoff = Duration::from_secs(60);
+        let mut start_override_active = self.cfg.start_ledger_override.is_some();
 
         loop {
-            match self.poll_once(&client).await {
+            let result = self.poll_once(&client, start_override_active).await;
+            if matches!(
+                &result,
+                Ok(PollStep::Advanced { .. })
+                    | Ok(PollStep::Replayed { .. })
+                    | Ok(PollStep::Reorganized { .. })
+            ) {
+                start_override_active = false;
+            }
+            match result {
                 Ok(PollStep::Advanced { processed, next }) => {
                     if processed > 0 {
                         info!(processed, next_ledger = next, "indexer advanced");
@@ -263,13 +337,17 @@ impl Poller {
         }
     }
 
-    async fn poll_once(&self, client: &RpcClient) -> Result<PollStep> {
-        let cursor = match self.cfg.start_ledger_override {
-            Some(forced) => Cursor {
+    async fn poll_once(
+        &self,
+        client: &RpcClient,
+        use_start_override: bool,
+    ) -> Result<PollStep> {
+        let cursor = match (self.cfg.start_ledger_override, use_start_override) {
+            (Some(forced), true) => Cursor {
                 last_ledger: forced.saturating_sub(1),
                 override_active: true,
             },
-            None => {
+            _ => {
                 let last = get_last_ledger(&self.pool).await.context("reading cursor")?;
                 Cursor {
                     last_ledger: last,
@@ -283,61 +361,54 @@ impl Poller {
             .await
             .context("fetching latest ledger")?;
 
-        if cursor.last_ledger + 1 > latest {
-            return Ok(PollStep::Idle { next: latest + 1 });
-        }
-
         let end = cursor
             .last_ledger
             .saturating_add(self.cfg.batch_size)
             .min(latest);
-
         let window_start = cursor.last_ledger.saturating_sub(3).max(1);
-        match client.get_ledger_seals(window_start, end).await {
-            Ok(seals) => {
-                if let Some(fork_ledger) = reconcile_fork(&self.pool, &seals)
-                    .await
-                    .context("reconciling ledger fork")?
-                {
-                    return Ok(PollStep::Reorganized { fork_ledger });
-                }
-                if !seals.is_empty() {
-                    upsert_seals(&self.pool, &seals)
-                        .await
-                        .context("persisting ledger seals")?;
-                }
+        let seals = if window_start <= end {
+            let seals = client
+                .get_ledger_seals(window_start, end)
+                .await
+                .context("fetching ledger hashes")?;
+            if let Some(fork_ledger) = reconcile_fork(&self.pool, &seals)
+                .await
+                .context("reconciling ledger fork")?
+            {
+                return Ok(PollStep::Reorganized { fork_ledger });
             }
-            Err(err) => {
-                warn!(error = %err, "ledger hash probe failed; continuing without fork check");
-            }
+            seals
+        } else {
+            Vec::new()
+        };
+
+        let next_ledger = cursor.last_ledger.saturating_add(1);
+        if next_ledger > latest {
+            return Ok(PollStep::Idle {
+                next: latest.saturating_add(1),
+            });
         }
 
         let raw_events = client
-            .get_events(cursor.last_ledger + 1, Some(end), self.cfg.batch_size)
+            .get_events(next_ledger, Some(end), self.cfg.batch_size)
             .await
             .context("fetching events")?;
 
-        let processed = raw_events.len();
         let indexed: Vec<IndexedEvent> = raw_events.into_iter().map(|e| e.into_indexed()).collect();
-
-        if !indexed.is_empty() {
-            insert_events(&self.pool, &indexed)
-                .await
-                .context("persisting events")?;
-            for ev in &indexed {
-                match serde_json::to_string(ev) {
-                    Ok(json) => {
-                        // A send only errors when there are zero subscribers;
-                        // intentionally ignored to keep the poller hot.
-                        let _ = self.tx.send(json);
-                    }
-                    Err(err) => warn!(error = %err, "failed to serialise event for fan-out"),
+        let inserted = persist_batch(&self.pool, &indexed, &seals, end)
+            .await
+            .context("persisting events, seals, and cursor")?;
+        for event in &inserted {
+            match serde_json::to_string(event) {
+                Ok(json) => {
+                    // A send only errors when there are zero subscribers;
+                    // intentionally ignored to keep the poller hot.
+                    let _ = self.tx.send(json);
                 }
+                Err(err) => warn!(error = %err, "failed to serialise event for fan-out"),
             }
         }
-        update_last_ledger(&self.pool, end)
-            .await
-            .context("updating cursor")?;
+        let processed = inserted.len();
 
         if cursor.override_active {
             Ok(PollStep::Replayed {
@@ -346,7 +417,7 @@ impl Poller {
         } else {
             Ok(PollStep::Advanced {
                 processed,
-                next: end + 1,
+                next: end.saturating_add(1),
             })
         }
     }

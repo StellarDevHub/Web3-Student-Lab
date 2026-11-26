@@ -31,6 +31,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 name = "amm"
 version = "0.1.0"
 dependencies = [
+ "access-control",
  "contract-events",
  "proptest",
  "soroban-sdk",
@@ -456,6 +457,7 @@ dependencies = [
 name = "cross-chain-client"
 version = "0.1.0"
 dependencies = [
+ "ed25519-dalek",
  "soroban-sdk",
 ]
 
@@ -664,6 +666,7 @@ dependencies = [
 name = "did_registry"
 version = "0.0.0"
 dependencies = [
+ "ed25519-dalek",
  "soroban-sdk",
 ]
 
@@ -1209,6 +1212,7 @@ dependencies = [
 name = "lending-pool"
 version = "0.1.0"
 dependencies = [
+ "access-control",
  "proptest",
  "soroban-sdk",
 ]

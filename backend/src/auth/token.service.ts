@@ -73,6 +73,12 @@ const verifyJwt = (token: string, secret: string): any => {
 
 export const generateAccessToken = (payload: TokenPayload): string => {
   const cleanPayload: { userId: string; [key: string]: any } = { userId: payload.userId };
+  if (payload.walletAddress) {
+    cleanPayload.walletAddress = payload.walletAddress;
+  }
+  if (payload.sep10Nonce) {
+    cleanPayload.sep10Nonce = payload.sep10Nonce;
+  }
   return signJwt(cleanPayload, getAccessTokenSecret(), { expiresIn: ACCESS_TOKEN_EXPIRY });
 };
 

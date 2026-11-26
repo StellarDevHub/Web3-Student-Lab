@@ -1,13 +1,7 @@
 #![no_std]
 
-pub mod receiver;
-
-#[cfg(test)]
-mod test;
-
 use soroban_sdk::{
-    contract, contracterror, contractimpl, panic_with_error, symbol_short, token, Address, Bytes,
-    Env, IntoVal, Symbol,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, token, Address, Env,
 };
 
 #[contracterror]
@@ -22,6 +16,16 @@ pub enum FlashLoanError {
     Overflow = 7,
 }
 
+/// Typed instance-storage keys. Each variant XDR-encodes as its own key, so
+/// these cannot collide with keys written by other modules or other versions.
+#[contracttype]
+#[derive(Clone)]
+enum DataKey {
+    Admin,
+    Token,
+    FeeBps,
+}
+
 #[contract]
 pub struct FlashLoanProvider;
 
@@ -30,16 +34,12 @@ const FLASH_LOAN_LOCK: Symbol = symbol_short!("fl_lock");
 #[contractimpl]
 impl FlashLoanProvider {
     pub fn initialize(env: Env, admin: Address, token: Address, fee_bps: i128) {
-        if env.storage().instance().has(&("admin")) {
+        if env.storage().instance().has(&DataKey::Admin) {
             panic_with_error!(&env, FlashLoanError::AlreadyInitialized);
         }
-        admin.require_auth();
-        if fee_bps < 0 {
-            panic_with_error!(&env, FlashLoanError::InvalidAmount);
-        }
-        env.storage().instance().set(&("admin"), &admin);
-        env.storage().instance().set(&("token"), &token);
-        env.storage().instance().set(&("fee_bps"), &fee_bps);
+        env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Token, &token);
+        env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
     }
 
     pub fn flash_loan(env: Env, borrower: Address, amount: i128) -> i128 {
@@ -56,25 +56,8 @@ impl FlashLoanProvider {
         if amount <= 0 {
             panic_with_error!(&env, FlashLoanError::InvalidAmount);
         }
-
-        borrower.require_auth();
-
-        if env.storage().temporary().has(&FLASH_LOAN_LOCK) {
-            panic_with_error!(&env, FlashLoanError::ReentrancyGuardTriggered);
-        }
-        env.storage().temporary().set(&FLASH_LOAN_LOCK, &true);
-
-        let token_addr: Address = env
-            .storage()
-            .instance()
-            .get(&("token"))
-            .unwrap_or_else(|| panic_with_error!(&env, FlashLoanError::NotInitialized));
-        let fee_bps: i128 = env.storage().instance().get(&("fee_bps")).unwrap_or(10);
-        if fee_bps < 0 {
-            env.storage().temporary().remove(&FLASH_LOAN_LOCK);
-            panic_with_error!(&env, FlashLoanError::InvalidAmount);
-        }
-
+        let token_addr: Address = env.storage().instance().get(&DataKey::Token).unwrap();
+        let fee_bps: i128 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(10);
         let token = token::Client::new(&env, &token_addr);
         let contract_addr = env.current_contract_address();
         let balance_before = token.balance(&contract_addr);

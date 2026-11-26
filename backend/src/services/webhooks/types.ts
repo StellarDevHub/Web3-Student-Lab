@@ -59,6 +59,7 @@ export interface SignedWebhookHeaders {
   'x-webhook-event': string;
   'x-webhook-signature': string;
   'x-webhook-timestamp': string;
+  'x-signature-sha256': string;
   'x-hub-signature-256': string;
   'x-webhook-nonce': string;
   'x-webhook-unix-timestamp': string;

@@ -1,4 +1,5 @@
 import { requestBackgroundSync } from './service-worker-sync';
+import { getStoredSessionToken } from './credentialStorage';
 
 const DB_NAME = 'web3-student-lab-offline-sync';
 const DB_VERSION = 2;
@@ -112,8 +113,16 @@ async function deleteItem(storeName: string, id: string) {
 export async function queueOfflineRequest(request: Omit<QueuedRequest, 'id' | 'createdAt'>) {
   if (typeof window === 'undefined') return;
 
+  const headers = { ...request.headers };
+  for (const headerName of Object.keys(headers)) {
+    if (headerName.toLowerCase() === 'authorization') {
+      delete headers[headerName];
+    }
+  }
+
   await writeItem<QueuedRequest>(REQUEST_STORE, {
     ...request,
+    headers,
     id: createId(),
     createdAt: Date.now(),
     idempotencyKey: request.idempotencyKey ?? createId(),
@@ -184,12 +193,14 @@ export async function flushQueuedRequests() {
   if (typeof window === 'undefined' || !navigator.onLine) return;
 
   const requests = await getQueuedRequests();
+  const token = await getStoredSessionToken();
   for (const request of requests) {
     try {
       const response = await fetch(request.url, {
         method: request.method,
         headers: {
           ...request.headers,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           'Idempotency-Key': request.idempotencyKey ?? request.id,
           'X-Client-Timestamp': String(request.clientTimestamp ?? request.createdAt),
         },
@@ -250,7 +261,7 @@ export async function flushQueuedLessonProgress() {
   const queuedItems = await getQueuedLessonProgress();
   for (const item of queuedItems) {
     try {
-      const token = localStorage.getItem('token');
+      const token = await getStoredSessionToken();
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };

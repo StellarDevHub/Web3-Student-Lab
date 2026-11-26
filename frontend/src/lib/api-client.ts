@@ -1,6 +1,12 @@
 import axios from 'axios';
 import { API_BASE_URL, getWorkspaceId } from './api-config';
 import { queueOfflineRequest } from './offline-sync';
+import {
+  clearSessionStorage,
+  getStoredSession,
+  getStoredSessionToken,
+  storeEncryptedSession,
+} from './credentialStorage';
 
 // Create axios instance
 const apiClient = axios.create({
@@ -47,7 +53,7 @@ apiClient.interceptors.request.use(async (config) => {
     );
   }
 
-  const token = localStorage.getItem('token');
+  const token = isBrowser ? await getStoredSessionToken() : null;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -94,7 +100,12 @@ apiClient.interceptors.response.use(
         );
         const newAccessToken = refreshRes.data?.accessToken;
         if (newAccessToken) {
-          localStorage.setItem('token', newAccessToken);
+          const session = await getStoredSession();
+          await storeEncryptedSession({
+            ...session,
+            token: newAccessToken,
+            accessToken: newAccessToken,
+          });
           originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
           return apiClient(originalRequest);
         }
@@ -105,9 +116,7 @@ apiClient.interceptors.response.use(
 
     if (error.response?.status === 401) {
       // Token expired or invalid
-      localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
+      clearSessionStorage();
       if (isBrowser) {
         const publicPaths = ['/auth/login', '/auth/register', '/roadmap', '/courses'];
         const isPublicPath = publicPaths.some(p => window.location.pathname.startsWith(p));
