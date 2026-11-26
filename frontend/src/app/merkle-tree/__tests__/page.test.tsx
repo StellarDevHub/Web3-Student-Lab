@@ -40,7 +40,8 @@ describe('merkle-tree Proof Studio (FE-HARD-27)', () => {
 
     // Promotion (not duplication) means one L1 node is carried up as a copy:
     // root + 2 × L2 + 2 × L1 + 6 leaves = 11 nodes reachable on the canvas.
-    expect(container.querySelectorAll('circle').length).toBe(11);
+    // d3 is loaded on demand (FE-076), so the canvas draws asynchronously.
+    await waitFor(() => expect(container.querySelectorAll('circle').length).toBe(11), { timeout: 5000 });
   });
 
   it('observes canvas resizes and re-lays out the tree', async () => {

@@ -4,10 +4,12 @@ import express, { Request, Response } from 'express';
 import { createCorsMiddleware } from './config/cors.config.js';
 import { securityHeadersMiddleware } from './middleware/securityHeaders.js';
 import swaggerDocsRouter from './config/swagger.serve.js';
-import { jsonBodySizeLimit } from './middleware/bodySizeLimit.js';
+import { jsonBodySizeLimit, jsonBodyParsingErrorHandler } from './middleware/bodySizeLimit.js';
 import { dbRoutingMiddleware } from './middleware/dbRouting.js';
 import { dynamicRateLimiter } from './middleware/dynamicRateLimiter.js';
 import { tracingMiddleware } from './middleware/tracingMiddleware.js';
+import { prometheusHttpMetrics } from './middleware/prometheusHttpMetrics.js';
+import { prometheusBasicRouter } from './routes/metrics.routes.js';
 import apiRouter from './routes/api.js';
 import { livenessHandler, readinessHandler } from './routes/health.routes.js';
 import routes from './routes/index.js';
@@ -30,6 +32,10 @@ initializeSentry(app);
 // OpenTelemetry SERVER span per request; downstream work becomes child spans
 app.use(tracingMiddleware());
 
+// Prometheus `http_request_duration_seconds` (BE-077). Records on response
+// finish; labels use the matched route pattern, never the raw URL.
+app.use(prometheusHttpMetrics());
+
 // Mount Sentry Request Handler middleware
 app.use(getSentryRequestHandler());
 
@@ -38,12 +44,10 @@ app.use(securityHeadersMiddleware);
 
 app.use(createCorsMiddleware());
 
-// Contract evaluation submissions carry base64 WASM, so they may use the full
-// 1MB body ceiling enforced by jsonBodySizeLimit instead of the 100kb default.
-app.use('/api/v1/evaluations', express.json({ limit: '1mb' }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use(jsonBodySizeLimit);
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(jsonBodyParsingErrorHandler);
 // Attach DB routing context middleware to ensure GETs are routed to replicas
 app.use(dbRoutingMiddleware);
 
@@ -71,7 +75,7 @@ app.get('/health', (_req: Request, res: Response) => {
 app.get('/health/live', livenessHandler);
 app.get('/health/ready', readinessHandler);
 
-app.post('/api/security/csp-report', express.json(), (req: Request, res: Response) => {
+app.post('/api/security/csp-report', (req: Request, res: Response) => {
   const report = req.body;
   logger.warn('CSP violation report', {
     report,
@@ -98,6 +102,10 @@ app.use('/api/v1', routes);
 
 // Mount versioned API routes (e.g. /api/v1/lottery, /api/v2/lottery)
 app.use('/api', apiRouter);
+
+// Conventional Prometheus scrape endpoint, protected by HTTP basic auth
+// (BE-077). Mounted at the root so standard scrape configs work unchanged.
+app.use('/metrics', prometheusBasicRouter);
 
 // Mount Sentry Error Handler middleware
 app.use(getSentryErrorHandler());

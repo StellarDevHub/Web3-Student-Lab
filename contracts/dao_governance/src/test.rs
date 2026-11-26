@@ -32,7 +32,7 @@ fn new_proposal(env: &Env, client: &DaoGovernanceClient<'_>, creator: &Address) 
 }
 
 /// Builds a proposal that passes: one voter holds 1000 credits (so quorum is
-/// 200), votes +20 (cost 400 >= 200), and the proposal is finalized after its
+/// 150), votes +20 (cost 400 >= 150), and the proposal is finalized after its
 /// deadline. Returns the proposal id and the voter.
 fn passing_proposal(
     env: &Env,
@@ -109,7 +109,7 @@ fn proposal_fails_when_tally_non_positive() {
     client.grant_credits(&voter, &1_000u128);
 
     let pid = new_proposal(&env, &client, &admin);
-    client.vote(&voter, &pid, &-20i64); // cost 400 >= quorum 200, but tally < 0
+    client.vote(&voter, &pid, &-20i64); // cost 400 >= 300 standard quorum, but tally < 0
 
     advance(&env, DAY + 1);
     client.finalize(&pid);
@@ -125,7 +125,7 @@ fn quorum_failure_marks_proposal_failed() {
     let a = Address::generate(&env);
     let b = Address::generate(&env);
     client.grant_credits(&a, &1_000u128);
-    client.grant_credits(&b, &1_000u128); // total supply 2000 -> quorum 400
+    client.grant_credits(&b, &1_000u128); // total supply 2000 -> 300 standard quorum
 
     let pid = new_proposal(&env, &client, &admin);
     client.vote(&a, &pid, &5i64); // cost 25 < 400, tally 5 > 0
@@ -136,7 +136,7 @@ fn quorum_failure_marks_proposal_failed() {
     let p = client.get_proposal(&pid).unwrap();
     assert_eq!(p.tally, 5);
     assert_eq!(p.credits_spent, 25);
-    assert_eq!(p.quorum_required, 400);
+    assert_eq!(p.quorum_required, 300);
     assert_eq!(p.status, ProposalStatus::Failed);
 }
 
@@ -457,7 +457,7 @@ fn execute_passed_proposal_full_lifecycle() {
     let voter1 = Address::generate(&env);
     let voter2 = Address::generate(&env);
     client.grant_credits(&voter1, &500u128);
-    client.grant_credits(&voter2, &500u128); // supply 1000 -> quorum 200
+    client.grant_credits(&voter2, &500u128); // supply 1000 -> 150 standard quorum
 
     let pid = new_proposal(&env, &client, &admin);
     client.vote(&voter1, &pid, &10i64); // cost 100
@@ -574,4 +574,57 @@ fn credits_decrease_by_quadratic_cost_on_negative_vote() {
     let p = client.get_proposal(&pid).unwrap();
     assert_eq!(p.tally, -4);
     assert_eq!(p.credits_spent, 16);
+}
+
+#[test]
+fn treasury_proposals_require_thirty_percent_quorum() {
+    let (env, client, admin) = setup();
+    let voter = Address::generate(&env);
+    client.grant_credits(&voter, &1_000u128);
+
+    let pid = client.create_treasury_proposal(
+        &admin,
+        &String::from_str(&env, "Treasury"),
+        &String::from_str(&env, "Treasury action"),
+        &DAY,
+    );
+
+    client.vote(&voter, &pid, &15i64); // 225 < 300
+    advance(&env, DAY + 1);
+    client.finalize(&pid);
+
+    let proposal = client.get_proposal(&pid).unwrap();
+    assert!(proposal.treasury_action);
+    assert_eq!(proposal.quorum_required, 300);
+    assert_eq!(proposal.status, ProposalStatus::Failed);
+}
+
+#[test]
+fn vetoed_queued_proposal_can_be_cancelled_by_token_holder() {
+    let (env, client, admin) = setup();
+    let (pid, voter) = passing_proposal(&env, &client, &admin);
+
+    client.set_administrative_veto(&true);
+    assert!(client.get_administrative_veto());
+    client.cancel_execution(&voter, &pid);
+
+    let proposal = client.get_proposal(&pid).unwrap();
+    assert_eq!(proposal.status, ProposalStatus::Cancelled);
+    assert_eq!(proposal.eta, 0);
+}
+
+#[test]
+fn security_pause_blocks_execution_and_can_cancel_queued_proposal() {
+    let (env, client, admin) = setup();
+    let (pid, voter) = passing_proposal(&env, &client, &admin);
+
+    client.set_security_paused(&true);
+    advance(&env, TIMELOCK_DELAY);
+    assert!(client.try_execute(&admin, &pid).is_err());
+
+    client.cancel_execution(&voter, &pid);
+    assert_eq!(
+        client.get_proposal(&pid).unwrap().status,
+        ProposalStatus::Cancelled
+    );
 }

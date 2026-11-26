@@ -129,7 +129,8 @@ pub async fn rollback_from(pool: &IndexerPool, fork_ledger: u32) -> Result<u64> 
                 .context("delete sqlite seals")?;
             sqlx::query(
                 "INSERT INTO indexer_cursor (id, last_ledger) VALUES (1, ?1)
-                 ON CONFLICT(id) DO UPDATE SET last_ledger = excluded.last_ledger",
+                 ON CONFLICT(id) DO UPDATE SET last_ledger = excluded.last_ledger,
+                     updated_at = datetime('now')",
             )
             .bind(rewind)
             .execute(&mut *tx)
@@ -153,7 +154,8 @@ pub async fn rollback_from(pool: &IndexerPool, fork_ledger: u32) -> Result<u64> 
                 .context("delete postgres seals")?;
             sqlx::query(
                 "INSERT INTO indexer_cursor (id, last_ledger) VALUES (1, $1)
-                 ON CONFLICT (id) DO UPDATE SET last_ledger = EXCLUDED.last_ledger",
+                 ON CONFLICT (id) DO UPDATE SET last_ledger = EXCLUDED.last_ledger,
+                     updated_at = NOW()",
             )
             .bind(rewind)
             .execute(&mut *tx)
@@ -218,7 +220,7 @@ pub async fn reconcile_fork(pool: &IndexerPool, canonical: &[LedgerSeal]) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::{init_schema, insert_events, IndexerPool};
+    use crate::db::{init_schema, insert_events, persist_batch, IndexerPool};
     use crate::rpc::IndexedEvent;
 
     fn event(id: &str, ledger: u32) -> IndexedEvent {
@@ -323,5 +325,50 @@ mod tests {
                 ("e13b".into(), 13),
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn ingestion_batch_only_fans_out_new_events_and_keeps_transaction_siblings() {
+        let pool = IndexerPool::Sqlite(
+            sqlx::sqlite::SqlitePoolOptions::new()
+                .connect("sqlite::memory:")
+                .await
+                .unwrap(),
+        );
+        init_schema(&pool).await.unwrap();
+
+        let mut first = event("event-1", 1);
+        first.transaction_hash = "shared-tx".into();
+        let mut second = event("event-2", 1);
+        second.transaction_hash = "shared-tx".into();
+        let batch = vec![first.clone(), second.clone()];
+
+        let inserted = persist_batch(
+            &pool,
+            &batch,
+            &[LedgerSeal {
+                sequence: 1,
+                hash: "ledger-1".into(),
+            }],
+            1,
+        )
+        .await
+        .unwrap();
+        assert_eq!(inserted.len(), 2);
+
+        let retried = persist_batch(
+            &pool,
+            &batch,
+            &[LedgerSeal {
+                sequence: 1,
+                hash: "ledger-1".into(),
+            }],
+            1,
+        )
+        .await
+        .unwrap();
+        assert!(retried.is_empty());
+        assert_eq!(list_events_in_range(&pool, 1, 1).await.unwrap().len(), 2);
+        assert_eq!(crate::db::get_last_ledger(&pool).await.unwrap(), 1);
     }
 }

@@ -99,6 +99,34 @@
   --foreground: var(--text);
 }
 
+.high-contrast,
+[data-high-contrast='true'] {
+  --bg: #000000;
+  --bg-panel: #0a0a0a;
+  --bg-panel-strong: #121212;
+  --text-strong: #ffffff;
+  --text: #f5f5f5;
+  --muted: #b8b8b8;
+  --line: #d4d4d4;
+  --brand: #ffd400;
+  --brand-strong: #ffea70;
+  --brand-soft: #fff3b0;
+  --accent: #70d6ff;
+  --success: #5cff8a;
+  --warning: #ffd400;
+  --body-bg: #000000;
+  --background: var(--bg);
+  --foreground: var(--text);
+}
+
+.high-contrast button:focus-visible,
+.high-contrast a:focus-visible,
+[data-high-contrast='true'] button:focus-visible,
+[data-high-contrast='true'] a:focus-visible {
+  outline: 3px solid #ffd400;
+  outline-offset: 2px;
+}
+
 @theme inline {
   --font-sans: var(--font-outfit), var(--font-inter), 'Outfit', 'Inter', 'Sora', 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
@@ -532,4 +560,27 @@ html:not(.dark) .lesson-viewer pre,
 html:not(.dark) .lesson-viewer code {
   --code-bg: hsl(var(--code-hsl-bg-h), var(--code-hsl-bg-s), var(--code-hsl-bg-l-light));
   --code-fg: hsl(var(--code-hsl-fg-h), var(--code-hsl-fg-s), var(--code-hsl-fg-l-light));
+}
+
+/* Wallet gate entrance (replaces a framer-motion fade so the root layout does
+   not ship the animation library to every route — FE-076). */
+@keyframes wallet-gate-enter {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.wallet-gate-enter {
+  animation: wallet-gate-enter 0.3s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wallet-gate-enter {
+    animation: none;
+  }
 }

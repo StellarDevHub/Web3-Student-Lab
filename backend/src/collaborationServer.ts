@@ -4,11 +4,11 @@ import { YjsDocumentManager } from './services/yjsDocumentManager.js';
 
 const port = process.env.WS_PORT || 1234;
 const HEARTBEAT_INTERVAL_MS = parseInt(process.env.WS_HEARTBEAT_INTERVAL_MS || '30000', 10);
+const HEARTBEAT_TIMEOUT_MS = 5_000;
 const MAX_PAYLOAD_BYTES = parseInt(process.env.WS_MAX_PAYLOAD_BYTES || String(10 * 1024 * 1024), 10);
 const ROOM_NAME_PATTERN = /^[\w\-.:/]{1,200}$/;
 
 const documents = new YjsDocumentManager();
-const liveConnections = new WeakSet<WebSocket>();
 
 const server = http.createServer((request, response) => {
   if (request.url === '/health') {
@@ -46,20 +46,27 @@ wss.on('connection', (conn: WebSocket, req) => {
     return;
   }
 
-  liveConnections.add(conn);
-  conn.on('pong', () => liveConnections.add(conn));
-
   void documents.setupConnection(conn, roomName);
 });
 
 // Terminate sockets that stopped answering pings so their rooms get released.
 const heartbeat = setInterval(() => {
   wss.clients.forEach((conn) => {
-    if (!liveConnections.has(conn)) {
+    if (conn.readyState !== WebSocket.OPEN) return;
+
+    const cleanup = () => {
+      clearTimeout(pongTimeout);
+      conn.off('pong', onPong);
+      conn.off('close', cleanup);
+    };
+    const onPong = () => cleanup();
+    const pongTimeout = setTimeout(() => {
+      cleanup();
       conn.terminate();
-      return;
-    }
-    liveConnections.delete(conn);
+    }, HEARTBEAT_TIMEOUT_MS);
+
+    conn.once('pong', onPong);
+    conn.once('close', cleanup);
     conn.ping();
   });
 }, HEARTBEAT_INTERVAL_MS);

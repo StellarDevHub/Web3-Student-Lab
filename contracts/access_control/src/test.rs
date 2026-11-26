@@ -1,4 +1,5 @@
 use super::*;
+use crate::circuit_breaker::UNPAUSE_TIMELOCK_SECONDS;
 use soroban_sdk::{
     contract, contractimpl,
     testutils::{Address as _, Ledger as _},
@@ -44,6 +45,42 @@ impl TestContract {
 
     pub fn pending_admin(env: Env) -> Option<AdminProposal> {
         crate::pending_admin(&env)
+    }
+
+    // ── Circuit breaker surface ───────────────────────────────────────────
+
+    pub fn set_breaker_guardian(env: Env, caller: Address, guardian: Address) {
+        crate::circuit_breaker::set_guardian(&env, &caller, &guardian);
+    }
+
+    pub fn pause(env: Env, caller: Address) {
+        crate::circuit_breaker::pause(&env, &caller);
+    }
+
+    pub fn propose_unpause(env: Env, caller: Address) -> u64 {
+        crate::circuit_breaker::propose_unpause(&env, &caller)
+    }
+
+    pub fn unpause(env: Env, caller: Address) {
+        crate::circuit_breaker::unpause(&env, &caller);
+    }
+
+    pub fn cancel_unpause(env: Env, caller: Address) {
+        crate::circuit_breaker::cancel_unpause(&env, &caller);
+    }
+
+    pub fn unpause_unlock_at(env: Env) -> Option<u64> {
+        crate::circuit_breaker::unpause_unlock_at(&env)
+    }
+
+    pub fn is_paused(env: Env) -> bool {
+        crate::circuit_breaker::is_paused(&env)
+    }
+
+    /// Example gated entrypoint: must revert while paused.
+    pub fn guarded_action(env: Env) -> bool {
+        crate::require_not_paused!(&env);
+        true
     }
 }
 
@@ -164,6 +201,116 @@ fn current_admin_can_cancel_a_pending_handover() {
     client.cancel_admin_proposal(&current_admin);
     assert!(client.pending_admin().is_none());
     assert_eq!(client.admin(), Some(current_admin.clone()));
+}
+
+// ── Circuit breaker ──────────────────────────────────────────────────────────
+
+#[test]
+fn guardian_pauses_instantly_but_cannot_unpause() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let guardian = Address::generate(&env);
+
+    let client = setup_test(&env);
+    client.initialize(&admin);
+    client.set_breaker_guardian(&admin, &guardian);
+    client.pause(&guardian);
+
+    assert!(client.is_paused());
+    assert!(client.try_guarded_action().is_err());
+    assert!(client.try_unpause(&guardian).is_err());
+    assert!(client.try_unpause(&admin).is_err()); // no proposal yet
+    assert!(client.try_guarded_action().is_err());
+}
+
+#[test]
+fn admin_unpauses_only_after_the_timelock() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let guardian = Address::generate(&env);
+
+    let client = setup_test(&env);
+    client.initialize(&admin);
+    client.set_breaker_guardian(&admin, &guardian);
+    client.pause(&guardian);
+
+    let unlock_at = client.propose_unpause(&admin);
+    assert_eq!(
+        unlock_at,
+        env.ledger().timestamp() + UNPAUSE_TIMELOCK_SECONDS
+    );
+    assert_eq!(client.unpause_unlock_at(), Some(unlock_at));
+    assert!(client.try_unpause(&admin).is_err()); // too early
+
+    env.ledger().with_mut(|ledger| ledger.timestamp = unlock_at);
+    client.unpause(&admin);
+
+    assert!(!client.is_paused());
+    assert!(client.unpause_unlock_at().is_none());
+    assert!(client.guarded_action());
+}
+
+#[test]
+fn re_pausing_restarts_the_unpause_timelock() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let guardian = Address::generate(&env);
+
+    let client = setup_test(&env);
+    client.initialize(&admin);
+    client.set_breaker_guardian(&admin, &guardian);
+    client.pause(&guardian);
+    let first_unlock = client.propose_unpause(&admin);
+
+    env.ledger()
+        .with_mut(|ledger| ledger.timestamp = first_unlock / 2);
+    // A second pause (e.g. attack still in progress) must invalidate the
+    // pending unpause instead of letting it fire on the original schedule.
+    client.pause(&guardian);
+    assert!(client.unpause_unlock_at().is_none());
+    assert!(client.try_unpause(&admin).is_err());
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #300)")]
+fn non_guardian_cannot_pause() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let stranger = Address::generate(&env);
+
+    let client = setup_test(&env);
+    client.initialize(&admin);
+    client.pause(&stranger);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #310)")]
+fn cannot_propose_unpause_while_running() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+
+    let client = setup_test(&env);
+    client.initialize(&admin);
+    client.propose_unpause(&admin);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #300)")]
+fn only_admin_can_rotate_the_guardian() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let guardian = Address::generate(&env);
+    let attacker = Address::generate(&env);
+
+    let client = setup_test(&env);
+    client.initialize(&admin);
+    client.set_breaker_guardian(&attacker, &guardian);
 }
 
 #[test]

@@ -1,14 +1,13 @@
 import { ImageResponse } from 'next/og';
 import { NextRequest } from 'next/server';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ id: string }> | { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const resolvedParams = await Promise.resolve(context.params);
-  const certificateId = resolvedParams?.id || 'UNKNOWN';
+  const { id: certificateId } = await context.params;
 
   const { searchParams } = new URL(request.url);
   const studentName = searchParams.get('studentName') || searchParams.get('name') || 'Stellar Builder';
