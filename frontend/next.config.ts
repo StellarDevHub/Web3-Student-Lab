@@ -38,6 +38,20 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   transpilePackages: ['recharts'],
 
+  // FE-066: Partial Prerendering (PPR). In Next.js 16 the standalone
+  // `experimental.ppr` flag and `experimental_ppr` route segment config have
+  // been removed; PPR is now the default App Router behaviour when Cache
+  // Components is enabled. `cacheComponents` unifies the ppr / useCache /
+  // dynamicIO flags. Data fetching is dynamic by default and the static shell
+  // (course curriculum, navigation, headers) is prerendered at build time and
+  // served from the edge CDN, while user-specific enrollment, progress, and
+  // completion state streams in behind <Suspense> boundaries.
+  cacheComponents: true,
+  // Pairs with cacheComponents: the first Cache Components release predates
+  // Partial Prefetching, so the flag must be set explicitly to silence the
+  // warning and enable per-link prefetching of cached URL-specific content.
+  partialPrefetching: true,
+
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
     config.resolve.modules = [
       path.join(__dirname, 'node_modules'),
