@@ -10,7 +10,7 @@
  *             → `contract-evaluation`  (sandboxed WASM grading, BE-010)
  *   low       → `email-notifications`  (transactional email)
  *
- * Every job gets 1 initial attempt + `MAX_RETRIES` (5) retries with
+ * Every job gets 1 initial attempt + `MAX_RETRIES` (4) retries with
  * exponential backoff and jitter. Once those are exhausted — or the processor
  * throws BullMQ's `UnrecoverableError` — the job is copied into the
  * dead-letter queue by `DlqProcessor`, which also raises alerts.
@@ -34,6 +34,7 @@ import {
 } from 'bullmq';
 import { Cluster, Redis } from 'ioredis';
 import logger from '../utils/logger.js';
+import { DLQ_RETRY_ATTEMPTS, dlqRetryBackoffStrategy, withDlqRetryPolicy } from './retryPolicy.js';
 import {
   QUEUE_FAILOVER_BUDGET_MS,
   QueueFailoverMonitor,
@@ -56,7 +57,7 @@ export type ManagedQueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
 export type QueueTier = 'critical' | 'standard' | 'low';
 
 /** Retries after the first attempt; BullMQ's `attempts` therefore is MAX_RETRIES + 1. */
-export const MAX_RETRIES = 5;
+export const MAX_RETRIES = DLQ_RETRY_ATTEMPTS;
 export const BACKOFF_BASE_DELAY_MS = 2_000;
 /** Fraction of each backoff delay that is randomised, to avoid thundering-herd retries. */
 export const BACKOFF_JITTER = 0.5;
@@ -119,7 +120,7 @@ const TIER_PRIORITY: Record<QueueTier, number> = { critical: 1, standard: 5, low
 
 /** Default options applied to every job; callers may tighten but not disable retries. */
 export function defaultJobOptions(tier: QueueTier, backoffDelayMs = BACKOFF_BASE_DELAY_MS): JobsOptions {
-  return {
+  return withDlqRetryPolicy({
     attempts: MAX_RETRIES + 1,
     backoff: { type: 'exponential', delay: backoffDelayMs, jitter: BACKOFF_JITTER },
     priority: TIER_PRIORITY[tier],
@@ -127,7 +128,7 @@ export function defaultJobOptions(tier: QueueTier, backoffDelayMs = BACKOFF_BASE
     // Keep terminal failures around for a week so they can be cross-checked
     // against the DLQ copy.
     removeOnFail: { age: 7 * 24 * 3600 },
-  };
+  });
 }
 
 export class QueueRateLimitError extends Error {
@@ -311,7 +312,7 @@ export class QueueManager {
   createWorker<T = any, R = any>(
     name: ManagedQueueName,
     processor: Processor<T, R>,
-    overrides: Partial<Pick<WorkerOptions, 'concurrency' | 'limiter'>> = {}
+    overrides: Partial<Pick<WorkerOptions, 'concurrency' | 'limiter' | 'settings'>> = {}
   ): Worker<T, R> {
     const definition = this.definitions[name];
     const worker = new Worker<T, R>(name, processor, {
@@ -321,6 +322,10 @@ export class QueueManager {
       ...(this.prefix ? { prefix: this.prefix } : {}),
       concurrency: overrides.concurrency ?? definition.concurrency,
       ...(overrides.limiter ?? definition.limiter ? { limiter: overrides.limiter ?? definition.limiter } : {}),
+      settings: {
+        ...(overrides.settings ?? {}),
+        backoffStrategy: overrides.settings?.backoffStrategy ?? dlqRetryBackoffStrategy,
+      },
     });
 
     worker.on('failed', (job, err) => {

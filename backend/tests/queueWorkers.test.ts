@@ -183,3 +183,19 @@ describe('evaluationWorker processor (BE-010)', () => {
     expect(publish).toHaveBeenCalledWith(expect.objectContaining({ status: 'QUEUED', jobId: 'j9' }));
   });
 });
+
+describe('queueWorkers BE-063 retry policy', () => {
+  it('starts minting and evaluation workers on the managed queue', async () => {
+    const { startQueueWorkers, stopQueueWorkers } = await import('../src/workers/queueWorkers.js');
+    const close = jest.fn(async () => undefined);
+    const createWorker = jest.fn(() => ({ close }));
+    const manager = { createWorker } as any;
+
+    startQueueWorkers(manager);
+
+    expect(createWorker).toHaveBeenCalledTimes(2);
+
+    await stopQueueWorkers();
+    expect(close).toHaveBeenCalled();
+  });
+});

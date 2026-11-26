@@ -28,7 +28,9 @@ const mockGetDLQMetrics = jest.fn();
 const mockGetDLQTriageSummary = jest.fn();
 const mockReplayDLQJob = jest.fn();
 const mockReplayAllDLQJobs = jest.fn();
+const mockReplayDLQJobsByIds = jest.fn();
 const mockPurgeDLQ = jest.fn();
+const mockPurgeDLQJobsByIds = jest.fn();
 
 jest.mock('../src/services/dlq.service.js', () => ({
   inspectDLQ: (...args: unknown[]) => mockInspectDLQ(...args),
@@ -37,7 +39,9 @@ jest.mock('../src/services/dlq.service.js', () => ({
   getDLQTriageSummary: (...args: unknown[]) => mockGetDLQTriageSummary(...args),
   replayDLQJob: (...args: unknown[]) => mockReplayDLQJob(...args),
   replayAllDLQJobs: (...args: unknown[]) => mockReplayAllDLQJobs(...args),
+  replayDLQJobsByIds: (...args: unknown[]) => mockReplayDLQJobsByIds(...args),
   purgeDLQ: (...args: unknown[]) => mockPurgeDLQ(...args),
+  purgeDLQJobsByIds: (...args: unknown[]) => mockPurgeDLQJobsByIds(...args),
 }));
 
 jest.mock('../src/utils/logger.js', () => ({
@@ -166,6 +170,47 @@ describe('Admin DLQ Routes (/api/v1/admin/dlq)', () => {
         .send({ confirm: true });
       expect(res.status).toBe(200);
       expect(mockPurgeDLQ).toHaveBeenCalledWith(undefined);
+    });
+  });
+
+  describe('POST /batch-retry', () => {
+    it('rejects an empty batch', async () => {
+      const res = await request(app).post('/api/v1/admin/dlq/batch-retry').send({ dlqIds: [] });
+      expect(res.status).toBe(400);
+      expect(mockReplayDLQJobsByIds).not.toHaveBeenCalled();
+    });
+
+    it('replays the selected DLQ ids', async () => {
+      mockReplayDLQJobsByIds.mockResolvedValue({ replayedCount: 2, errors: [] });
+      const res = await request(app)
+        .post('/api/v1/admin/dlq/batch-retry')
+        .send({ dlqIds: ['dlq_1', 'dlq_2'] });
+
+      expect(res.status).toBe(200);
+      expect(mockReplayDLQJobsByIds).toHaveBeenCalledWith(['dlq_1', 'dlq_2']);
+      expect(res.body.data.replayedCount).toBe(2);
+    });
+  });
+
+  describe('DELETE /batch-purge', () => {
+    it('rejects a batch purge without confirmation', async () => {
+      const res = await request(app)
+        .delete('/api/v1/admin/dlq/batch-purge')
+        .send({ dlqIds: ['dlq_1'] });
+      expect(res.status).toBe(400);
+      expect(mockPurgeDLQJobsByIds).not.toHaveBeenCalled();
+    });
+
+    it('purges the selected DLQ ids when confirmed', async () => {
+      mockPurgeDLQJobsByIds.mockResolvedValue({ purgedCount: 1, missingIds: ['missing'] });
+      const res = await request(app)
+        .delete('/api/v1/admin/dlq/batch-purge')
+        .send({ dlqIds: ['dlq_1', 'missing'], confirm: true });
+
+      expect(res.status).toBe(200);
+      expect(mockPurgeDLQJobsByIds).toHaveBeenCalledWith(['dlq_1', 'missing']);
+      expect(res.body.data.purgedCount).toBe(1);
+      expect(res.body.data.missingIds).toEqual(['missing']);
     });
   });
 

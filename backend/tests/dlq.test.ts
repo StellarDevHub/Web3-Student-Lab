@@ -6,8 +6,10 @@ import {
   getDLQMetrics,
   inspectDLQ,
   purgeDLQ,
+  purgeDLQJobsByIds,
   replayAllDLQJobs,
   replayDLQJob,
+  replayDLQJobsByIds,
   resetDLQStore,
 } from '../src/services/dlq.service.js';
 import { exportQueue } from '../src/jobs/export.queue.js';
@@ -54,11 +56,13 @@ describe('DLQ & Retry Service', () => {
         data: { deliveryId: 'del_100', event: { id: 'evt_100', type: 'certificate.minted' } },
         opts: { attempts: 5 },
         error: 'Network timeout',
+        stacktrace: ['Error: timeout', '  at pin (/app/worker.ts:42:11)'],
         traceId: 'trace_100',
         attemptsMade: 5,
       });
 
       expect(record.dlqId).toBeDefined();
+      expect(record.stacktrace).toEqual(['Error: timeout', '  at pin (/app/worker.ts:42:11)']);
       expect(record.traceId).toBe('trace_100');
       expect(record.originalQueue).toBe('webhook-delivery');
       expect(record.attemptsMade).toBe(5);
@@ -176,6 +180,40 @@ describe('DLQ & Retry Service', () => {
       const remaining = await inspectDLQ();
       expect(remaining).toHaveLength(1);
       expect(remaining[0]?.originalQueue).toBe('webhook-delivery');
+    });
+
+    it('replays and purges selected DLQ ids', async () => {
+      const first = await enqueueToDLQ({
+        originalQueue: 'export-queue',
+        jobName: 'job-1',
+        data: {},
+        error: 'err',
+        attemptsMade: 3,
+      });
+      const second = await enqueueToDLQ({
+        originalQueue: 'webhook-delivery',
+        jobName: 'job-2',
+        data: {},
+        error: 'err',
+        attemptsMade: 5,
+      });
+
+      const replayResult = await replayDLQJobsByIds([first.dlqId, second.dlqId]);
+      expect(replayResult.replayedCount).toBe(2);
+      expect(replayResult.errors).toEqual([]);
+      expect(await inspectDLQ()).toHaveLength(0);
+
+      const third = await enqueueToDLQ({
+        originalQueue: 'export-queue',
+        jobName: 'job-3',
+        data: {},
+        error: 'err',
+        attemptsMade: 3,
+      });
+      const purgeResult = await purgeDLQJobsByIds([third.dlqId, 'missing-id']);
+      expect(purgeResult.purgedCount).toBe(1);
+      expect(purgeResult.missingIds).toEqual(['missing-id']);
+      expect(await inspectDLQ()).toHaveLength(0);
     });
   });
 });

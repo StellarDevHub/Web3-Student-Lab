@@ -12,6 +12,46 @@ const NONCE_HEADER = 'x-nonce';
 const ADMIN_ROUTE_PREFIX = '/admin';
 const LOGIN_ROUTE = '/login';
 
+// FE-100: content-negotiated, build-time pre-compressed static assets.
+const PRECOMPRESSED_ASSET = /^\/_next\/static\/.+\.(?:js|mjs|css|json|svg|txt|xml)$/i;
+const STATIC_IMMUTABLE_CACHE = 'public, max-age=31536000, immutable';
+const STATIC_CONTENT_TYPES: Record<string, string> = {
+  js: 'application/javascript; charset=utf-8',
+  mjs: 'application/javascript; charset=utf-8',
+  css: 'text/css; charset=utf-8',
+  json: 'application/json; charset=utf-8',
+  svg: 'image/svg+xml',
+  txt: 'text/plain; charset=utf-8',
+  xml: 'application/xml; charset=utf-8',
+};
+
+function precompressedAssetResponse(request: NextRequest): NextResponse | null {
+  if (process.env.NODE_ENV !== 'production') return null;
+
+  const pathname = request.nextUrl.pathname;
+  if (!PRECOMPRESSED_ASSET.test(pathname)) return null;
+
+  const acceptEncoding = request.headers.get('accept-encoding') || '';
+  const compression = /\bbr\b/i.test(acceptEncoding)
+    ? { suffix: 'br', encoding: 'br' }
+    : /\bgzip\b/i.test(acceptEncoding)
+      ? { suffix: 'gz', encoding: 'gzip' }
+      : null;
+
+  if (!compression) return null;
+
+  const extension = pathname.slice(pathname.lastIndexOf('.') + 1).toLowerCase();
+  const destination = request.nextUrl.clone();
+  destination.pathname = `${pathname}.${compression.suffix}`;
+
+  const response = NextResponse.rewrite(destination);
+  response.headers.set('Content-Encoding', compression.encoding);
+  response.headers.set('Content-Type', STATIC_CONTENT_TYPES[extension] ?? 'application/octet-stream');
+  response.headers.set('Vary', 'Accept-Encoding');
+  response.headers.set('Cache-Control', STATIC_IMMUTABLE_CACHE);
+  return response;
+}
+
 // Security settings
 const ALLOWED_ADMIN_IPS = (process.env.ALLOWED_ADMIN_IPS || '').split(',').filter(Boolean);
 const ALLOWED_ADMIN_COUNTRIES = (process.env.ALLOWED_ADMIN_COUNTRIES || '').split(',').filter(Boolean);
@@ -106,6 +146,12 @@ function isValidRedirectUrl(url: string, requestUrl: URL): boolean {
 }
 
 export async function middleware(request: NextRequest) {
+  // Static assets bypass bot detection/rate limiting. In production they may be
+  // rewritten to the .br/.gz sibling emitted at build time (FE-100).
+  if (PRECOMPRESSED_ASSET.test(request.nextUrl.pathname)) {
+    return precompressedAssetResponse(request) ?? NextResponse.next();
+  }
+
   if (request.nextUrl.pathname === '/peer-review-new' || request.nextUrl.pathname === '/peer-review-new/') {
     const destination = request.nextUrl.clone();
     destination.pathname = '/peer-review';
@@ -308,5 +354,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)', '/_next/static/:path*'],
 };

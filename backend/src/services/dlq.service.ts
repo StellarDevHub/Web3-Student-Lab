@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { createDlqIncidentAlert, extractPayloadIds, sendDlqIncidentAlert } from './alertingService.js';
 import logger from '../utils/logger.js';
 import { webhookDeliveryQueue, WEBHOOK_DELIVERY_QUEUE_NAME } from './webhooks/queue.js';
 import { exportQueue, EXPORT_QUEUE_NAME } from '../jobs/export.queue.js';
@@ -38,6 +39,7 @@ export interface DLQJobRecord {
   opts?: Record<string, any>;
   failedAt: string;
   error: string;
+  stacktrace?: string[];
   traceId: string;
   attemptsMade: number;
   /** Automated failure classification used by the inspector dashboard. */
@@ -277,6 +279,7 @@ export async function enqueueToDLQ(
     opts: input.opts ?? {},
     failedAt: new Date().toISOString(),
     error: input.error,
+    stacktrace: input.stacktrace ?? [],
     traceId,
     attemptsMade: input.attemptsMade,
     triage: triageDLQFailure({
@@ -288,6 +291,26 @@ export async function enqueueToDLQ(
   dlqStore.set(dlqId, record);
   logger.warn(
     `Job [${input.jobName}] from queue [${input.originalQueue}] sent to DLQ (ID: ${dlqId}, traceId: ${traceId}). Error: ${input.error}`
+  );
+
+  await sendDlqIncidentAlert(
+    createDlqIncidentAlert({
+      kind: 'job-dead-lettered',
+      queue: record.originalQueue,
+      message: `Job ${record.jobName} from '${record.originalQueue}' moved to the DLQ (ID: ${record.dlqId}, traceId: ${record.traceId}): ${record.error}`,
+      details: {
+        jobId: record.data?.deliveryId ?? record.data?.jobId,
+        dlqId: record.dlqId,
+        jobName: record.jobName,
+        attemptsMade: record.attemptsMade,
+        traceId: record.traceId,
+        userId: record.data?.userId,
+        failedAt: record.failedAt,
+        payloadIds: extractPayloadIds(record.data, [record.dlqId, record.traceId]),
+        stacktrace: record.stacktrace,
+        data: record.data,
+      },
+    })
   );
 
   await checkDLQMetricsAlert();
@@ -499,6 +522,24 @@ export async function replayAllDLQJobs(
   return { replayedCount, errors };
 }
 
+export async function replayDLQJobsByIds(
+  dlqIds: string[]
+): Promise<{ replayedCount: number; errors: Array<{ dlqId: string; error: string }> }> {
+  let replayedCount = 0;
+  const errors: Array<{ dlqId: string; error: string }> = [];
+
+  for (const dlqId of dlqIds) {
+    const result = await replayDLQJob(dlqId);
+    if (result.success) {
+      replayedCount++;
+    } else {
+      errors.push({ dlqId, error: result.error ?? 'Failed to replay DLQ job' });
+    }
+  }
+
+  return { replayedCount, errors };
+}
+
 /**
  * Purges DLQ jobs from storage.
  */
@@ -514,6 +555,24 @@ export async function purgeDLQ(queueName?: string): Promise<{ purgedCount: numbe
 
   logger.info(`Purged ${purgedCount} DLQ jobs${queueName ? ` for queue ${queueName}` : ''}`);
   return { purgedCount };
+}
+
+export async function purgeDLQJobsByIds(
+  dlqIds: string[]
+): Promise<{ purgedCount: number; missingIds: string[] }> {
+  let purgedCount = 0;
+  const missingIds: string[] = [];
+
+  for (const dlqId of dlqIds) {
+    if (dlqStore.delete(dlqId)) {
+      purgedCount++;
+    } else {
+      missingIds.push(dlqId);
+    }
+  }
+
+  logger.info(`Purged ${purgedCount} selected DLQ jobs`);
+  return { purgedCount, missingIds };
 }
 
 /**

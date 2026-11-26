@@ -10,17 +10,34 @@
  * through the admin API (/api/v1/admin/queues/dlq).
  */
 
+import { getQueueManager, type QueueManager } from '../queues/queueManager.js';
+import {
+  computeDlqRetryDelayMs,
+  DLQ_RETRY_ATTEMPTS,
+  DLQ_RETRY_JITTER,
+  DLQ_RETRY_SCHEDULE_MS,
+  DLQ_RETRY_WINDOW_MS,
+  DLQ_TOTAL_ATTEMPTS,
+} from '../queues/retryPolicy.js';
 import { startTracing } from '../instrumentation.js';
-import { getQueueManager } from '../queues/queueManager.js';
 import { QUEUE_FAILOVER_BUDGET_MS } from '../config/redis.js';
 import logger from '../utils/logger.js';
 import { startEvaluationWorker, stopEvaluationWorker } from './evaluationWorker.js';
 import { startMintingWorker, stopMintingWorker } from './mintingWorker.js';
 import { startVideoTranscodingWorker, stopVideoTranscodingWorker } from './videoTranscodingWorker.js';
 
-export function startQueueWorkers(): void {
-  startMintingWorker();
-  startEvaluationWorker();
+export {
+  computeDlqRetryDelayMs,
+  DLQ_RETRY_ATTEMPTS,
+  DLQ_RETRY_JITTER,
+  DLQ_RETRY_SCHEDULE_MS,
+  DLQ_RETRY_WINDOW_MS,
+  DLQ_TOTAL_ATTEMPTS,
+};
+
+export function startQueueWorkers(manager: QueueManager = getQueueManager()): void {
+  startMintingWorker(manager);
+  startEvaluationWorker(manager);
   startVideoTranscodingWorker();
 }
 
