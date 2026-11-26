@@ -22,7 +22,7 @@ pub use payment_splitter::*;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
-    Env, Symbol, Vec,
+    token, Env, Symbol, Vec,
 };
 
 // ── Storage keys ────────────────────────────────────────────────────────────
@@ -31,6 +31,7 @@ const PAUSED: Symbol = symbol_short!("PAUSED");
 const TOTAL_DEPOSITED: Symbol = symbol_short!("TDEP");
 const TOTAL_PAID_OUT: Symbol = symbol_short!("TPAYOUT");
 const PLATFORM_FEE_BPS: Symbol = symbol_short!("PFEES");
+const PAYMENT_TOKEN: Symbol = symbol_short!("TOKEN");
 
 // ── Data types ───────────────────────────────────────────────────────────────
 
@@ -85,6 +86,8 @@ pub enum Error {
     EscrowAlreadyDistributed = 11,
     DuplicateStakeholder = 12,
     EscrowAlreadyExists = 13,
+    AlreadyInitialized = 14,
+    InvalidToken = 15,
 }
 
 // ── User balance mapping ─────────────────────────────────────────────────────
@@ -137,13 +140,21 @@ pub struct PaymentGateway;
 impl PaymentGateway {
     // ── Initialization ──────────────────────────────────────────────────────
 
-    pub fn initialize(env: Env, admin: Address) {
+    pub fn initialize(env: Env, admin: Address, payment_token: Address) {
         admin.require_auth();
+        if env.storage().instance().has(&ADMIN) {
+            panic_with_error!(&env, Error::AlreadyInitialized);
+        }
+        token::Client::new(&env, &payment_token).decimals();
         env.storage().instance().set(&ADMIN, &admin);
+        env.storage()
+            .instance()
+            .set(&PAYMENT_TOKEN, &payment_token);
         env.storage()
             .instance()
             .set(&PLATFORM_FEE_BPS, &DEFAULT_PLATFORM_FEE_BPS);
         env.storage().instance().set(&PAUSED, &false);
+        env.storage().instance().set(&TOTAL_DEPOSITED, &0i128);
         env.events().publish((symbol_short!("init"),), admin);
     }
 
@@ -156,20 +167,31 @@ impl PaymentGateway {
             panic_with_error!(&env, Error::InvalidAmount);
         }
 
+        let token_address = Self::payment_token(&env);
+        token::Client::new(&env, &token_address).transfer(
+            &user,
+            &env.current_contract_address(),
+            &amount,
+        );
+
         let mut balance: i128 = env
             .storage()
             .persistent()
             .get(&DataKey::Balance(user.clone()))
             .unwrap_or(0);
 
-        balance = balance.checked_add(amount).expect("balance overflow");
+        balance = balance
+            .checked_add(amount)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::ArithmeticOverflow));
 
         env.storage()
             .persistent()
             .set(&DataKey::Balance(user.clone()), &balance);
 
         let mut total: i128 = env.storage().instance().get(&TOTAL_DEPOSITED).unwrap_or(0);
-        total = total.checked_add(amount).expect("total overflow");
+        total = total
+            .checked_add(amount)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::ArithmeticOverflow));
         env.storage().instance().set(&TOTAL_DEPOSITED, &total);
 
         env.events()
@@ -199,6 +221,21 @@ impl PaymentGateway {
         env.storage()
             .persistent()
             .set(&DataKey::Balance(user.clone()), &balance);
+
+        let total: i128 = env.storage().instance().get(&TOTAL_DEPOSITED).unwrap_or(0);
+        let updated_total = total
+            .checked_sub(amount)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::ArithmeticOverflow));
+        env.storage()
+            .instance()
+            .set(&TOTAL_DEPOSITED, &updated_total);
+
+        let token_address = Self::payment_token(&env);
+        token::Client::new(&env, &token_address).transfer(
+            &env.current_contract_address(),
+            &user,
+            &amount,
+        );
 
         env.events()
             .publish((symbol_short!("withdraw"), user.clone()), amount);
@@ -366,6 +403,19 @@ impl PaymentGateway {
             .unwrap_or(0)
     }
 
+    pub fn get_total_deposited(env: Env) -> i128 {
+        env.storage().instance().get(&TOTAL_DEPOSITED).unwrap_or(0)
+    }
+
+    pub fn get_payment_token(env: Env) -> Address {
+        Self::payment_token(&env)
+    }
+
+    pub fn get_token_balance(env: Env) -> i128 {
+        let token_address = Self::payment_token(&env);
+        token::Client::new(&env, &token_address).balance(&env.current_contract_address())
+    }
+
     pub fn get_payment(env: Env, payment_id: u64) -> PaymentRecord {
         env.storage()
             .persistent()
@@ -401,6 +451,13 @@ impl PaymentGateway {
         if paused {
             panic_with_error!(env, Error::Paused);
         }
+    }
+
+    fn payment_token(env: &Env) -> Address {
+        env.storage()
+            .instance()
+            .get(&PAYMENT_TOKEN)
+            .unwrap_or_else(|| panic_with_error!(env, Error::InvalidToken))
     }
 
     fn calculate_fee(_env: &Env, amount: i128, fee_bps: u32) -> i128 {
@@ -697,7 +754,7 @@ mod tests {
     use super::*;
     use soroban_sdk::{
         testutils::{Address as _, Ledger},
-        Env,
+        token, Env,
     };
 
     fn setup() -> (Env, Address, Address) {
@@ -705,11 +762,25 @@ mod tests {
         env.mock_all_auths();
         let contract_id = env.register(PaymentGateway, ());
         let admin = Address::generate(&env);
-        let _user = Address::generate(&env);
+        let token_admin = Address::generate(&env);
+        let payment_token = env
+            .register_stellar_asset_contract_v2(token_admin)
+            .address();
         let client = PaymentGatewayClient::new(&env, &contract_id);
 
-        client.initialize(&admin);
+        client.initialize(&admin, &payment_token);
         (env, contract_id, admin)
+    }
+
+    fn fund_and_deposit(
+        env: &Env,
+        client: &PaymentGatewayClient<'_>,
+        user: &Address,
+        amount: i128,
+    ) {
+        let payment_token = client.get_payment_token();
+        token::StellarAssetClient::new(env, &payment_token).mint(user, &amount);
+        client.deposit(user, &amount);
     }
 
     fn setup_with_user() -> (
@@ -736,9 +807,9 @@ mod tests {
 
     #[test]
     fn test_deposit_and_balance() {
-        let (_env, _contract_id, _admin, user, client) = setup_with_user();
+        let (env, _contract_id, _admin, user, client) = setup_with_user();
 
-        client.deposit(&user, &1000);
+        fund_and_deposit(&env, &client, &user, 1000);
         assert_eq!(client.get_balance(&user), 1000);
     }
 
@@ -746,7 +817,7 @@ mod tests {
     fn test_withdraw_reduces_balance() {
         let (env, _contract_id, _admin, user, client) = setup_with_user();
 
-        client.deposit(&user, &1000);
+        fund_and_deposit(&env, &client, &user, 1000);
         let withdrawn = client.withdraw(&user, &400);
         assert_eq!(withdrawn, 400);
         assert_eq!(client.get_balance(&user), 600);
@@ -756,7 +827,7 @@ mod tests {
     #[should_panic(expected = "Error(Contract, #4)")]
     fn test_withdraw_over_balance_panics() {
         let (env, _contract_id, _admin, user, client) = setup_with_user();
-        client.deposit(&user, &100);
+        fund_and_deposit(&env, &client, &user, 100);
         client.withdraw(&user, &200);
     }
 
@@ -765,7 +836,7 @@ mod tests {
         let (env, _contract_id, _admin, payer, client) = setup_with_user();
         let payee = Address::generate(&env);
 
-        client.deposit(&payer, &10_000);
+        fund_and_deposit(&env, &client, &payer, 10_000);
         let record = client.process_payment(&payer, &payee, &3000, &symbol_short!("test"), &1);
 
         assert_eq!(record.status, PaymentStatus::Completed);
@@ -779,7 +850,7 @@ mod tests {
     fn test_process_zero_payment_panics() {
         let (env, _contract_id, _admin, payer, client) = setup_with_user();
         let payee = Address::generate(&env);
-        client.deposit(&payer, &1000);
+        fund_and_deposit(&env, &client, &payer, 1000);
         client.process_payment(&payer, &payee, &0, &symbol_short!("test"), &1);
     }
 
@@ -788,7 +859,7 @@ mod tests {
         let (env, _contract_id, _admin, payer, client) = setup_with_user();
         let payee = Address::generate(&env);
 
-        client.deposit(&payer, &10_000);
+        fund_and_deposit(&env, &client, &payer, 10_000);
         client.process_payment(&payer, &payee, &3000, &symbol_short!("test"), &1);
 
         env.ledger().with_mut(|l| l.sequence_number += 10);
@@ -803,7 +874,7 @@ mod tests {
         let (env, _contract_id, _admin, payer, client) = setup_with_user();
         let payee = Address::generate(&env);
 
-        client.deposit(&payer, &10_000);
+        fund_and_deposit(&env, &client, &payer, 10_000);
         client.process_payment(&payer, &payee, &3000, &symbol_short!("test"), &1);
 
         env.ledger()
@@ -826,7 +897,7 @@ mod tests {
         let (env, contract_id, admin, payer, client) = setup_with_user();
 
         client.pause(&admin);
-        client.deposit(&payer, &1000);
+        fund_and_deposit(&env, &client, &payer, 1000);
     }
 
     #[test]
@@ -836,7 +907,7 @@ mod tests {
         client.update_fee_bps(&admin, &100);
         // After update, new payments should use 1% fee
         let user = Address::generate(&env);
-        client.deposit(&user, &10_000);
+        fund_and_deposit(&env, &client, &user, 10_000);
         let payee = Address::generate(&env);
         let record = client.process_payment(&user, &payee, &3000, &symbol_short!("test"), &2);
         assert_eq!(record.fee, 30); // 3000 * 100 / 10000

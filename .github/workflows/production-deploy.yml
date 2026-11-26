@@ -101,6 +101,22 @@ jobs:
           chmod +x ./scripts/canary-verifier.sh
           ./scripts/canary-verifier.sh
 
+      - name: Generate typed OpenAPI client
+        working-directory: ./backend
+        run: npm run openapi:generate-client
+
+      - name: Compile generated OpenAPI client
+        working-directory: ./backend
+        run: npx tsc --noEmit --strict --target ES2022 --lib ES2022,DOM generated/openapi-client.ts
+
+      - name: Publish typed OpenAPI client artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web3-student-lab-openapi-client
+          path: backend/generated/openapi-client.ts
+          if-no-files-found: error
+          retention-days: 90
+
   automated_rollback:
     name: Automated Rollback on Canary Failure
     needs: [deploy_production, canary_verification]
