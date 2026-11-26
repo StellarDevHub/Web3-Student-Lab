@@ -2,11 +2,13 @@ name: Disaster Recovery Test (Automated Backup + Restore Verification)
 
 on:
   schedule:
-    - cron: '0 2 * * 0' # Weekly Sunday 02:00 UTC
+    - cron: '0 2 * * *' # Daily 02:00 UTC (BE-084 daily restore drill)
   workflow_dispatch:
   pull_request:
     paths:
       - 'backend/src/jobs/backup*.ts'
+      - 'scripts/db-backup-pitr.sh'
+      - 'k8s/backup-cronjob.yaml'
       - '.github/workflows/disaster-recovery.yml'
 
 jobs:
@@ -42,6 +44,16 @@ jobs:
         ports:
           - 5433:5432
 
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -68,7 +80,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/primary_db
         run: |
-          npx prisma migrate deploy
+          npm run migration:deploy:locked
           npm run db:seed || npx tsx prisma/seed.ts || echo "Seed completed"
 
       - name: Capture pre-backup counts
@@ -118,3 +130,102 @@ jobs:
 
       - name: Cleanup temporary artifacts
         run: rm -rf /tmp/backups /tmp/*-counts.txt
+
+  pitr-drill:
+    name: PITR Restore Drill (RTO < 30m, RPO < 5m)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 15 and backup tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-15 postgresql-client-15 openssl
+          export PATH="/usr/lib/postgresql/15/bin:$PATH"
+          echo "/usr/lib/postgresql/15/bin" >> "$GITHUB_PATH"
+          pg_ctl --version
+          pg_basebackup --version
+          initdb --version
+
+      - name: Run backup, WAL archiving and PITR restore drill
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '55432'
+          PGUSER: postgres
+          PGDATABASE: postgres
+          BACKUP_STORAGE: local
+          BACKUP_ENCRYPTION: openssl
+          BACKUP_ENCRYPTION_KEY_FILE: ${{ runner.temp }}/pitr/enc.key
+          BACKUP_LOCAL_DIR: ${{ runner.temp }}/pitr/storage
+          BACKUP_RETENTION_DAYS: '7'
+          BACKUP_RTO_BUDGET_SECONDS: '1800'
+          BACKUP_RPO_BUDGET_SECONDS: '300'
+          STAGING_PORT: '55433'
+          PITR_VERIFY_SQL: SELECT count(*) FROM users;
+          PITR_EXPECTED_RESULT: '501'
+          PITR_REPORT_PATH: ${{ runner.temp }}/pitr/report.json
+        run: |
+          set -Eeuo pipefail
+          BASE="${RUNNER_TEMP}/pitr"
+          PRIMARY="$BASE/primary"
+          SCRIPT="$GITHUB_WORKSPACE/scripts/db-backup-pitr.sh"
+
+          mkdir -p "$BASE/storage"
+          openssl rand -hex 32 > "$BASE/enc.key"
+          chmod 600 "$BASE/enc.key"
+
+          initdb -D "$PRIMARY" -U postgres --auth=trust --no-locale --encoding=UTF8 >/dev/null
+          cat >> "$PRIMARY/postgresql.conf" <<EOF
+          port = 55432
+          listen_addresses = '127.0.0.1'
+          unix_socket_directories = '$BASE'
+          wal_level = replica
+          archive_mode = on
+          archive_command = 'env BACKUP_STORAGE=local BACKUP_LOCAL_DIR=$BASE/storage BACKUP_ENCRYPTION_KEY_FILE=$BASE/enc.key $SCRIPT wal-archive %p %f'
+          archive_timeout = 30
+          max_wal_senders = 4
+          EOF
+
+          pg_ctl -D "$PRIMARY" -l "$BASE/primary.log" -w start
+
+          # Seed the database and take a daily-style base backup.
+          psql -v ON_ERROR_STOP=1 -c "CREATE TABLE users (id int primary key, email text);"
+          psql -v ON_ERROR_STOP=1 -c "INSERT INTO users SELECT g, 'user' || g || '@example.com' FROM generate_series(1, 500) g;"
+          psql -tAc 'SELECT pg_switch_wal()' >/dev/null
+          sleep 2
+          "$SCRIPT" base-backup
+
+          # A transaction that must survive the disaster, then a target time
+          # after it, then a later transaction that must NOT be replayed.
+          psql -v ON_ERROR_STOP=1 -c "INSERT INTO users VALUES (501, 'survivor@example.com');"
+          sleep 1
+          TARGET="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+          sleep 2
+          psql -v ON_ERROR_STOP=1 -c "INSERT INTO users VALUES (502, 'after-target@example.com');"
+          psql -tAc 'SELECT pg_switch_wal()' >/dev/null
+          sleep 3
+
+          # Simulated catastrophic data loss.
+          psql -v ON_ERROR_STOP=1 -c 'DROP TABLE users;'
+
+          "$SCRIPT" drill --target-time "$TARGET" --dest "$BASE/restore" --port 55433
+          "$SCRIPT" status --check
+
+      - name: Stop primary instance
+        if: always()
+        run: |
+          if [[ -d "${RUNNER_TEMP}/pitr/primary" ]]; then
+            /usr/lib/postgresql/15/bin/pg_ctl -D "${RUNNER_TEMP}/pitr/primary" -m immediate stop || true
+          fi
+
+      - name: Upload PITR drill report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pitr-drill-report
+          path: ${{ runner.temp }}/pitr/report.json
+          if-no-files-found: warn
+          retention-days: 30

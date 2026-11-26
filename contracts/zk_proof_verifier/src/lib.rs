@@ -181,5 +181,9 @@ fn bump_instance(env: &Env) {
         .extend_ttl(TTL_THRESHOLD, INSTANCE_BUMP);
 }
 
+// SC-072: Re-export verifying and pairing types for external consumers.
+pub use pairing::*;
+pub use verifier::*;
+
 #[cfg(test)]
 mod test;
