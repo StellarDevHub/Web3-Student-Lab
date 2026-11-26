@@ -1,6 +1,123 @@
 @import 'tailwindcss';
 @source '../**/*.{ts,tsx}';
 
+/* ─── Zero-Runtime CSS Dynamic Theming (FE-068) ───────────────────────────────
+ * Native CSS custom properties bound to the data-theme attribute.
+ * Render-blocking inline script in layout.tsx sets data-theme before paint
+ * to eliminate FOUC. No JavaScript runtime required for theme switching.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+[data-theme='light'] {
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f8f8f8;
+  --color-bg-tertiary: #f0f0f0;
+  --color-bg-accent: #fafafa;
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #666666;
+  --color-text-tertiary: #999999;
+  --color-text-muted: #cccccc;
+  --color-border-light: #e5e5e5;
+  --color-border-medium: #d0d0d0;
+  --color-border-dark: #b0b0b0;
+  --color-interactive-primary: #7c3aed;
+  --color-interactive-primary-hover: #6d28d9;
+  --color-interactive-secondary: #f0f0f0;
+  --color-interactive-secondary-hover: #e0e0e0;
+  --color-status-success: #10b981;
+  --color-status-error: #ef4444;
+  --color-status-warning: #f59e0b;
+  --color-status-info: #3b82f6;
+  --color-chart-primary: #7c3aed;
+  --color-chart-accent: #a78bfa;
+  --color-chart-neutral: #d1d5db;
+  --color-chart-text: #1a1a1a;
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --color-bg-primary: #000000;
+  --color-bg-secondary: #0a0a0a;
+  --color-bg-tertiary: #121212;
+  --color-bg-accent: #1a1a1a;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #e5e5e5;
+  --color-text-tertiary: #a0a0a0;
+  --color-text-muted: #666666;
+  --color-border-light: #2d2d2d;
+  --color-border-medium: #3d3d3d;
+  --color-border-dark: #4d4d4d;
+  --color-interactive-primary: #7c3aed;
+  --color-interactive-primary-hover: #a78bfa;
+  --color-interactive-secondary: #2d2d2d;
+  --color-interactive-secondary-hover: #3d3d3d;
+  --color-status-success: #10b981;
+  --color-status-error: #ef4444;
+  --color-status-warning: #f59e0b;
+  --color-status-info: #3b82f6;
+  --color-chart-primary: #7c3aed;
+  --color-chart-accent: #a78bfa;
+  --color-chart-neutral: #4b5563;
+  --color-chart-text: #ffffff;
+  color-scheme: dark;
+}
+
+[data-theme='oled'] {
+  --color-bg-primary: #000000;
+  --color-bg-secondary: #000000;
+  --color-bg-tertiary: #000000;
+  --color-bg-accent: #000000;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #f0f0f0;
+  --color-text-tertiary: #d4d4d4;
+  --color-text-muted: #888888;
+  --color-border-light: #1c1c1c;
+  --color-border-medium: #333333;
+  --color-border-dark: #555555;
+  --color-interactive-primary: #7c3aed;
+  --color-interactive-primary-hover: #c084fc;
+  --color-interactive-secondary: #121212;
+  --color-interactive-secondary-hover: #1f1f1f;
+  --color-status-success: #10b981;
+  --color-status-error: #ef4444;
+  --color-status-warning: #f59e0b;
+  --color-status-info: #3b82f6;
+  --color-chart-primary: #a78bfa;
+  --color-chart-accent: #c084fc;
+  --color-chart-neutral: #374151;
+  --color-chart-text: #ffffff;
+  color-scheme: dark;
+}
+
+/* Apply theme colors to html element */
+html[data-theme='dark'],
+html[data-theme='oled'] {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='light'] {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+/* Utility classes for theme colors */
+.text-theme-primary { color: var(--color-text-primary); }
+.text-theme-secondary { color: var(--color-text-secondary); }
+.text-theme-tertiary { color: var(--color-text-tertiary); }
+.text-theme-muted { color: var(--color-text-muted); }
+.bg-theme-primary { background-color: var(--color-bg-primary); }
+.bg-theme-secondary { background-color: var(--color-bg-secondary); }
+.bg-theme-tertiary { background-color: var(--color-bg-tertiary); }
+.bg-theme-accent { background-color: var(--color-bg-accent); }
+.border-theme-light { border-color: var(--color-border-light); }
+.border-theme-medium { border-color: var(--color-border-medium); }
+.border-theme-dark { border-color: var(--color-border-dark); }
+
+/* Smooth theme transitions when toggling */
+html {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
 /* react-loading-skeleton overrides */
 .react-loading-skeleton {
   --base-color: rgba(255, 255, 255, 0.05) !important;
@@ -58,7 +175,7 @@
   --foreground: var(--text);
 }
 
-.dark {
+[data-theme='dark'] {
   --bg: #09111d;
   --bg-panel: rgba(14, 21, 32, 0.78);
   --bg-panel-strong: #121d2b;
@@ -80,7 +197,7 @@
   --foreground: var(--text);
 }
 
-.oled {
+[data-theme='oled'] {
   --bg: #000000;
   --bg-panel: #000000;
   --bg-panel-strong: #000000;
@@ -97,6 +214,34 @@
   --body-bg: #000000;
   --background: var(--bg);
   --foreground: var(--text);
+}
+
+.high-contrast,
+[data-high-contrast='true'] {
+  --bg: #000000;
+  --bg-panel: #0a0a0a;
+  --bg-panel-strong: #121212;
+  --text-strong: #ffffff;
+  --text: #f5f5f5;
+  --muted: #b8b8b8;
+  --line: #d4d4d4;
+  --brand: #ffd400;
+  --brand-strong: #ffea70;
+  --brand-soft: #fff3b0;
+  --accent: #70d6ff;
+  --success: #5cff8a;
+  --warning: #ffd400;
+  --body-bg: #000000;
+  --background: var(--bg);
+  --foreground: var(--text);
+}
+
+.high-contrast button:focus-visible,
+.high-contrast a:focus-visible,
+[data-high-contrast='true'] button:focus-visible,
+[data-high-contrast='true'] a:focus-visible {
+  outline: 3px solid #ffd400;
+  outline-offset: 2px;
 }
 
 @theme inline {
@@ -294,7 +439,7 @@ textarea {
  *  - Custom properties override Prism / Shiki tokens at the component scope.
  * ─────────────────────────────────────────────────────────────────────────── */
 
-/* Light-mode defaults (already in effect unless .dark is present) */
+/* Light-mode defaults (already in effect unless data-theme='dark' or 'oled') */
 .lesson-viewer pre,
 .lesson-viewer code {
   --code-bg: #f4f6fa;
@@ -325,9 +470,11 @@ textarea {
   --shiki-token-punctuation: var(--prism-punctuation);
 }
 
-/* Dark-mode overrides – activated by Tailwind's html.dark class */
-.dark .lesson-viewer pre,
-.dark .lesson-viewer code {
+/* Dark-mode overrides – activated by data-theme='dark' or 'oled' */
+[data-theme='dark'] .lesson-viewer pre,
+[data-theme='dark'] .lesson-viewer code,
+[data-theme='oled'] .lesson-viewer pre,
+[data-theme='oled'] .lesson-viewer code {
   --code-bg: #0d1520;
   --code-fg: #cdd6f4;
   --code-border: rgba(255, 255, 255, 0.08);
@@ -492,7 +639,7 @@ textarea {
   --hsl-muted-l-light: 42%;
 }
 
-.dark {
+[data-theme='dark'] {
   --hsl-bg: hsl(var(--hsl-surface-bg-h), var(--hsl-surface-bg-s), var(--hsl-surface-bg-l-dark));
   --hsl-panel: hsl(var(--hsl-surface-panel-h), var(--hsl-surface-panel-s), var(--hsl-surface-panel-l-dark));
   --hsl-text: hsl(var(--hsl-text-h), var(--hsl-text-s), var(--hsl-text-l-dark));
@@ -500,7 +647,7 @@ textarea {
   --hsl-brand: hsl(var(--hsl-brand-h), var(--hsl-brand-s), var(--hsl-brand-l-dark));
 }
 
-html:not(.dark) {
+html:not([data-theme='dark']):not([data-theme='oled']) {
   --hsl-bg: hsl(var(--hsl-surface-bg-h), var(--hsl-surface-bg-s), var(--hsl-surface-bg-l-light));
   --hsl-panel: hsl(var(--hsl-surface-panel-h), var(--hsl-surface-panel-s), var(--hsl-surface-panel-l-light));
   --hsl-text: hsl(var(--hsl-text-h), var(--hsl-text-s), var(--hsl-text-l-light));
@@ -522,14 +669,99 @@ html:not(.dark) {
   --code-hsl-fg-l-light: 14%;
 }
 
-.dark .lesson-viewer pre,
-.dark .lesson-viewer code {
+[data-theme='dark'] .lesson-viewer pre,
+[data-theme='dark'] .lesson-viewer code,
+[data-theme='oled'] .lesson-viewer pre,
+[data-theme='oled'] .lesson-viewer code {
   --code-bg: hsl(var(--code-hsl-bg-h), var(--code-hsl-bg-s), var(--code-hsl-bg-l-dark));
   --code-fg: hsl(var(--code-hsl-fg-h), var(--code-hsl-fg-s), var(--code-hsl-fg-l-dark));
 }
 
-html:not(.dark) .lesson-viewer pre,
-html:not(.dark) .lesson-viewer code {
+html:not([data-theme='dark']):not([data-theme='oled']) .lesson-viewer pre,
+html:not([data-theme='dark']):not([data-theme='oled']) .lesson-viewer code {
   --code-bg: hsl(var(--code-hsl-bg-h), var(--code-hsl-bg-s), var(--code-hsl-bg-l-light));
   --code-fg: hsl(var(--code-hsl-fg-h), var(--code-hsl-fg-s), var(--code-hsl-fg-l-light));
+}
+
+/* ─── FE-092: RTL / logical-property overrides ─────────────────────────────
+   When dir="rtl" is set on <html> the browser mirrors layout automatically.
+   These rules replace physical (left/right) properties with CSS logical
+   equivalents so padding, margin, border-radius, and flex alignment all
+   flip correctly without per-component overrides.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+[dir='rtl'] {
+  /* Ensure text alignment follows writing direction */
+  text-align: start;
+}
+
+/* Navigation / flex rows: flip gap and alignment in RTL */
+[dir='rtl'] .flex {
+  /* flex-direction stays row; browser mirrors start/end automatically */
+}
+
+/* Convert physical padding/margin helpers to logical where needed */
+[dir='rtl'] .ps-1  { padding-inline-start: 0.25rem; }
+[dir='rtl'] .ps-2  { padding-inline-start: 0.5rem; }
+[dir='rtl'] .ps-3  { padding-inline-start: 0.75rem; }
+[dir='rtl'] .ps-4  { padding-inline-start: 1rem; }
+[dir='rtl'] .ps-6  { padding-inline-start: 1.5rem; }
+[dir='rtl'] .pe-1  { padding-inline-end: 0.25rem; }
+[dir='rtl'] .pe-2  { padding-inline-end: 0.5rem; }
+[dir='rtl'] .pe-3  { padding-inline-end: 0.75rem; }
+[dir='rtl'] .pe-4  { padding-inline-end: 1rem; }
+[dir='rtl'] .pe-6  { padding-inline-end: 1.5rem; }
+
+[dir='rtl'] .ms-1  { margin-inline-start: 0.25rem; }
+[dir='rtl'] .ms-2  { margin-inline-start: 0.5rem; }
+[dir='rtl'] .ms-3  { margin-inline-start: 0.75rem; }
+[dir='rtl'] .ms-4  { margin-inline-start: 1rem; }
+[dir='rtl'] .ms-auto { margin-inline-start: auto; }
+[dir='rtl'] .me-1  { margin-inline-end: 0.25rem; }
+[dir='rtl'] .me-2  { margin-inline-end: 0.5rem; }
+[dir='rtl'] .me-3  { margin-inline-end: 0.75rem; }
+[dir='rtl'] .me-4  { margin-inline-end: 1rem; }
+[dir='rtl'] .me-auto { margin-inline-end: auto; }
+
+/* Border-radius: flip rounded corners for start/end */
+[dir='rtl'] .rounded-l-md  { border-start-start-radius: 0.375rem; border-end-start-radius: 0.375rem; }
+[dir='rtl'] .rounded-r-md  { border-start-end-radius: 0.375rem;   border-end-end-radius: 0.375rem; }
+[dir='rtl'] .rounded-l-lg  { border-start-start-radius: 0.5rem;   border-end-start-radius: 0.5rem; }
+[dir='rtl'] .rounded-r-lg  { border-start-end-radius: 0.5rem;     border-end-end-radius: 0.5rem; }
+
+/* Icons that must mirror (arrows, chevrons, etc.) */
+[dir='rtl'] .icon-flip-rtl {
+  transform: scaleX(-1);
+}
+
+/* Navbar / sidebar: start-aligned in LTR should become end-aligned in RTL */
+[dir='rtl'] .navbar-logo {
+  margin-inline-end: auto;
+  margin-inline-start: 0;
+}
+
+/* Scrollbars stay on the correct side */
+[dir='rtl'] {
+  scrollbar-gutter: stable both-edges;
+/* Wallet gate entrance (replaces a framer-motion fade so the root layout does
+   not ship the animation library to every route — FE-076). */
+@keyframes wallet-gate-enter {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.wallet-gate-enter {
+  animation: wallet-gate-enter 0.3s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wallet-gate-enter {
+    animation: none;
+  }
 }

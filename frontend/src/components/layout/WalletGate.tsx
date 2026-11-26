@@ -1,16 +1,7 @@
 'use client';
 
 import { StellarNetwork, useWallet } from '@/contexts/WalletContext';
-import {
-  AlertCircle,
-  CheckCircle2,
-  Download,
-  ExternalLink,
-  Globe,
-  RefreshCw,
-  ShieldAlert,
-  Wallet,
-} from 'lucide-react';
+import { AlertCircle, CheckCircle2, Download, ExternalLink, Globe, RefreshCw, ShieldAlert, Wallet } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -59,8 +50,8 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
               <ShieldAlert className="h-5 w-5 text-amber-400 shrink-0" />
               <span>
                 <strong>Network Mismatch Detected:</strong> Application target is{' '}
-                <span className="font-semibold underline">{activeNetwork}</span> but connected
-                wallet is on <span className="font-semibold underline">{walletNetwork}</span>.
+                <span className="font-semibold underline">{activeNetwork}</span> but connected wallet is on{' '}
+                <span className="font-semibold underline">{walletNetwork}</span>.
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -86,7 +77,11 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-      <div className="max-w-xl w-full bg-bg-secondary border border-border-theme rounded-2xl p-8 shadow-2xl space-y-6">
+      {/* CSS fade-in instead of framer-motion: this gate is in the root layout,
+          so its dependencies are paid by every route (FE-076). */}
+      <div
+        className="wallet-gate-enter max-w-xl w-full bg-bg-secondary border border-border-theme rounded-2xl p-8 shadow-2xl space-y-6"
+      >
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3">
             <div className="bg-red-500/10 p-3 rounded-full border border-red-500/20">
@@ -125,15 +120,15 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
             return (
               <div
                 key={wallet.id}
-                className={`flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border transition-all ${
+                className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
                   installed
                     ? 'border-border-theme hover:border-red-500 hover:bg-red-500/5 cursor-pointer'
                     : 'border-neutral-800 bg-neutral-950/40 opacity-75'
                 }`}
               >
-                <div className="flex min-w-0 flex-1 items-center gap-3">
+                <div className="flex items-center gap-3">
                   <span className="text-2xl">{wallet.icon}</span>
-                  <div className="min-w-0">
+                  <div>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-sm">{wallet.name}</span>
                       {wallet.recommended && installed && (
@@ -151,13 +146,11 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
                         </span>
                       )}
                     </div>
-                    <p className="mt-0.5 break-words text-xs text-text-secondary">
-                      {wallet.description}
-                    </p>
+                    <p className="text-xs text-text-secondary mt-0.5">{wallet.description}</p>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-end gap-2">
+                <div className="flex items-center gap-2">
                   {!installed && (
                     <a
                       href={wallet.downloadUrl}
@@ -194,8 +187,7 @@ export default function WalletGate({ children }: { children: React.ReactNode }) 
         <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl flex items-start gap-3 text-xs text-yellow-200/80">
           <AlertCircle className="h-4 w-4 text-yellow-500 shrink-0 mt-0.5" />
           <span>
-            Targeting <strong>{activeNetwork}</strong>. If your wallet is on a different network,
-            you will be prompted to switch seamlessly.
+            Targeting <strong>{activeNetwork}</strong>. If your wallet is on a different network, you will be prompted to switch seamlessly.
           </span>
         </div>
       </div>

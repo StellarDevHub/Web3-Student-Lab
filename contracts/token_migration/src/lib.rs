@@ -11,7 +11,7 @@ pub use vesting::MigrationVestingSchedule;
 pub mod burner;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, token,
+    contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error, token,
     Address, Env, Vec,
 };
 
@@ -109,6 +109,76 @@ pub struct UserRecordV2 {
 pub enum VersionedUserRecord {
     V1(UserRecordV1),
     V2(UserRecordV2),
+}
+
+// ── Typed contract events ─────────────────────────────────────────────────────
+
+/// Emitted after an in-place v1 → v2 storage migration batch.
+///
+/// Topics: `(stor_mig)`; data: `cursor`.
+#[contractevent(topics = ["stor_mig"], data_format = "single-value")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StorageMigrationEvent {
+    pub cursor: u32,
+}
+
+/// Emitted when a vesting schedule is created.
+///
+/// Topics: `(vest_new, schedule_id)`;
+/// data: `(beneficiary, total_amount, end_ledger)`.
+#[contractevent(topics = ["vest_new"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VestingScheduleCreatedEvent {
+    #[topic]
+    pub schedule_id: u64,
+    pub beneficiary: Address,
+    pub total_amount: i128,
+    pub end_ledger: u32,
+}
+
+/// Emitted when vested tokens are claimed.
+///
+/// Topics: `(vest_clm, schedule_id)`;
+/// data: `(beneficiary, claimed, current_ledger)`.
+#[contractevent(topics = ["vest_clm"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VestingClaimedEvent {
+    #[topic]
+    pub schedule_id: u64,
+    pub beneficiary: Address,
+    pub claimed: i128,
+    pub current_ledger: u32,
+}
+
+/// Emitted when a vesting schedule is revoked.
+///
+/// Topics: `(vest_rev, schedule_id)`;
+/// data: `(unvested, claimable, current_ledger)`.
+#[contractevent(topics = ["vest_rev"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VestingRevokedEvent {
+    #[topic]
+    pub schedule_id: u64,
+    pub unvested: i128,
+    pub claimable: i128,
+    pub current_ledger: u32,
+}
+
+/// Emitted for every legacy token migration, vested or immediate.
+///
+/// Topics: `(migrated, caller)`;
+/// data: `(legacy_amount, new_amount, ratio, denominator, vested, ts)`.
+#[contractevent(topics = ["migrated"], data_format = "vec")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TokenMigratedEvent {
+    #[topic]
+    pub caller: Address,
+    pub legacy_amount: i128,
+    pub new_amount: i128,
+    pub ratio_new_per_old: u32,
+    pub denominator: u32,
+    pub vested: bool,
+    pub ts: u64,
 }
 
 #[contract]
@@ -425,7 +495,7 @@ impl TokenMigrationContract {
             .instance()
             .set(&DataKey::MigrationStatus, &status);
 
-        env.events().publish((symbol_short!("stor_mig"),), cursor);
+        StorageMigrationEvent { cursor }.publish(&env);
 
         cursor
     }
@@ -494,14 +564,13 @@ impl TokenMigrationContract {
             .persistent()
             .set(&DataKey::BeneficiaryVesting(beneficiary), &list);
 
-        env.events().publish(
-            (symbol_short!("vest_new"), schedule_id),
-            (
-                schedule.beneficiary.clone(),
-                total_amount,
-                schedule.end_ledger,
-            ),
-        );
+        VestingScheduleCreatedEvent {
+            schedule_id,
+            beneficiary: schedule.beneficiary.clone(),
+            total_amount,
+            end_ledger: schedule.end_ledger,
+        }
+        .publish(&env);
         schedule_id
     }
 
@@ -544,10 +613,13 @@ impl TokenMigrationContract {
         env.storage()
             .persistent()
             .set(&DataKey::VestingSchedule(schedule_id), &schedule);
-        env.events().publish(
-            (symbol_short!("vest_clm"), schedule_id),
-            (beneficiary, claimed, current_ledger),
-        );
+        VestingClaimedEvent {
+            schedule_id,
+            beneficiary,
+            claimed,
+            current_ledger,
+        }
+        .publish(&env);
         claimed
     }
 
@@ -580,10 +652,13 @@ impl TokenMigrationContract {
         env.storage()
             .persistent()
             .set(&DataKey::VestingSchedule(schedule_id), &schedule);
-        env.events().publish(
-            (symbol_short!("vest_rev"), schedule_id),
-            (unvested, claimable, current_ledger),
-        );
+        VestingRevokedEvent {
+            schedule_id,
+            unvested,
+            claimable,
+            current_ledger,
+        }
+        .publish(&env);
         (unvested, claimable)
     }
 
@@ -692,17 +767,16 @@ impl TokenMigrationContract {
             .instance()
             .get(&DataKey::RatioDenominator)
             .unwrap_or(1);
-        env.events().publish(
-            (symbol_short!("migrated"), caller.clone()),
-            (
-                legacy_amount,
-                new_amount,
-                config.ratio_new_per_old,
-                denominator,
-                vested,
-                env.ledger().timestamp(),
-            ),
-        );
+        TokenMigratedEvent {
+            caller: caller.clone(),
+            legacy_amount,
+            new_amount,
+            ratio_new_per_old: config.ratio_new_per_old,
+            denominator,
+            vested,
+            ts: env.ledger().timestamp(),
+        }
+        .publish(env);
     }
 }
 

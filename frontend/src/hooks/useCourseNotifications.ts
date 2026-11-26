@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback, type RefObject } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useNotifications } from '@/contexts/NotificationContext';
+import { getStoredSessionToken, SESSION_STORAGE_EVENT } from '@/lib/credentialStorage';
 
 /**
  * Shape of a course-notification event emitted by the backend via Socket.IO.
@@ -131,14 +132,22 @@ export function useCourseNotifications(
   // socket and prevents reconnect attempts. The 'storage' event covers
   // cross-tab logout; same-tab logout re-renders via the auth flow.
   useEffect(() => {
-    const readToken = () =>
-      setToken(
-        localStorage.getItem('token') ??
-          localStorage.getItem('auth_token')
-      );
+    let active = true;
+    const readToken = () => {
+      getStoredSessionToken()
+        .then((storedToken) => {
+          if (active) setToken(storedToken);
+        })
+        .catch((error) => console.error('Failed to read encrypted session token:', error));
+    };
     readToken();
     window.addEventListener('storage', readToken);
-    return () => window.removeEventListener('storage', readToken);
+    window.addEventListener(SESSION_STORAGE_EVENT, readToken);
+    return () => {
+      active = false;
+      window.removeEventListener('storage', readToken);
+      window.removeEventListener(SESSION_STORAGE_EVENT, readToken);
+    };
   }, []);
 
   const handleEvent = useCallback(

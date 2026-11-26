@@ -1,14 +1,56 @@
 import type { NextConfig } from 'next';
 import path from 'path';
+import { validatePublicEnv } from './src/lib/env';
 
-const withBundleAnalyzer =
-  process.env.ANALYZE === 'true'
-    ? require('@next/bundle-analyzer')({ enabled: true })
-    : (config: NextConfig) => config;
+if (process.env.NODE_ENV === 'production') {
+  const { errors } = validatePublicEnv();
+  if (errors.length > 0) {
+    throw new Error(`Invalid frontend build configuration:\n- ${errors.join('\n- ')}`);
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { HEAVY_LIBRARIES, packagesRegExp } = require('./scripts/bundle/heavy-libraries');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { HeavyModulesManifestPlugin } = require('./scripts/bundle/heavy-modules-plugin');
+
+const withBundleAnalyzer = process.env.ANALYZE === 'true'
+  ? require('@next/bundle-analyzer')({ enabled: true })
+  : (config: NextConfig) => config;
+
+/** One enforced async cacheGroup per heavy library family. */
+function heavyLibraryCacheGroups() {
+  const groups: Record<string, object> = {};
+  for (const lib of HEAVY_LIBRARIES as Array<{ id: string; chunkName: string; packages: string[] }>) {
+    groups[`heavy-${lib.id}`] = {
+      test: packagesRegExp(lib.packages),
+      name: lib.chunkName,
+      chunks: 'async',
+      priority: 50,
+      enforce: true,
+      reuseExistingChunk: true,
+    };
+  }
+  return groups;
+}
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
   transpilePackages: ['recharts'],
+
+  // FE-066: Partial Prerendering (PPR). In Next.js 16 the standalone
+  // `experimental.ppr` flag and `experimental_ppr` route segment config have
+  // been removed; PPR is now the default App Router behaviour when Cache
+  // Components is enabled. `cacheComponents` unifies the ppr / useCache /
+  // dynamicIO flags. Data fetching is dynamic by default and the static shell
+  // (course curriculum, navigation, headers) is prerendered at build time and
+  // served from the edge CDN, while user-specific enrollment, progress, and
+  // completion state streams in behind <Suspense> boundaries.
+  cacheComponents: true,
+  // Pairs with cacheComponents: the first Cache Components release predates
+  // Partial Prefetching, so the flag must be set explicitly to silence the
+  // warning and enable per-link prefetching of cached URL-specific content.
+  partialPrefetching: true,
 
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
     config.resolve.modules = [
@@ -27,6 +69,10 @@ const nextConfig: NextConfig = {
 
     // Client-only: server bundles are not shipped to the browser (FE-050).
     if (!isServer) {
+      // Records which heavy libraries end up in initial vs async chunks so
+      // `npm run check:bundle` can fail the build on a regression (FE-076).
+      if (!dev) config.plugins.push(new HeavyModulesManifestPlugin());
+
       if (!config.optimization.splitChunks) {
         config.optimization.splitChunks = {};
       }
@@ -53,32 +99,27 @@ const nextConfig: NextConfig = {
             priority: 40,
             enforce: true,
           },
-          charts: {
-            test: /[\\/]node_modules[\\/](chart\.js|react-chartjs-2|recharts|d3-[\w-]+)[\\/]/,
-            name: 'async-charts',
-            chunks: 'async',
-            priority: 40,
-          },
+          // Charting & web3-math libraries (FE-076): one async chunk per family
+          // (async-d3, async-chartjs, async-recharts, async-web3-math), built
+          // from the same registry `check:bundle` enforces. `chunks: 'async'`
+          // means they can only be reached through next/dynamic / import().
+          ...heavyLibraryCacheGroups(),
           wasm: {
-            test: /[\\/]node_modules[\\/](wabt|ethers|@ethersproject)[\\/]/,
-            name: 'async-wasm-evm',
+            test: /[\\/]node_modules[\\/]wabt[\\/]/,
+            name: 'async-wasm',
             chunks: 'async',
             priority: 40,
             enforce: true,
           },
+          // The Stellar SDK (~250 KB gzipped) is shared by many tool routes but
+          // must not ride along on every page. A named `chunks: 'all'` group
+          // used to merge it with the tiny @stellar/freighter-api the root
+          // layout needs, putting the whole SDK into everyone's first load
+          // (FE-076). Async-only now; static users get it via normal splitting.
           stellar: {
-            test: /[\\/]node_modules[\\/]@stellar[\\/]/,
-            name: 'stellar',
-            // Keep the large Stellar SDK out of every route's shared initial
-            // chunk. Routes that need it can load their own code on demand.
+            test: /[\\/]node_modules[\\/]@stellar[\\/]stellar-(sdk|base)[\\/]/,
+            name: 'async-stellar',
             chunks: 'async',
-            priority: 20,
-            enforce: true,
-          },
-          d3: {
-            test: /[\\/]node_modules[\\/]d3[\\/]/,
-            name: 'd3',
-            chunks: 'all',
             priority: 20,
           },
           // React runtime shared by every route — one long-lived cacheable chunk.
@@ -104,11 +145,14 @@ const nextConfig: NextConfig = {
             chunks: 'async',
             priority: 35,
           },
+          // Code shared by 2+ chunks. No fixed `name` (FE-076): a single global
+          // "common" chunk was part of every route's first load (~130 KB
+          // gzipped) regardless of whether the route used any of it.
           common: {
-            name: 'common',
             minChunks: 2,
             chunks: 'all',
             priority: 5,
+            reuseExistingChunk: true,
           },
         },
       };
@@ -121,8 +165,11 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    formats: ['image/webp', 'image/avif'],
+    // Next's optimizer negotiates AVIF first and WebP for broader compatibility.
+    formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 60 * 60 * 24 * 30,
+    maximumRedirects: 2,
+    maximumResponseBody: 10_000_000,
   },
   // Immutable CDN cache headers for static assets — FE-HARD-50
   async headers() {
@@ -161,14 +208,7 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     // Barrel-file tree shaking for icon/util/animation libraries (FE-050).
-    optimizePackageImports: [
-      'd3',
-      'lucide-react',
-      'date-fns',
-      'framer-motion',
-      'recharts',
-      'react-chartjs-2',
-    ],
+    optimizePackageImports: ['d3', 'lucide-react', 'date-fns', 'framer-motion', 'recharts', 'react-chartjs-2', 'ethers'],
   },
 };
 

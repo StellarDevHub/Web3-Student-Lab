@@ -69,14 +69,10 @@ export function PasskeyLogin({
       return;
     }
 
+    // No built-in biometric sensor is fine: roaming security keys (YubiKey)
+    // and phones via QR code can still complete the ceremony.
     const platformAvailable = await isPlatformAuthenticatorAvailable();
-    if (!platformAvailable) {
-      setError('Biometric authentication is not available on this device.');
-      setStep('error');
-      return;
-    }
-
-    setDeviceName(getAuthenticatorName());
+    setDeviceName(platformAvailable ? getAuthenticatorName() : 'your security key');
 
     // Check if user has stored credentials
     const storedCredentials = await getStoredCredentials();

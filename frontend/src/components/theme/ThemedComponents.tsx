@@ -14,23 +14,18 @@ export const ThemedCard: React.FC<ThemedComponentProps & { title?: string }> = (
   children,
   title,
 }) => {
-  const { colors, isDark } = useThemeMode();
+  const { isDark } = useThemeMode();
 
   return (
     <div
-      style={{
-        backgroundColor: colors.background.secondary,
-        borderColor: colors.border.light,
-        color: colors.text.primary,
-      }}
-      className="rounded-lg border p-4 transition-colors duration-300"
+      className="rounded-lg border border-theme-light bg-theme-secondary p-4 text-theme-primary transition-colors duration-300"
     >
       {title && (
-        <h3 style={{ color: colors.text.primary }} className="mb-2 font-semibold">
+        <h3 className="mb-2 font-semibold text-theme-primary">
           {title}
         </h3>
       )}
-      <p style={{ color: colors.text.secondary }}>{children}</p>
+      <p className="text-theme-secondary">{children}</p>
     </div>
   );
 };
@@ -146,12 +141,7 @@ export const ThemeShowcase: React.FC = () => {
 
       {/* Current Theme Info */}
       <div
-        style={{
-          backgroundColor: colors.background.tertiary,
-          borderColor: colors.border.medium,
-          color: colors.text.secondary,
-        }}
-        className="rounded-lg border p-4"
+        className="rounded-lg border border-theme-medium bg-theme-tertiary p-4 text-theme-secondary"
       >
         <p className="text-sm">
           Current theme: <strong>{isDark ? 'Dark' : 'Light'}</strong>

@@ -5,6 +5,7 @@ import { GasRelayerService } from '../blockchain/gasRelayer.service.js';
 import { assertQuota, getUsage } from '../blockchain/relayerQuota.js';
 import logger from '../utils/logger.js';
 import { submitFeeBump } from '../workers/relayerWorker.js';
+import { getRelayerSigner } from '../services/relayerService.js';
 
 const router = Router();
 const relayer = new GasRelayerService();
@@ -25,7 +26,8 @@ function studentDid(user: Express.Request['user']): string {
 /**
  * POST /relayer/relay
  * Accept a student-signed inner transaction XDR, wrap it in a fee-bump envelope,
- * and submit it to Horizon on behalf of the student.
+ * and submit it to Horizon on behalf of the student. Signing is delegated to the
+ * KMS/HSM-backed relayer signer service; no private key is loaded into process memory.
  */
 router.post('/relay', authenticate, async (req: Request, res: Response) => {
   const parse = relaySchema.safeParse(req.body);
@@ -59,7 +61,8 @@ router.post('/relay', authenticate, async (req: Request, res: Response) => {
   }
 
   try {
-    const feeAccount = relayer.getRelayerPublicKey();
+    const signer = await getRelayerSigner();
+    const feeAccount = signer.publicKey;
     const submitted = await submitFeeBump(feeBumpXdr, feeAccount, did, MAX_FEE_STROOPS);
     res.json({ hash: submitted.hash, ledger: submitted.ledger });
   } catch (err: any) {

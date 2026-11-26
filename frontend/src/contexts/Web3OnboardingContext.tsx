@@ -6,10 +6,6 @@ import type { CallBackProps, Step } from 'react-joyride';
 import { useWallet } from './WalletContext';
 import { api } from '@/lib/api';
 
-const Joyride = dynamic(() => import('react-joyride').then((module) => module.Joyride), {
-  ssr: false,
-});
-
 export interface OnboardingState {
   hasCompletedWalletCreation: boolean;
   hasReceivedTokens: boolean;
@@ -28,6 +24,16 @@ interface Web3OnboardingContextType {
 }
 
 const Web3OnboardingContext = createContext<Web3OnboardingContextType | null>(null);
+
+// react-joyride (+ floating-ui) is only fetched once a tour actually runs
+// (FE-076); it used to ship in every route's first-load JS via the root layout.
+const Joyride = dynamic(() => import('react-joyride').then((m) => m.Joyride), { ssr: false });
+
+// Values of react-joyride's STATUS / EVENTS / ACTIONS constants, inlined so the
+// library is not needed until the tour renders.
+const STATUS = { FINISHED: 'finished', SKIPPED: 'skipped' } as const;
+const EVENTS = { STEP_AFTER: 'step:after', TARGET_NOT_FOUND: 'error:target_not_found' } as const;
+const ACTIONS = { NEXT: 'next', PREV: 'prev' } as const;
 
 const ONBOARDING_STEPS: Step[] = [
   {
@@ -50,11 +56,10 @@ const ONBOARDING_STEPS: Step[] = [
   },
   {
     target: '.deploy-contract-btn',
-    content:
-      'Finally, deploy your very first smart contract! This will require a transaction signature.',
+    content: 'Finally, deploy your very first smart contract! This will require a transaction signature.',
     placement: 'top',
     disableBeacon: true,
-  },
+  }
 ];
 
 export const Web3OnboardingProvider = ({ children }: { children: ReactNode }) => {
@@ -117,7 +122,7 @@ export const Web3OnboardingProvider = ({ children }: { children: ReactNode }) =>
     const newState = { ...state, [stepName]: true };
     setState(newState);
     await saveStateToBackend({ [stepName]: true });
-
+    
     // Auto-advance logic based on step completion
     if (stepName === 'hasCompletedWalletCreation' && stepIndex === 1) {
       nextStep();
@@ -146,30 +151,30 @@ export const Web3OnboardingProvider = ({ children }: { children: ReactNode }) =>
   const handleJoyrideCallback = async (data: CallBackProps) => {
     const { action, index, status, type } = data;
 
-    if ((['finished', 'skipped'] as string[]).includes(status)) {
+    if (([STATUS.FINISHED, STATUS.SKIPPED] as string[]).includes(status)) {
       setRun(false);
       setState((prev) => ({ ...prev, isTourActive: false }));
       await saveStateToBackend({ currentStepIndex: index });
-    } else if ((['step:after', 'target:not_found'] as string[]).includes(type)) {
+    } else if (([EVENTS.STEP_AFTER, EVENTS.TARGET_NOT_FOUND] as string[]).includes(type)) {
       // Logic for web3 async events
       // If we are on the wallet step, and user clicks next, but wallet isn't connected, we shouldn't advance unless they did it.
       // We can intercept the next action
-      if (action === 'next') {
+      if (action === ACTIONS.NEXT) {
         if (index === 1 && !state.hasCompletedWalletCreation) {
-          // Wait for wallet creation
-          return; // Do not advance stepIndex manually, let completeStep handle it
+           // Wait for wallet creation
+           return; // Do not advance stepIndex manually, let completeStep handle it
         }
         if (index === 2 && !state.hasReceivedTokens) {
-          return; // Wait for tokens
+           return; // Wait for tokens
         }
         if (index === 3 && !state.hasDeployedContract) {
-          return; // Wait for contract deploy
+           return; // Wait for contract deploy
         }
-
-        const nextIndex = index + (action === 'prev' ? -1 : 1);
+        
+        const nextIndex = index + (action === ACTIONS.PREV ? -1 : 1);
         setStepIndex(nextIndex);
         await saveStateToBackend({ currentStepIndex: nextIndex });
-      } else if (action === 'prev') {
+      } else if (action === ACTIONS.PREV) {
         const prevIndex = index - 1;
         setStepIndex(prevIndex);
         await saveStateToBackend({ currentStepIndex: prevIndex });
@@ -189,28 +194,28 @@ export const Web3OnboardingProvider = ({ children }: { children: ReactNode }) =>
       }}
     >
       {run && (
-        <Joyride
-          steps={steps}
-          run={run}
-          stepIndex={stepIndex}
-          continuous={true}
-          showProgress={true}
-          showSkipButton={true}
-          callback={handleJoyrideCallback}
-          styles={{
-            options: {
-              primaryColor: '#7c3aed',
-              backgroundColor: '#1f2937',
-              textColor: '#fff',
-              arrowColor: '#1f2937',
-            },
-            tooltipContainer: {
-              textAlign: 'left',
-            },
-          }}
-          disableOverlayClose={true}
-          hideCloseButton={false}
-        />
+      <Joyride
+        steps={steps}
+        run={run}
+        stepIndex={stepIndex}
+        continuous={true}
+        showProgress={true}
+        showSkipButton={true}
+        callback={handleJoyrideCallback}
+        styles={{
+          options: {
+            primaryColor: '#7c3aed',
+            backgroundColor: '#1f2937',
+            textColor: '#fff',
+            arrowColor: '#1f2937',
+          },
+          tooltipContainer: {
+            textAlign: 'left',
+          },
+        }}
+        disableOverlayClose={true}
+        hideCloseButton={false}
+      />
       )}
       {children}
     </Web3OnboardingContext.Provider>

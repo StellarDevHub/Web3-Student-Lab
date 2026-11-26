@@ -9,6 +9,7 @@ import {
 } from '@/lib/web3/transactionMachine';
 import { authAPI } from '@/lib/api';
 import { getSessionBroadcastManager } from '@/services/session/broadcastSync';
+import { storeEncryptedSession } from '@/lib/credentialStorage';
 
 export type StellarNetwork = 'PUBLIC' | 'TESTNET' | 'FUTURENET';
 
@@ -758,8 +759,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         const authResponse = await authAPI.verifySep10Challenge(signedXdr);
 
         if (authResponse?.token) {
-          localStorage.setItem('token', authResponse.token);
-          localStorage.setItem('user', JSON.stringify(authResponse.user));
+          await storeEncryptedSession({
+            token: authResponse.token,
+            accessToken: authResponse.accessToken,
+            refreshToken: authResponse.refreshToken ?? null,
+            user: authResponse.user,
+          });
         }
 
         return authResponse;

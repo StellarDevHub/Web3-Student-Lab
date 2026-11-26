@@ -96,7 +96,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
     return (
       <button
         onClick={toggleTheme}
-        className={`flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-300 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-black focus:outline-none dark:bg-gray-100 dark:text-gray-600 dark:hover:bg-gray-200 dark:hover:text-gray-700 dark:focus:ring-offset-white ${className} `}
+        className={`flex items-center gap-2 rounded-lg bg-theme-primary px-3 py-2 text-theme-secondary transition-colors hover:bg-theme-tertiary hover:text-theme-primary focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-theme-primary focus:outline-none ${className} `}
         aria-label={`Switch theme`}
       >
         <AnimatedThemeIcon isDark={isDark} size={size} />
@@ -114,7 +114,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
   return (
     <button
       onClick={toggleTheme}
-      className={`relative flex items-center justify-center rounded-lg ${sizeMap[size]} bg-gray-900 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-300 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-black focus:outline-none dark:bg-gray-100 dark:text-gray-600 dark:hover:bg-gray-200 dark:hover:text-gray-700 dark:focus:ring-offset-white ${className} `}
+      className={`relative flex items-center justify-center rounded-lg ${sizeMap[size]} bg-theme-primary text-theme-secondary transition-colors hover:bg-theme-tertiary hover:text-theme-primary focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-theme-primary focus:outline-none ${className} `}
       aria-label={`Switch theme`}
       type="button"
     >
@@ -182,7 +182,7 @@ export const ThemeToggleCompact: React.FC<{ className?: string }> = ({ className
   return (
     <button
       onClick={toggleTheme}
-      className={`rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-900 hover:text-gray-300 focus:ring-2 focus:ring-purple-500 focus:outline-none dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white ${className} `}
+      className={`rounded-md p-1.5 text-theme-secondary transition-colors hover:bg-theme-tertiary hover:text-theme-primary focus:ring-2 focus:ring-purple-500 focus:outline-none ${className} `}
       aria-label={`Switch theme`}
     >
       <div>

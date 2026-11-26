@@ -1,12 +1,35 @@
 import crypto from 'node:crypto';
 import {
-  consumeOAuthPkceSession,
-  consumeOAuthLoginTicket,
-  createOAuthLoginTicket,
-  createOAuthPkceSession,
+    assertExactRedirectUri,
+    assertValidPkceChallenge,
+    assertValidPkceVerifier,
+    consumeOAuthLoginTicket,
+    consumeOAuthPkceSession,
+    createOAuthLoginTicket,
+    createOAuthPkceSession,
 } from '../src/auth/oauthPkce.js';
 
 describe('OAuth PKCE sessions', () => {
+  it('accepts only RFC 7636 verifier and S256 challenge formats', () => {
+    const verifier = crypto.randomBytes(32).toString('base64url');
+    const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+
+    expect(() => assertValidPkceVerifier(verifier)).not.toThrow();
+    expect(() => assertValidPkceChallenge(challenge)).not.toThrow();
+    expect(() => assertValidPkceVerifier(undefined)).toThrow(/code_verifier/);
+    expect(() => assertValidPkceVerifier('plain')).toThrow(/code_verifier/);
+    expect(() => assertValidPkceChallenge('plain')).toThrow(/S256/);
+  });
+
+  it('requires an exact redirect URI and rejects wildcard registrations', () => {
+    const registered = 'https://lab.example.edu/oauth/callback';
+
+    expect(assertExactRedirectUri(registered, registered)).toBe(registered);
+    expect(() => assertExactRedirectUri(`${registered}/other`, registered)).toThrow(/exactly match/);
+    expect(() => assertExactRedirectUri('https://*.example.edu/callback', 'https://*.example.edu/callback'))
+      .toThrow(/wildcard-free/);
+  });
+
   it('creates an S256 challenge for the stored verifier', async () => {
     const { state, challenge } = await createOAuthPkceSession({
       provider: 'github',

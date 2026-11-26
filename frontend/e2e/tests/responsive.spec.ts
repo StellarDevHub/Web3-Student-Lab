@@ -60,9 +60,36 @@ test.describe('mobile-first responsive layout', () => {
       await expect(drawer.getByText('Learn', { exact: true }).first()).toBeVisible();
       await expect(drawer.getByText('Dashboard', { exact: true }).first()).toBeVisible();
 
+      await expect(drawer).toHaveAttribute('aria-hidden', 'false');
+
       await page.getByLabel('Close menu').first().evaluate((b: HTMLElement) => b.click());
 
       await expect(page.getByLabel('Open menu').first()).toBeVisible();
+      await expect(page.locator('[aria-label="Mobile Navigation"]')).toHaveAttribute(
+        'aria-hidden',
+        'true'
+      );
+    });
+
+    test('drawer closes on Escape and returns focus to the trigger', async ({ page }) => {
+      const viewport = page.viewportSize();
+      test.skip(!(viewport && viewport.width < 768), 'Mobile-only test');
+
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+      const openButton = page.getByLabel('Open menu').first();
+      await openButton.click();
+
+      const closeButton = page.getByRole('navigation', { name: /Mobile Navigation/i }).getByLabel('Close menu');
+      await expect(closeButton).toBeFocused();
+
+      await page.keyboard.press('Escape');
+
+      await expect(page.locator('[aria-label="Mobile Navigation"]')).toHaveAttribute(
+        'aria-hidden',
+        'true'
+      );
+      await expect(openButton).toBeFocused();
     });
 
     test('desktop nav does not show hamburger menu button', async ({ page }) => {
@@ -177,6 +204,51 @@ test.describe('mobile-first responsive layout', () => {
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth
       );
       if (overflow) { const wide = await page.evaluate(() => [...document.querySelectorAll("*")].filter(e => e.getBoundingClientRect().right > document.documentElement.clientWidth).map(e => e.tagName + " " + e.className)); console.log("WIDE ELEMENTS:", wide); } expect(overflow).toBe(false);
+    });
+  });
+
+  test.describe('virtualized leaderboard', () => {
+    test('keeps the DOM bounded for a 5,000-entry leaderboard', async ({ page, stellarAddress }) => {
+      await mockWallet(page, stellarAddress);
+
+      const entries = Array.from({ length: 5000 }, (_, index) => ({
+        rank: index + 1,
+        studentId: `student-${index + 1}`,
+        studentName: `Student ${index + 1}`,
+        walletAddress: null,
+        certificateCount: 5000 - index,
+        lastIssuedAt: '2026-01-01T00:00:00.000Z',
+      }));
+
+      await page.route('**/api/v1/certificates/explorer/leaderboard/students**', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ status: 'success', data: entries }),
+        })
+      );
+
+      await page.goto('/hackathon-ideas', { waitUntil: 'domcontentloaded' });
+
+      const rows = page.getByTestId('leaderboard-row');
+      await expect(rows.first()).toBeVisible();
+      await expect(rows.first()).toContainText('Student 1');
+
+      const initialCount = await rows.count();
+      expect(initialCount).toBeGreaterThan(0);
+      expect(initialCount).toBeLessThan(60);
+
+      const scroller = page.getByTestId('leaderboard-scroll');
+      await expect
+        .poll(async () => {
+          await scroller.evaluate((el) => {
+            el.scrollTop = el.scrollHeight;
+          });
+          return (await rows.last().textContent()) ?? '';
+        })
+        .toContain('#5000');
+
+      expect(await rows.count()).toBeLessThan(60);
     });
   });
 
