@@ -7,6 +7,8 @@
  *                           ↘ error
  */
 
+import type { MemoryUsage, SimulationDiagnostic } from '../../services/stellar/simulator';
+
 /** Unique identifier for a single compile/execute request. */
 export type CancellationId = string;
 
@@ -41,10 +43,27 @@ export interface CancellableCompileRequest {
   filePath: string;
 }
 
-/** Message from worker to cancel an in-flight compile. */
+/** Run a guest WASM module inside a memory-governed simulation session. */
+export interface CancellableSimulateRequest {
+  type: 'simulate';
+  cancellationId: CancellationId;
+  /** Module bytes. Sent as a transferable to avoid copying. */
+  wasm: ArrayBuffer;
+  exportName: string;
+  args?: Array<number | bigint>;
+  /** Per-session resident memory budget in bytes (capped at 50 MB). */
+  maxMemoryBytes?: number;
+}
+
+/** Message from page to cancel an in-flight compile. */
 export interface WorkerCancelMessage {
   type: 'cancel';
   cancellationId: CancellationId;
+}
+
+/** Ask the worker to release everything and close itself. */
+export interface WorkerDisposeMessage {
+  type: 'dispose';
 }
 
 /** Worker-to-page message carrying cancellation id in every frame. */
@@ -63,6 +82,12 @@ export interface CancellableWorkerCompleteMessage {
   exports: string[];
   wasmSizeKb: number;
   durationMs: number;
+  /** Present for simulation runs. */
+  memory?: MemoryUsage;
+  /** Present when a simulation failed. */
+  diagnostic?: SimulationDiagnostic;
+  /** Stringified return value of a successful simulation. */
+  result?: string;
 }
 
 export interface CancellableWorkerCancelledMessage {
@@ -77,7 +102,9 @@ export type CancellableWorkerResponse =
 
 export type CancellableWorkerInbound =
   | CancellableCompileRequest
-  | WorkerCancelMessage;
+  | CancellableSimulateRequest
+  | WorkerCancelMessage
+  | WorkerDisposeMessage;
 
 // ─── Backend cancellation types ───────────────────────────────────────────────
 

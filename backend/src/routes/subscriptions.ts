@@ -145,7 +145,7 @@ router.post('/subscribe', idempotency(), async (req: Request, res: Response) => 
 });
 
 // POST /api/subscriptions/cancel - Cancel subscription
-router.post('/cancel', async (req: Request, res: Response) => {
+router.post('/cancel', idempotency(), async (req: Request, res: Response) => {
   try {
     const { subscriber, subscription_id } = req.body;
 
@@ -188,7 +188,7 @@ router.post('/cancel', async (req: Request, res: Response) => {
 });
 
 // POST /api/subscriptions/pause - Pause subscription
-router.post('/pause', async (req: Request, res: Response) => {
+router.post('/pause', idempotency(), async (req: Request, res: Response) => {
   try {
     const { subscriber, subscription_id } = req.body;
 
@@ -224,7 +224,7 @@ router.post('/pause', async (req: Request, res: Response) => {
 });
 
 // POST /api/subscriptions/resume - Resume subscription
-router.post('/resume', async (req: Request, res: Response) => {
+router.post('/resume', idempotency(), async (req: Request, res: Response) => {
   try {
     const { subscriber, subscription_id } = req.body;
 
@@ -277,7 +277,7 @@ router.get('/payments/:subscriptionId', async (req: Request, res: Response) => {
 });
 
 // POST /api/subscriptions/execute-payment - Execute a payment
-router.post('/execute-payment', async (req: Request, res: Response) => {
+router.post('/execute-payment', idempotency(), async (req: Request, res: Response) => {
   try {
     const { subscription_id } = req.body;
 
@@ -325,7 +325,7 @@ router.post('/execute-payment', async (req: Request, res: Response) => {
 });
 
 // POST /api/subscriptions/retry-payment - Retry failed payment
-router.post('/retry-payment', async (req: Request, res: Response) => {
+router.post('/retry-payment', idempotency(), async (req: Request, res: Response) => {
   try {
     const { subscription_id } = req.body;
 

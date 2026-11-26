@@ -28,6 +28,8 @@ export default function MobileDrawer({ open, setOpen }: MobileDrawerProps) {
 
   const drawerRef = useRef<HTMLDivElement | null>(null);
   const backdropRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   // Drag tracking state
   const dragStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
@@ -54,6 +56,23 @@ export default function MobileDrawer({ open, setOpen }: MobileDrawerProps) {
       document.body.style.overflow = '';
     };
   }, [open]);
+
+  // Escape-to-close + focus handling: focus the close button on open and
+  // restore focus to the trigger when the drawer closes.
+  useEffect(() => {
+    if (!open) return;
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+    const focusTimer = window.setTimeout(() => closeButtonRef.current?.focus(), 50);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener('keydown', handleKeyDown);
+      previouslyFocusedRef.current?.focus?.();
+    };
+  }, [open, setOpen]);
 
   // Global Pointer events for swipe-to-open and swipe-to-close gestures
   useEffect(() => {
@@ -149,7 +168,8 @@ export default function MobileDrawer({ open, setOpen }: MobileDrawerProps) {
 
       // Restore spring-like bezier transition
       if (drawerRef.current) {
-        drawerRef.current.style.transition = 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1)';
+        drawerRef.current.style.transition =
+          'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1), translate 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1)';
       }
       if (backdropRef.current) {
         backdropRef.current.style.transition = 'opacity 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1)';
@@ -235,7 +255,7 @@ export default function MobileDrawer({ open, setOpen }: MobileDrawerProps) {
         ref={backdropRef}
         onClick={() => setOpen(false)}
         className={cn(
-          'fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 xl:hidden',
+          'fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 motion-reduce:transition-none xl:hidden',
           open ? 'opacity-100' : 'opacity-0 pointer-events-none'
         )}
         style={{ display: open ? 'block' : 'none' }}
@@ -246,11 +266,13 @@ export default function MobileDrawer({ open, setOpen }: MobileDrawerProps) {
       <div
         ref={drawerRef}
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-[300px] flex-col border-r border-red-500/20 bg-neutral-950 p-6 shadow-[20px_0_50px_rgba(0,0,0,0.8)] transition-transform duration-300 xl:hidden',
+          'fixed inset-y-0 left-0 z-50 flex w-[300px] flex-col transform-gpu border-r border-red-500/20 bg-neutral-950 p-6 shadow-[20px_0_50px_rgba(0,0,0,0.8)] transition-transform duration-300 will-change-transform motion-reduce:transition-none xl:hidden',
           open ? 'translate-x-0' : '-translate-x-full'
         )}
         role="navigation"
         aria-label="Mobile Navigation"
+        aria-hidden={!open}
+        inert={!open}
       >
         {/* Drawer Header */}
         <div className="flex items-center justify-between border-b border-white/5 pb-4">
@@ -265,6 +287,7 @@ export default function MobileDrawer({ open, setOpen }: MobileDrawerProps) {
             </div>
           </div>
           <button
+            ref={closeButtonRef}
             onClick={() => setOpen(false)}
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
             aria-label="Close menu"

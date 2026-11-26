@@ -11,6 +11,7 @@ members = [
     "amm",
     "auth_checker",
     "certificate_nft",
+    "cicd_pipeline",
     "commit_reveal_rng",
     "content_management_system",
     "continuous_bonding_curve",
@@ -47,9 +48,6 @@ members = [
     "automated_testing_suite",
 ]
 # Incomplete or non-crate directories under contracts/ must not be listed as members.
-exclude = [
-    "cicd_pipeline",
-]
 # All contract crates are now fully reconciled into the workspace.
 
 [profile.release]

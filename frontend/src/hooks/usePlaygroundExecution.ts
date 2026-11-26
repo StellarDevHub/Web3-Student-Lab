@@ -1,38 +1,80 @@
 /**
  * usePlaygroundExecution
  *
- * Manages the full lifecycle of a playground compile operation:
- *   – Generates a unique cancellation ID per request.
- *   – Sends the cancellation ID to the compile worker and (optionally) the backend.
- *   – Guards against stale results: any message whose cancellationId differs from
- *     the current one is silently dropped.
- *   – Exposes an `ExecutionState` that the UI can render.
- *   – Provides a `cancel()` function that notifies both the worker and the backend.
+ * Lifecycle manager for playground compiles and WASM simulations.
+ *
+ *  - One worker at a time, created lazily on the first run.
+ *  - The worker is terminated (never just abandoned) when:
+ *      • the playground unmounts or the page is hidden/unloaded (pagehide),
+ *      • a run is cancelled (hard stop frees all guest memory instantly),
+ *      • the watchdog fires (runaway guest code),
+ *      • the worker crashes (e.g. the browser killed it for memory),
+ *      • it has served `maxRunsPerWorker` runs, or a run came close to the
+ *        50 MB memory budget — so every session starts from a clean heap.
+ *  - Stale results are dropped via per-run cancellation IDs.
+ *  - Log history is bounded so repeated runs can't grow React state forever.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CompileLogEntry } from '../lib/compiler/compileTypes';
 import {
   CANCELLATION_ID_HEADER,
+  type CancellableCompileRequest,
+  type CancellableSimulateRequest,
   type CancellableWorkerResponse,
   type CancellationId,
   type ExecutionPhase,
   type ExecutionState,
 } from '../lib/compiler/cancellationTypes';
 import { getApiEndpoint } from '../lib/env';
+import {
+  MAX_SESSION_MEMORY_BYTES,
+  formatDiagnostic,
+  makeDiagnostic,
+  type MemoryUsage,
+  type SimulationDiagnostic,
+} from '../services/stellar/simulator';
+
+/** Kill the worker if a run produces no terminal message within this window. */
+export const WORKER_WATCHDOG_MS = 15_000;
+/** Recycle the worker after this many runs so heap fragmentation can't accumulate. */
+export const MAX_RUNS_PER_WORKER = 10;
+/** Recycle early when a run used this fraction of the memory budget. */
+export const MEMORY_RECYCLE_RATIO = 0.8;
+/** Cap on retained log entries. */
+export const MAX_LOG_ENTRIES = 500;
+
+export interface SimulateOptions {
+  args?: Array<number | bigint>;
+  /** Resident memory budget for the session (capped at 50 MB). */
+  maxMemoryBytes?: number;
+}
 
 /** Shape returned by the hook. */
 export interface UsePlaygroundExecutionReturn {
   /** Current lifecycle state. */
   executionState: ExecutionState;
-  /** Accumulated compile log entries for the current (or most recent) run. */
+  /** Accumulated log entries for the current (or most recent) run. */
   compileLogs: CompileLogEntry[];
-  /** Call to kick off a compile. No-op if already running. */
+  /** Memory usage reported by the most recent simulation. */
+  memoryUsage: MemoryUsage | null;
+  /** Friendly diagnostic for the most recent failed simulation, if any. */
+  diagnostic: SimulationDiagnostic | null;
+  /** Kick off a compile. No-op if already running. */
   compile: (source: string, filePath: string) => void;
-  /** Cancel the in-flight compile. No-op when idle/complete. */
+  /** Run an exported function of a WASM module. No-op if already running. */
+  simulate: (wasm: ArrayBuffer | Uint8Array, exportName: string, options?: SimulateOptions) => void;
+  /** Cancel the in-flight run. No-op when idle/complete. */
   cancel: () => void;
   /** Clear logs and reset to idle. */
   reset: () => void;
+}
+
+export interface UsePlaygroundExecutionOptions {
+  /** Injectable for tests. */
+  createWorker?: () => Worker;
+  watchdogMs?: number;
+  maxRunsPerWorker?: number;
 }
 
 function makeIdleState(): ExecutionState {
@@ -45,15 +87,22 @@ function makeIdleState(): ExecutionState {
   };
 }
 
-function statusFor(phase: ExecutionPhase, cancellationId: CancellationId | null): string {
+function statusFor(phase: ExecutionPhase): string {
   switch (phase) {
-    case 'idle':       return 'Ready';
-    case 'queued':     return 'Queued — waiting for worker…';
-    case 'running':    return 'Compiling…';
-    case 'complete':   return 'Done';
-    case 'cancelled':  return 'Cancelled';
-    case 'error':      return 'Compilation failed';
-    default:           return '';
+    case 'idle':
+      return 'Ready';
+    case 'queued':
+      return 'Queued — waiting for worker…';
+    case 'running':
+      return 'Running…';
+    case 'complete':
+      return 'Done';
+    case 'cancelled':
+      return 'Cancelled';
+    case 'error':
+      return 'Run failed';
+    default:
+      return '';
   }
 }
 
@@ -66,177 +115,315 @@ function transition(
   return {
     cancellationId: id,
     phase,
-    statusMessage: statusFor(phase, id),
+    statusMessage: statusFor(phase),
     queuePosition: phase === 'queued' ? 1 : null,
     enteredAt: Date.now(),
   };
 }
 
+function logEntry(level: CompileLogEntry['level'], message: string): CompileLogEntry {
+  return {
+    id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    level,
+    timestamp: new Date().toLocaleTimeString(),
+    message,
+  };
+}
+
+function appendBounded(prev: CompileLogEntry[], next: CompileLogEntry[]): CompileLogEntry[] {
+  const merged = prev.concat(next);
+  return merged.length > MAX_LOG_ENTRIES ? merged.slice(merged.length - MAX_LOG_ENTRIES) : merged;
+}
+
+function defaultCreateWorker(): Worker {
+  return new Worker(new URL('../lib/compiler/compile.worker.ts', import.meta.url), {
+    type: 'module',
+  });
+}
+
 /**
- * Base URL for backend contract API — strictly normalized via getApiEndpoint to prevent
- * duplicate /api/v1 prefix bugs regardless of whether NEXT_PUBLIC_API_URL includes /api/v1.
+ * Base URL for backend contract API — normalized via getApiEndpoint to prevent
+ * duplicate /api/v1 prefix bugs.
  */
 const getContractsApiBase = (): string => getApiEndpoint('/contracts');
-const API_BASE = getApiEndpoint('/contracts');
 
-export function usePlaygroundExecution(): UsePlaygroundExecutionReturn {
+export function usePlaygroundExecution(
+  options: UsePlaygroundExecutionOptions = {}
+): UsePlaygroundExecutionReturn {
+  const {
+    createWorker = defaultCreateWorker,
+    watchdogMs = WORKER_WATCHDOG_MS,
+    maxRunsPerWorker = MAX_RUNS_PER_WORKER,
+  } = options;
+
   const [executionState, setExecutionState] = useState<ExecutionState>(makeIdleState);
   const [compileLogs, setCompileLogs] = useState<CompileLogEntry[]>([]);
+  const [memoryUsage, setMemoryUsage] = useState<MemoryUsage | null>(null);
+  const [diagnostic, setDiagnostic] = useState<SimulationDiagnostic | null>(null);
 
-  /**
-   * currentIdRef is the authoritative "live" cancellation ID.
-   * Any worker message whose ID does not match is stale and is discarded.
-   */
+  /** The authoritative "live" run id; worker messages for other ids are stale. */
   const currentIdRef = useRef<CancellationId | null>(null);
   const workerRef = useRef<Worker | null>(null);
+  const runsOnWorkerRef = useRef(0);
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+  const createWorkerRef = useRef(createWorker);
+  createWorkerRef.current = createWorker;
 
-  // ── Worker lifecycle ──────────────────────────────────────────────────────
-  useEffect(() => {
-    // Dynamically import the worker so Next.js bundles it correctly.
-    const worker = new Worker(
-      new URL('../lib/compiler/compile.worker.ts', import.meta.url),
-      { type: 'module' }
+  const clearWatchdog = () => {
+    if (watchdogRef.current !== null) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+  };
+
+  /** Terminate the worker and drop every reference to it. Idempotent. */
+  const retireWorker = useCallback(() => {
+    clearWatchdog();
+    const worker = workerRef.current;
+    if (!worker) return;
+    workerRef.current = null;
+    runsOnWorkerRef.current = 0;
+    worker.onmessage = null;
+    worker.onerror = null;
+    worker.onmessageerror = null;
+    try {
+      worker.postMessage({ type: 'dispose' });
+    } catch {
+      // Already gone.
+    }
+    worker.terminate();
+  }, []);
+
+  /** End the current run with an engine-level diagnostic (timeout, crash). */
+  const failCurrentRun = useCallback((diag: SimulationDiagnostic) => {
+    const id = currentIdRef.current;
+    if (!id) return;
+    currentIdRef.current = null;
+    if (!mountedRef.current) return;
+    setDiagnostic(diag);
+    setCompileLogs((prev) =>
+      appendBounded(
+        prev,
+        formatDiagnostic(diag).map((line) => logEntry('error', line))
+      )
     );
+    setExecutionState((prev) => (prev.cancellationId === id ? transition(prev, 'error') : prev));
+  }, []);
 
-    const handleMessage = (event: MessageEvent<CancellableWorkerResponse>) => {
+  const handleMessage = useCallback(
+    (event: MessageEvent<CancellableWorkerResponse>) => {
       const msg = event.data;
       const currentId = currentIdRef.current;
-
-      // Stale-result guard: drop messages that belong to a previous request.
-      if (msg.cancellationId !== currentId) return;
+      if (!msg || msg.cancellationId !== currentId || !mountedRef.current) return;
 
       if (msg.type === 'log') {
-        setCompileLogs((prev) => [...prev, msg.entry]);
+        setCompileLogs((prev) => appendBounded(prev, [msg.entry]));
         return;
       }
+
+      clearWatchdog();
+      currentIdRef.current = null;
 
       if (msg.type === 'cancelled') {
         setExecutionState((prev) =>
-          prev.cancellationId === currentId
-            ? transition(prev, 'cancelled')
-            : prev
+          prev.cancellationId === currentId ? transition(prev, 'cancelled') : prev
         );
         return;
       }
 
-      if (msg.type === 'complete') {
-        setExecutionState((prev) =>
-          prev.cancellationId === currentId
-            ? transition(prev, msg.success ? 'complete' : 'error')
-            : prev
-        );
+      // complete
+      if (msg.memory) setMemoryUsage(msg.memory);
+      setDiagnostic(msg.diagnostic ?? null);
+      setExecutionState((prev) =>
+        prev.cancellationId === currentId ? transition(prev, msg.success ? 'complete' : 'error') : prev
+      );
+
+      const nearLimit =
+        msg.memory && msg.memory.peakBytes >= msg.memory.limitBytes * MEMORY_RECYCLE_RATIO;
+      if (nearLimit || msg.diagnostic?.code === 'out-of-memory') {
+        // Start the next run from a fresh heap.
+        retireWorker();
       }
+    },
+    [retireWorker]
+  );
+
+  const ensureWorker = useCallback((): Worker | null => {
+    if (workerRef.current && runsOnWorkerRef.current >= maxRunsPerWorker) {
+      retireWorker();
+    }
+    if (workerRef.current) return workerRef.current;
+    try {
+      const worker = createWorkerRef.current();
+      worker.onmessage = handleMessage as (event: MessageEvent) => void;
+      worker.onerror = (event: ErrorEvent) => {
+        event.preventDefault?.();
+        retireWorker();
+        failCurrentRun(makeDiagnostic('worker-crashed', event.message || undefined));
+      };
+      worker.onmessageerror = () => {
+        retireWorker();
+        failCurrentRun(makeDiagnostic('worker-crashed', 'Worker message could not be deserialized'));
+      };
+      workerRef.current = worker;
+      runsOnWorkerRef.current = 0;
+      return worker;
+    } catch (error) {
+      console.error('Failed to start playground worker:', error);
+      return null;
+    }
+  }, [failCurrentRun, handleMessage, maxRunsPerWorker, retireWorker]);
+
+  // ── Teardown on unmount / navigation ──────────────────────────────────────
+  useEffect(() => {
+    mountedRef.current = true;
+    const onPageHide = () => {
+      currentIdRef.current = null;
+      abortControllerRef.current?.abort();
+      retireWorker();
     };
-
-    worker.addEventListener('message', handleMessage);
-    workerRef.current = worker;
-
+    window.addEventListener('pagehide', onPageHide);
     return () => {
-      worker.removeEventListener('message', handleMessage);
-      worker.terminate();
-      workerRef.current = null;
+      mountedRef.current = false;
+      window.removeEventListener('pagehide', onPageHide);
+      currentIdRef.current = null;
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+      retireWorker();
     };
-  }, []);
+  }, [retireWorker]);
+
+  /** Shared start sequence for compile and simulate. Returns false if busy. */
+  const startRun = useCallback(
+    (
+      build: (id: CancellationId) => CancellableCompileRequest | CancellableSimulateRequest,
+      transfer: Transferable[] = []
+    ): CancellationId | null => {
+      if (currentIdRef.current !== null) return null;
+
+      const cancellationId: CancellationId = crypto.randomUUID();
+      currentIdRef.current = cancellationId;
+      setCompileLogs([]);
+      setDiagnostic(null);
+      setExecutionState(transition(makeIdleState(), 'queued', cancellationId));
+
+      const worker = ensureWorker();
+      if (!worker) {
+        failCurrentRun(makeDiagnostic('worker-crashed', 'Web Workers are unavailable in this browser'));
+        return null;
+      }
+
+      runsOnWorkerRef.current += 1;
+      setExecutionState(transition(makeIdleState(), 'running', cancellationId));
+      worker.postMessage(build(cancellationId), transfer);
+
+      clearWatchdog();
+      watchdogRef.current = setTimeout(() => {
+        watchdogRef.current = null;
+        if (currentIdRef.current !== cancellationId) return;
+        retireWorker();
+        failCurrentRun(
+          makeDiagnostic('timeout', `No response from the simulation engine after ${Math.round(watchdogMs / 1000)}s`)
+        );
+      }, watchdogMs);
+
+      return cancellationId;
+    },
+    [ensureWorker, failCurrentRun, retireWorker, watchdogMs]
+  );
 
   // ── compile ───────────────────────────────────────────────────────────────
-  const compile = useCallback((source: string, filePath: string) => {
-    // Already running — prevent double-submit.
-    if (currentIdRef.current !== null) return;
+  const compile = useCallback(
+    (source: string, filePath: string) => {
+      const id = startRun((cancellationId) => ({
+        type: 'compile',
+        cancellationId,
+        source,
+        filePath,
+      }));
+      if (!id) return;
 
-    const cancellationId: CancellationId = crypto.randomUUID();
-    currentIdRef.current = cancellationId;
-    abortControllerRef.current = new AbortController();
+      // Best-effort backend notification so the server can register the id for
+      // /cancel. The browser compile result is authoritative.
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = new AbortController();
+      fetch(`${getContractsApiBase()}/compile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          [CANCELLATION_ID_HEADER]: id,
+        },
+        body: JSON.stringify({
+          sourceCode: source,
+          compilerVersion: '21.0.0',
+          optimization: false,
+          target: 'soroban',
+        }),
+        signal: abortControllerRef.current.signal,
+      }).catch(() => {
+        // Network errors are non-fatal for the browser-based compile workflow.
+      });
+    },
+    [startRun]
+  );
 
-    setCompileLogs([]);
-    setExecutionState(transition(makeIdleState(), 'queued', cancellationId));
-
-    if (!workerRef.current) {
-      setExecutionState(transition(makeIdleState(), 'error', cancellationId));
-      currentIdRef.current = null;
-      return;
-    }
-
-    // Move to running state just before we send to the worker.
-    setExecutionState(transition(makeIdleState(), 'running', cancellationId));
-
-    workerRef.current.postMessage({
-      type: 'compile',
-      cancellationId,
-      source,
-      filePath,
-    });
-
-    // Best-effort backend notification — fire and forget, does not block the UI.
-    // We send the ID so the server can register it in its registry and allow
-    // the /cancel endpoint to short-circuit backend execution for future operations.
-    const signal = abortControllerRef.current.signal;
-    const contractsApiBase = getContractsApiBase();
-    fetch(`${contractsApiBase}/compile`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        [CANCELLATION_ID_HEADER]: cancellationId,
-      },
-      body: JSON.stringify({
-        // Minimal body that satisfies the backend schema; frontend compile
-        // is browser-only so the server result is advisory only.
-        sourceCode: source,
-        compilerVersion: '21.0.0',
-        optimization: false,
-        target: 'soroban',
-      }),
-      signal,
-    }).catch(() => {
-      // Network errors are non-fatal for the browser-based compile workflow.
-    });
-  }, []);
+  // ── simulate ──────────────────────────────────────────────────────────────
+  const simulate = useCallback(
+    (wasm: ArrayBuffer | Uint8Array, exportName: string, simOptions: SimulateOptions = {}) => {
+      // Copy into a standalone buffer that can be transferred (zero-copy) to
+      // the worker without detaching the caller's data.
+      const source = wasm instanceof Uint8Array ? wasm : new Uint8Array(wasm);
+      const bytes = source.slice().buffer as ArrayBuffer;
+      startRun(
+        (cancellationId) => ({
+          type: 'simulate',
+          cancellationId,
+          wasm: bytes,
+          exportName,
+          args: simOptions.args,
+          maxMemoryBytes: Math.min(
+            simOptions.maxMemoryBytes ?? MAX_SESSION_MEMORY_BYTES,
+            MAX_SESSION_MEMORY_BYTES
+          ),
+        }),
+        [bytes]
+      );
+    },
+    [startRun]
+  );
 
   // ── cancel ────────────────────────────────────────────────────────────────
   const cancel = useCallback(() => {
     const id = currentIdRef.current;
     if (!id) return;
+    currentIdRef.current = null;
 
-    // 1. Tell the worker to stop.
-    workerRef.current?.postMessage({ type: 'cancel', cancellationId: id });
-
-    // 2. Abort any in-flight fetch.
+    // Hard stop: terminating the worker is the only way to interrupt running
+    // guest code and it releases all of its memory at once. A fresh worker is
+    // created lazily on the next run.
+    retireWorker();
     abortControllerRef.current?.abort();
 
-    // 3. Notify the backend (fire and forget).
-    fetch(`${contractsApiBase}/cancel`, {
+    fetch(`${getContractsApiBase()}/cancel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cancellationId: id }),
     }).catch(() => {});
 
-    // 4. Update UI state immediately — don't wait for worker confirmation.
-    setExecutionState((prev) =>
-      prev.cancellationId === id ? transition(prev, 'cancelled') : prev
-    );
-
-    // 5. Clear the current ID so a new compile can start.
-    currentIdRef.current = null;
-  }, []);
+    setExecutionState((prev) => (prev.cancellationId === id ? transition(prev, 'cancelled') : prev));
+  }, [retireWorker]);
 
   // ── reset ─────────────────────────────────────────────────────────────────
   const reset = useCallback(() => {
+    if (currentIdRef.current) retireWorker();
     currentIdRef.current = null;
     setCompileLogs([]);
+    setDiagnostic(null);
+    setMemoryUsage(null);
     setExecutionState(makeIdleState());
-  }, []);
+  }, [retireWorker]);
 
-  // When execution reaches a terminal state, unblock the current ID slot so
-  // a new compile can be queued without calling reset().
-  useEffect(() => {
-    const { phase, cancellationId } = executionState;
-    if (
-      (phase === 'complete' || phase === 'error' || phase === 'cancelled') &&
-      cancellationId === currentIdRef.current
-    ) {
-      currentIdRef.current = null;
-    }
-  }, [executionState]);
-
-  return { executionState, compileLogs, compile, cancel, reset };
+  return { executionState, compileLogs, memoryUsage, diagnostic, compile, simulate, cancel, reset };
 }
