@@ -1,66 +1,176 @@
 # Gitleaks configuration for Web3-Student-Lab
 # Docs: https://github.com/gitleaks/gitleaks#configuration
+#
+# This file is referenced explicitly by both secret-scan.yml and
+# malware-pr-guard.yml so every scan uses identical rule definitions.
+
+title = "Web3-Student-Lab Gitleaks Config"
+
+[extend]
+  # Inherit the upstream gitleaks default ruleset (AWS keys, GCP, GitHub PATs,
+  # Slack, Stripe, Twilio, etc.) and add project-specific rules below.
+  useDefault = true
 
 [allowlist]
   description = "Known safe patterns that should not trigger secret scanning alerts"
 
-  # Example/placeholder values in .env.example — not real secrets
   regexes = [
+    # Placeholder values in .env.example and documentation
     '''CHANGE_THIS_.*''',
+    '''YOUR_.*_HERE''',
+    '''<YOUR_.*>''',
+    # Test-only dummy values referenced in the gitleaksignore fingerprint list
     '''test-jwt-secret''',
     '''test-github-client-id''',
     '''test-github-client-secret''',
     '''test-github-redirect-uri''',
+    # Stellar testnet/futurenet demo keys that are intentionally public
+    '''GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN''',
   ]
 
-  # Test fixture files and mock values
   paths = [
-    # Test snapshots and fixtures
+    # Test snapshots and fixtures — never real credentials
     '''.*__snapshots__/.*''',
     '''.*__fixtures__/.*''',
     '''.*test_fixtures/.*''',
     '''.*\.test\.(ts|tsx|js|jsx|rs)$''',
     '''.*\.spec\.(ts|tsx|js|jsx|rs)$''',
 
-    # Example env template
+    # Template / example files
     '''\.env\.example$''',
+    '''\.env\.sample$''',
+    '''\.env\.template$''',
 
-    # Documentation and policy files
+    # Documentation
     '''docs/.*''',
     '''README\.md$''',
     '''MVP_READINESS\.md$''',
     '''INTEGRATION_GUIDE\.md$''',
+    '''CHANGELOG\.md$''',
 
-    # Generated, dependency cache and workflow configs
+    # Generated files and local caches — never committed secrets
     '''\.pnpm-store/.*''',
-    '''\.github/workflows/.*''',
+    '''node_modules/.*''',
+    '''dist/.*''',
+    '''build/.*''',
+    '''coverage/.*''',
+
+    # Docker Compose and scripts that use env-var interpolation, not literals
     '''docker-compose.*\.ya?ml$''',
     '''scripts/setup\.sh$''',
-    '''backend/coverage/.*''',
-    '''frontend/coverage/.*''',
-    '''backend/dist/.*''',
+
+    # Workflow files themselves (CI injects values via secrets/env, never hardcodes)
+    '''\.github/workflows/.*''',
   ]
 
+# ---------------------------------------------------------------------------
+# Stellar / Soroban secrets
+# ---------------------------------------------------------------------------
 [[rules]]
-  id = "stellar-secret-seed"
-  description = "Stellar Ed25519 secret key seed"
-  regex = '''S[A-Z0-9]{55}'''
-  tags = ["stellar", "secret", "key"]
+  id          = "stellar-secret-seed"
+  description = "Stellar Ed25519 secret key seed (S + 55 uppercase alphanumeric)"
+  regex       = '''(?:^|[^A-Z0-9])(S[A-Z2-7]{55})(?:[^A-Z2-7]|$)'''
+  tags        = ["stellar", "secret", "cryptographic-key"]
 
 [[rules]]
-  id = "jwt-secret"
-  description = "JWT secret or token"
-  regex = '''(?i)jwt[_\-]?secret\s*[:=]\s*['"]?[A-Za-z0-9\-_]{32,}['"]?'''
-  tags = ["jwt", "secret"]
+  id          = "stellar-muxed-account"
+  description = "Stellar muxed account ID with embedded secret context"
+  regex       = '''(?i)(stellar[_\-\s]?secret|secret[_\-\s]?key)\s*[:=]\s*['"]?(S[A-Z2-7]{55})['"]?'''
+  tags        = ["stellar", "secret"]
+
+# ---------------------------------------------------------------------------
+# Web3 / blockchain private keys
+# ---------------------------------------------------------------------------
+[[rules]]
+  id          = "ethereum-private-key"
+  description = "Ethereum / EVM raw 256-bit private key"
+  regex       = '''(?i)(?:private[_\-]?key|priv[_\-]?key)\s*[:=]\s*['"]?0x[0-9a-fA-F]{64}['"]?'''
+  tags        = ["ethereum", "private-key", "web3"]
 
 [[rules]]
-  id = "generic-api-key"
-  description = "Generic API key"
-  regex = '''(?i)api[_\-\s]?key\s*[:=]\s*['"]?[A-Za-z0-9\-_]{16,}['"]?'''
-  tags = ["api-key", "secret"]
+  id          = "mnemonic-phrase"
+  description = "BIP-39 mnemonic seed phrase (12 or 24 words)"
+  # Matches lines that contain exactly 12 or 24 lowercase BIP-39 words separated by spaces.
+  regex       = '''\b(?:[a-z]+\s){11}[a-z]+\b|\b(?:[a-z]+\s){23}[a-z]+\b'''
+  tags        = ["mnemonic", "seed-phrase", "web3"]
+
+# ---------------------------------------------------------------------------
+# JWT secrets
+# ---------------------------------------------------------------------------
+[[rules]]
+  id          = "jwt-secret"
+  description = "JWT secret or signing key"
+  regex       = '''(?i)jwt[_\-\s]?(?:secret|signing[_\-]?key|key)\s*[:=]\s*['"]?[A-Za-z0-9\-_]{32,}['"]?'''
+  tags        = ["jwt", "secret"]
 
 [[rules]]
-  id = "private-key-block"
+  id          = "jwt-token"
+  description = "Encoded JWT token (three Base64url segments)"
+  regex       = '''eyJ[A-Za-z0-9\-_]+\.eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+'''
+  tags        = ["jwt", "token"]
+
+# ---------------------------------------------------------------------------
+# Generic API keys and credentials
+# ---------------------------------------------------------------------------
+[[rules]]
+  id          = "generic-api-key"
+  description = "Generic API key assignment"
+  regex       = '''(?i)api[_\-\s]?key\s*[:=]\s*['"]?[A-Za-z0-9\-_]{16,}['"]?'''
+  tags        = ["api-key", "secret"]
+
+[[rules]]
+  id          = "generic-secret"
+  description = "Generic secret or password assignment"
+  regex       = '''(?i)(?:secret|password|passwd|pwd)\s*[:=]\s*['"]?[A-Za-z0-9!@#$%^&*\-_]{12,}['"]?'''
+  tags        = ["secret", "password"]
+
+# ---------------------------------------------------------------------------
+# PEM / certificate material
+# ---------------------------------------------------------------------------
+[[rules]]
+  id          = "private-key-block"
   description = "PEM private key block"
-  regex = '''-----BEGIN ((RSA|EC|DSA|OPENSSH) )?PRIVATE KEY-----'''
-  tags = ["pem", "private-key"]
+  regex       = '''-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----'''
+  tags        = ["pem", "private-key", "certificate"]
+
+[[rules]]
+  id          = "certificate-block"
+  description = "PEM certificate block (may contain embedded private key data)"
+  regex       = '''-----BEGIN CERTIFICATE-----'''
+  tags        = ["pem", "certificate"]
+
+# ---------------------------------------------------------------------------
+# Cloud provider credentials
+# ---------------------------------------------------------------------------
+[[rules]]
+  id          = "aws-access-key"
+  description = "AWS Access Key ID"
+  regex       = '''(?:^|[^A-Z0-9])(AKIA[0-9A-Z]{16})(?:[^A-Z0-9]|$)'''
+  tags        = ["aws", "cloud", "access-key"]
+
+[[rules]]
+  id          = "aws-secret-access-key"
+  description = "AWS Secret Access Key"
+  regex       = '''(?i)aws[_\-\s]?secret[_\-\s]?access[_\-\s]?key\s*[:=]\s*['"]?[A-Za-z0-9/+]{40}['"]?'''
+  tags        = ["aws", "cloud", "secret"]
+
+# ---------------------------------------------------------------------------
+# CI / DevOps tokens
+# ---------------------------------------------------------------------------
+[[rules]]
+  id          = "snyk-token"
+  description = "Snyk API token"
+  regex       = '''(?i)snyk[_\-\s]?token\s*[:=]\s*['"]?[0-9a-f\-]{36,}['"]?'''
+  tags        = ["snyk", "ci", "token"]
+
+[[rules]]
+  id          = "github-pat"
+  description = "GitHub Personal Access Token (classic or fine-grained)"
+  regex       = '''(?:^|[^A-Za-z0-9])(ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{82})(?:[^A-Za-z0-9]|$)'''
+  tags        = ["github", "pat", "token"]
+
+[[rules]]
+  id          = "npm-token"
+  description = "npm publish / automation token"
+  regex       = '''(?:^|[^A-Za-z0-9])(npm_[A-Za-z0-9]{36})(?:[^A-Za-z0-9]|$)'''
+  tags        = ["npm", "token"]
