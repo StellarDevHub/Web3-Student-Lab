@@ -167,6 +167,54 @@ fn bench_certificate_nft_mint() {
     );
 }
 
+#[test]
+fn bench_certificate_nft_batch_mint_reduction() {
+    const BATCH_SIZE: u32 = 50;
+
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(crate::certificate_nft::CertificateNFTContract, ());
+    let client = crate::certificate_nft::CertificateNFTContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let course_id = SorobanString::from_str(&env, "NFT-BATCH-BENCH");
+    let grade = SorobanString::from_str(&env, "A");
+    let uri = SorobanString::from_str(&env, "ipfs://batch-bench");
+    let mut recipients = Vec::new(&env);
+    let mut metadata_uris = Vec::new(&env);
+    for _ in 0..BATCH_SIZE {
+        recipients.push_back(Address::generate(&env));
+        metadata_uris.push_back(uri.clone());
+    }
+
+    let (individual_cpu, individual_mem) = measure(&env, || {
+        for recipient in recipients.iter() {
+            client.mint_certificate(&admin, &recipient, &course_id, &grade, &uri);
+        }
+    });
+    let (batch_cpu, batch_mem) = measure(&env, || {
+        client.batch_mint(&admin, &recipients, &metadata_uris);
+    });
+
+    let individual_cpu_per_certificate = individual_cpu / u64::from(BATCH_SIZE);
+    record(
+        "certificate_nft::mint_certificate_50_individual",
+        individual_cpu,
+        individual_mem,
+        "50 individual certificate issues; total CPU and memory cost",
+    );
+    record(
+        "certificate_nft::batch_mint_50",
+        batch_cpu,
+        batch_mem,
+        &alloc::format!(
+            "50 certificates; {} CPU per certificate",
+            batch_cpu / u64::from(BATCH_SIZE)
+        ),
+    );
+    assert!(individual_cpu_per_certificate > 0);
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  smart_vault
 // ═════════════════════════════════════════════════════════════════════════════
