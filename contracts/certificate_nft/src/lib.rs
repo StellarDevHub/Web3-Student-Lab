@@ -7,7 +7,7 @@ pub use badges::{AchievementBadge, ProvenanceRecord};
 pub use rarity::RarityTier;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
-    Env, String, Symbol,
+    Env, String, Symbol, Vec,
 };
 
 // ---- Errors (SC-HARD-20: range 400+) ----
@@ -18,13 +18,13 @@ use soroban_sdk::{
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
-pub enum CertError {
+pub enum CertificateNftError {
     /// `400` - A certificate has already been minted for this student and course.
     AlreadyMinted = 400,
     /// `401` - Caller is not the admin.
     Unauthorized = 401,
-    /// `402` - Badge is soulbound and cannot be transferred.
-    SoulboundNonTransferable = 402,
+    /// `402` - Certificate is soulbound and cannot be transferred or delegated.
+    Soulbound = 402,
     /// `403` - Requested tier upgrade is invalid or prerequisites unmet.
     InvalidTierUpgrade = 403,
     /// `404` - Requested badge ID was not found.
@@ -33,7 +33,15 @@ pub enum CertError {
     InsufficientMilestones = 405,
     /// `406` - Badge transfer attempted; badges are non-transferable.
     NonTransferable = 406,
+    /// `407` - A batch may contain at most 50 certificates.
+    BatchTooLarge = 407,
+    /// `408` - Recipients and metadata URIs must have the same length.
+    BatchLengthMismatch = 408,
+    /// `409` - Requested certificate ID was not found.
+    CertificateNotFound = 409,
 }
+
+pub type CertError = CertificateNftError;
 
 #[contracttype]
 pub struct CertificateMetadata {
@@ -48,6 +56,15 @@ use royalties::{Royalties, RoyaltyInfo};
 pub enum DataKey {
     BadgeCounter,
     Badge(u64),
+    CertificateCounter,
+    CertificateBatch(u64),
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BatchCertificate {
+    pub owner: Address,
+    pub metadata_uri: String,
 }
 
 #[contract]
@@ -55,6 +72,69 @@ pub struct CertificateNFTContract;
 
 #[contractimpl]
 impl CertificateNFTContract {
+    /// Mints a cohort of soulbound certificates, emitting one batch event.
+    ///
+    /// At most 50 certificates can be issued in one transaction.
+    pub fn batch_mint(
+        env: Env,
+        admin: Address,
+        recipients: Vec<Address>,
+        metadata_uris: Vec<String>,
+    ) -> u64 {
+        admin.require_auth();
+
+        if recipients.len() > 50 {
+            panic_with_error!(&env, CertificateNftError::BatchTooLarge);
+        }
+        if recipients.len() != metadata_uris.len() {
+            panic_with_error!(&env, CertificateNftError::BatchLengthMismatch);
+        }
+
+        let batch_id: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CertificateCounter)
+            .unwrap_or(1);
+        env.storage()
+            .persistent()
+            .set(
+                &DataKey::CertificateBatch(batch_id),
+                &(recipients.clone(), metadata_uris),
+            );
+        env.storage()
+            .persistent()
+            .set(&DataKey::CertificateCounter, &(batch_id + 1));
+        env.events().publish(
+            (symbol_short!("batch_mnt"), admin),
+            (batch_id, recipients.len()),
+        );
+        batch_id
+    }
+
+    /// Returns a certificate created by `batch_mint`.
+    pub fn get_certificate(env: Env, token_id: u64) -> BatchCertificate {
+        let batch_id = token_id >> 6;
+        let encoded_index = token_id & 63;
+        if encoded_index == 0 || encoded_index > 50 {
+            panic_with_error!(&env, CertificateNftError::CertificateNotFound);
+        }
+        let certificate_index = (encoded_index - 1) as u32;
+        let (recipients, metadata_uris): (Vec<Address>, Vec<String>) = env.storage()
+            .persistent()
+            .get(&DataKey::CertificateBatch(batch_id))
+            .unwrap_or_else(|| panic_with_error!(&env, CertificateNftError::CertificateNotFound));
+        let owner = recipients
+            .get(certificate_index)
+            .unwrap_or_else(|| panic_with_error!(&env, CertificateNftError::CertificateNotFound));
+        let metadata_uri = metadata_uris
+            .get(certificate_index)
+            .unwrap_or_else(|| panic_with_error!(&env, CertificateNftError::CertificateNotFound));
+        BatchCertificate {
+            owner,
+            metadata_uri,
+        }
+    }
+
     /// Mints a new non-fungible achievement certificate to a student.
     pub fn mint_certificate(
         env: Env,
@@ -198,20 +278,30 @@ impl CertificateNFTContract {
             .set(&DataKey::Badge(badge_id), &badge);
     }
 
-    /// Strictly enforces soulbound non-transferability.
-    pub fn transfer(env: Env, _from: Address, _to: Address, _badge_id: u64) {
-        AchievementBadge::assert_transfer_blocked(&env);
+    /// Soulbound certificates cannot be transferred.
+    pub fn transfer(env: Env, _from: Address, _to: Address, _token_id: u64) {
+        panic_with_error!(&env, CertificateNftError::Soulbound);
     }
 
-    /// Strictly enforces soulbound non-transferability.
+    /// Soulbound certificates cannot be transferred by an approved spender.
     pub fn transfer_from(
         env: Env,
         _spender: Address,
         _from: Address,
         _to: Address,
-        _badge_id: u64,
+        _token_id: u64,
     ) {
-        AchievementBadge::assert_transfer_blocked(&env);
+        panic_with_error!(&env, CertificateNftError::Soulbound);
+    }
+
+    /// Soulbound certificates cannot be approved for transfer.
+    pub fn approve(env: Env, _owner: Address, _approved: Address, _token_id: u64) {
+        panic_with_error!(&env, CertificateNftError::Soulbound);
+    }
+
+    /// Soulbound certificates cannot be delegated.
+    pub fn delegate(env: Env, _owner: Address, _delegate: Address, _token_id: u64) {
+        panic_with_error!(&env, CertificateNftError::Soulbound);
     }
 }
 
