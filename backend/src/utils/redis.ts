@@ -38,6 +38,12 @@ const createTestRedisClient = () => {
       keys.forEach((key) => memoryStore.delete(key));
       return keys.length;
     },
+    incr: async (key: string) => {
+      const val = Number(memoryStore.get(key) ?? 0) + 1;
+      memoryStore.set(key, String(val));
+      return val;
+    },
+    expire: async (_key: string, _ttl: number) => 1,
     eval: async (script: string, _numKeys: number, ...args: any[]) => {
       if (script.includes('get') && script.includes('del')) {
         const key = args[0];
